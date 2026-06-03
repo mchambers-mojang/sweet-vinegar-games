@@ -1,17 +1,3 @@
-# Vinegar
+# Sweet Vinegar Games
 
-A 2D game built with Godot 4.6.
-
-## Getting Started
-
-Open the project in Godot:
-
-```
-C:\Godot\Godot_v4.6.3-stable_win64.exe --path C:\Users\michambers\Projects\vinegar
-```
-
-Or open Godot and import the project from `C:\Users\michambers\Projects\vinegar`.
-
-## Controls
-
-- Arrow keys / WASD: Move the player
+An AI game-making side project for private use. A mobile puzzle game collection featuring Sudoku and Shikaku, built with Godot 4.6.
