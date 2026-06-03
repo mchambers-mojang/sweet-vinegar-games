@@ -204,6 +204,14 @@ func _layout_cells() -> void:
 	queue_redraw()
 
 
+func get_cell_rect(index: int) -> Rect2:
+	var r := index / 9
+	var c := index % 9
+	if c < _col_positions.size() and r < _row_positions.size():
+		return Rect2(Vector2(_col_positions[c], _row_positions[r]), Vector2(_cell_w, _cell_h))
+	return Rect2()
+
+
 func _draw() -> void:
 	if cells.is_empty() or _col_positions.is_empty():
 		return
@@ -211,6 +219,7 @@ func _draw() -> void:
 	var tm := ThemeManager
 	var thin_color := tm.get_color("grid_line_thin")
 	var thick_color := tm.get_color("grid_line_thick")
+	var neon_mode := tm.is_neon
 
 	var ox := _grid_rect.position.x
 	var oy := _grid_rect.position.y
@@ -225,7 +234,7 @@ func _draw() -> void:
 	# Draw thin lines between cells within each box
 	for r in range(1, 9):
 		if r % 3 == 0:
-			continue  # These gaps are thick — background already handles them
+			continue
 		var y := _row_positions[r] - thin
 		draw_rect(Rect2(Vector2(ox, y), Vector2(gw, thin)), thin_color)
 
@@ -234,3 +243,8 @@ func _draw() -> void:
 			continue
 		var x := _col_positions[c] - thin
 		draw_rect(Rect2(Vector2(x, oy), Vector2(thin, gh)), thin_color)
+
+	# Neon outer glow
+	if neon_mode:
+		var glow := Color(thick_color.r * 0.4, thick_color.g * 0.4, thick_color.b * 0.4, 0.25)
+		draw_rect(Rect2(Vector2(ox - 3, oy - 3), Vector2(gw + 6, gh + 6)), glow, false, 6.0)

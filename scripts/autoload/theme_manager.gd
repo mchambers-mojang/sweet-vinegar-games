@@ -1,10 +1,11 @@
 extends Node
 
-## Manages light/dark theme switching and applies a global Godot Theme
+## Manages light/dark/neon theme switching and applies a global Godot Theme
 
 signal theme_changed(is_dark: bool)
 
 var is_dark: bool = false
+var is_neon: bool = false
 var ui_theme: Theme
 
 ## Theme colors
@@ -62,6 +63,32 @@ var _dark_colors := {
 
 var _light_colors: Dictionary
 
+var _neon_colors := {
+	"background": Color(0.04, 0.04, 0.1),
+	"cell_background": Color(0.06, 0.06, 0.14),
+	"cell_selected": Color(0.12, 0.14, 0.3),
+	"cell_highlighted": Color(0.1, 0.08, 0.22),
+	"cell_same_number": Color(0.15, 0.05, 0.35),
+	"cell_error": Color(0.5, 0.0, 0.1),
+	"cell_given": Color(0.08, 0.08, 0.18),
+	"grid_line_thin": Color(0.15, 0.1, 0.35),
+	"grid_line_thick": Color(0.0, 1.5, 1.5),       # HDR cyan — will bloom
+	"text_given": Color(0.0, 2.0, 1.6),             # HDR cyan text — blooms
+	"text_placed": Color(2.0, 0.3, 1.8),            # HDR hot pink — blooms
+	"text_error": Color(2.0, 0.0, 0.2),             # HDR red — blooms
+	"text_pencil": Color(0.4, 0.3, 0.8),
+	"button_bg": Color(0.08, 0.06, 0.18),
+	"button_bg_hover": Color(0.12, 0.08, 0.28),
+	"button_bg_pressed": Color(0.06, 0.04, 0.14),
+	"button_text": Color(0.0, 1.5, 1.5),            # HDR cyan buttons
+	"button_disabled": Color(0.08, 0.06, 0.14),
+	"button_disabled_text": Color(0.25, 0.2, 0.4),
+	"label_text": Color(0.0, 1.5, 1.5),             # HDR cyan labels
+	"timer_text": Color(1.5, 0.2, 1.2),             # HDR magenta
+	"strike_active": Color(2.0, 0.0, 0.2),
+	"strike_inactive": Color(0.2, 0.15, 0.35),
+}
+
 
 func _ready() -> void:
 	_light_colors = colors.duplicate()
@@ -73,23 +100,44 @@ func _ready() -> void:
 func _apply_theme_setting() -> void:
 	match SettingsManager.dark_mode:
 		"system":
-			set_dark(DisplayServer.is_dark_mode() if DisplayServer.has_method("is_dark_mode") else false)
+			set_theme_mode("system")
 		"dark":
-			set_dark(true)
+			set_theme_mode("dark")
 		"light":
-			set_dark(false)
+			set_theme_mode("light")
+		"neon":
+			set_theme_mode("neon")
+
+
+func set_theme_mode(mode: String) -> void:
+	match mode:
+		"system":
+			is_neon = false
+			is_dark = DisplayServer.is_dark_mode() if DisplayServer.has_method("is_dark_mode") else false
+			_apply_color_set(_dark_colors if is_dark else _light_colors)
+		"dark":
+			is_neon = false
+			is_dark = true
+			_apply_color_set(_dark_colors)
+		"light":
+			is_neon = false
+			is_dark = false
+			_apply_color_set(_light_colors)
+		"neon":
+			is_neon = true
+			is_dark = true
+			_apply_color_set(_neon_colors)
+	_rebuild_ui_theme()
+	theme_changed.emit(is_dark)
+
+
+func _apply_color_set(source: Dictionary) -> void:
+	for key in source:
+		colors[key] = source[key]
 
 
 func set_dark(dark: bool) -> void:
-	is_dark = dark
-	if dark:
-		for key in _dark_colors:
-			colors[key] = _dark_colors[key]
-	else:
-		for key in _light_colors:
-			colors[key] = _light_colors[key]
-	_rebuild_ui_theme()
-	theme_changed.emit(is_dark)
+	set_theme_mode("dark" if dark else "light")
 
 
 func _rebuild_ui_theme() -> void:
@@ -98,16 +146,25 @@ func _rebuild_ui_theme() -> void:
 	btn_normal.bg_color = colors["button_bg"]
 	btn_normal.set_corner_radius_all(8)
 	btn_normal.set_content_margin_all(10)
+	if is_neon:
+		btn_normal.border_color = Color(0.0, 0.8, 0.8, 0.5)
+		btn_normal.set_border_width_all(1)
 
 	var btn_hover := StyleBoxFlat.new()
 	btn_hover.bg_color = colors["button_bg_hover"]
 	btn_hover.set_corner_radius_all(8)
 	btn_hover.set_content_margin_all(10)
+	if is_neon:
+		btn_hover.border_color = Color(0.0, 1.2, 1.2, 0.8)
+		btn_hover.set_border_width_all(2)
 
 	var btn_pressed := StyleBoxFlat.new()
 	btn_pressed.bg_color = colors["button_bg_pressed"]
 	btn_pressed.set_corner_radius_all(8)
 	btn_pressed.set_content_margin_all(10)
+	if is_neon:
+		btn_pressed.border_color = Color(1.5, 0.2, 1.0, 0.8)
+		btn_pressed.set_border_width_all(2)
 
 	var btn_disabled := StyleBoxFlat.new()
 	btn_disabled.bg_color = colors["button_disabled"]
@@ -136,6 +193,24 @@ func _rebuild_ui_theme() -> void:
 	ui_theme.set_stylebox("pressed", "OptionButton", btn_pressed.duplicate())
 	ui_theme.set_color("font_color", "OptionButton", colors["button_text"])
 	ui_theme.set_color("font_hover_color", "OptionButton", colors["button_text"])
+
+	# PopupMenu (dropdown list for OptionButton)
+	var popup_panel := StyleBoxFlat.new()
+	popup_panel.bg_color = colors["button_bg"]
+	popup_panel.set_corner_radius_all(6)
+	popup_panel.set_content_margin_all(4)
+	if is_neon:
+		popup_panel.border_color = Color(0.0, 0.8, 0.8, 0.6)
+		popup_panel.set_border_width_all(1)
+	ui_theme.set_stylebox("panel", "PopupMenu", popup_panel)
+
+	var popup_hover := StyleBoxFlat.new()
+	popup_hover.bg_color = colors["button_bg_hover"]
+	popup_hover.set_corner_radius_all(4)
+	ui_theme.set_stylebox("hover", "PopupMenu", popup_hover)
+
+	ui_theme.set_color("font_color", "PopupMenu", colors["button_text"])
+	ui_theme.set_color("font_hover_color", "PopupMenu", colors["button_text"])
 
 	# PanelContainer background
 	var panel_style := StyleBoxFlat.new()

@@ -260,6 +260,15 @@ func _handle_number_first_cell_tap(index: int) -> void:
 			cell.set_value(_selected_number)
 			cell.set_error(true)
 			var revert_cell := cell
+
+			# Neon glass shatter + shockwave on error
+			if ThemeManager.is_neon:
+				var cell_rect := board.get_cell_rect(index)
+				GlassShatter.create(board, cell_rect, Color(2.0, 0.0, 0.2), 10)
+				var err_center := cell_rect.position + cell_rect.size / 2.0
+				NeonRing.create(board, err_center, Color(2.0, 0.0, 0.2), cell_rect.size.x * 2.5, 0.2, 0.4)
+				NeonFxManager.screen_shake(5.0, 0.15)
+
 			var revert_tween := create_tween()
 			revert_tween.tween_interval(0.4)
 			revert_tween.tween_callback(func() -> void:
@@ -280,6 +289,13 @@ func _handle_number_first_cell_tap(index: int) -> void:
 		cell.set_cell_color(Color.TRANSPARENT)
 		current_grid[index] = _selected_number
 		redo_stack.clear()
+
+		# Neon burst on correct placement
+		if ThemeManager.is_neon:
+			var cell_rect := board.get_cell_rect(index)
+			var center := cell_rect.position + cell_rect.size / 2.0
+			NeonBurst.create(board, center, Color(0.0, 2.0, 1.6), 10, 0.8)
+
 		if SettingsManager.auto_remove_pencil_marks:
 			_remove_pencil_marks_for_number(index, _selected_number)
 		_check_unit_completion(index)
@@ -338,6 +354,15 @@ func _place_or_note_number(number: int) -> void:
 			cell.set_value(number)
 			cell.set_error(true)
 			var revert_cell := cell
+
+			# Neon glass shatter + shockwave on error
+			if ThemeManager.is_neon:
+				var cell_rect := board.get_cell_rect(index)
+				GlassShatter.create(board, cell_rect, Color(2.0, 0.0, 0.2), 10)
+				var err_center := cell_rect.position + cell_rect.size / 2.0
+				NeonRing.create(board, err_center, Color(2.0, 0.0, 0.2), cell_rect.size.x * 2.5, 0.2, 0.4)
+				NeonFxManager.screen_shake(5.0, 0.15)
+
 			var revert_tween := create_tween()
 			revert_tween.tween_interval(0.4)
 			revert_tween.tween_callback(func() -> void:
@@ -362,6 +387,12 @@ func _place_or_note_number(number: int) -> void:
 		redo_stack.clear()
 		SoundManager.play_place()
 		HapticManager.vibrate_light()
+
+		# Neon burst on correct placement
+		if ThemeManager.is_neon:
+			var cell_rect := board.get_cell_rect(index)
+			var center := cell_rect.position + cell_rect.size / 2.0
+			NeonBurst.create(board, center, Color(0.0, 2.0, 1.6), 10, 0.8)
 
 		# Auto-remove pencil marks if enabled
 		if SettingsManager.auto_remove_pencil_marks:
@@ -559,6 +590,12 @@ func _handle_win() -> void:
 func _play_win_celebration() -> void:
 	SoundManager.play_win()
 	HapticManager.vibrate_success()
+	# Neon win shockwave from board center
+	if ThemeManager.is_neon:
+		var center_rect := board.get_cell_rect(40)  # Center cell (row 4, col 4)
+		var center := center_rect.position + center_rect.size / 2.0
+		NeonRing.create(board, center, Color(0.0, 2.0, 1.5), center_rect.size.x * 8.0, 0.5, 1.2)
+		NeonFxManager.screen_shake(6.0, 0.2)
 	# Cascade reveal: flash each cell in sequence from top-left to bottom-right
 	var tween := create_tween()
 	for i in 81:
@@ -614,6 +651,16 @@ func _check_unit_completion(index: int) -> void:
 		SoundManager.play_unit_complete()
 		for idx in flash_indices.keys():
 			board.cells[idx].flash(Color(1.0, 0.85, 0.4), 0.35)
+		# Neon shockwave from center of completed unit
+		if ThemeManager.is_neon:
+			var avg_x := 0.0
+			var avg_y := 0.0
+			for idx in flash_indices.keys():
+				var cell_rect := board.get_cell_rect(idx)
+				avg_x += cell_rect.position.x + cell_rect.size.x / 2.0
+				avg_y += cell_rect.position.y + cell_rect.size.y / 2.0
+			var center := Vector2(avg_x / flash_indices.size(), avg_y / flash_indices.size())
+			NeonRing.create(board, center, Color(0.0, 2.0, 1.5), board.get_cell_rect(0).size.x * 4.0, 0.35, 0.6)
 
 
 func _update_number_completion() -> void:

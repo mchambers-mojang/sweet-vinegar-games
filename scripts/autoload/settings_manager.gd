@@ -22,6 +22,11 @@ var dark_mode: String = "system" # "system", "light", "dark"
 var sound_enabled: bool = true
 var haptic_enabled: bool = true
 
+## Effects
+var screen_shake_enabled: bool = true
+var shockwave_enabled: bool = true
+var particle_effects_enabled: bool = true
+
 
 func _ready() -> void:
 	load_settings()
@@ -50,6 +55,9 @@ func save_settings() -> void:
 	config.set_value("display", "dark_mode", dark_mode)
 	config.set_value("feedback", "sound_enabled", sound_enabled)
 	config.set_value("feedback", "haptic_enabled", haptic_enabled)
+	config.set_value("effects", "screen_shake", screen_shake_enabled)
+	config.set_value("effects", "shockwave", shockwave_enabled)
+	config.set_value("effects", "particles", particle_effects_enabled)
 	config.save(SAVE_PATH)
 	settings_changed.emit()
 
@@ -66,3 +74,6 @@ func load_settings() -> void:
 	dark_mode = config.get_value("display", "dark_mode", dark_mode)
 	sound_enabled = config.get_value("feedback", "sound_enabled", sound_enabled)
 	haptic_enabled = config.get_value("feedback", "haptic_enabled", haptic_enabled)
+	screen_shake_enabled = config.get_value("effects", "screen_shake", screen_shake_enabled)
+	shockwave_enabled = config.get_value("effects", "shockwave", shockwave_enabled)
+	particle_effects_enabled = config.get_value("effects", "particles", particle_effects_enabled)

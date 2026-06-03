@@ -68,12 +68,14 @@ func _build_settings_ui() -> void:
 		"system": dark_idx = 0
 		"light": dark_idx = 1
 		"dark": dark_idx = 2
-	_add_option_button("Theme", ["System", "Light", "Dark"], dark_idx,
+		"neon": dark_idx = 3
+	_add_option_button("Theme", ["System", "Light", "Dark", "Neon"], dark_idx,
 		func(idx: int) -> void:
 			match idx:
 				0: SettingsManager.dark_mode = "system"
 				1: SettingsManager.dark_mode = "light"
 				2: SettingsManager.dark_mode = "dark"
+				3: SettingsManager.dark_mode = "neon"
 			SettingsManager.save_settings()
 	)
 
@@ -95,6 +97,30 @@ func _build_settings_ui() -> void:
 	_add_toggle("Haptic Feedback", SettingsManager.haptic_enabled,
 		func(value: bool) -> void:
 			SettingsManager.haptic_enabled = value
+			SettingsManager.save_settings()
+	)
+
+	_add_separator()
+	_add_header("Effects")
+
+	# Screen shake
+	_add_toggle("Screen Shake", SettingsManager.screen_shake_enabled,
+		func(value: bool) -> void:
+			SettingsManager.screen_shake_enabled = value
+			SettingsManager.save_settings()
+	)
+
+	# Shockwave distortion
+	_add_toggle("Shockwave Distortion", SettingsManager.shockwave_enabled,
+		func(value: bool) -> void:
+			SettingsManager.shockwave_enabled = value
+			SettingsManager.save_settings()
+	)
+
+	# Particle effects
+	_add_toggle("Particle Effects", SettingsManager.particle_effects_enabled,
+		func(value: bool) -> void:
+			SettingsManager.particle_effects_enabled = value
 			SettingsManager.save_settings()
 	)
 

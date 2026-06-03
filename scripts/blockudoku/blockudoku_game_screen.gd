@@ -201,6 +201,34 @@ func _end_drag(screen_pos: Vector2) -> void:
 		SoundManager.play_place()
 		HapticManager.vibrate_light()
 
+		# Neon placement effects
+		if ThemeManager.is_neon:
+			var cell_size := board._get_cell_size()
+			var origin := board._get_grid_origin()
+
+			# Per-cell burst — small burst on each cell of the shape
+			for cell_offset in _drag_shape:
+				var co: Vector2i = cell_offset
+				var cell_center := origin + Vector2(
+					(grid_pos.x + co.x + 0.5) * cell_size,
+					(grid_pos.y + co.y + 0.5) * cell_size
+				)
+				NeonBurst.create(board, cell_center, block_color, 6, 0.5)
+
+			# Expanding ring from shape center
+			var bounds := BlockudokuShapes.get_bounds(_drag_shape)
+			var shape_center := origin + Vector2(
+				(grid_pos.x + bounds.x / 2.0) * cell_size,
+				(grid_pos.y + bounds.y / 2.0) * cell_size
+			)
+			NeonRing.create(board, shape_center, block_color, cell_size * 2.0, 0.25, 0.3)
+
+			# Cell flash — briefly brighten placed cells
+			board.flash_placed_cells(_drag_shape, grid_pos.x, grid_pos.y, block_color)
+
+			# Light screen shake
+			NeonFxManager.screen_shake(3.0, 0.1)
+
 		# Remove from available blocks
 		available_blocks[_drag_block_index] = []
 		blocks_placed_this_set += 1
@@ -226,6 +254,13 @@ func _end_drag(screen_pos: Vector2) -> void:
 			var combo_bonus := 0
 			if combo_count > 1:
 				combo_bonus = combo_count * 10
+				# Scale shockwave with combo
+				if ThemeManager.is_neon:
+					var cell_size := board._get_cell_size()
+					var origin := board._get_grid_origin()
+					var combo_center := origin + Vector2(cell_size * 4.5, cell_size * 4.5)
+					var combo_amp := minf(0.5 + combo_count * 0.3, 2.0)
+					NeonRing.create(board, combo_center, Color(2.0, 0.3, 1.8), cell_size * (4.0 + combo_count), 0.4, combo_amp)
 			# Scoring: 10 per line/box cleared + combo bonus
 			var clear_score := (lines + boxes) * 18 + cleared + combo_bonus
 			score += clear_score

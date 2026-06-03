@@ -203,20 +203,28 @@ func _draw() -> void:
 		draw_rect(Rect2(draw_rect_pos, draw_rect_size), color)
 
 	# Placed rectangles (border)
+	var neon_mode := tm.is_neon
 	for i in range(placed_rects.size()):
 		var rect := placed_rects[i]
 		var border_color := rect_colors[i]
 		border_color.a = 0.9
+		if neon_mode:
+			border_color = Color(border_color.r * 3.0, border_color.g * 3.0, border_color.b * 3.0, 0.9)
 		var draw_rect_pos := origin + Vector2(rect.position.x * cell_size, rect.position.y * cell_size)
 		var draw_rect_size := Vector2(rect.size.x * cell_size, rect.size.y * cell_size)
+		var bw := RECT_BORDER if not neon_mode else 1.5
 		# Top
-		draw_rect(Rect2(draw_rect_pos, Vector2(draw_rect_size.x, RECT_BORDER)), border_color)
+		draw_rect(Rect2(draw_rect_pos, Vector2(draw_rect_size.x, bw)), border_color)
 		# Bottom
-		draw_rect(Rect2(draw_rect_pos + Vector2(0, draw_rect_size.y - RECT_BORDER), Vector2(draw_rect_size.x, RECT_BORDER)), border_color)
+		draw_rect(Rect2(draw_rect_pos + Vector2(0, draw_rect_size.y - bw), Vector2(draw_rect_size.x, bw)), border_color)
 		# Left
-		draw_rect(Rect2(draw_rect_pos, Vector2(RECT_BORDER, draw_rect_size.y)), border_color)
+		draw_rect(Rect2(draw_rect_pos, Vector2(bw, draw_rect_size.y)), border_color)
 		# Right
-		draw_rect(Rect2(draw_rect_pos + Vector2(draw_rect_size.x - RECT_BORDER, 0), Vector2(RECT_BORDER, draw_rect_size.y)), border_color)
+		draw_rect(Rect2(draw_rect_pos + Vector2(draw_rect_size.x - bw, 0), Vector2(bw, draw_rect_size.y)), border_color)
+		# Extra glow pass for neon
+		if neon_mode:
+			var glow := Color(border_color.r * 0.3, border_color.g * 0.3, border_color.b * 0.3, 0.25)
+			draw_rect(Rect2(draw_rect_pos - Vector2(2, 2), draw_rect_size + Vector2(4, 4)), glow, false, 3.0)
 
 	# Drag preview
 	if _dragging and _drag_preview.size.x > 0:
@@ -232,15 +240,24 @@ func _draw() -> void:
 		draw_rect(Rect2(preview_pos + Vector2(preview_size.x - 2, 0), Vector2(2, preview_size.y)), pb)
 
 	# Grid lines
+	var grid_line_color := line_color.darkened(0.5)
+	if neon_mode:
+		grid_line_color = Color(0.15, 0.1, 0.35)
 	for c in range(grid_width + 1):
 		var x := origin.x + c * cell_size
-		draw_line(Vector2(x, origin.y), Vector2(x, origin.y + grid_height * cell_size), line_color.darkened(0.5), LINE_WIDTH)
+		draw_line(Vector2(x, origin.y), Vector2(x, origin.y + grid_height * cell_size), grid_line_color, LINE_WIDTH)
 	for r in range(grid_height + 1):
 		var y := origin.y + r * cell_size
-		draw_line(Vector2(origin.x, y), Vector2(origin.x + grid_width * cell_size, y), line_color.darkened(0.5), LINE_WIDTH)
+		draw_line(Vector2(origin.x, y), Vector2(origin.x + grid_width * cell_size, y), grid_line_color, LINE_WIDTH)
 
 	# Border
-	draw_rect(grid_rect, line_color, false, BORDER_WIDTH)
+	var border_col := line_color
+	if neon_mode:
+		border_col = Color(0.0, 1.5, 1.5)
+	draw_rect(grid_rect, border_col, false, BORDER_WIDTH)
+	if neon_mode:
+		var glow := Color(0.0, 0.6, 0.6, 0.25)
+		draw_rect(Rect2(origin - Vector2(3, 3), Vector2(cell_size * grid_width + 6, cell_size * grid_height + 6)), glow, false, 5.0)
 
 	# Numbers
 	var font := ThemeDB.fallback_font
@@ -258,9 +275,23 @@ func _draw() -> void:
 
 ## Flash all cells for win celebration
 func flash_all(color: Color, duration: float) -> void:
-	# Simple: temporarily tint the whole grid
 	var original_modulate := modulate
 	modulate = Color(1.2, 1.1, 0.8)
+
+	# Neon win celebration: bursts on each rectangle
+	if ThemeManager.is_neon:
+		var cell_size := _get_cell_size()
+		var origin := _get_grid_origin()
+		for i in range(placed_rects.size()):
+			var rect := placed_rects[i]
+			var center := origin + Vector2(
+				(rect.position.x + rect.size.x / 2.0) * cell_size,
+				(rect.position.y + rect.size.y / 2.0) * cell_size
+			)
+			var rc := rect_colors[i] if i < rect_colors.size() else Color(0.0, 1.5, 1.5)
+			NeonBurst.create(self, center, rc, 12, 1.2)
+		NeonFxManager.screen_shake(8.0, 0.25)
+
 	var t := create_tween()
 	t.tween_interval(duration)
 	t.tween_callback(func() -> void: modulate = original_modulate)

@@ -120,6 +120,15 @@ func _on_rectangle_placed(rect: Rect2i) -> void:
 	board.add_rect(rect)
 	SoundManager.play_place()
 	HapticManager.vibrate_light()
+	# Neon shockwave on rect placement
+	if ThemeManager.is_neon:
+		var cell_size := board._get_cell_size()
+		var origin := board._get_grid_origin()
+		var center := origin + Vector2(
+			(rect.position.x + rect.size.x / 2.0) * cell_size,
+			(rect.position.y + rect.size.y / 2.0) * cell_size
+		)
+		NeonRing.create(board, center, Color(0.0, 1.5, 1.5), cell_size * 2.5, 0.25, 0.3)
 	_update_button_states()
 	_check_completion()
 	_save_current_state()
@@ -237,6 +246,16 @@ func _handle_win() -> void:
 	ShikakuSaveManager.clear_save()
 	SoundManager.play_win()
 	HapticManager.vibrate_success()
+	# Neon win shockwave
+	if ThemeManager.is_neon:
+		var cell_size := board._get_cell_size()
+		var origin := board._get_grid_origin()
+		var center := origin + Vector2(
+			(board.grid_width / 2.0) * cell_size,
+			(board.grid_height / 2.0) * cell_size
+		)
+		NeonRing.create(board, center, Color(0.0, 2.0, 1.5), cell_size * 6.0, 0.5, 1.2)
+		NeonFxManager.screen_shake(6.0, 0.2)
 	board.flash_all(Color(1.2, 1.1, 0.8), 0.4)
 	var timer := get_tree().create_timer(0.5)
 	timer.timeout.connect(_show_win_dialog)
