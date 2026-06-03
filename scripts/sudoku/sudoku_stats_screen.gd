@@ -1,0 +1,119 @@
+extends Control
+
+## Statistics display screen
+
+@onready var back_button: Button = %BackButton
+@onready var stats_list: VBoxContainer = %StatsList
+
+const DIFFICULTY_NAMES := ["Easy", "Medium", "Hard", "Expert", "Evil"]
+
+
+func _ready() -> void:
+	back_button.pressed.connect(func() -> void:
+		SceneTransition.transition_to("res://scenes/main_menu.tscn")
+	)
+	_build_stats_ui()
+	_apply_theme()
+	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
+
+
+func _build_stats_ui() -> void:
+	for child in stats_list.get_children():
+		child.queue_free()
+
+	# Global stats
+	_add_header("Overall")
+	_add_stat_row("Total Games", str(StatsManager.total_games_played))
+	_add_stat_row("Current Streak", str(StatsManager.current_streak))
+	_add_stat_row("Best Streak", str(StatsManager.best_streak))
+
+	_add_separator()
+
+	# Per-difficulty stats
+	for d in range(5):
+		_add_header(DIFFICULTY_NAMES[d])
+
+		var best: float = StatsManager.best_times.get(d, -1.0)
+		_add_stat_row("Best Time", _format_time(best) if best >= 0 else "--")
+
+		var avg := StatsManager.get_average_time(d)
+		_add_stat_row("Average Time", _format_time(avg) if avg >= 0 else "--")
+
+		var started: int = StatsManager.games_started.get(d, 0)
+		var completed: int = StatsManager.games_completed.get(d, 0)
+		var abandoned: int = StatsManager.games_abandoned.get(d, 0)
+		_add_stat_row("Started / Completed", "%d / %d" % [started, completed])
+		_add_stat_row("Abandoned", str(abandoned))
+
+		var won: int = StatsManager.games_won.get(d, 0)
+		var lost: int = StatsManager.games_lost.get(d, 0)
+		_add_stat_row("Strict W/L", "%d / %d" % [won, lost])
+
+		var rate := StatsManager.get_completion_rate(d)
+		_add_stat_row("Completion Rate", "%.0f%%" % rate)
+
+		_add_separator()
+
+	# Reset button at the bottom
+	var reset_btn := Button.new()
+	reset_btn.text = "Reset All Statistics"
+	reset_btn.custom_minimum_size = Vector2(0, 44)
+	reset_btn.pressed.connect(_on_reset_pressed)
+	stats_list.add_child(reset_btn)
+
+
+func _add_header(text: String) -> void:
+	var label := Label.new()
+	label.text = text
+	label.add_theme_font_size_override("font_size", 20)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stats_list.add_child(label)
+
+
+func _add_stat_row(label_text: String, value_text: String) -> void:
+	var row := HBoxContainer.new()
+
+	var label := Label.new()
+	label.text = label_text
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(label)
+
+	var value := Label.new()
+	value.text = value_text
+	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	row.add_child(value)
+
+	stats_list.add_child(row)
+
+
+func _add_separator() -> void:
+	var sep := HSeparator.new()
+	sep.custom_minimum_size = Vector2(0, 10)
+	stats_list.add_child(sep)
+
+
+func _format_time(seconds: float) -> String:
+	var mins := int(seconds) / 60
+	var secs := int(seconds) % 60
+	return "%d:%02d" % [mins, secs]
+
+
+func _apply_theme() -> void:
+	var style := StyleBoxFlat.new()
+	style.bg_color = ThemeManager.get_color("background")
+	add_theme_stylebox_override("panel", style)
+
+
+func _on_reset_pressed() -> void:
+	var dialog := ConfirmationDialog.new()
+	dialog.title = "Reset Statistics"
+	dialog.dialog_text = "Are you sure? This will permanently delete all statistics."
+	dialog.ok_button_text = "Reset"
+	add_child(dialog)
+	dialog.popup_centered()
+	dialog.confirmed.connect(func() -> void:
+		StatsManager.reset_all()
+		_build_stats_ui()
+		dialog.queue_free()
+	)
+	dialog.canceled.connect(func() -> void: dialog.queue_free())

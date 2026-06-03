@@ -1,0 +1,53 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="Sweet Vinegar Games"
+run/main_scene="res://scenes/game_picker.tscn"
+config/features=PackedStringArray("4.6")
+config/icon="res://icon.svg"
+
+[autoload]
+
+SettingsManager="*res://scripts/autoload/settings_manager.gd"
+StatsManager="*res://scripts/autoload/stats_manager.gd"
+SaveManager="*res://scripts/autoload/save_manager.gd"
+ThemeManager="*res://scripts/autoload/theme_manager.gd"
+SoundManager="*res://scripts/autoload/sound_manager.gd"
+HapticManager="*res://scripts/autoload/haptic_manager.gd"
+ShikakuSaveManager="*res://scripts/autoload/shikaku_save_manager.gd"
+ShikakuStatsManager="*res://scripts/autoload/shikaku_stats_manager.gd"
+SceneTransition="*res://scripts/autoload/scene_transition.gd"
+
+[debug]
+
+file_logging/enable_file_logging=true
+gdscript/warnings/integer_division=0
+
+[display]
+
+window/size/viewport_width=390
+window/size/viewport_height=844
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=1
+
+[input]
+
+touch={
+"deadzone": 0.2,
+"events": []
+}
+
+[rendering]
+
+renderer/rendering_method="mobile"
+textures/vram_compression/import_etc2_astc=true

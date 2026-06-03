@@ -1,0 +1,20 @@
+# Godot 4 generated files
+.godot/
+
+# Build artifacts
+*.apk
+*.idsig
+*.aab
+
+# Godot import files
+*.import
+
+# UID files
+*.uid
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# VS Code
+.vscode/

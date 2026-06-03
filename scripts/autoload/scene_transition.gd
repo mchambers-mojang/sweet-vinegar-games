@@ -1,0 +1,76 @@
+extends CanvasLayer
+
+## Fade-to-black scene transition overlay.
+## Usage:
+##   SceneTransition.transition_to("res://scenes/main_menu.tscn")
+##   SceneTransition.transition_with_callback(func(): ... )
+
+var _overlay: ColorRect
+var _tween: Tween
+const FADE_DURATION := 0.15
+var _transitioning := false
+
+
+func _ready() -> void:
+	layer = 100
+	_overlay = ColorRect.new()
+	# Start fully opaque so the first scene fades in cleanly
+	_overlay.color = _get_fade_color(1.0)
+	_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(_overlay)
+	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _update_overlay_color())
+	# Fade in after the first scene has had time to render
+	get_tree().process_frame.connect(func() -> void:
+		get_tree().process_frame.connect(_fade_in, CONNECT_ONE_SHOT)
+	, CONNECT_ONE_SHOT)
+
+
+## Fade out, change scene, fade in.
+func transition_to(scene_path: String) -> void:
+	transition_with_callback(func() -> void:
+		get_tree().change_scene_to_file(scene_path)
+	)
+
+
+## Fade out, run a callback (for manual instantiate patterns), fade in.
+func transition_with_callback(callback: Callable) -> void:
+	if _transitioning:
+		return
+	_transitioning = true
+	_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	_overlay.color = _get_fade_color(0.0)
+	if _tween and _tween.is_valid():
+		_tween.kill()
+	# Fade to background color
+	_tween = create_tween()
+	_tween.tween_property(_overlay, "color:a", 1.0, FADE_DURATION)
+	_tween.tween_callback(func() -> void:
+		callback.call()
+		# Wait two frames so the new scene fully initialises and renders behind the overlay
+		get_tree().process_frame.connect(func() -> void:
+			get_tree().process_frame.connect(_fade_in, CONNECT_ONE_SHOT)
+		, CONNECT_ONE_SHOT)
+	)
+
+
+func _fade_in() -> void:
+	if _tween and _tween.is_valid():
+		_tween.kill()
+	_tween = create_tween()
+	_tween.tween_property(_overlay, "color:a", 0.0, FADE_DURATION)
+	_tween.tween_callback(func() -> void:
+		_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_transitioning = false
+	)
+
+
+func _get_fade_color(alpha: float) -> Color:
+	var bg := ThemeManager.get_color("background")
+	bg.a = alpha
+	return bg
+
+
+func _update_overlay_color() -> void:
+	var a := _overlay.color.a
+	_overlay.color = _get_fade_color(a)
