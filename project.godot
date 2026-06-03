@@ -25,6 +25,8 @@ SoundManager="*res://scripts/autoload/sound_manager.gd"
 HapticManager="*res://scripts/autoload/haptic_manager.gd"
 ShikakuSaveManager="*res://scripts/autoload/shikaku_save_manager.gd"
 ShikakuStatsManager="*res://scripts/autoload/shikaku_stats_manager.gd"
+BlockudokuSaveManager="*res://scripts/autoload/blockudoku_save_manager.gd"
+BlockudokuStatsManager="*res://scripts/autoload/blockudoku_stats_manager.gd"
 SceneTransition="*res://scripts/autoload/scene_transition.gd"
 
 [debug]

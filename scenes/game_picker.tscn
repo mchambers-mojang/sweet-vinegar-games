@@ -64,6 +64,12 @@ layout_mode = 2
 custom_minimum_size = Vector2(0, 60)
 text = "Shikaku"
 
+[node name="BlockudokuButton" type="Button" parent="MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(0, 60)
+text = "Blockudoku"
+
 [node name="Spacer3" type="Control" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2
 size_flags_vertical = 3

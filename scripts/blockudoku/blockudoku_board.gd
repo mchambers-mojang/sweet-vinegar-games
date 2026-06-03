@@ -1,0 +1,334 @@
+class_name BlockudokuBoard
+extends Control
+
+## 9x9 Blockudoku grid — draws cells, placed blocks, previews, and handles clears
+
+signal cells_cleared(count: int, lines: int, boxes: int, is_combo: bool)
+signal block_placed
+
+const GRID_SIZE := 9
+const BOX_SIZE := 3
+const LINE_WIDTH := 1.0
+const BORDER_WIDTH := 2.0
+const BOX_LINE_WIDTH := 2.0
+
+## Grid state: 0 = empty, 1 = filled
+var grid: Array[int] = []
+
+## Color for each filled cell (for visual variety)
+var cell_colors: Array[Color] = []
+
+## Preview state
+var preview_cells: Array[Vector2i] = []
+var preview_valid: bool = false
+
+## Flash animation
+var _flash_cells: Array[Vector2i] = []
+var _flash_alpha: float = 0.0
+
+## Color palette for placed blocks
+const PALETTE: Array[Color] = [
+	Color(0.45, 0.7, 0.95),    # Blue
+	Color(0.95, 0.6, 0.45),    # Orange
+	Color(0.55, 0.85, 0.55),   # Green
+	Color(0.9, 0.5, 0.5),      # Red
+	Color(0.7, 0.55, 0.9),     # Purple
+	Color(0.95, 0.85, 0.4),    # Yellow
+	Color(0.45, 0.85, 0.8),    # Teal
+	Color(0.9, 0.6, 0.75),     # Pink
+]
+var _color_index: int = 0
+
+
+func _ready() -> void:
+	mouse_filter = Control.MOUSE_FILTER_STOP
+	_init_grid()
+
+
+func _init_grid() -> void:
+	grid.resize(GRID_SIZE * GRID_SIZE)
+	grid.fill(0)
+	cell_colors.resize(GRID_SIZE * GRID_SIZE)
+	for i in cell_colors.size():
+		cell_colors[i] = Color.TRANSPARENT
+
+
+func reset() -> void:
+	_init_grid()
+	_color_index = 0
+	preview_cells.clear()
+	_flash_cells.clear()
+	queue_redraw()
+
+
+func _get_cell_size() -> float:
+	# Use the smaller dimension so the grid always fits, and leave room for siblings
+	var available := minf(size.x, size.y) - BORDER_WIDTH * 2
+	# Also cap to the viewport height minus space for top bar + tray (~200px)
+	var viewport_h := get_viewport_rect().size.y
+	var max_grid := viewport_h - 200.0
+	available = minf(available, max_grid)
+	return available / GRID_SIZE
+
+
+func _get_grid_origin() -> Vector2:
+	var cell_size := _get_cell_size()
+	var grid_px := cell_size * GRID_SIZE
+	return Vector2((size.x - grid_px) / 2.0, (size.y - grid_px) / 2.0)
+
+
+func can_place(shape: Array, grid_col: int, grid_row: int) -> bool:
+	for cell in shape:
+		var c: Vector2i = cell
+		var col := grid_col + c.x
+		var row := grid_row + c.y
+		if col < 0 or col >= GRID_SIZE or row < 0 or row >= GRID_SIZE:
+			return false
+		if grid[row * GRID_SIZE + col] != 0:
+			return false
+	return true
+
+
+func place_block(shape: Array, grid_col: int, grid_row: int, color: Color = Color(-1, -1, -1)) -> void:
+	if color.r < 0:
+		color = PALETTE[_color_index % PALETTE.size()]
+	_color_index += 1
+	for cell in shape:
+		var c: Vector2i = cell
+		var col := grid_col + c.x
+		var row := grid_row + c.y
+		grid[row * GRID_SIZE + col] = 1
+		cell_colors[row * GRID_SIZE + col] = color
+	block_placed.emit()
+	queue_redraw()
+
+
+func check_and_clear() -> Dictionary:
+	var rows_to_clear: Array[int] = []
+	var cols_to_clear: Array[int] = []
+	var boxes_to_clear: Array[Vector2i] = []  # top-left of each 3x3 box
+
+	# Check rows
+	for r in GRID_SIZE:
+		var full := true
+		for c in GRID_SIZE:
+			if grid[r * GRID_SIZE + c] == 0:
+				full = false
+				break
+		if full:
+			rows_to_clear.append(r)
+
+	# Check columns
+	for c in GRID_SIZE:
+		var full := true
+		for r in GRID_SIZE:
+			if grid[r * GRID_SIZE + c] == 0:
+				full = false
+				break
+		if full:
+			cols_to_clear.append(c)
+
+	# Check 3x3 boxes
+	for box_r in range(0, GRID_SIZE, BOX_SIZE):
+		for box_c in range(0, GRID_SIZE, BOX_SIZE):
+			var full := true
+			for r in range(box_r, box_r + BOX_SIZE):
+				for c in range(box_c, box_c + BOX_SIZE):
+					if grid[r * GRID_SIZE + c] == 0:
+						full = false
+						break
+				if not full:
+					break
+			if full:
+				boxes_to_clear.append(Vector2i(box_c, box_r))
+
+	if rows_to_clear.is_empty() and cols_to_clear.is_empty() and boxes_to_clear.is_empty():
+		return {"cleared": 0, "lines": 0, "boxes": 0}
+
+	# Collect all cells to clear (use a set to avoid duplicates)
+	var clear_set := {}
+	for r in rows_to_clear:
+		for c in GRID_SIZE:
+			clear_set[Vector2i(c, r)] = true
+	for c in cols_to_clear:
+		for r in GRID_SIZE:
+			clear_set[Vector2i(c, r)] = true
+	for box_pos in boxes_to_clear:
+		for r in range(box_pos.y, box_pos.y + BOX_SIZE):
+			for c in range(box_pos.x, box_pos.x + BOX_SIZE):
+				clear_set[Vector2i(c, r)] = true
+
+	# Flash then clear
+	_flash_cells.clear()
+	var _flash_saved_colors: Array[Color] = []
+	for key in clear_set.keys():
+		var p: Vector2i = key
+		_flash_cells.append(p)
+		_flash_saved_colors.append(cell_colors[p.y * GRID_SIZE + p.x])
+
+	# Clear grid state immediately so game-over checks see the updated board
+	for p in _flash_cells:
+		grid[p.y * GRID_SIZE + p.x] = 0
+		cell_colors[p.y * GRID_SIZE + p.x] = Color.TRANSPARENT
+
+	# Animate flash overlay
+	_flash_alpha = 1.0
+	var tween := create_tween()
+	tween.tween_method(_set_flash_alpha, 1.0, 0.0, 0.3)
+	tween.tween_callback(func() -> void:
+		_flash_cells.clear()
+		queue_redraw()
+	)
+
+	queue_redraw()
+
+	var lines := rows_to_clear.size() + cols_to_clear.size()
+	var boxes := boxes_to_clear.size()
+	return {"cleared": clear_set.size(), "lines": lines, "boxes": boxes}
+
+
+func _set_flash_alpha(alpha: float) -> void:
+	_flash_alpha = alpha
+	queue_redraw()
+
+
+func show_preview(shape: Array, grid_col: int, grid_row: int) -> void:
+	preview_cells.clear()
+	preview_valid = can_place(shape, grid_col, grid_row)
+	for cell in shape:
+		var c: Vector2i = cell
+		preview_cells.append(Vector2i(grid_col + c.x, grid_row + c.y))
+	queue_redraw()
+
+
+func clear_preview() -> void:
+	preview_cells.clear()
+	queue_redraw()
+
+
+## Check if any of the given shapes can be placed anywhere on the board
+func has_valid_placement(shapes: Array) -> bool:
+	for shape in shapes:
+		for r in GRID_SIZE:
+			for c in GRID_SIZE:
+				if can_place(shape, c, r):
+					return true
+	return false
+
+
+func screen_to_grid(screen_pos: Vector2) -> Vector2i:
+	var origin := _get_grid_origin()
+	var cell_size := _get_cell_size()
+	var col := int((screen_pos.x - origin.x) / cell_size)
+	var row := int((screen_pos.y - origin.y) / cell_size)
+	return Vector2i(col, row)
+
+
+func get_filled_count() -> int:
+	var count := 0
+	for cell in grid:
+		if cell != 0:
+			count += 1
+	return count
+
+
+func get_state() -> Dictionary:
+	return {
+		"grid": grid.duplicate(),
+		"cell_colors": _serialize_colors(),
+		"color_index": _color_index,
+	}
+
+
+func set_state(state: Dictionary) -> void:
+	grid = state.get("grid", [])
+	if grid.size() != GRID_SIZE * GRID_SIZE:
+		_init_grid()
+	else:
+		_deserialize_colors(state.get("cell_colors", []))
+	_color_index = state.get("color_index", 0)
+	queue_redraw()
+
+
+func _serialize_colors() -> Array[String]:
+	var result: Array[String] = []
+	for c in cell_colors:
+		result.append(c.to_html())
+	return result
+
+
+func _deserialize_colors(data: Array) -> void:
+	cell_colors.resize(GRID_SIZE * GRID_SIZE)
+	for i in mini(data.size(), cell_colors.size()):
+		cell_colors[i] = Color.from_string(str(data[i]), Color.TRANSPARENT)
+	for i in range(data.size(), cell_colors.size()):
+		cell_colors[i] = Color.TRANSPARENT
+
+
+func _draw() -> void:
+	var cell_size := _get_cell_size()
+	var origin := _get_grid_origin()
+	var tm := ThemeManager
+	var bg_color := tm.get_color("cell_background")
+	var grid_px := cell_size * GRID_SIZE
+	var grid_rect := Rect2(origin, Vector2(grid_px, grid_px))
+
+	# Background
+	draw_rect(grid_rect, bg_color)
+
+	# 3x3 box shading (alternating subtle tint for visual grouping)
+	var box_tint := tm.get_color("cell_given")
+	for box_r in range(0, GRID_SIZE, BOX_SIZE):
+		for box_c in range(0, GRID_SIZE, BOX_SIZE):
+			var box_idx := (box_r / BOX_SIZE) * 3 + (box_c / BOX_SIZE)
+			if box_idx % 2 == 0:
+				var box_origin := origin + Vector2(box_c * cell_size, box_r * cell_size)
+				var box_size := Vector2(BOX_SIZE * cell_size, BOX_SIZE * cell_size)
+				draw_rect(Rect2(box_origin, box_size), box_tint)
+
+	# Filled cells
+	for r in GRID_SIZE:
+		for c in GRID_SIZE:
+			if grid[r * GRID_SIZE + c] != 0:
+				var cell_origin := origin + Vector2(c * cell_size, r * cell_size)
+				var color := cell_colors[r * GRID_SIZE + c]
+				draw_rect(Rect2(cell_origin + Vector2(0.5, 0.5), Vector2(cell_size - 1, cell_size - 1)), color)
+
+	# Flash animation
+	if not _flash_cells.is_empty():
+		var flash_color := Color(1.0, 1.0, 0.7, _flash_alpha * 0.6)
+		for pos in _flash_cells:
+			var p: Vector2i = pos
+			var cell_origin := origin + Vector2(p.x * cell_size, p.y * cell_size)
+			draw_rect(Rect2(cell_origin, Vector2(cell_size, cell_size)), flash_color)
+
+	# Preview
+	if not preview_cells.is_empty():
+		var preview_color: Color
+		if preview_valid:
+			preview_color = Color(0.5, 0.8, 1.0, 0.35)
+		else:
+			preview_color = Color(1.0, 0.3, 0.3, 0.25)
+		for pos in preview_cells:
+			if pos.x >= 0 and pos.x < GRID_SIZE and pos.y >= 0 and pos.y < GRID_SIZE:
+				var cell_origin := origin + Vector2(pos.x * cell_size, pos.y * cell_size)
+				draw_rect(Rect2(cell_origin + Vector2(0.5, 0.5), Vector2(cell_size - 1, cell_size - 1)), preview_color)
+
+	# Grid lines (thin)
+	var thin_color := tm.get_color("grid_line_thin")
+	for i in range(GRID_SIZE + 1):
+		var x := origin.x + i * cell_size
+		draw_line(Vector2(x, origin.y), Vector2(x, origin.y + grid_px), thin_color, LINE_WIDTH)
+		var y := origin.y + i * cell_size
+		draw_line(Vector2(origin.x, y), Vector2(origin.x + grid_px, y), thin_color, LINE_WIDTH)
+
+	# Box lines (thick)
+	var thick_color := tm.get_color("grid_line_thick")
+	for i in range(0, GRID_SIZE + 1, BOX_SIZE):
+		var x := origin.x + i * cell_size
+		draw_line(Vector2(x, origin.y), Vector2(x, origin.y + grid_px), thick_color, BOX_LINE_WIDTH)
+		var y := origin.y + i * cell_size
+		draw_line(Vector2(origin.x, y), Vector2(origin.x + grid_px, y), thick_color, BOX_LINE_WIDTH)
+
+	# Outer border
+	draw_rect(grid_rect, thick_color, false, BORDER_WIDTH)

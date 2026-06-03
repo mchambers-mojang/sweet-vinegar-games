@@ -1,0 +1,61 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/blockudoku/blockudoku_game_screen.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/blockudoku/blockudoku_board.gd" id="2"]
+
+[node name="BlockudokuGame" type="PanelContainer"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1")
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TopBar" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="BackButton" type="Button" parent="MarginContainer/VBoxContainer/TopBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "< Back"
+
+[node name="ScoreLabel" type="Label" parent="MarginContainer/VBoxContainer/TopBar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Score: 0"
+horizontal_alignment = 1
+
+[node name="TimerLabel" type="Label" parent="MarginContainer/VBoxContainer/TopBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "0:00"
+
+[node name="BoardArea" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+alignment = 1
+theme_override_constants/separation = 12
+
+[node name="BlockudokuBoard" type="Control" parent="MarginContainer/VBoxContainer/BoardArea"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+script = ExtResource("2")
+
+[node name="BlockTray" type="HBoxContainer" parent="MarginContainer/VBoxContainer/BoardArea"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(0, 80)
+alignment = 1
+theme_override_constants/separation = 24

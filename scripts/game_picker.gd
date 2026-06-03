@@ -6,6 +6,7 @@ extends Control
 @onready var subtitle_label: Label = %SubtitleLabel
 @onready var sudoku_button: Button = %SudokuButton
 @onready var shikaku_button: Button = %ShikakuButton
+@onready var blockudoku_button: Button = %BlockudokuButton
 @onready var settings_button: Button = %SettingsButton
 
 
@@ -15,6 +16,9 @@ func _ready() -> void:
 	)
 	shikaku_button.pressed.connect(func() -> void:
 		SceneTransition.transition_to("res://scenes/shikaku_menu.tscn")
+	)
+	blockudoku_button.pressed.connect(func() -> void:
+		SceneTransition.transition_to("res://scenes/blockudoku_menu.tscn")
 	)
 	settings_button.pressed.connect(func() -> void:
 		var SettingsScreen := load("res://scripts/settings_screen.gd")
