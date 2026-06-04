@@ -146,3 +146,9 @@ jobs:
           files: build/android/${{ env.EXPORT_NAME }}.apk
           draft: false
           prerelease: false
+
+  build-ios:
+    needs: tag
+    if: needs.tag.outputs.tagged == 'true'
+    uses: ./.github/workflows/build-ios.yml
+    secrets: inherit
