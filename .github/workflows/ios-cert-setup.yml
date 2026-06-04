@@ -12,126 +12,33 @@ name: iOS Certificate Setup (One-Time)
 on:
   workflow_dispatch:
     inputs:
-      step:
-        description: 'Which step to run'
-        required: true
-        type: choice
-        options:
-          - '1-generate-csr'
-          - '2-create-p12'
       cer_base64:
-        description: 'Base64-encoded .cer file from Apple (only for step 2)'
-        required: false
+        description: 'Base64-encoded .cer file from Apple'
+        required: true
+        type: string
+      key_base64:
+        description: 'Base64-encoded distribution_key.pem from step 1 artifact'
+        required: true
         type: string
       p12_password:
-        description: 'Password to protect the .p12 export (only for step 2)'
-        required: false
+        description: 'Password to protect the .p12 export'
+        required: true
         type: string
 
 permissions:
   contents: read
 
 jobs:
-  generate-csr:
-    name: Generate CSR
-    if: inputs.step == '1-generate-csr'
-    runs-on: macos-latest
-    steps:
-      - name: Generate private key and CSR
-        run: |
-          # Generate a new private key
-          openssl genrsa -out distribution_key.pem 2048
-
-          # Generate CSR
-          openssl req -new \
-            -key distribution_key.pem \
-            -out CertificateSigningRequest.certSigningRequest \
-            -subj "/emailAddress=dev@sweetvinegar.com/CN=Sweet Vinegar Games/C=US"
-
-          echo "CSR generated successfully"
-          echo ""
-          echo "============================================"
-          echo "NEXT STEPS:"
-          echo "1. Download the artifacts from this workflow run"
-          echo "2. Go to https://developer.apple.com/account/resources/certificates/add"
-          echo "3. Select 'Apple Distribution'"
-          echo "4. Upload the CertificateSigningRequest.certSigningRequest file"
-          echo "5. Download the .cer file Apple gives you"
-          echo "6. Base64 encode it: base64 -i distribution.cer | pbcopy  (or use certutil on Windows)"
-          echo "7. Re-run this workflow choosing step '2-create-p12'"
-          echo "   - Paste the base64 .cer as the cer_base64 input"
-          echo "   - Set a p12_password"
-          echo "============================================"
-
-      - name: Upload CSR and private key
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-csr-and-key
-          path: |
-            CertificateSigningRequest.certSigningRequest
-            distribution_key.pem
-          retention-days: 7
-
   create-p12:
-    name: Create P12 from Apple cert
-    if: inputs.step == '2-create-p12'
+    name: Create P12 from inputs
     runs-on: macos-latest
     steps:
-      - name: Download key artifact from previous run
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Decode inputs and create P12
         run: |
-          echo "Looking for ios-csr-and-key artifact from previous runs..."
+          # Decode the private key
+          echo "${{ inputs.key_base64 }}" | base64 -d > distribution_key.pem
 
-          # Find the successful step-1 run
-          RUN_IDS=$(gh run list \
-            --repo ${{ github.repository }} \
-            --workflow "ios-cert-setup.yml" \
-            --status success \
-            --limit 5 \
-            --json databaseId \
-            -q '.[].databaseId')
-
-          echo "Found successful run IDs: $RUN_IDS"
-
-          FOUND=false
-          for run_id in $RUN_IDS; do
-            echo "Trying run $run_id..."
-            if gh run download "$run_id" \
-              --repo ${{ github.repository }} \
-              --name ios-csr-and-key 2>&1; then
-              echo "Downloaded artifact from run $run_id"
-              FOUND=true
-              break
-            else
-              echo "No matching artifact in run $run_id"
-            fi
-          done
-
-          echo "Download complete. Listing files:"
-          find . -name "*.pem" -o -name "*.certSigningRequest" | head -20
-          ls -laR . | head -40
-
-          # Move files if they ended up in a subdirectory
-          if [ -f "ios-csr-and-key/distribution_key.pem" ]; then
-            mv ios-csr-and-key/* .
-          fi
-
-          if [ "$FOUND" = false ]; then
-            echo "::warning::Could not download artifact from any previous run"
-          fi
-
-      - name: Check for private key
-        run: |
-          if [ ! -f distribution_key.pem ]; then
-            echo "::error::Private key not found. Make sure the 'ios-csr-and-key' artifact from step 1 is still available (expires after 7 days)."
-            echo "If it expired, you'll need to run step 1 again and re-upload the CSR to Apple."
-            exit 1
-          fi
-
-      - name: Convert .cer to .p12
-        run: |
-          # Decode the .cer from base64
+          # Decode the .cer
           echo "${{ inputs.cer_base64 }}" | base64 -d > distribution.cer
 
           # Convert DER cert to PEM
@@ -145,7 +52,6 @@ jobs:
             -passout "pass:${{ inputs.p12_password }}"
 
           echo "P12 created successfully!"
-          echo ""
 
           # Base64 encode it for the GitHub secret
           P12_BASE64=$(base64 -i distribution.p12)
