@@ -13,7 +13,6 @@ name: Build iOS
 on:
   workflow_dispatch:
   workflow_call:
-    secrets: inherit
 
 permissions:
   contents: write
