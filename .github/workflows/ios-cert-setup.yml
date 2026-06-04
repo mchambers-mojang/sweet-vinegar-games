@@ -1,0 +1,129 @@
+name: iOS Certificate Setup (One-Time)
+
+# Run this workflow ONCE to generate a CSR and signing certificate.
+# After running:
+#   1. Download the CSR artifact from the workflow run
+#   2. Upload it at https://developer.apple.com/account/resources/certificates/add
+#   3. Select "Apple Distribution" certificate type
+#   4. Download the .cer file Apple gives you
+#   5. Re-run this workflow with the .cer file uploaded as the IOS_CERT_CER secret (base64 encoded)
+#      OR use the manual-import workflow dispatch with the cer_base64 input
+
+on:
+  workflow_dispatch:
+    inputs:
+      step:
+        description: 'Which step to run'
+        required: true
+        type: choice
+        options:
+          - '1-generate-csr'
+          - '2-create-p12'
+      cer_base64:
+        description: 'Base64-encoded .cer file from Apple (only for step 2)'
+        required: false
+        type: string
+      p12_password:
+        description: 'Password to protect the .p12 export (only for step 2)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  generate-csr:
+    name: Generate CSR
+    if: inputs.step == '1-generate-csr'
+    runs-on: macos-latest
+    steps:
+      - name: Generate private key and CSR
+        run: |
+          # Generate a new private key
+          openssl genrsa -out distribution_key.pem 2048
+
+          # Generate CSR
+          openssl req -new \
+            -key distribution_key.pem \
+            -out CertificateSigningRequest.certSigningRequest \
+            -subj "/emailAddress=dev@sweetvinegar.com/CN=Sweet Vinegar Games/C=US"
+
+          echo "CSR generated successfully"
+          echo ""
+          echo "============================================"
+          echo "NEXT STEPS:"
+          echo "1. Download the artifacts from this workflow run"
+          echo "2. Go to https://developer.apple.com/account/resources/certificates/add"
+          echo "3. Select 'Apple Distribution'"
+          echo "4. Upload the CertificateSigningRequest.certSigningRequest file"
+          echo "5. Download the .cer file Apple gives you"
+          echo "6. Base64 encode it: base64 -i distribution.cer | pbcopy  (or use certutil on Windows)"
+          echo "7. Re-run this workflow choosing step '2-create-p12'"
+          echo "   - Paste the base64 .cer as the cer_base64 input"
+          echo "   - Set a p12_password"
+          echo "============================================"
+
+      - name: Upload CSR and private key
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-csr-and-key
+          path: |
+            CertificateSigningRequest.certSigningRequest
+            distribution_key.pem
+          retention-days: 7
+
+  create-p12:
+    name: Create P12 from Apple cert
+    if: inputs.step == '2-create-p12'
+    runs-on: macos-latest
+    steps:
+      - name: Download key artifact from previous run
+        uses: actions/download-artifact@v4
+        with:
+          name: ios-csr-and-key
+        continue-on-error: true
+
+      - name: Check for private key
+        run: |
+          if [ ! -f distribution_key.pem ]; then
+            echo "::error::Private key not found. Make sure the 'ios-csr-and-key' artifact from step 1 is still available (expires after 7 days)."
+            echo "If it expired, you'll need to run step 1 again and re-upload the CSR to Apple."
+            exit 1
+          fi
+
+      - name: Convert .cer to .p12
+        run: |
+          # Decode the .cer from base64
+          echo "${{ inputs.cer_base64 }}" | base64 -d > distribution.cer
+
+          # Convert DER cert to PEM
+          openssl x509 -inform DER -in distribution.cer -out distribution_cert.pem
+
+          # Combine into .p12
+          openssl pkcs12 -export \
+            -inkey distribution_key.pem \
+            -in distribution_cert.pem \
+            -out distribution.p12 \
+            -passout "pass:${{ inputs.p12_password }}"
+
+          echo "P12 created successfully!"
+          echo ""
+
+          # Base64 encode it for the GitHub secret
+          P12_BASE64=$(base64 -i distribution.p12)
+          echo "============================================"
+          echo "YOUR P12 BASE64 (add as GitHub Secret: IOS_DISTRIBUTION_CERTIFICATE_BASE64):"
+          echo "============================================"
+          echo "$P12_BASE64"
+          echo "============================================"
+          echo ""
+          echo "P12 PASSWORD (add as GitHub Secret: IOS_DISTRIBUTION_CERTIFICATE_PASSWORD):"
+          echo "${{ inputs.p12_password }}"
+          echo "============================================"
+
+      - name: Upload P12 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-distribution-p12
+          path: distribution.p12
+          retention-days: 1
