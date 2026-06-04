@@ -662,6 +662,27 @@ func _check_unit_completion(index: int) -> void:
 			var center := Vector2(avg_x / flash_indices.size(), avg_y / flash_indices.size())
 			NeonRing.create(board, center, Color(0.0, 2.0, 1.5), board.get_cell_rect(0).size.x * 4.0, 0.35, 0.6)
 
+			# Neon sweep on completed rows
+			if row_complete:
+				var first := board.get_cell_rect(row * 9)
+				var last := board.get_cell_rect(row * 9 + 8)
+				var sweep_rect := Rect2(first.position, Vector2(last.position.x + last.size.x - first.position.x, first.size.y))
+				NeonSweep.create(board, sweep_rect, true, Color(0.0, 2.0, 1.5))
+
+			# Neon sweep on completed columns
+			if col_complete:
+				var first := board.get_cell_rect(col)
+				var last := board.get_cell_rect(72 + col)
+				var sweep_rect := Rect2(first.position, Vector2(first.size.x, last.position.y + last.size.y - first.position.y))
+				NeonSweep.create(board, sweep_rect, false, Color(2.0, 0.3, 1.8))
+
+			# Neon sweep on completed box
+			if box_complete:
+				var first := board.get_cell_rect(box_row * 9 + box_col)
+				var last := board.get_cell_rect((box_row + 2) * 9 + box_col + 2)
+				var sweep_rect := Rect2(first.position, Vector2(last.position.x + last.size.x - first.position.x, last.position.y + last.size.y - first.position.y))
+				NeonSweep.create(board, sweep_rect, true, Color(1.5, 0.2, 1.0))
+
 
 func _update_number_completion() -> void:
 	var counts: Array[int] = []
