@@ -76,7 +76,7 @@ var _neon_colors := {
 	"text_given": Color(0.0, 2.0, 1.6),             # HDR cyan text — blooms
 	"text_placed": Color(2.0, 0.3, 1.8),            # HDR hot pink — blooms
 	"text_error": Color(2.0, 0.0, 0.2),             # HDR red — blooms
-	"text_pencil": Color(0.4, 0.3, 0.8),
+	"text_pencil": Color(0.2, 0.15, 0.5),
 	"button_bg": Color(0.08, 0.06, 0.18),
 	"button_bg_hover": Color(0.12, 0.08, 0.28),
 	"button_bg_pressed": Color(0.06, 0.04, 0.14),
@@ -185,6 +185,39 @@ func _rebuild_ui_theme() -> void:
 
 	# CheckButton
 	ui_theme.set_color("font_color", "CheckButton", colors["label_text"])
+
+	# CheckButton state styles — fix focus/hover outlines for neon consistency
+	var check_normal := StyleBoxFlat.new()
+	check_normal.bg_color = Color.TRANSPARENT
+	check_normal.set_corner_radius_all(4)
+	check_normal.set_content_margin_all(4)
+	if is_neon:
+		check_normal.border_color = Color(0.0, 0.8, 0.8, 0.4)
+		check_normal.set_border_width_all(1)
+
+	var check_hover := StyleBoxFlat.new()
+	check_hover.bg_color = Color.TRANSPARENT
+	check_hover.set_corner_radius_all(4)
+	check_hover.set_content_margin_all(4)
+	if is_neon:
+		check_hover.border_color = Color(0.0, 1.0, 1.0, 0.6)
+		check_hover.set_border_width_all(1)
+
+	var check_pressed := StyleBoxFlat.new()
+	check_pressed.bg_color = Color.TRANSPARENT
+	check_pressed.set_corner_radius_all(4)
+	check_pressed.set_content_margin_all(4)
+	if is_neon:
+		check_pressed.border_color = Color(1.5, 0.2, 1.0, 0.8)
+		check_pressed.set_border_width_all(1)
+
+	var check_focus := StyleBoxEmpty.new()
+
+	ui_theme.set_stylebox("normal", "CheckButton", check_normal)
+	ui_theme.set_stylebox("hover", "CheckButton", check_hover)
+	ui_theme.set_stylebox("pressed", "CheckButton", check_pressed)
+	ui_theme.set_stylebox("hover_pressed", "CheckButton", check_pressed.duplicate())
+	ui_theme.set_stylebox("focus", "CheckButton", check_focus)
 
 	# OptionButton
 	var opt_normal := btn_normal.duplicate()

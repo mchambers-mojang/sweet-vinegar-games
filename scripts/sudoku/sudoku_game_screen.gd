@@ -50,6 +50,17 @@ const CELL_COLORS: Array[Color] = [
 	Color(0.93, 0.85, 1.0),    # Light purple
 ]
 
+# Darker palette for neon mode — avoids bloom washing out distinctions
+const NEON_CELL_COLORS: Array[Color] = [
+	Color.TRANSPARENT,          # Clear
+	Color(0.4, 0.1, 0.1),      # Dark red
+	Color(0.4, 0.25, 0.08),    # Dark orange
+	Color(0.35, 0.35, 0.08),   # Dark yellow
+	Color(0.1, 0.35, 0.1),     # Dark green
+	Color(0.1, 0.2, 0.4),      # Dark blue
+	Color(0.25, 0.1, 0.4),     # Dark purple
+]
+
 const DIFFICULTY_NAMES := ["Easy", "Medium", "Hard", "Expert", "Evil"]
 
 var _number_buttons: Array[Button] = []
@@ -801,7 +812,8 @@ func _setup_color_buttons() -> void:
 	color_container.modulate = Color(1, 1, 1, 0)
 	color_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	for i in range(CELL_COLORS.size()):
+	var palette := NEON_CELL_COLORS if ThemeManager.is_neon else CELL_COLORS
+	for i in range(palette.size()):
 		var btn := Button.new()
 		btn.custom_minimum_size = Vector2(36, 36)
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -810,17 +822,17 @@ func _setup_color_buttons() -> void:
 		else:
 			# Use a StyleBoxFlat so the button shows the exact color
 			var style := StyleBoxFlat.new()
-			style.bg_color = CELL_COLORS[i]
+			style.bg_color = palette[i]
 			style.set_corner_radius_all(6)
 			style.set_content_margin_all(4)
 			btn.add_theme_stylebox_override("normal", style)
 			var hover := style.duplicate()
-			hover.bg_color = CELL_COLORS[i].lightened(0.15)
+			hover.bg_color = palette[i].lightened(0.15)
 			btn.add_theme_stylebox_override("hover", hover)
 			var pressed := style.duplicate()
-			pressed.bg_color = CELL_COLORS[i].darkened(0.1)
+			pressed.bg_color = palette[i].darkened(0.1)
 			btn.add_theme_stylebox_override("pressed", pressed)
-		var color := CELL_COLORS[i]
+		var color := palette[i]
 		btn.pressed.connect(func() -> void: _on_color_pressed(color))
 		color_container.add_child(btn)
 		_color_buttons.append(btn)

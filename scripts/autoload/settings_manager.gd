@@ -16,7 +16,7 @@ var error_mode: String = "strict" # "strict" or "free"
 var show_timer: bool = true
 var highlight_row_col_box: bool = true
 var auto_remove_pencil_marks: bool = true
-var dark_mode: String = "system" # "system", "light", "dark"
+var dark_mode: String = "neon" # "system", "light", "dark", "neon"
 
 ## Feedback
 var sound_enabled: bool = true
