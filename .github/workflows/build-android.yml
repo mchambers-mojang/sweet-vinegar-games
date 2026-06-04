@@ -1,0 +1,75 @@
+name: Build Android APK
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+env:
+  GODOT_VERSION: "4.6.3"
+  EXPORT_NAME: "SweetVinegarGames"
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.6.3
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup export templates
+        run: |
+          mkdir -p /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          mv /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable.mono/android_debug.apk /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable/ 2>/dev/null || true
+          mv /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable.mono/android_release.apk /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable/ 2>/dev/null || true
+          # Templates should already be in place for non-mono image
+          ls -la /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable/ || true
+
+      - name: Setup keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > /root/release.keystore
+          # Configure Godot editor settings for keystore
+          mkdir -p /root/.config/godot
+          cat > /root/.config/godot/editor_settings-4.tres <<EOF
+          [gd_resource type="EditorSettings"]
+          [resource]
+          export/android/android_sdk_path = "/usr/lib/android-sdk"
+          export/android/debug_keystore = "/root/release.keystore"
+          export/android/debug_keystore_user = "${{ secrets.KEYSTORE_ALIAS }}"
+          export/android/debug_keystore_pass = "${{ secrets.KEYSTORE_PASSWORD }}"
+          EOF
+
+      - name: Import project
+        run: |
+          cd $GITHUB_WORKSPACE
+          godot --headless --import 2>&1 || true
+          godot --headless --import 2>&1 || true
+
+      - name: Build APK
+        run: |
+          mkdir -p $GITHUB_WORKSPACE/build/android
+          cd $GITHUB_WORKSPACE
+          godot --headless --export-debug "Android" build/android/${EXPORT_NAME}.apk 2>&1
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: build/android/${{ env.EXPORT_NAME }}.apk
+          retention-days: 30
+
+      - name: Get tag name
+        id: tag
+        run: echo "name=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          name: "${{ env.EXPORT_NAME }} ${{ steps.tag.outputs.name }}"
+          body: "Automated build from tag ${{ steps.tag.outputs.name }}"
+          files: build/android/${{ env.EXPORT_NAME }}.apk
+          draft: false
+          prerelease: false

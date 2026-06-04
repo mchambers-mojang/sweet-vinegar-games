@@ -1,0 +1,63 @@
+name: Auto Tag
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    outputs:
+      tagged: ${{ steps.check.outputs.tagged }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check commit message for release keywords
+        id: check
+        run: |
+          MSG=$(git log -1 --pretty=%B)
+          echo "Commit message: $MSG"
+
+          # Match keywords: [release], [build], [deploy]
+          # Optionally with version: [release v1.2.3]
+          if echo "$MSG" | grep -qiE '\[(release|build|deploy)(\s+v?[0-9]+\.[0-9]+(\.[0-9]+)?)?\]'; then
+            # Extract version if provided
+            VERSION=$(echo "$MSG" | grep -oiE '\[(release|build|deploy)\s+v?([0-9]+\.[0-9]+(\.[0-9]+)?)\]' | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1)
+
+            if [ -z "$VERSION" ]; then
+              # Auto-increment: find latest tag and bump patch
+              LATEST=$(git tag -l 'v*' --sort=-v:refname | head -1)
+              if [ -z "$LATEST" ]; then
+                VERSION="1.0.0"
+              else
+                # Strip 'v' prefix and increment patch
+                CURRENT="${LATEST#v}"
+                MAJOR=$(echo "$CURRENT" | cut -d. -f1)
+                MINOR=$(echo "$CURRENT" | cut -d. -f2)
+                PATCH=$(echo "$CURRENT" | cut -d. -f3)
+                PATCH=$((PATCH + 1))
+                VERSION="$MAJOR.$MINOR.$PATCH"
+              fi
+            fi
+
+            echo "tagged=true" >> $GITHUB_OUTPUT
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "Will create tag v$VERSION"
+          else
+            echo "tagged=false" >> $GITHUB_OUTPUT
+            echo "No release keyword found, skipping"
+          fi
+
+      - name: Create and push tag
+        if: steps.check.outputs.tagged == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${{ steps.check.outputs.version }}" -m "Release v${{ steps.check.outputs.version }}"
+          git push origin "v${{ steps.check.outputs.version }}"
