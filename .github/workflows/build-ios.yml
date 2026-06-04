@@ -160,7 +160,7 @@ jobs:
       - name: Upload to TestFlight
         uses: apple-actions/upload-testflight-build@v5
         with:
-          app-path: build/ios/export/${EXPORT_NAME}.ipa
+          app-path: build/ios/export/${{ env.EXPORT_NAME }}.ipa
           issuer-id: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
           api-key-id: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           api-private-key: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY }}
