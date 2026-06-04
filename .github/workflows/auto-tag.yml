@@ -77,22 +77,46 @@ jobs:
 
       - name: Setup export templates
         run: |
-          mkdir -p /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable
-          # Templates should already be in place for non-mono image
-          ls -la /root/.local/share/godot/export_templates/ || true
+          # The container HOME may differ from /root — use $HOME
+          TEMPLATES_DIR="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$TEMPLATES_DIR"
+          # barichello/godot-ci stores templates in /root, but HOME might be /github/home
+          if [ -d "/root/.local/share/godot/export_templates/${GODOT_VERSION}.stable" ] && [ "$HOME" != "/root" ]; then
+            cp -r /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable/* "$TEMPLATES_DIR/" 2>/dev/null || true
+          fi
+          echo "Templates directory contents:"
+          ls -la "$TEMPLATES_DIR/" || echo "Empty or missing"
 
-      - name: Setup keystore
+      - name: Setup keystore and editor settings
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > /root/release.keystore
-          mkdir -p /root/.config/godot
-          cat > /root/.config/godot/editor_settings-4.tres <<EOF
-          [gd_resource type="EditorSettings"]
-          [resource]
-          export/android/android_sdk_path = "/usr/lib/android-sdk"
-          export/android/debug_keystore = "/root/release.keystore"
-          export/android/debug_keystore_user = "${{ secrets.KEYSTORE_ALIAS }}"
-          export/android/debug_keystore_pass = "${{ secrets.KEYSTORE_PASSWORD }}"
-          EOF
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > $HOME/release.keystore
+          mkdir -p $HOME/.config/godot
+
+          # Find Java SDK path
+          JAVA_HOME_PATH=$(find /usr -name "javac" -type f 2>/dev/null | head -1 | sed 's|/bin/javac||')
+          if [ -z "$JAVA_HOME_PATH" ]; then
+            JAVA_HOME_PATH="/usr/lib/jvm/java-17-openjdk-amd64"
+          fi
+          echo "Java home: $JAVA_HOME_PATH"
+
+          # Find Android SDK
+          ANDROID_SDK="/usr/lib/android-sdk"
+          if [ ! -d "$ANDROID_SDK" ]; then
+            ANDROID_SDK="$ANDROID_HOME"
+          fi
+          echo "Android SDK: $ANDROID_SDK"
+
+          cat > $HOME/.config/godot/editor_settings-4.tres <<SETTINGS
+[gd_resource type="EditorSettings"]
+[resource]
+export/android/android_sdk_path = "$ANDROID_SDK"
+export/android/java_sdk_path = "$JAVA_HOME_PATH"
+export/android/debug_keystore = "$HOME/release.keystore"
+export/android/debug_keystore_user = "${{ secrets.KEYSTORE_ALIAS }}"
+export/android/debug_keystore_pass = "${{ secrets.KEYSTORE_PASSWORD }}"
+SETTINGS
+          echo "Editor settings:"
+          cat $HOME/.config/godot/editor_settings-4.tres
 
       - name: Import project
         run: |
