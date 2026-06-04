@@ -78,10 +78,26 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Download key artifact from previous run
-        uses: actions/download-artifact@v4
-        with:
-          name: ios-csr-and-key
-        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Find the most recent successful step-1 run and download its artifact
+          gh run list \
+            --repo ${{ github.repository }} \
+            --workflow "ios-cert-setup.yml" \
+            --status success \
+            --limit 5 \
+            --json databaseId \
+            -q '.[].databaseId' | while read run_id; do
+            echo "Trying run $run_id..."
+            if gh run download "$run_id" \
+              --repo ${{ github.repository }} \
+              --name ios-csr-and-key \
+              --dir . 2>/dev/null; then
+              echo "Downloaded artifact from run $run_id"
+              break
+            fi
+          done
 
       - name: Check for private key
         run: |
