@@ -60,6 +60,7 @@ jobs:
           p12-password: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
 
       - name: Download provisioning profile
+        id: profile
         uses: apple-actions/download-provisioning-profiles@v6
         with:
           bundle-id: ${{ env.BUNDLE_ID }}
@@ -68,27 +69,98 @@ jobs:
           api-key-id: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           api-private-key: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY }}
 
-      - name: Export iOS
+      - name: Export Xcode project
         run: |
           mkdir -p build/ios
-          godot --headless --export-debug "iOS" build/ios/${EXPORT_NAME}.ipa 2>&1
+          godot --headless --export-release "iOS" build/ios/${EXPORT_NAME}.ipa 2>&1 || true
           echo "Export directory contents:"
           ls -laR build/ios/ || true
+
+      - name: Resolve signing identity and profile
+        id: signing
+        run: |
+          # Find the signing identity
+          IDENTITY=$(security find-identity -v -p codesigning | grep "Apple Distribution" | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          echo "Signing identity: $IDENTITY"
+          echo "identity=$IDENTITY" >> $GITHUB_OUTPUT
+
+          # Find the provisioning profile UUID
+          PROFILE_PATH=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision 2>/dev/null | head -1)
+          if [ -n "$PROFILE_PATH" ]; then
+            PROFILE_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< $(/usr/bin/security cms -D -i "$PROFILE_PATH"))
+            PROFILE_NAME=$(/usr/libexec/PlistBuddy -c "Print Name" /dev/stdin <<< $(/usr/bin/security cms -D -i "$PROFILE_PATH"))
+            echo "Profile UUID: $PROFILE_UUID"
+            echo "Profile Name: $PROFILE_NAME"
+            echo "uuid=$PROFILE_UUID" >> $GITHUB_OUTPUT
+            echo "name=$PROFILE_NAME" >> $GITHUB_OUTPUT
+          else
+            echo "::error::No provisioning profile found"
+            exit 1
+          fi
+
+      - name: Create ExportOptions.plist
+        run: |
+          cat > build/ios/ExportOptions.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>app-store-connect</string>
+              <key>teamID</key>
+              <string>2Q468ML836</string>
+              <key>signingStyle</key>
+              <string>manual</string>
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>${BUNDLE_ID}</key>
+                  <string>${{ steps.signing.outputs.name }}</string>
+              </dict>
+              <key>signingCertificate</key>
+              <string>Apple Distribution</string>
+              <key>uploadBitcode</key>
+              <false/>
+              <key>uploadSymbols</key>
+              <true/>
+          </dict>
+          </plist>
+          EOF
+
+      - name: Archive with xcodebuild
+        run: |
+          cd build/ios
+          xcodebuild \
+            -project ${EXPORT_NAME}.xcodeproj \
+            -scheme ${EXPORT_NAME} \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath ${EXPORT_NAME}.xcarchive \
+            CODE_SIGN_IDENTITY="${{ steps.signing.outputs.identity }}" \
+            PROVISIONING_PROFILE_SPECIFIER="${{ steps.signing.outputs.uuid }}" \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM=2Q468ML836 \
+            archive
+
+      - name: Export IPA
+        run: |
+          cd build/ios
+          xcodebuild \
+            -exportArchive \
+            -archivePath ${EXPORT_NAME}.xcarchive \
+            -exportPath export \
+            -exportOptionsPlist ExportOptions.plist
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: ios-ipa
-          path: |
-            build/ios/*.ipa
-            build/ios/build/export/*.ipa
+          path: build/ios/export/*.ipa
           retention-days: 30
 
       - name: Upload to TestFlight
-        if: ${{ hashFiles('build/ios/*.ipa') != '' || hashFiles('build/ios/build/export/*.ipa') != '' }}
         uses: apple-actions/upload-testflight-build@v5
         with:
-          app-path: build/ios/${EXPORT_NAME}.ipa
+          app-path: build/ios/export/${EXPORT_NAME}.ipa
           issuer-id: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
           api-key-id: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           api-private-key: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY }}
@@ -98,6 +170,4 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            build/ios/*.ipa
-            build/ios/build/export/*.ipa
+          files: build/ios/export/*.ipa
