@@ -56,7 +56,10 @@ jobs:
       - name: Export Xcode project
         run: |
           mkdir -p build/ios
-          godot --headless --export-debug "iOS" build/ios/${EXPORT_NAME}.ipa 2>&1
+          godot --headless --verbose --export-debug "iOS" build/ios/${EXPORT_NAME}.ipa 2>&1 || true
+          echo "---"
+          echo "Export directory contents:"
+          ls -laR build/ios/ || true
 
       - name: Import Apple Distribution certificate
         uses: apple-actions/import-codesign-certs@v7
