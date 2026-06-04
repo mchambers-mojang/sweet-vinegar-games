@@ -45,6 +45,11 @@ func _ready() -> void:
 	_apply_theme()
 	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
 
+	# Adjust for mobile safe area (notch, status bar)
+	var margin := get_node_or_null("MarginContainer") as MarginContainer
+	if margin:
+		SafeAreaManager.apply(margin)
+
 
 func start_new_game(w: int, h: int) -> void:
 	grid_width = w
@@ -267,14 +272,31 @@ func _show_win_dialog() -> void:
 	dialog.dialog_text = "You solved the %s puzzle\nin %s!" % [SIZE_NAMES.get(grid_width, ""), _format_time(elapsed_time)]
 	if hints_used > 0:
 		dialog.dialog_text += "\nHints used: %d" % hints_used
-	dialog.ok_button_text = "Back to Menu"
+	dialog.ok_button_text = "Play Again"
+	dialog.add_button("Back to Menu", true, "menu")
 	dialog.min_size = Vector2i(300, 0)
 	add_child(dialog)
 	dialog.get_label().horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	dialog.popup_centered()
 	dialog.confirmed.connect(func() -> void:
 		dialog.queue_free()
-		SceneTransition.transition_to("res://scenes/shikaku_menu.tscn")
+		_restart_same_game()
+	)
+	dialog.custom_action.connect(func(action: StringName) -> void:
+		if action == "menu":
+			dialog.queue_free()
+			SceneTransition.transition_to("res://scenes/shikaku_menu.tscn")
+	)
+
+
+func _restart_same_game() -> void:
+	var w := grid_width
+	var h := grid_height
+	SceneTransition.transition_with_callback(func() -> void:
+		var game_scene: Node = load("res://scenes/shikaku_game.tscn").instantiate()
+		get_tree().root.add_child(game_scene)
+		game_scene.start_new_game(w, h)
+		queue_free()
 	)
 
 

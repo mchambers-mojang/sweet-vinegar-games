@@ -93,6 +93,11 @@ func _ready() -> void:
 	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
 	_apply_theme()
 
+	# Adjust for mobile safe area (notch, status bar)
+	var margin := get_node_or_null("MarginContainer") as MarginContainer
+	if margin:
+		SafeAreaManager.apply(margin)
+
 
 func start_new_game(diff: int) -> void:
 	difficulty = diff
@@ -780,12 +785,28 @@ func _show_win_dialog() -> void:
 	dialog.dialog_text = "You solved the %s puzzle in %s!" % [DIFFICULTY_NAMES[difficulty], time_text]
 	if hints_used > 0:
 		dialog.dialog_text += "\nHints used: %d" % hints_used
-	dialog.ok_button_text = "Back to Menu"
+	dialog.ok_button_text = "Play Again"
+	dialog.add_button("Back to Menu", true, "menu")
 	add_child(dialog)
 	dialog.popup_centered()
 	dialog.confirmed.connect(func() -> void:
 		dialog.queue_free()
-		SceneTransition.transition_to("res://scenes/main_menu.tscn")
+		_restart_same_game()
+	)
+	dialog.custom_action.connect(func(action: StringName) -> void:
+		if action == "menu":
+			dialog.queue_free()
+			SceneTransition.transition_to("res://scenes/main_menu.tscn")
+	)
+
+
+func _restart_same_game() -> void:
+	var diff := difficulty
+	SceneTransition.transition_with_callback(func() -> void:
+		var game_scene: Node = load("res://scenes/game.tscn").instantiate()
+		get_tree().root.add_child(game_scene)
+		game_scene.start_new_game(diff)
+		queue_free()
 	)
 
 

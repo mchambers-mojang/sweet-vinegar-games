@@ -38,6 +38,11 @@ func _ready() -> void:
 	_apply_theme()
 	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
 
+	# Adjust for mobile safe area (notch, status bar)
+	var margin := get_node_or_null("MarginContainer") as MarginContainer
+	if margin:
+		SafeAreaManager.apply(margin)
+
 
 func start_new_game() -> void:
 	score = 0
@@ -267,6 +272,9 @@ func _end_drag(screen_pos: Vector2) -> void:
 			BlockudokuStatsManager.record_clears(lines + boxes)
 			SoundManager.play_win()
 			HapticManager.vibrate_medium()
+
+			# Show combo/multi-clear celebration text
+			_show_combo_text(lines + boxes, combo_count)
 		else:
 			combo_count = 0
 
@@ -302,15 +310,60 @@ func _handle_game_over() -> void:
 	var dialog := AcceptDialog.new()
 	dialog.title = "Game Over"
 	dialog.dialog_text = "Score: %d\nTurns: %d" % [score, turns]
-	dialog.ok_button_text = "Back to Menu"
+	dialog.ok_button_text = "Play Again"
+	dialog.add_button("Back to Menu", true, "menu")
 	dialog.min_size = Vector2i(280, 0)
 	add_child(dialog)
 	dialog.get_label().horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	dialog.popup_centered()
 	dialog.confirmed.connect(func() -> void:
 		dialog.queue_free()
-		SceneTransition.transition_to("res://scenes/blockudoku_menu.tscn")
+		_restart_game()
 	)
+	dialog.custom_action.connect(func(action: StringName) -> void:
+		if action == "menu":
+			dialog.queue_free()
+			SceneTransition.transition_to("res://scenes/blockudoku_menu.tscn")
+	)
+
+
+func _restart_game() -> void:
+	SceneTransition.transition_with_callback(func() -> void:
+		var game_scene: Node = load("res://scenes/blockudoku_game.tscn").instantiate()
+		get_tree().root.add_child(game_scene)
+		game_scene.start_new_game()
+		queue_free()
+	)
+
+
+func _show_combo_text(total_clears: int, combo: int) -> void:
+	var text := ""
+	# Multi-clear in a single move
+	if total_clears >= 3:
+		text = "Triple!"
+	elif total_clears == 2:
+		text = "Double!"
+
+	# Consecutive combo streak
+	if combo > 1:
+		if text != "":
+			text += " %dx" % combo
+		else:
+			text = "%dx Combo!" % combo
+
+	if text == "":
+		return
+
+	var color: Color
+	if ThemeManager.is_neon:
+		color = Color(0.0, 1.5, 1.5) if combo <= 2 else Color(2.0, 0.3, 1.8)
+	else:
+		color = Color(0.2, 0.6, 1.0) if combo <= 2 else Color(0.8, 0.2, 0.8)
+
+	var cell_size := board._get_cell_size()
+	var origin := board._get_grid_origin()
+	var center := origin + Vector2(cell_size * 4.5, cell_size * 4.5)
+	ComboLabel.create(board, center, text, color)
 
 
 func _on_back() -> void:

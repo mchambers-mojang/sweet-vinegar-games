@@ -22,6 +22,10 @@ func _ready() -> void:
 	_apply_theme()
 	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
 
+	var margin := get_node_or_null("MarginContainer") as MarginContainer
+	if margin:
+		SafeAreaManager.apply(margin)
+
 
 func _on_continue() -> void:
 	var data := BlockudokuSaveManager.load_game()
