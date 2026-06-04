@@ -53,14 +53,6 @@ jobs:
           godot --headless --import 2>&1 || true
           godot --headless --import 2>&1 || true
 
-      - name: Export Xcode project
-        run: |
-          mkdir -p build/ios
-          godot --headless --verbose --export-debug "iOS" build/ios/${EXPORT_NAME}.ipa 2>&1 || true
-          echo "---"
-          echo "Export directory contents:"
-          ls -laR build/ios/ || true
-
       - name: Import Apple Distribution certificate
         uses: apple-actions/import-codesign-certs@v7
         with:
@@ -76,26 +68,12 @@ jobs:
           api-key-id: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           api-private-key: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY }}
 
-      - name: Build IPA with xcodebuild
+      - name: Export iOS
         run: |
-          cd build/ios
-          if [ -d "${EXPORT_NAME}.xcodeproj" ]; then
-            xcodebuild \
-              -project ${EXPORT_NAME}.xcodeproj \
-              -scheme ${EXPORT_NAME} \
-              -configuration Release \
-              -destination 'generic/platform=iOS' \
-              -archivePath build/${EXPORT_NAME}.xcarchive \
-              archive
-
-            xcodebuild \
-              -exportArchive \
-              -archivePath build/${EXPORT_NAME}.xcarchive \
-              -exportPath build/export \
-              -exportOptionsPlist ../../ExportOptions.plist
-          else
-            echo "Xcode project not found — Godot may have exported IPA directly"
-          fi
+          mkdir -p build/ios
+          godot --headless --export-debug "iOS" build/ios/${EXPORT_NAME}.ipa 2>&1
+          echo "Export directory contents:"
+          ls -laR build/ios/ || true
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
