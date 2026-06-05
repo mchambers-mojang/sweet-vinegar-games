@@ -11,14 +11,18 @@ const MAX_RINGS := 6
 const RING_SPAWN_DISTANCE := 40.0  # Pixels between ring spawns
 const RING_LIFETIME := 1.2
 
+const DRAG_THRESHOLD := 20.0  # Pixels of drag before ripple activates
+
 var _ripple_rect: ColorRect
 var _ripple_material: ShaderMaterial
 var _trail_points: Array[Dictionary] = []
 var _trail_canvas: Control
 var _dragging := false
+var _drag_active := false  # Only true after threshold met
 var _last_pos := Vector2.ZERO
 var _release_time := 0.0
 var _released := false
+var _drag_start_pos := Vector2.ZERO
 
 # Ring management
 var _rings: Array[Dictionary] = []  # {center_uv: Vector2, spawn_time: float}
@@ -54,7 +58,7 @@ func _setup() -> void:
 	_trail_canvas.draw.connect(_draw_trail)
 
 
-func _input(event: InputEvent) -> void:
+func _unhandled_input(event: InputEvent) -> void:
 	if not SettingsManager.particle_effects_enabled:
 		return
 
@@ -88,12 +92,14 @@ func _input(event: InputEvent) -> void:
 
 	if pressed:
 		_dragging = true
+		_drag_active = false
 		_released = false
 		_last_pos = pos
+		_drag_start_pos = pos
 		_last_ring_pos = pos
-		_spawn_ring(pos)
 	elif released:
 		_dragging = false
+		_drag_active = false
 		_released = true
 		_release_time = Time.get_ticks_msec() / 1000.0
 
@@ -101,6 +107,14 @@ func _input(event: InputEvent) -> void:
 func _on_drag(pos: Vector2) -> void:
 	if not _dragging:
 		return
+
+	# Don't activate until drag exceeds threshold
+	if not _drag_active:
+		if pos.distance_to(_drag_start_pos) < DRAG_THRESHOLD:
+			return
+		_drag_active = true
+		_last_ring_pos = pos
+
 	_last_pos = pos
 
 	# Spawn new ring when moved enough distance
