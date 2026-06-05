@@ -18,10 +18,17 @@ static func show_for(parent: Node, game_mode: String) -> void:
 
 	var dialog := AcceptDialog.new()
 	dialog.title = "How to Play"
-	dialog.dialog_text = text
 	dialog.ok_button_text = "Got it"
+
+	# Use a custom label with proper wrapping
+	dialog.dialog_text = ""
+	var label := dialog.get_label()
+	label.text = text
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.custom_minimum_size = Vector2(280, 0)
+
 	dialog.min_size = Vector2i(320, 0)
+	dialog.max_size = Vector2i(360, 600)
 	parent.add_child(dialog)
-	dialog.get_label().autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	dialog.popup_centered()
 	dialog.confirmed.connect(func() -> void: dialog.queue_free())
