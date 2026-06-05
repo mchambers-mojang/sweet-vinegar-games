@@ -181,6 +181,10 @@ jobs:
           API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
           API_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY }}
         run: |
+          # Write API key to file
+          API_KEY_PATH="$RUNNER_TEMP/AuthKey_${API_KEY_ID}.p8"
+          echo "$API_PRIVATE_KEY" > "$API_KEY_PATH"
+
           # Create ExportOptions.plist
           cat > $RUNNER_TEMP/ExportOptions.plist << EOF
           <?xml version="1.0" encoding="UTF-8"?>
@@ -200,7 +204,7 @@ jobs:
             -exportOptionsPlist $RUNNER_TEMP/ExportOptions.plist \
             -exportPath build/ios/export \
             -allowProvisioningUpdates \
-            -authenticationKeyPath <(echo "$API_PRIVATE_KEY") \
+            -authenticationKeyPath "$API_KEY_PATH" \
             -authenticationKeyID "$API_KEY_ID" \
             -authenticationKeyIssuerID "$API_ISSUER_ID" || true
 
