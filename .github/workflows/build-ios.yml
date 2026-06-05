@@ -100,6 +100,7 @@ jobs:
           application/launch_screens_interpolation=4
           application/export_project_only=true
           application/min_ios_version="16.0"
+          display/window/hide_status_bar=false
           EOF
           fi
 

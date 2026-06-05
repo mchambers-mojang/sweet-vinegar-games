@@ -35,14 +35,11 @@ func get_insets() -> Dictionary:
 	}
 
 
-## Apply safe area insets to a MarginContainer, adding to its existing margins
+## Apply safe area insets to a MarginContainer
+## Only applies the inset values directly (does not add to existing margins)
 func apply(container: MarginContainer) -> void:
 	var insets := get_insets()
-	var base_top: int = container.get_theme_constant("margin_top")
-	var base_bottom: int = container.get_theme_constant("margin_bottom")
-	var base_left: int = container.get_theme_constant("margin_left")
-	var base_right: int = container.get_theme_constant("margin_right")
-	container.add_theme_constant_override("margin_top", base_top + insets["top"])
-	container.add_theme_constant_override("margin_bottom", base_bottom + insets["bottom"])
-	container.add_theme_constant_override("margin_left", base_left + insets["left"])
-	container.add_theme_constant_override("margin_right", base_right + insets["right"])
+	container.add_theme_constant_override("margin_top", insets["top"])
+	container.add_theme_constant_override("margin_bottom", insets["bottom"])
+	container.add_theme_constant_override("margin_left", insets["left"])
+	container.add_theme_constant_override("margin_right", insets["right"])
