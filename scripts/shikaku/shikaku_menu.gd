@@ -42,7 +42,7 @@ func _add_how_to_play_button() -> void:
 	btn.custom_minimum_size = Vector2(0, 50)
 	btn.pressed.connect(func() -> void: HowToPlay.show_for(self, "shikaku"))
 	settings_button.get_parent().add_child(btn)
-	settings_button.get_parent().move_child(btn, settings_button.get_index() + 1)
+	settings_button.get_parent().move_child(btn, settings_button.get_index())
 
 
 func _on_continue() -> void:
