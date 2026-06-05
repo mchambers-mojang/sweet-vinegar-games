@@ -313,18 +313,19 @@ func _end_drag(screen_pos: Vector2) -> void:
 	_drag_shape = []
 
 
+var _shatter_tween: Tween = null
+
 func _handle_game_over() -> void:
 	is_game_over = true
 	BlockudokuStatsManager.record_game_over(score, turns)
 	BlockudokuSaveManager.clear_save()
 	HapticManager.vibrate_success()
 
-	# Shatter animation: break filled cells into pieces that fall apart
+	# Shatter animation runs in background
 	_play_board_shatter()
 
-	# Show dialog after shatter finishes
-	var timer := get_tree().create_timer(1.2)
-	timer.timeout.connect(_show_game_over_dialog)
+	# Show dialog immediately
+	_show_game_over_dialog()
 
 
 func _play_board_shatter() -> void:
@@ -354,11 +355,11 @@ func _play_board_shatter() -> void:
 	sorted_rows.sort()
 	sorted_rows.reverse()  # Bottom first
 
-	var tween := create_tween()
+	_shatter_tween = create_tween()
 	for row_idx in sorted_rows.size():
 		var row_cells: Array = rows_map[sorted_rows[row_idx]]
 		var delay := row_idx * 0.06
-		tween.tween_callback(func() -> void:
+		_shatter_tween.tween_callback(func() -> void:
 			for cell_pos in row_cells:
 				var rect := Rect2(
 					origin + Vector2(cell_pos.x * cell_size, cell_pos.y * cell_size),
@@ -374,11 +375,22 @@ func _play_board_shatter() -> void:
 		).set_delay(delay if row_idx > 0 else 0.3)
 
 	if ThemeManager.is_neon:
-		tween.tween_callback(func() -> void:
+		_shatter_tween.tween_callback(func() -> void:
 			var board_center := origin + Vector2(cell_size * 4.5, cell_size * 4.5)
 			NeonRing.create(board, board_center, Color(2.0, 0.0, 0.3), cell_size * 8.0, 0.5, 1.5)
 			NeonFxManager.screen_shake(8.0, 0.3)
 		).set_delay(0.1)
+
+
+func _stop_shatter() -> void:
+	if _shatter_tween and _shatter_tween.is_running():
+		_shatter_tween.kill()
+		_shatter_tween = null
+	# Clear any remaining filled cells instantly
+	for i in board.grid.size():
+		board.grid[i] = 0
+		board.cell_colors[i] = Color.TRANSPARENT
+	board.queue_redraw()
 
 
 func _show_game_over_dialog() -> void:
@@ -392,11 +404,13 @@ func _show_game_over_dialog() -> void:
 	dialog.get_label().horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	dialog.popup_centered()
 	dialog.confirmed.connect(func() -> void:
+		_stop_shatter()
 		dialog.queue_free()
 		_restart_game()
 	)
 	dialog.custom_action.connect(func(action: StringName) -> void:
 		if action == "menu":
+			_stop_shatter()
 			dialog.queue_free()
 			SceneTransition.transition_to("res://scenes/blockudoku_menu.tscn")
 	)
