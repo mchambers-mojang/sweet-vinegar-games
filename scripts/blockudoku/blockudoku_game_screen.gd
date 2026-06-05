@@ -338,30 +338,40 @@ func _play_board_shatter() -> void:
 			if board.grid[r * board.GRID_SIZE + c] == 1:
 				filled_cells.append(Vector2i(c, r))
 
-	# Stagger the shatters from center outward
-	var center := Vector2(board.GRID_SIZE / 2.0, board.GRID_SIZE / 2.0)
+	# Sweep bottom to top — shatter entire rows at once
 	filled_cells.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
-		return Vector2(a).distance_to(center) < Vector2(b).distance_to(center)
+		return a.y > b.y  # Bottom rows first
 	)
 
-	var tween := create_tween()
-	for i in filled_cells.size():
-		var cell_pos := filled_cells[i]
-		var rect := Rect2(
-			origin + Vector2(cell_pos.x * cell_size, cell_pos.y * cell_size),
-			Vector2(cell_size, cell_size)
-		)
-		var color := board.cell_colors[cell_pos.y * board.GRID_SIZE + cell_pos.x]
-		if color == Color.TRANSPARENT:
-			color = ThemeManager.get_color("cell_given")
+	# Group cells by row
+	var rows_map: Dictionary = {}
+	for cell_pos in filled_cells:
+		if not rows_map.has(cell_pos.y):
+			rows_map[cell_pos.y] = []
+		rows_map[cell_pos.y].append(cell_pos)
 
-		var delay := i * 0.015
+	var sorted_rows: Array = rows_map.keys()
+	sorted_rows.sort()
+	sorted_rows.reverse()  # Bottom first
+
+	var tween := create_tween()
+	for row_idx in sorted_rows.size():
+		var row_cells: Array = rows_map[sorted_rows[row_idx]]
+		var delay := row_idx * 0.06
 		tween.tween_callback(func() -> void:
-			GlassShatter.create(board, rect, color, 6)
-			board.grid[cell_pos.y * board.GRID_SIZE + cell_pos.x] = 0
-			board.cell_colors[cell_pos.y * board.GRID_SIZE + cell_pos.x] = Color.TRANSPARENT
+			for cell_pos in row_cells:
+				var rect := Rect2(
+					origin + Vector2(cell_pos.x * cell_size, cell_pos.y * cell_size),
+					Vector2(cell_size, cell_size)
+				)
+				var color: Color = board.cell_colors[cell_pos.y * board.GRID_SIZE + cell_pos.x]
+				if color == Color.TRANSPARENT:
+					color = ThemeManager.get_color("cell_given")
+				GlassShatter.create(board, rect, color, 6)
+				board.grid[cell_pos.y * board.GRID_SIZE + cell_pos.x] = 0
+				board.cell_colors[cell_pos.y * board.GRID_SIZE + cell_pos.x] = Color.TRANSPARENT
 			board.queue_redraw()
-		).set_delay(delay if i > 0 else 0.3)
+		).set_delay(delay if row_idx > 0 else 0.3)
 
 	if ThemeManager.is_neon:
 		tween.tween_callback(func() -> void:

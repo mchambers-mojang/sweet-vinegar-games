@@ -32,24 +32,33 @@ static func create(parent: Control, pos: Vector2, text: String, color: Color = C
 
 
 func _animate() -> void:
-	# Randomize arc direction
-	var angle := randf_range(-PI * 0.6, -PI * 0.4)  # Mostly upward, with variance
-	var distance := randf_range(50.0, 90.0)
+	# Randomize arc direction — wider spread
+	var angle := randf_range(-PI * 0.75, -PI * 0.25)  # Broad upward arc
+	var distance := randf_range(70.0, 120.0)
 	var target_offset := Vector2(cos(angle), sin(angle)) * distance
+
+	# Random rotation wobble
+	var spin := randf_range(-12.0, 12.0)  # degrees
 
 	var tween := create_tween()
 	tween.set_parallel(true)
 
-	# Arc movement with slight curve
-	tween.tween_property(self, "position", position + target_offset, 1.0) \
-		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-
-	# Scale: pop in then settle
-	tween.tween_property(self, "scale", Vector2(1.0, 1.0), 0.2) \
+	# Arc movement with bounce feel
+	tween.tween_property(self, "position", position + target_offset, 1.2) \
 		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 
+	# Scale: pop in, overshoot, settle
+	tween.tween_property(self, "scale", Vector2(1.1, 1.1), 0.15) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	tween.tween_property(self, "scale", Vector2(0.9, 0.9), 0.9) \
+		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD).set_delay(0.3)
+
+	# Rotation wobble
+	tween.tween_property(self, "rotation_degrees", spin, 1.2) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
+
 	# Fade out in the second half
-	tween.tween_property(self, "modulate:a", 0.0, 0.6) \
-		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD).set_delay(0.4)
+	tween.tween_property(self, "modulate:a", 0.0, 0.5) \
+		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD).set_delay(0.6)
 
 	tween.chain().tween_callback(queue_free)
