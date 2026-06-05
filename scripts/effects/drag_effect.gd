@@ -68,13 +68,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		pos = sd.position
 		_on_drag(pos)
 		return
-	elif event is InputEventMouseButton and not DisplayServer.is_touchscreen_available():
+	elif event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_LEFT:
 			pos = mb.position
 			pressed = mb.pressed
 			released = not mb.pressed
-	elif event is InputEventMouseMotion and not DisplayServer.is_touchscreen_available():
+	elif event is InputEventMouseMotion:
 		if _dragging:
 			var mm := event as InputEventMouseMotion
 			_on_drag(mm.position)
