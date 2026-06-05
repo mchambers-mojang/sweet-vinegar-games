@@ -1,4 +1,3 @@
-class_name DragEffect
 extends CanvasLayer
 
 ## Cosmetic drag effect: water-like ripple + fading ribbon trail.
