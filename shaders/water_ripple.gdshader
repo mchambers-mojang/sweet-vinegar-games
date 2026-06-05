@@ -5,6 +5,7 @@ shader_type canvas_item;
 
 uniform sampler2D screen_texture : hint_screen_texture, filter_linear_mipmap;
 uniform float aspect_ratio;
+uniform vec2 viewport_size;    // Viewport dimensions in pixels
 
 // Up to 6 active ripple sources
 uniform vec2 ring_centers[6];
@@ -15,6 +16,9 @@ void fragment() {
     vec2 uv = SCREEN_UV;
     vec2 total_offset = vec2(0.0);
 
+    // Convert UV distances to pixels for consistent ring size
+    float px_scale = viewport_size.y;  // Normalize to screen height
+
     for (int i = 0; i < 6; i++) {
         if (i >= active_rings) break;
         float age = ring_ages[i];
@@ -22,11 +26,12 @@ void fragment() {
 
         vec2 diff = uv - ring_centers[i];
         diff.x *= aspect_ratio;
-        float dist = length(diff);
+        // Convert to pixel-space distance
+        float dist = length(diff) * px_scale;
 
-        // Ring expands outward over time
-        float ring_radius = age * 0.3;  // Expansion speed
-        float ring_width = 0.025;       // Thickness of the ring
+        // Ring expands at fixed pixel speed (~150px/s)
+        float ring_radius = age * 150.0;
+        float ring_width = 12.0;  // Fixed pixel thickness
 
         // Distance from the expanding ring edge
         float ring_dist = abs(dist - ring_radius);
@@ -36,13 +41,12 @@ void fragment() {
 
         // Fade out as ring expands (lifetime ~1.2s)
         float fade = 1.0 - smoothstep(0.0, 1.2, age);
-        fade *= fade;  // Quadratic falloff for natural decay
+        fade *= fade;
 
-        // Also fade inner rings slightly less (first ring stronger)
         ring *= fade;
 
         // Second harmonic ring (trailing ripple, weaker)
-        float ring2_radius = age * 0.3 - 0.05;
+        float ring2_radius = ring_radius - 25.0;
         if (ring2_radius > 0.0) {
             float ring2_dist = abs(dist - ring2_radius);
             float ring2 = smoothstep(ring_width * 0.7, 0.0, ring2_dist);

@@ -40,6 +40,7 @@ func _setup() -> void:
 	var viewport := get_viewport()
 	var vp_size := viewport.get_visible_rect().size
 	_ripple_material.set_shader_parameter("aspect_ratio", vp_size.x / vp_size.y)
+	_ripple_material.set_shader_parameter("viewport_size", vp_size)
 	_ripple_material.set_shader_parameter("active_rings", 0)
 	_ripple_rect.material = _ripple_material
 	add_child(_ripple_rect)
