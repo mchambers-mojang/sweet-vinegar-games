@@ -9,6 +9,8 @@ on:
         required: true
       IOS_DISTRIBUTION_CERTIFICATE_PASSWORD:
         required: true
+      IOS_PROVISIONING_PROFILE_UUID:
+        required: true
       APP_STORE_CONNECT_API_KEY_ID:
         required: true
       APP_STORE_CONNECT_API_ISSUER_ID:
@@ -131,6 +133,7 @@ jobs:
       - name: Build with xcodebuild
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          PROVISIONING_PROFILE_UUID: ${{ secrets.IOS_PROVISIONING_PROFILE_UUID }}
           API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
           API_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY }}
@@ -144,7 +147,7 @@ jobs:
           fi
           echo "Found project in: $PROJ_DIR"
 
-          # Write API key for automatic signing
+          # Write API key for provisioning updates
           mkdir -p ~/.appstoreconnect/private_keys
           echo "$API_PRIVATE_KEY" > ~/.appstoreconnect/private_keys/AuthKey_${API_KEY_ID}.p8
 
@@ -157,10 +160,8 @@ jobs:
             DEVELOPMENT_TEAM="${APPLE_TEAM_ID}" \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Apple Distribution" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath ~/".appstoreconnect/private_keys/AuthKey_${API_KEY_ID}.p8" \
-            -authenticationKeyID "$API_KEY_ID" \
-            -authenticationKeyIssuerID "$API_ISSUER_ID" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            PROVISIONING_PROFILE="${PROVISIONING_PROFILE_UUID}" \
             archive
 
       - name: Export IPA
