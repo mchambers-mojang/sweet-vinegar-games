@@ -36,6 +36,7 @@ var blockudoku_f_pentomino: bool = false
 var blockudoku_n_pentomino: bool = false
 var blockudoku_hexominoes: bool = false
 var blockudoku_diagonals: bool = false
+var blockudoku_drag_offset: int = 1  # 0=None, 1=Small, 2=Medium, 3=Large
 
 
 func _ready() -> void:
@@ -76,6 +77,7 @@ func save_settings() -> void:
 	config.set_value("blockudoku", "n_pentomino", blockudoku_n_pentomino)
 	config.set_value("blockudoku", "hexominoes", blockudoku_hexominoes)
 	config.set_value("blockudoku", "diagonals", blockudoku_diagonals)
+	config.set_value("blockudoku", "drag_offset", blockudoku_drag_offset)
 	config.save(SAVE_PATH)
 	settings_changed.emit()
 
@@ -103,3 +105,4 @@ func load_settings() -> void:
 	blockudoku_n_pentomino = config.get_value("blockudoku", "n_pentomino", blockudoku_n_pentomino)
 	blockudoku_hexominoes = config.get_value("blockudoku", "hexominoes", blockudoku_hexominoes)
 	blockudoku_diagonals = config.get_value("blockudoku", "diagonals", blockudoku_diagonals)
+	blockudoku_drag_offset = config.get_value("blockudoku", "drag_offset", blockudoku_drag_offset)

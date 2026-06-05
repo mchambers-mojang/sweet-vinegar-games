@@ -193,9 +193,11 @@ func _update_drag(screen_pos: Vector2) -> void:
 
 func _update_board_preview(screen_pos: Vector2) -> void:
 	var local_pos := board.get_local_mouse_position()
-	# Slight offset upward on mobile so finger doesn't cover the placement
-	if OS.has_feature("mobile"):
-		local_pos.y -= board._get_cell_size()
+	# Offset upward so finger doesn't cover the placement
+	var cell_size := board._get_cell_size()
+	var offset_multiplier := SettingsManager.blockudoku_drag_offset  # 0=None, 1=Small, 2=Medium, 3=Large
+	if offset_multiplier > 0:
+		local_pos.y -= cell_size * offset_multiplier
 	var grid_pos := board.screen_to_grid(local_pos)
 	board.show_preview(_drag_shape, grid_pos.x, grid_pos.y)
 

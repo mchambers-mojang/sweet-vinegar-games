@@ -117,6 +117,12 @@ func _build_settings_ui() -> void:
 				SettingsManager.save_settings()
 		)
 
+		_add_option_button("Drag Offset", ["None", "Small", "Medium", "Large"], SettingsManager.blockudoku_drag_offset,
+			func(idx: int) -> void:
+				SettingsManager.blockudoku_drag_offset = idx
+				SettingsManager.save_settings()
+		)
+
 		_add_separator()
 
 	# --- General settings ---
