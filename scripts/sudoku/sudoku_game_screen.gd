@@ -11,6 +11,7 @@ var elapsed_time: float = 0.0
 var strikes: int = 0
 var is_failed: bool = false
 var is_completed: bool = false
+var _fail_continue_unlocked: bool = false
 var is_paused: bool = false
 var hints_used: int = 0
 var notes_mode: bool = false
@@ -128,6 +129,7 @@ func start_new_game(diff: int) -> void:
 	strikes = 0
 	is_failed = false
 	is_completed = false
+	_fail_continue_unlocked = false
 	is_paused = false
 	hints_used = 0
 	notes_mode = false
@@ -154,6 +156,7 @@ func resume_game(data: Dictionary) -> void:
 	elapsed_time = data["elapsed_time"]
 	strikes = data["strikes"]
 	is_failed = data["is_failed"]
+	_fail_continue_unlocked = data.get("fail_continue_unlocked", is_failed)
 	hints_used = data.get("hints_used", 0)
 	is_completed = false
 	is_paused = false
@@ -166,6 +169,8 @@ func resume_game(data: Dictionary) -> void:
 	_update_strikes_display()
 	_update_button_states()
 	_update_number_completion()
+	if _is_board_locked():
+		call_deferred("_show_fail_dialog")
 
 
 func _process(delta: float) -> void:
@@ -196,6 +201,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 
 func _cheat_place_one() -> void:
+	if _is_board_locked():
+		_cheat_active = false
+		return
 	# Find all unsolved cells (empty or wrong) and pick one at random
 	var unsolved_indices: Array[int] = []
 	for i in 81:
@@ -229,7 +237,7 @@ func _cheat_place_one() -> void:
 
 
 func _on_cell_selected(index: int) -> void:
-	if is_completed:
+	if _is_board_locked():
 		return
 
 	var now := Time.get_ticks_msec() / 1000.0
@@ -305,6 +313,8 @@ func _handle_number_first_cell_tap(index: int) -> void:
 			)
 			if strikes >= 4 and not is_failed:
 				is_failed = true
+				_fail_continue_unlocked = false
+				_update_button_states()
 				_show_fail_dialog()
 			_save_current_state()
 			_update_number_completion()
@@ -334,7 +344,7 @@ func _handle_number_first_cell_tap(index: int) -> void:
 
 
 func _on_number_pressed(number: int) -> void:
-	if is_completed:
+	if _is_board_locked():
 		return
 
 	# If multi-selection is active, apply to all selected cells
@@ -404,6 +414,8 @@ func _place_or_note_number(number: int) -> void:
 
 			if strikes >= 4 and not is_failed:
 				is_failed = true
+				_fail_continue_unlocked = false
+				_update_button_states()
 				_show_fail_dialog()
 			_save_current_state()
 			_update_number_completion()
@@ -448,7 +460,7 @@ func _on_notes_pressed() -> void:
 
 
 func _on_hint_pressed() -> void:
-	if is_completed or hints_used >= 1:
+	if _is_board_locked() or hints_used >= 1:
 		return
 
 	var index: int = -1
@@ -497,6 +509,8 @@ func _on_hint_pressed() -> void:
 
 
 func _on_erase_pressed() -> void:
+	if _is_board_locked():
+		return
 	var index := board.selected_index
 	if index < 0:
 		return
@@ -531,6 +545,8 @@ func _on_back_pressed() -> void:
 
 
 func _on_undo_pressed() -> void:
+	if _is_board_locked():
+		return
 	if undo_stack.is_empty():
 		return
 	var state: Dictionary = undo_stack.pop_back()
@@ -550,6 +566,8 @@ func _on_undo_pressed() -> void:
 
 
 func _on_redo_pressed() -> void:
+	if _is_board_locked():
+		return
 	if redo_stack.is_empty():
 		return
 	var state: Dictionary = redo_stack.pop_back()
@@ -751,10 +769,11 @@ func _update_strikes_display() -> void:
 
 
 func _update_button_states() -> void:
-	undo_button.disabled = undo_stack.is_empty()
-	redo_button.disabled = redo_stack.is_empty()
+	var board_locked := _is_board_locked()
+	undo_button.disabled = board_locked or undo_stack.is_empty()
+	redo_button.disabled = board_locked or redo_stack.is_empty()
 	erase_button.visible = SettingsManager.error_mode != "strict"
-	hint_button.disabled = hints_used >= 1
+	hint_button.disabled = board_locked or hints_used >= 1
 
 
 func _select_number_button(number: int) -> void:
@@ -800,6 +819,9 @@ func _show_fail_dialog() -> void:
 	)
 	dialog.custom_action.connect(func(action: StringName) -> void:
 		if action == "continue":
+			_fail_continue_unlocked = true
+			_update_button_states()
+			_save_current_state()
 			dialog.queue_free()
 		elif action == "menu":
 			dialog.queue_free()
@@ -889,6 +911,8 @@ func _setup_color_buttons() -> void:
 
 
 func _on_color_pressed(color: Color) -> void:
+	if _is_board_locked():
+		return
 	var now := Time.get_ticks_msec() / 1000.0
 
 	# Double-click detection: apply number to all cells with this color
@@ -972,6 +996,8 @@ func _apply_number_to_multi_selection(number: int) -> void:
 		)
 		if strikes >= 4 and not is_failed:
 			is_failed = true
+			_fail_continue_unlocked = false
+			_update_button_states()
 			_show_fail_dialog()
 
 	redo_stack.clear()
@@ -1017,8 +1043,13 @@ func _save_current_state() -> void:
 		"strikes": strikes,
 		"error_mode": SettingsManager.error_mode,
 		"is_failed": is_failed,
+		"fail_continue_unlocked": _fail_continue_unlocked,
 		"hints_used": hints_used,
 	})
+
+
+func _is_board_locked() -> bool:
+	return is_completed or (is_failed and not _fail_continue_unlocked)
 
 
 func _format_time(seconds: float) -> String:

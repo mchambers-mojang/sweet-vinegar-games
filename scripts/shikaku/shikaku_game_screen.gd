@@ -164,6 +164,8 @@ func _on_rectangle_tapped(index: int) -> void:
 
 
 func _on_undo() -> void:
+	if is_completed:
+		return
 	if undo_stack.is_empty():
 		return
 	var entry: Dictionary = undo_stack.pop_back()
@@ -186,6 +188,8 @@ func _on_undo() -> void:
 
 
 func _on_redo() -> void:
+	if is_completed:
+		return
 	if redo_stack.is_empty():
 		return
 	var entry: Dictionary = redo_stack.pop_back()
@@ -312,9 +316,9 @@ func _restart_same_game() -> void:
 
 
 func _update_button_states() -> void:
-	undo_button.disabled = undo_stack.is_empty()
-	redo_button.disabled = redo_stack.is_empty()
-	hint_button.disabled = hints_used >= 1
+	undo_button.disabled = is_completed or undo_stack.is_empty()
+	redo_button.disabled = is_completed or redo_stack.is_empty()
+	hint_button.disabled = is_completed or hints_used >= 1
 
 
 func _format_time(seconds: float) -> String:
