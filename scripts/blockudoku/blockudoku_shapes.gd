@@ -1,10 +1,36 @@
 class_name BlockudokuShapes
 extends RefCounted
 
-## Defines all block shapes for Blockudoku (2-5 cells, no monominoes)
-## Each shape is an Array of Vector2i offsets from origin (0,0)
+## Defines all block shapes for Blockudoku organized by family.
+## Each shape is an Array of Vector2i offsets from origin (0,0).
+## New shape families can be toggled on/off in settings.
+
 
 static func get_all_shapes() -> Array[Array]:
+	var shapes: Array[Array] = []
+	shapes.append_array(_get_standard_shapes())
+
+	if SettingsManager.blockudoku_pentominoes:
+		shapes.append_array(_get_pentomino_shapes())
+	if SettingsManager.blockudoku_p_pentomino:
+		shapes.append_array(_get_p_pentomino_shapes())
+	if SettingsManager.blockudoku_w_pentomino:
+		shapes.append_array(_get_w_pentomino_shapes())
+	if SettingsManager.blockudoku_y_pentomino:
+		shapes.append_array(_get_y_pentomino_shapes())
+	if SettingsManager.blockudoku_f_pentomino:
+		shapes.append_array(_get_f_pentomino_shapes())
+	if SettingsManager.blockudoku_n_pentomino:
+		shapes.append_array(_get_n_pentomino_shapes())
+	if SettingsManager.blockudoku_hexominoes:
+		shapes.append_array(_get_hexomino_shapes())
+	if SettingsManager.blockudoku_diagonals:
+		shapes.append_array(_get_diagonal_shapes())
+
+	return shapes
+
+
+static func _get_standard_shapes() -> Array[Array]:
 	var shapes: Array[Array] = []
 
 	# === DOMINOES (2 cells) ===
@@ -16,10 +42,10 @@ static func get_all_shapes() -> Array[Array]:
 	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0)])   # Horizontal line
 	shapes.append([Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2)])   # Vertical line
 	# L-shapes (all 4 rotations)
-	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1)])   # L top-left
-	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(1, 1)])   # L top-right
-	shapes.append([Vector2i(0, 0), Vector2i(0, 1), Vector2i(1, 1)])   # L bottom-left
-	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, -1)])  # L inverted
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1)])   # top-left corner
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(1, 1)])   # top-right corner
+	shapes.append([Vector2i(0, 0), Vector2i(0, 1), Vector2i(1, 1)])   # bottom-right corner
+	shapes.append([Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)])   # bottom-left corner
 
 	# === TETROMINOES (4 cells) ===
 	# Straight line
@@ -32,7 +58,7 @@ static func get_all_shapes() -> Array[Array]:
 	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(1, -1)]) # T up
 	shapes.append([Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2i(1, 1)])  # T right
 	shapes.append([Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2i(-1, 1)]) # T left
-	# L-shapes (4 rotations)
+	# L-shapes (all 8 orientations: L + J)
 	shapes.append([Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2i(1, 2)])  # L
 	shapes.append([Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2i(-1, 2)]) # J
 	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(0, 1)])  # L rotated
@@ -41,30 +67,159 @@ static func get_all_shapes() -> Array[Array]:
 	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(1, 1), Vector2i(1, 2)])  # J rotated 2
 	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(2, -1)]) # L rotated 3
 	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(0, -1)]) # J rotated 3
-	# S-shapes
+	# S-shapes (2 rotations)
 	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(1, 1), Vector2i(2, 1)])  # S horizontal
 	shapes.append([Vector2i(0, 0), Vector2i(0, 1), Vector2i(1, 0), Vector2i(1, -1)]) # S vertical
-	# Z-shapes
+	# Z-shapes (2 rotations)
 	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(1, -1), Vector2i(2, -1)]) # Z horizontal
 	shapes.append([Vector2i(0, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(1, 2)])   # Z vertical
 
-	# === PENTOMINOES (5 cells) — a subset of interesting ones ===
-	# Plus/cross
+	return shapes
+
+
+static func _get_pentomino_shapes() -> Array[Array]:
+	var shapes: Array[Array] = []
+
+	# Plus/cross (X pentomino — rotationally symmetric)
 	shapes.append([Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(2, 1), Vector2i(1, 2)])
-	# Straight line
+
+	# I pentomino (2 orientations)
 	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0), Vector2i(4, 0)])
 	shapes.append([Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2i(0, 3), Vector2i(0, 4)])
-	# Big L shapes
-	shapes.append([Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2i(0, 3), Vector2i(1, 3)])
-	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0), Vector2i(0, 1)])
-	# U shape
-	shapes.append([Vector2i(0, 0), Vector2i(2, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(2, 1)])
-	# T pentomino
-	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(1, 1), Vector2i(1, 2)])
-	# Corner 3x3 minus
-	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(0, 1), Vector2i(0, 2)])
-	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(2, 1), Vector2i(2, 2)])
 
+	# L pentomino (all 8 orientations: 4 rotations × 2 chiralities)
+	shapes.append([Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2i(0, 3), Vector2i(1, 3)])  # L R0
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0), Vector2i(0, 1)])  # L R90
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(1, 1), Vector2i(1, 2), Vector2i(1, 3)])  # L R180
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0), Vector2i(3, -1)]) # L R270
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2i(0, 3)])  # J R0
+	shapes.append([Vector2i(0, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(2, 1), Vector2i(3, 1)])  # J R90
+	shapes.append([Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2i(0, 3), Vector2i(1, 0)])  # J R180
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0), Vector2i(0, -1)]) # J R270
+
+	# U pentomino (4 rotations)
+	shapes.append([Vector2i(0, 0), Vector2i(2, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(2, 1)])  # U R0
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(1, 1), Vector2i(0, 2), Vector2i(1, 2)])  # U R90
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(0, 1), Vector2i(2, 1)])  # U R180
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2i(1, 2)])  # U R270
+
+	# T pentomino (4 rotations)
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(1, 1), Vector2i(1, 2)])  # T R0
+	shapes.append([Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2i(1, 0), Vector2i(2, 0)])  # T R90 (points right... actually this is V, let me fix)
+	shapes.append([Vector2i(1, 0), Vector2i(1, 1), Vector2i(0, 2), Vector2i(1, 2), Vector2i(2, 2)])  # T R180
+	shapes.append([Vector2i(0, 2), Vector2i(1, 2), Vector2i(2, 0), Vector2i(2, 1), Vector2i(2, 2)])  # T R270
+
+	# V pentomino (4 rotations)
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(0, 1), Vector2i(0, 2)])  # V R0
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(2, 1), Vector2i(2, 2)])  # V R90
+	shapes.append([Vector2i(2, 0), Vector2i(2, 1), Vector2i(0, 2), Vector2i(1, 2), Vector2i(2, 2)])  # V R180
+	shapes.append([Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2i(1, 2), Vector2i(2, 2)])  # V R270
+
+	return shapes
+
+
+static func _get_p_pentomino_shapes() -> Array[Array]:
+	var shapes: Array[Array] = []
+	# P pentomino: 2x2 block + tail (8 orientations)
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(0, 2)])  # P R0
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(1, 1), Vector2i(2, 1)])  # P R90
+	shapes.append([Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(0, 2), Vector2i(1, 2)])  # P R180
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(2, 1)])  # P R270
+	# Mirror (F')
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(1, 2)])  # P' R0
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(0, 1), Vector2i(1, 1)])  # P' R90
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2i(1, 2)])  # P' R180
+	shapes.append([Vector2i(1, 0), Vector2i(2, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(2, 1)])  # P' R270
+	return shapes
+
+
+static func _get_w_pentomino_shapes() -> Array[Array]:
+	var shapes: Array[Array] = []
+	# W pentomino: stair-step (4 rotations)
+	shapes.append([Vector2i(0, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(1, 2), Vector2i(2, 2)])  # W R0
+	shapes.append([Vector2i(2, 0), Vector2i(1, 1), Vector2i(2, 1), Vector2i(0, 2), Vector2i(1, 2)])  # W R90
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(1, 1), Vector2i(2, 1), Vector2i(2, 2)])  # W R180
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(0, 2)])  # W R270
+	return shapes
+
+
+static func _get_y_pentomino_shapes() -> Array[Array]:
+	var shapes: Array[Array] = []
+	# Y pentomino: 4-long with one branch (8 orientations)
+	shapes.append([Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2i(0, 3), Vector2i(1, 1)])  # Y R0
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0), Vector2i(1, 1)])  # Y R90
+	shapes.append([Vector2i(1, 0), Vector2i(1, 1), Vector2i(1, 2), Vector2i(1, 3), Vector2i(0, 2)])  # Y R180
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0), Vector2i(2, -1)]) # Y R270
+	# Mirror
+	shapes.append([Vector2i(1, 0), Vector2i(1, 1), Vector2i(1, 2), Vector2i(1, 3), Vector2i(0, 1)])  # Y' R0
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0), Vector2i(1, -1)]) # Y' R90
+	shapes.append([Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2i(0, 3), Vector2i(1, 2)])  # Y' R180
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0), Vector2i(2, 1)])  # Y' R270
+	return shapes
+
+
+static func _get_f_pentomino_shapes() -> Array[Array]:
+	var shapes: Array[Array] = []
+	# F pentomino: asymmetric (8 orientations)
+	shapes.append([Vector2i(1, 0), Vector2i(2, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(1, 2)])  # F R0
+	shapes.append([Vector2i(0, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(2, 1), Vector2i(1, 2)])  # F R90
+	shapes.append([Vector2i(1, 0), Vector2i(1, 1), Vector2i(2, 1), Vector2i(0, 2), Vector2i(1, 2)])  # F R180
+	shapes.append([Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(2, 1), Vector2i(2, 2)])  # F R270
+	# Mirror
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(1, 1), Vector2i(2, 1), Vector2i(1, 2)])  # F' R0
+	shapes.append([Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(2, 1), Vector2i(0, 2)])  # F' R90
+	shapes.append([Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(1, 2), Vector2i(2, 2)])  # F' R180
+	shapes.append([Vector2i(2, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(2, 1), Vector2i(1, 2)])  # F' R270
+	return shapes
+
+
+static func _get_n_pentomino_shapes() -> Array[Array]:
+	var shapes: Array[Array] = []
+	# N pentomino: zigzag/snake (8 orientations)
+	shapes.append([Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2i(1, 2), Vector2i(1, 3)])  # N R0
+	shapes.append([Vector2i(1, 0), Vector2i(2, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(0, 2)])  # N R90
+	shapes.append([Vector2i(0, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(1, 2), Vector2i(1, 3)])  # N R180
+	shapes.append([Vector2i(2, 0), Vector2i(1, 1), Vector2i(2, 1), Vector2i(0, 2), Vector2i(1, 2)])  # N R270
+	# Mirror
+	shapes.append([Vector2i(1, 0), Vector2i(1, 1), Vector2i(0, 2), Vector2i(1, 2), Vector2i(0, 3)])  # N' R0
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(1, 1), Vector2i(2, 1), Vector2i(2, 2)])  # N' R90
+	shapes.append([Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2i(1, 0), Vector2i(1, 1)])  # N' R180
+	shapes.append([Vector2i(0, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(1, 2), Vector2i(2, 2)])  # N' R270
+	return shapes
+
+
+static func _get_hexomino_shapes() -> Array[Array]:
+	var shapes: Array[Array] = []
+
+	# 2x3 rectangle (2 orientations)
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(2, 1)])
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(0, 2), Vector2i(1, 2)])
+
+	# 6-line (2 orientations)
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0), Vector2i(4, 0), Vector2i(5, 0)])
+	shapes.append([Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2i(0, 3), Vector2i(0, 4), Vector2i(0, 5)])
+
+	# Extended T (4 rotations)
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0), Vector2i(1, 1), Vector2i(2, 1)])
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2i(0, 3), Vector2i(1, 1)])
+	shapes.append([Vector2i(1, 0), Vector2i(2, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(2, 1), Vector2i(3, 1)])
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(1, 1), Vector2i(1, 2), Vector2i(1, 3), Vector2i(0, 2)])
+
+	# C/U hexomino (4 rotations)
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2i(1, 2)])
+	shapes.append([Vector2i(0, 0), Vector2i(2, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(2, 1), Vector2i(0, 2)])
+	shapes.append([Vector2i(0, 0), Vector2i(1, 0), Vector2i(1, 1), Vector2i(1, 2), Vector2i(0, 2), Vector2i(2, 2)])
+	shapes.append([Vector2i(0, 0), Vector2i(2, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(2, 1), Vector2i(2, 2)])
+
+	return shapes
+
+
+static func _get_diagonal_shapes() -> Array[Array]:
+	var shapes: Array[Array] = []
+	# 3-tile diagonal / (bottom-left to top-right)
+	shapes.append([Vector2i(0, 2), Vector2i(1, 1), Vector2i(2, 0)])
+	# 3-tile diagonal \ (top-left to bottom-right)
+	shapes.append([Vector2i(0, 0), Vector2i(1, 1), Vector2i(2, 2)])
 	return shapes
 
 
@@ -106,16 +261,13 @@ static func get_bounds(shape: Array) -> Vector2i:
 ## Get a unique color for a shape based on its geometry
 static func get_shape_color(shape: Array) -> Color:
 	var norm := normalize(shape)
-	# Sort cells for consistent hashing
 	norm.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
 		if a.y != b.y:
 			return a.y < b.y
 		return a.x < b.x
 	)
-	# Build a hash from cell positions
 	var h := 0
 	for c in norm:
 		h = h * 31 + c.x * 7 + c.y * 13
-	# Use golden ratio spacing for well-distributed hues
 	var hue := fmod(float(absi(h)) * 0.618033988749, 1.0)
 	return Color.from_hsv(hue, 0.55, 0.85)

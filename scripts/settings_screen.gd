@@ -63,6 +63,62 @@ func _build_settings_ui() -> void:
 
 		_add_separator()
 
+	var is_blockudoku := return_scene == "res://scenes/blockudoku_menu.tscn"
+
+	# --- Blockudoku-specific settings ---
+	if is_blockudoku:
+		_add_header("Blockudoku Shapes")
+
+		_add_toggle("Pentominoes (5-cell standard)", SettingsManager.blockudoku_pentominoes,
+			func(value: bool) -> void:
+				SettingsManager.blockudoku_pentominoes = value
+				SettingsManager.save_settings()
+		)
+
+		_add_toggle("P-Pentomino (2×2 + tail)", SettingsManager.blockudoku_p_pentomino,
+			func(value: bool) -> void:
+				SettingsManager.blockudoku_p_pentomino = value
+				SettingsManager.save_settings()
+		)
+
+		_add_toggle("W-Pentomino (stair-step)", SettingsManager.blockudoku_w_pentomino,
+			func(value: bool) -> void:
+				SettingsManager.blockudoku_w_pentomino = value
+				SettingsManager.save_settings()
+		)
+
+		_add_toggle("Y-Pentomino (4-long + branch)", SettingsManager.blockudoku_y_pentomino,
+			func(value: bool) -> void:
+				SettingsManager.blockudoku_y_pentomino = value
+				SettingsManager.save_settings()
+		)
+
+		_add_toggle("F-Pentomino (asymmetric)", SettingsManager.blockudoku_f_pentomino,
+			func(value: bool) -> void:
+				SettingsManager.blockudoku_f_pentomino = value
+				SettingsManager.save_settings()
+		)
+
+		_add_toggle("N-Pentomino (zigzag)", SettingsManager.blockudoku_n_pentomino,
+			func(value: bool) -> void:
+				SettingsManager.blockudoku_n_pentomino = value
+				SettingsManager.save_settings()
+		)
+
+		_add_toggle("Hexominoes (6-cell)", SettingsManager.blockudoku_hexominoes,
+			func(value: bool) -> void:
+				SettingsManager.blockudoku_hexominoes = value
+				SettingsManager.save_settings()
+		)
+
+		_add_toggle("Diagonals", SettingsManager.blockudoku_diagonals,
+			func(value: bool) -> void:
+				SettingsManager.blockudoku_diagonals = value
+				SettingsManager.save_settings()
+		)
+
+		_add_separator()
+
 	# --- General settings ---
 	_add_header("General")
 

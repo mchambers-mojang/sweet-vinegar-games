@@ -27,6 +27,16 @@ var screen_shake_enabled: bool = true
 var shockwave_enabled: bool = true
 var particle_effects_enabled: bool = true
 
+## Blockudoku shape families
+var blockudoku_pentominoes: bool = true
+var blockudoku_p_pentomino: bool = false
+var blockudoku_w_pentomino: bool = false
+var blockudoku_y_pentomino: bool = false
+var blockudoku_f_pentomino: bool = false
+var blockudoku_n_pentomino: bool = false
+var blockudoku_hexominoes: bool = false
+var blockudoku_diagonals: bool = false
+
 
 func _ready() -> void:
 	load_settings()
@@ -58,6 +68,14 @@ func save_settings() -> void:
 	config.set_value("effects", "screen_shake", screen_shake_enabled)
 	config.set_value("effects", "shockwave", shockwave_enabled)
 	config.set_value("effects", "particles", particle_effects_enabled)
+	config.set_value("blockudoku", "pentominoes", blockudoku_pentominoes)
+	config.set_value("blockudoku", "p_pentomino", blockudoku_p_pentomino)
+	config.set_value("blockudoku", "w_pentomino", blockudoku_w_pentomino)
+	config.set_value("blockudoku", "y_pentomino", blockudoku_y_pentomino)
+	config.set_value("blockudoku", "f_pentomino", blockudoku_f_pentomino)
+	config.set_value("blockudoku", "n_pentomino", blockudoku_n_pentomino)
+	config.set_value("blockudoku", "hexominoes", blockudoku_hexominoes)
+	config.set_value("blockudoku", "diagonals", blockudoku_diagonals)
 	config.save(SAVE_PATH)
 	settings_changed.emit()
 
@@ -77,3 +95,11 @@ func load_settings() -> void:
 	screen_shake_enabled = config.get_value("effects", "screen_shake", screen_shake_enabled)
 	shockwave_enabled = config.get_value("effects", "shockwave", shockwave_enabled)
 	particle_effects_enabled = config.get_value("effects", "particles", particle_effects_enabled)
+	blockudoku_pentominoes = config.get_value("blockudoku", "pentominoes", blockudoku_pentominoes)
+	blockudoku_p_pentomino = config.get_value("blockudoku", "p_pentomino", blockudoku_p_pentomino)
+	blockudoku_w_pentomino = config.get_value("blockudoku", "w_pentomino", blockudoku_w_pentomino)
+	blockudoku_y_pentomino = config.get_value("blockudoku", "y_pentomino", blockudoku_y_pentomino)
+	blockudoku_f_pentomino = config.get_value("blockudoku", "f_pentomino", blockudoku_f_pentomino)
+	blockudoku_n_pentomino = config.get_value("blockudoku", "n_pentomino", blockudoku_n_pentomino)
+	blockudoku_hexominoes = config.get_value("blockudoku", "hexominoes", blockudoku_hexominoes)
+	blockudoku_diagonals = config.get_value("blockudoku", "diagonals", blockudoku_diagonals)
