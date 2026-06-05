@@ -17,7 +17,7 @@ void fragment() {
     vec2 total_offset = vec2(0.0);
 
     // Convert UV distances to pixels for consistent ring size
-    float px_scale = viewport_size.y;  // Normalize to screen height
+    float px_scale = viewport_size.y;
 
     for (int i = 0; i < 6; i++) {
         if (i >= active_rings) break;
@@ -26,46 +26,38 @@ void fragment() {
 
         vec2 diff = uv - ring_centers[i];
         diff.x *= aspect_ratio;
-        // Convert to pixel-space distance
         float dist = length(diff) * px_scale;
 
-        // Ring expands at fixed pixel speed (~150px/s)
+        // Ring expands at fixed pixel speed
         float ring_radius = age * 150.0;
-        float ring_width = 12.0;  // Fixed pixel thickness
+        float ring_width = 20.0;  // Wider, softer ring
 
-        // Distance from the expanding ring edge
-        float ring_dist = abs(dist - ring_radius);
+        // Gaussian-like falloff from ring edge (smooth blend)
+        float ring_dist = dist - ring_radius;
+        float ring = exp(-(ring_dist * ring_dist) / (ring_width * ring_width));
 
-        // Smooth ring shape
-        float ring = smoothstep(ring_width, 0.0, ring_dist);
-
-        // Fade out as ring expands (lifetime ~1.2s)
+        // Fade out as ring expands
         float fade = 1.0 - smoothstep(0.0, 1.2, age);
         fade *= fade;
 
         ring *= fade;
 
-        // Second harmonic ring (trailing ripple, weaker)
-        float ring2_radius = ring_radius - 25.0;
-        if (ring2_radius > 0.0) {
-            float ring2_dist = abs(dist - ring2_radius);
-            float ring2 = smoothstep(ring_width * 0.7, 0.0, ring2_dist);
-            ring2 *= fade * 0.5;
-            ring += ring2;
-        }
+        // Signed displacement — push outward on outer edge, inward on inner
+        // This creates a natural water-like refraction
+        float signed_ring = sign(ring_dist) * ring;
 
-        // Radial distortion — push pixels outward along the ring
+        // Radial distortion direction
         vec2 dir = normalize(diff + vec2(0.0001));
         dir.x /= aspect_ratio;
-        total_offset += dir * ring * 0.008;
+        total_offset += dir * signed_ring * 0.006;
     }
 
     vec2 displaced_uv = uv + total_offset;
     vec4 color = texture(screen_texture, displaced_uv);
 
-    // Subtle brightness on distorted areas
+    // Very subtle caustic highlight — keeps rings from looking individually outlined
     float offset_strength = length(total_offset);
-    color.rgb += vec3(offset_strength * 2.0);
+    color.rgb += vec3(offset_strength * 0.8);
 
     COLOR = color;
 }
