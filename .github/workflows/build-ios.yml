@@ -180,6 +180,8 @@ jobs:
           API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
           API_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          PROVISIONING_PROFILE_UUID: ${{ secrets.IOS_PROVISIONING_PROFILE_UUID }}
         run: |
           # Write API key to file
           API_KEY_PATH="$RUNNER_TEMP/AuthKey_${API_KEY_ID}.p8"
@@ -195,6 +197,15 @@ jobs:
             <string>app-store-connect</string>
             <key>destination</key>
             <string>upload</string>
+            <key>teamID</key>
+            <string>${APPLE_TEAM_ID}</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>com.sweetvinegar.games</key>
+              <string>${PROVISIONING_PROFILE_UUID}</string>
+            </dict>
           </dict>
           </plist>
           EOF
@@ -206,7 +217,7 @@ jobs:
             -allowProvisioningUpdates \
             -authenticationKeyPath "$API_KEY_PATH" \
             -authenticationKeyID "$API_KEY_ID" \
-            -authenticationKeyIssuerID "$API_ISSUER_ID" || true
+            -authenticationKeyIssuerID "$API_ISSUER_ID"
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
