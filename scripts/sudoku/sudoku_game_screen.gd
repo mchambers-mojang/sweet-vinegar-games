@@ -361,6 +361,10 @@ func _place_or_note_number(number: int) -> void:
 		if cell.value == number:
 			return  # Already placed
 
+		# Lock correctly placed cells in strict mode
+		if SettingsManager.error_mode == "strict" and cell.value != 0 and cell.value == solution[index]:
+			return
+
 		# Check if correct in strict mode
 		if SettingsManager.error_mode == "strict" and solution[index] != number:
 			strikes += 1
@@ -487,6 +491,9 @@ func _on_erase_pressed() -> void:
 		return
 	var cell := board.cells[index]
 	if cell.is_given:
+		return
+	# Don't allow erasing correctly placed cells in strict mode
+	if SettingsManager.error_mode == "strict" and cell.value != 0 and cell.value == solution[index]:
 		return
 
 	_push_undo(index)
