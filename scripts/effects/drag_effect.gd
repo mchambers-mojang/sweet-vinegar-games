@@ -50,7 +50,7 @@ func _setup() -> void:
 	_trail_canvas.draw.connect(_draw_trail)
 
 
-func _unhandled_input(event: InputEvent) -> void:
+func _input(event: InputEvent) -> void:
 	if not SettingsManager.particle_effects_enabled:
 		return
 
