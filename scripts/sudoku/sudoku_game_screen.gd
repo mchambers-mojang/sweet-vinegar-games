@@ -11,7 +11,7 @@ var elapsed_time: float = 0.0
 var strikes: int = 0
 var is_failed: bool = false
 var is_completed: bool = false
-var _fail_continue_unlocked: bool = false
+var _can_continue_after_failure: bool = false
 var is_paused: bool = false
 var hints_used: int = 0
 var notes_mode: bool = false
@@ -129,7 +129,7 @@ func start_new_game(diff: int) -> void:
 	strikes = 0
 	is_failed = false
 	is_completed = false
-	_fail_continue_unlocked = false
+	_can_continue_after_failure = false
 	is_paused = false
 	hints_used = 0
 	notes_mode = false
@@ -156,7 +156,7 @@ func resume_game(data: Dictionary) -> void:
 	elapsed_time = data["elapsed_time"]
 	strikes = data["strikes"]
 	is_failed = data["is_failed"]
-	_fail_continue_unlocked = data.get("fail_continue_unlocked", is_failed)
+	_can_continue_after_failure = data.get("can_continue_after_failure", false)
 	hints_used = data.get("hints_used", 0)
 	is_completed = false
 	is_paused = false
@@ -169,7 +169,8 @@ func resume_game(data: Dictionary) -> void:
 	_update_strikes_display()
 	_update_button_states()
 	_update_number_completion()
-	if _is_board_locked():
+	if is_failed and _is_board_locked():
+		# Re-show the fail dialog for failed saves so players can choose Continue/Menu.
 		call_deferred("_show_fail_dialog")
 
 
@@ -313,7 +314,7 @@ func _handle_number_first_cell_tap(index: int) -> void:
 			)
 			if strikes >= 4 and not is_failed:
 				is_failed = true
-				_fail_continue_unlocked = false
+				_can_continue_after_failure = false
 				_update_button_states()
 				_show_fail_dialog()
 			_save_current_state()
@@ -414,7 +415,7 @@ func _place_or_note_number(number: int) -> void:
 
 			if strikes >= 4 and not is_failed:
 				is_failed = true
-				_fail_continue_unlocked = false
+				_can_continue_after_failure = false
 				_update_button_states()
 				_show_fail_dialog()
 			_save_current_state()
@@ -819,7 +820,7 @@ func _show_fail_dialog() -> void:
 	)
 	dialog.custom_action.connect(func(action: StringName) -> void:
 		if action == "continue":
-			_fail_continue_unlocked = true
+			_can_continue_after_failure = true
 			_update_button_states()
 			_save_current_state()
 			dialog.queue_free()
@@ -996,7 +997,7 @@ func _apply_number_to_multi_selection(number: int) -> void:
 		)
 		if strikes >= 4 and not is_failed:
 			is_failed = true
-			_fail_continue_unlocked = false
+			_can_continue_after_failure = false
 			_update_button_states()
 			_show_fail_dialog()
 
@@ -1043,13 +1044,14 @@ func _save_current_state() -> void:
 		"strikes": strikes,
 		"error_mode": SettingsManager.error_mode,
 		"is_failed": is_failed,
-		"fail_continue_unlocked": _fail_continue_unlocked,
+		"can_continue_after_failure": _can_continue_after_failure,
 		"hints_used": hints_used,
 	})
 
 
 func _is_board_locked() -> bool:
-	return is_completed or (is_failed and not _fail_continue_unlocked)
+	# Locked after completion, or after failure until Continue is chosen.
+	return is_completed or (is_failed and not _can_continue_after_failure)
 
 
 func _format_time(seconds: float) -> String:
