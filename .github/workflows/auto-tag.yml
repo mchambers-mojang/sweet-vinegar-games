@@ -17,6 +17,7 @@ jobs:
     outputs:
       tagged: ${{ steps.check.outputs.tagged }}
       version: ${{ steps.check.outputs.version }}
+      changelog: ${{ steps.changelog.outputs.notes }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -65,6 +66,53 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a "v${{ steps.check.outputs.version }}" -m "Release v${{ steps.check.outputs.version }}"
           git push origin "v${{ steps.check.outputs.version }}"
+
+      - name: Generate changelog
+        id: changelog
+        if: steps.check.outputs.tagged == 'true'
+        run: |
+          # Find previous tag
+          PREV_TAG=$(git tag -l 'v*' --sort=-v:refname | grep -v "v${{ steps.check.outputs.version }}" | head -1)
+          if [ -z "$PREV_TAG" ]; then
+            RANGE="HEAD"
+          else
+            RANGE="${PREV_TAG}..HEAD"
+          fi
+
+          echo "Gathering commits from $RANGE"
+
+          # Collect feat: and fix: commits
+          FEATS=$(git log "$RANGE" --pretty=format:"%s" | grep -iE "^feat:" | sed 's/^[Ff]eat: *//' || true)
+          FIXES=$(git log "$RANGE" --pretty=format:"%s" | grep -iE "^fix:" | sed 's/^[Ff]ix: *//' || true)
+
+          # Build release notes
+          NOTES=""
+          if [ -n "$FEATS" ]; then
+            NOTES+="## ✨ New Features"$'\n'
+            while IFS= read -r line; do
+              NOTES+="- $line"$'\n'
+            done <<< "$FEATS"
+            NOTES+=$'\n'
+          fi
+          if [ -n "$FIXES" ]; then
+            NOTES+="## 🐛 Bug Fixes"$'\n'
+            while IFS= read -r line; do
+              NOTES+="- $line"$'\n'
+            done <<< "$FIXES"
+            NOTES+=$'\n'
+          fi
+          if [ -z "$NOTES" ]; then
+            NOTES="Maintenance release v${{ steps.check.outputs.version }}"
+          fi
+
+          # Write to file for multi-line output
+          echo "$NOTES" > "$RUNNER_TEMP/release_notes.md"
+
+          # Pass as output using delimiter
+          EOF_MARKER=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+          echo "notes<<$EOF_MARKER" >> $GITHUB_OUTPUT
+          echo "$NOTES" >> $GITHUB_OUTPUT
+          echo "$EOF_MARKER" >> $GITHUB_OUTPUT
 
   build-android:
     needs: tag
@@ -142,7 +190,7 @@ jobs:
         with:
           tag_name: v${{ needs.tag.outputs.version }}
           name: "${{ env.EXPORT_NAME }} v${{ needs.tag.outputs.version }}"
-          body: "Automated build from v${{ needs.tag.outputs.version }}"
+          body: "${{ needs.tag.outputs.changelog }}"
           files: build/android/${{ env.EXPORT_NAME }}.apk
           draft: false
           prerelease: false
