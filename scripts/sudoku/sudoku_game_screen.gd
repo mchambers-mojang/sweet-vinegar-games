@@ -768,14 +768,25 @@ func _play_error_feedback() -> void:
 
 
 func _show_fail_dialog() -> void:
-	# Simple dialog offering to continue
 	var dialog := AcceptDialog.new()
 	dialog.title = "Game Over"
-	dialog.dialog_text = "You've used all 3 strikes! You can continue playing, but this game won't count as a win."
-	dialog.ok_button_text = "Continue"
+	dialog.dialog_text = "You've used all 3 strikes!"
+	dialog.ok_button_text = "Play Again"
+	dialog.add_button("Continue", true, "continue")
+	dialog.add_button("Back to Menu", true, "menu")
 	add_child(dialog)
 	dialog.popup_centered()
-	dialog.confirmed.connect(func() -> void: dialog.queue_free())
+	dialog.confirmed.connect(func() -> void:
+		dialog.queue_free()
+		_restart_same_game()
+	)
+	dialog.custom_action.connect(func(action: StringName) -> void:
+		if action == "continue":
+			dialog.queue_free()
+		elif action == "menu":
+			dialog.queue_free()
+			SceneTransition.transition_to("res://scenes/main_menu.tscn")
+	)
 
 
 func _show_win_dialog() -> void:
