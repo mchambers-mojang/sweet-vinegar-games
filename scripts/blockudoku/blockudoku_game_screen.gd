@@ -182,6 +182,7 @@ func _start_drag(index: int, screen_pos: Vector2) -> void:
 	_drag_block_index = index
 	_drag_shape = available_blocks[index]
 	_drag_screen_pos = screen_pos
+	DragEffect.suppress()
 	_update_board_preview(screen_pos)
 
 
@@ -203,6 +204,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 	if not _dragging:
 		return
 	_dragging = false
+	DragEffect.unsuppress()
 
 	var local_pos := board.get_local_mouse_position()
 	if OS.has_feature("mobile"):

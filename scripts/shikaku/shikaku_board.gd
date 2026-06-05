@@ -126,11 +126,13 @@ func _gui_input(event: InputEvent) -> void:
 		_dragging = true
 		_drag_start = cell
 		_drag_end = cell
+		DragEffect.suppress()
 		_update_drag_preview()
 		queue_redraw()
 		accept_event()
 	elif released and _dragging:
 		_dragging = false
+		DragEffect.unsuppress()
 		_drag_end = _pos_to_cell(pos)
 		_update_drag_preview()
 		# Only place if drag covers more than a single cell (prevents accidental 1x1 on tap)

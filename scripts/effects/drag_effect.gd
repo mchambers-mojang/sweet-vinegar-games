@@ -58,7 +58,20 @@ func _setup() -> void:
 	_trail_canvas.draw.connect(_draw_trail)
 
 
-func _unhandled_input(event: InputEvent) -> void:
+var _suppressed := false
+
+
+## Call to prevent ripple/trail while game elements handle their own drag.
+func suppress() -> void:
+	_suppressed = true
+
+
+## Call when game element drag ends to re-enable ripple/trail.
+func unsuppress() -> void:
+	_suppressed = false
+
+
+func _input(event: InputEvent) -> void:
 	if not SettingsManager.particle_effects_enabled:
 		return
 
@@ -94,18 +107,20 @@ func _unhandled_input(event: InputEvent) -> void:
 		_dragging = true
 		_drag_active = false
 		_released = false
+		_suppressed = false
 		_last_pos = pos
 		_drag_start_pos = pos
 		_last_ring_pos = pos
 	elif released:
 		_dragging = false
 		_drag_active = false
+		_suppressed = false
 		_released = true
 		_release_time = Time.get_ticks_msec() / 1000.0
 
 
 func _on_drag(pos: Vector2) -> void:
-	if not _dragging:
+	if not _dragging or _suppressed:
 		return
 
 	# Don't activate until drag exceeds threshold
