@@ -131,6 +131,9 @@ jobs:
       - name: Build with xcodebuild
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          API_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY }}
         run: |
           # Find the generated xcodeproj
           PROJ_DIR=$(find build/ios -name "*.xcodeproj" -print -quit | xargs dirname)
@@ -140,6 +143,11 @@ jobs:
             exit 1
           fi
           echo "Found project in: $PROJ_DIR"
+
+          # Write API key for automatic signing
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo "$API_PRIVATE_KEY" > ~/.appstoreconnect/private_keys/AuthKey_${API_KEY_ID}.p8
+
           cd "$PROJ_DIR"
           xcodebuild -project ${EXPORT_NAME}.xcodeproj \
             -scheme ${EXPORT_NAME} \
@@ -147,7 +155,11 @@ jobs:
             -configuration Release \
             -archivePath $RUNNER_TEMP/${EXPORT_NAME}.xcarchive \
             DEVELOPMENT_TEAM="${APPLE_TEAM_ID}" \
-            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_STYLE=Automatic \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/".appstoreconnect/private_keys/AuthKey_${API_KEY_ID}.p8" \
+            -authenticationKeyID "$API_KEY_ID" \
+            -authenticationKeyIssuerID "$API_ISSUER_ID" \
             archive
 
       - name: Export IPA
