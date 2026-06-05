@@ -30,6 +30,7 @@ BlockudokuStatsManager="*res://scripts/autoload/blockudoku_stats_manager.gd"
 NeonFxManager="*res://scripts/autoload/neon_fx_manager.gd"
 SceneTransition="*res://scripts/autoload/scene_transition.gd"
 SafeAreaManager="*res://scripts/autoload/safe_area_manager.gd"
+DragEffect="*res://scripts/effects/drag_effect.gd"
 
 [debug]
 

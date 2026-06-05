@@ -44,8 +44,7 @@ func _ready() -> void:
 	if margin:
 		SafeAreaManager.apply(margin)
 
-	# Cosmetic drag effect (ripple + ribbon on empty space)
-	DragEffect.create(self)
+	# Cosmetic drag effect is now a global autoload
 
 
 func _setup_help_button() -> void:

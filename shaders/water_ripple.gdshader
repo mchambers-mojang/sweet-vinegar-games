@@ -1,43 +1,67 @@
 shader_type canvas_item;
 
-// Water displacement effect — smooth wake that follows the drag point
-// Looks like dragging a finger through still water
+// Water surface ripple — expanding rings from touch/drag points
+// Inspired by classic water ripple effects (SM64 portal style)
 
 uniform sampler2D screen_texture : hint_screen_texture, filter_linear_mipmap;
-uniform vec2 center;           // Current touch position in UV coords (0-1)
-uniform vec2 velocity;         // Drag velocity (normalized direction + speed)
-uniform float intensity;       // Distortion strength (0 = off)
-uniform float aspect_ratio;    // Width / Height
+uniform float aspect_ratio;
+
+// Up to 6 active ripple sources
+uniform vec2 ring_centers[6];
+uniform float ring_ages[6];    // Time since each ring spawned (negative = inactive)
+uniform int active_rings;
 
 void fragment() {
     vec2 uv = SCREEN_UV;
-    vec2 diff = uv - center;
-    diff.x *= aspect_ratio;
-    float dist = length(diff);
+    vec2 total_offset = vec2(0.0);
 
-    // Smooth radial falloff — larger, softer area of influence
-    float radius = 0.12;
-    float falloff = exp(-dist * dist / (radius * radius));
+    for (int i = 0; i < 6; i++) {
+        if (i >= active_rings) break;
+        float age = ring_ages[i];
+        if (age < 0.0) continue;
 
-    // Directional wake: displace UVs away from the drag direction
-    vec2 wake_dir = normalize(velocity + vec2(0.0001));
-    wake_dir.x /= aspect_ratio;
+        vec2 diff = uv - ring_centers[i];
+        diff.x *= aspect_ratio;
+        float dist = length(diff);
 
-    // Combine drag speed influence with proximity
-    float speed = length(velocity);
-    float displacement = falloff * intensity * min(speed, 1.0);
+        // Ring expands outward over time
+        float ring_radius = age * 0.3;  // Expansion speed
+        float ring_width = 0.025;       // Thickness of the ring
 
-    // Push pixels outward from center + slightly along the wake
-    vec2 radial_dir = normalize(diff + vec2(0.0001));
-    radial_dir.x /= aspect_ratio;
-    vec2 push = mix(radial_dir, wake_dir, 0.4) * displacement * 0.02;
+        // Distance from the expanding ring edge
+        float ring_dist = abs(dist - ring_radius);
 
-    vec2 displaced_uv = uv + push;
+        // Smooth ring shape
+        float ring = smoothstep(ring_width, 0.0, ring_dist);
+
+        // Fade out as ring expands (lifetime ~1.2s)
+        float fade = 1.0 - smoothstep(0.0, 1.2, age);
+        fade *= fade;  // Quadratic falloff for natural decay
+
+        // Also fade inner rings slightly less (first ring stronger)
+        ring *= fade;
+
+        // Second harmonic ring (trailing ripple, weaker)
+        float ring2_radius = age * 0.3 - 0.05;
+        if (ring2_radius > 0.0) {
+            float ring2_dist = abs(dist - ring2_radius);
+            float ring2 = smoothstep(ring_width * 0.7, 0.0, ring2_dist);
+            ring2 *= fade * 0.5;
+            ring += ring2;
+        }
+
+        // Radial distortion — push pixels outward along the ring
+        vec2 dir = normalize(diff + vec2(0.0001));
+        dir.x /= aspect_ratio;
+        total_offset += dir * ring * 0.008;
+    }
+
+    vec2 displaced_uv = uv + total_offset;
     vec4 color = texture(screen_texture, displaced_uv);
 
-    // Subtle refraction highlight near the center
-    float highlight = falloff * intensity * speed * 0.03;
-    color.rgb += vec3(highlight);
+    // Subtle brightness on distorted areas
+    float offset_strength = length(total_offset);
+    color.rgb += vec3(offset_strength * 2.0);
 
     COLOR = color;
 }

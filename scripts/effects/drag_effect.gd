@@ -8,23 +8,27 @@ extends CanvasLayer
 const RIPPLE_SHADER := preload("res://shaders/water_ripple.gdshader")
 const TRAIL_LIFETIME := 0.5
 const MAX_TRAIL_POINTS := 30
+const MAX_RINGS := 6
+const RING_SPAWN_DISTANCE := 40.0  # Pixels between ring spawns
+const RING_LIFETIME := 1.2
 
 var _ripple_rect: ColorRect
 var _ripple_material: ShaderMaterial
-var _trail_points: Array[Dictionary] = []  # {pos: Vector2, time: float, color: Color}
+var _trail_points: Array[Dictionary] = []
 var _trail_canvas: Control
 var _dragging := false
 var _last_pos := Vector2.ZERO
-var _release_time := 0.0  # When drag ended (for fade-out)
+var _release_time := 0.0
 var _released := false
 
+# Ring management
+var _rings: Array[Dictionary] = []  # {center_uv: Vector2, spawn_time: float}
+var _last_ring_pos := Vector2.ZERO
 
-static func create(parent: Node) -> DragEffect:
-	var effect := DragEffect.new()
-	effect.layer = 90
-	parent.add_child(effect)
-	effect._setup()
-	return effect
+
+func _ready() -> void:
+	layer = 90
+	_setup()
 
 
 func _setup() -> void:
@@ -34,12 +38,10 @@ func _setup() -> void:
 	_ripple_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_ripple_material = ShaderMaterial.new()
 	_ripple_material.shader = RIPPLE_SHADER
-	_ripple_material.set_shader_parameter("intensity", 0.0)
-	_ripple_material.set_shader_parameter("center", Vector2(0.5, 0.5))
-	_ripple_material.set_shader_parameter("velocity", Vector2.ZERO)
 	var viewport := get_viewport()
 	var vp_size := viewport.get_visible_rect().size
 	_ripple_material.set_shader_parameter("aspect_ratio", vp_size.x / vp_size.y)
+	_ripple_material.set_shader_parameter("active_rings", 0)
 	_ripple_rect.material = _ripple_material
 	add_child(_ripple_rect)
 
@@ -88,25 +90,23 @@ func _input(event: InputEvent) -> void:
 		_dragging = true
 		_released = false
 		_last_pos = pos
-		_update_ripple_center(pos)
-		_ripple_material.set_shader_parameter("intensity", 0.8)
-		_ripple_material.set_shader_parameter("velocity", Vector2.ZERO)
+		_last_ring_pos = pos
+		_spawn_ring(pos)
 	elif released:
 		_dragging = false
 		_released = true
 		_release_time = Time.get_ticks_msec() / 1000.0
-		_ripple_material.set_shader_parameter("intensity", 0.0)
 
 
 func _on_drag(pos: Vector2) -> void:
 	if not _dragging:
 		return
-	# Calculate velocity for shader wake direction
-	var vp_size := get_viewport().get_visible_rect().size
-	var vel := (pos - _last_pos) / vp_size * 60.0  # Scale for visibility
-	_ripple_material.set_shader_parameter("velocity", vel)
-	_update_ripple_center(pos)
 	_last_pos = pos
+
+	# Spawn new ring when moved enough distance
+	if pos.distance_to(_last_ring_pos) >= RING_SPAWN_DISTANCE:
+		_spawn_ring(pos)
+		_last_ring_pos = pos
 
 	# Add trail point
 	var trail_color: Color
@@ -120,14 +120,41 @@ func _on_drag(pos: Vector2) -> void:
 	_trail_canvas.queue_redraw()
 
 
-func _update_ripple_center(pos: Vector2) -> void:
+func _spawn_ring(pos: Vector2) -> void:
 	var vp_size := get_viewport().get_visible_rect().size
-	_ripple_material.set_shader_parameter("center", pos / vp_size)
+	var center_uv := pos / vp_size
+	var now := Time.get_ticks_msec() / 1000.0
+	_rings.append({"center_uv": center_uv, "spawn_time": now})
+	if _rings.size() > MAX_RINGS:
+		_rings.pop_front()
+
+
+func _update_ripple_center(_pos: Vector2) -> void:
+	pass  # No longer needed, rings managed separately
 
 
 func _process(_delta: float) -> void:
-	# Fade out old trail points
+	# Expire old rings
 	var now := Time.get_ticks_msec() / 1000.0
+	while _rings.size() > 0 and (now - _rings[0]["spawn_time"]) > RING_LIFETIME:
+		_rings.pop_front()
+
+	# Update shader ring uniforms
+	var centers: Array = []
+	var ages: Array = []
+	for ring in _rings:
+		centers.append(ring["center_uv"])
+		ages.append(now - ring["spawn_time"])
+	# Pad to MAX_RINGS
+	while centers.size() < MAX_RINGS:
+		centers.append(Vector2.ZERO)
+		ages.append(-1.0)
+
+	_ripple_material.set_shader_parameter("ring_centers", centers)
+	_ripple_material.set_shader_parameter("ring_ages", ages)
+	_ripple_material.set_shader_parameter("active_rings", mini(_rings.size(), MAX_RINGS))
+
+	# Fade out old trail points
 	var changed := false
 	while _trail_points.size() > 0 and (now - _trail_points[0]["time"]) > TRAIL_LIFETIME:
 		_trail_points.pop_front()
