@@ -19,6 +19,7 @@ var _dragging: bool = false
 var _drag_block_index: int = -1
 var _drag_shape: Array = []
 var _drag_screen_pos: Vector2 = Vector2.ZERO
+var _drag_last_grid_pos := Vector2i(-999, -999)
 
 # Node references
 @onready var board: BlockudokuBoard = %BlockudokuBoard
@@ -182,6 +183,7 @@ func _start_drag(index: int, screen_pos: Vector2) -> void:
 	_drag_block_index = index
 	_drag_shape = available_blocks[index]
 	_drag_screen_pos = screen_pos
+	_drag_last_grid_pos = Vector2i(-999, -999)
 	DragEffect.suppress()
 	_update_board_preview(screen_pos)
 
@@ -199,6 +201,9 @@ func _update_board_preview(screen_pos: Vector2) -> void:
 	if offset_multiplier > 0:
 		local_pos.y -= cell_size * offset_multiplier
 	var grid_pos := board.screen_to_grid(local_pos)
+	if grid_pos != _drag_last_grid_pos:
+		_drag_last_grid_pos = grid_pos
+		HapticManager.vibrate_light()
 	board.show_preview(_drag_shape, grid_pos.x, grid_pos.y)
 
 
