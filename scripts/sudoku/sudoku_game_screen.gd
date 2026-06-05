@@ -88,6 +88,7 @@ func _ready() -> void:
 	_setup_number_buttons()
 	_setup_color_buttons()
 	_setup_strike_indicators()
+	_setup_help_button()
 	_update_button_states()
 
 	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
@@ -97,6 +98,17 @@ func _ready() -> void:
 	var margin := get_node_or_null("MarginContainer") as MarginContainer
 	if margin:
 		SafeAreaManager.apply(margin)
+
+	# Cosmetic drag effect (ripple + ribbon on empty space)
+	DragEffect.create(self)
+
+
+func _setup_help_button() -> void:
+	var btn := Button.new()
+	btn.text = "?"
+	btn.custom_minimum_size = Vector2(36, 0)
+	btn.pressed.connect(func() -> void: HowToPlay.show_for(self, "sudoku"))
+	pause_button.get_parent().add_child(btn)
 
 
 func start_new_game(diff: int) -> void:

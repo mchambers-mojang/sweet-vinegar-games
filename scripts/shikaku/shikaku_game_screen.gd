@@ -41,6 +41,7 @@ func _ready() -> void:
 	hint_button.pressed.connect(_on_hint)
 	pause_button.pressed.connect(_on_pause)
 	back_button.pressed.connect(_on_back)
+	_setup_help_button()
 	_update_button_states()
 	_apply_theme()
 	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
@@ -49,6 +50,17 @@ func _ready() -> void:
 	var margin := get_node_or_null("MarginContainer") as MarginContainer
 	if margin:
 		SafeAreaManager.apply(margin)
+
+	# Cosmetic drag effect (ripple + ribbon on empty space)
+	DragEffect.create(self)
+
+
+func _setup_help_button() -> void:
+	var btn := Button.new()
+	btn.text = "?"
+	btn.custom_minimum_size = Vector2(36, 0)
+	btn.pressed.connect(func() -> void: HowToPlay.show_for(self, "shikaku"))
+	pause_button.get_parent().add_child(btn)
 
 
 func start_new_game(w: int, h: int) -> void:

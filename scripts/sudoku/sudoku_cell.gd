@@ -142,14 +142,16 @@ func _set_flash_alpha(val: float) -> void:
 
 
 func _on_gui_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton:
-		var mb := event as InputEventMouseButton
-		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
-			cell_pressed.emit(index)
-			accept_event()
-	elif event is InputEventScreenTouch:
+	# On touch devices, Godot emits both ScreenTouch and MouseButton for a single tap.
+	# Only handle ScreenTouch on mobile and MouseButton on desktop to prevent double-fire.
+	if event is InputEventScreenTouch:
 		var st := event as InputEventScreenTouch
 		if st.pressed:
+			cell_pressed.emit(index)
+			accept_event()
+	elif event is InputEventMouseButton and not DisplayServer.is_touchscreen_available():
+		var mb := event as InputEventMouseButton
+		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
 			cell_pressed.emit(index)
 			accept_event()
 

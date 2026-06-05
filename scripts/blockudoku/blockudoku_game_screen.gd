@@ -35,6 +35,7 @@ var _tray_panels: Array[Control] = []
 
 func _ready() -> void:
 	back_button.pressed.connect(_on_back)
+	_setup_help_button()
 	_apply_theme()
 	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
 
@@ -42,6 +43,17 @@ func _ready() -> void:
 	var margin := get_node_or_null("MarginContainer") as MarginContainer
 	if margin:
 		SafeAreaManager.apply(margin)
+
+	# Cosmetic drag effect (ripple + ribbon on empty space)
+	DragEffect.create(self)
+
+
+func _setup_help_button() -> void:
+	var btn := Button.new()
+	btn.text = "?"
+	btn.custom_minimum_size = Vector2(36, 0)
+	btn.pressed.connect(func() -> void: HowToPlay.show_for(self, "blockudoku"))
+	back_button.get_parent().add_child(btn)
 
 
 func start_new_game() -> void:
@@ -307,6 +319,59 @@ func _handle_game_over() -> void:
 	BlockudokuSaveManager.clear_save()
 	HapticManager.vibrate_success()
 
+	# Shatter animation: break filled cells into pieces that fall apart
+	_play_board_shatter()
+
+	# Show dialog after shatter finishes
+	var timer := get_tree().create_timer(1.2)
+	timer.timeout.connect(_show_game_over_dialog)
+
+
+func _play_board_shatter() -> void:
+	var cell_size := board._get_cell_size()
+	var origin := board._get_grid_origin()
+
+	# Gather all filled cells
+	var filled_cells: Array[Vector2i] = []
+	for r in board.GRID_SIZE:
+		for c in board.GRID_SIZE:
+			if board.grid[r * board.GRID_SIZE + c] == 1:
+				filled_cells.append(Vector2i(c, r))
+
+	# Stagger the shatters from center outward
+	var center := Vector2(board.GRID_SIZE / 2.0, board.GRID_SIZE / 2.0)
+	filled_cells.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		return Vector2(a).distance_to(center) < Vector2(b).distance_to(center)
+	)
+
+	var tween := create_tween()
+	for i in filled_cells.size():
+		var cell_pos := filled_cells[i]
+		var rect := Rect2(
+			origin + Vector2(cell_pos.x * cell_size, cell_pos.y * cell_size),
+			Vector2(cell_size, cell_size)
+		)
+		var color := board.cell_colors[cell_pos.y * board.GRID_SIZE + cell_pos.x]
+		if color == Color.TRANSPARENT:
+			color = ThemeManager.get_color("cell_given")
+
+		var delay := i * 0.015
+		tween.tween_callback(func() -> void:
+			GlassShatter.create(board, rect, color, 6)
+			board.grid[cell_pos.y * board.GRID_SIZE + cell_pos.x] = 0
+			board.cell_colors[cell_pos.y * board.GRID_SIZE + cell_pos.x] = Color.TRANSPARENT
+			board.queue_redraw()
+		).set_delay(delay if i > 0 else 0.3)
+
+	if ThemeManager.is_neon:
+		tween.tween_callback(func() -> void:
+			var board_center := origin + Vector2(cell_size * 4.5, cell_size * 4.5)
+			NeonRing.create(board, board_center, Color(2.0, 0.0, 0.3), cell_size * 8.0, 0.5, 1.5)
+			NeonFxManager.screen_shake(8.0, 0.3)
+		).set_delay(0.1)
+
+
+func _show_game_over_dialog() -> void:
 	var dialog := AcceptDialog.new()
 	dialog.title = "Game Over"
 	dialog.dialog_text = "Score: %d\nTurns: %d" % [score, turns]

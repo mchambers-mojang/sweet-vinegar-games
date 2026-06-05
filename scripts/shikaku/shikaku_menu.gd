@@ -27,12 +27,22 @@ func _ready() -> void:
 	continue_button.visible = ShikakuSaveManager.has_saved_game()
 	size_container.visible = false
 	_setup_size_buttons()
+	_add_how_to_play_button()
 	_apply_theme()
 	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
 
 	var margin := get_node_or_null("MarginContainer") as MarginContainer
 	if margin:
 		SafeAreaManager.apply(margin)
+
+
+func _add_how_to_play_button() -> void:
+	var btn := Button.new()
+	btn.text = "How to Play"
+	btn.custom_minimum_size = Vector2(0, 50)
+	btn.pressed.connect(func() -> void: HowToPlay.show_for(self, "shikaku"))
+	settings_button.get_parent().add_child(btn)
+	settings_button.get_parent().move_child(btn, settings_button.get_index() + 1)
 
 
 func _on_continue() -> void:

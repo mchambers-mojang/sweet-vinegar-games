@@ -80,23 +80,9 @@ func _gui_input(event: InputEvent) -> void:
 	var pressed: bool = false
 	var released: bool = false
 	var pos := Vector2.ZERO
+	var is_touch := DisplayServer.is_touchscreen_available()
 
-	if event is InputEventMouseButton:
-		var mb := event as InputEventMouseButton
-		if mb.button_index == MOUSE_BUTTON_LEFT:
-			touch_event = true
-			pressed = mb.pressed
-			released = not mb.pressed
-			pos = mb.position
-	elif event is InputEventMouseMotion:
-		if _dragging:
-			var mm := event as InputEventMouseMotion
-			_drag_end = _pos_to_cell(mm.position)
-			_update_drag_preview()
-			queue_redraw()
-			accept_event()
-		return
-	elif event is InputEventScreenTouch:
+	if event is InputEventScreenTouch:
 		var st := event as InputEventScreenTouch
 		touch_event = true
 		pressed = st.pressed
@@ -106,6 +92,21 @@ func _gui_input(event: InputEvent) -> void:
 		if _dragging:
 			var sd := event as InputEventScreenDrag
 			_drag_end = _pos_to_cell(sd.position)
+			_update_drag_preview()
+			queue_redraw()
+			accept_event()
+		return
+	elif event is InputEventMouseButton and not is_touch:
+		var mb := event as InputEventMouseButton
+		if mb.button_index == MOUSE_BUTTON_LEFT:
+			touch_event = true
+			pressed = mb.pressed
+			released = not mb.pressed
+			pos = mb.position
+	elif event is InputEventMouseMotion and not is_touch:
+		if _dragging:
+			var mm := event as InputEventMouseMotion
+			_drag_end = _pos_to_cell(mm.position)
 			_update_drag_preview()
 			queue_redraw()
 			accept_event()
@@ -132,8 +133,10 @@ func _gui_input(event: InputEvent) -> void:
 		_dragging = false
 		_drag_end = _pos_to_cell(pos)
 		_update_drag_preview()
+		# Only place if drag covers more than a single cell (prevents accidental 1x1 on tap)
 		if _drag_preview.size.x > 0 and _drag_preview.size.y > 0:
-			rectangle_placed.emit(_drag_preview)
+			if _drag_preview.size.x > 1 or _drag_preview.size.y > 1 or not is_touch:
+				rectangle_placed.emit(_drag_preview)
 		_drag_preview = Rect2i()
 		queue_redraw()
 		accept_event()
