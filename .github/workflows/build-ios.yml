@@ -132,7 +132,15 @@ jobs:
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          cd build/ios/${EXPORT_NAME}
+          # Find the generated xcodeproj
+          PROJ_DIR=$(find build/ios -name "*.xcodeproj" -print -quit | xargs dirname)
+          if [ -z "$PROJ_DIR" ]; then
+            echo "ERROR: Could not find xcodeproj"
+            find build/ios -type f | head -30
+            exit 1
+          fi
+          echo "Found project in: $PROJ_DIR"
+          cd "$PROJ_DIR"
           xcodebuild -project ${EXPORT_NAME}.xcodeproj \
             -scheme ${EXPORT_NAME} \
             -sdk iphoneos \
