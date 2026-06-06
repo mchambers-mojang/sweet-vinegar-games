@@ -25,6 +25,16 @@ var preview_valid: bool = false
 ## Flash animation
 var _flash_cells: Array[Vector2i] = []
 var _flash_alpha: float = 0.0
+var _clear_anim_cells: Array[Vector2i] = []
+var _clear_anim_colors: Array[Color] = []
+var _clear_anim_delays: Array[float] = []
+var _clear_anim_elapsed: float = 0.0
+var _clear_anim_tween: Tween = null
+var is_clear_animating: bool = false
+
+const CLEAR_FLASH_DURATION := 0.1
+const CLEAR_SWEEP_DURATION := 0.26
+const CLEAR_CELL_DELAY_MAX := 0.12
 
 ## Color palette for placed blocks
 const PALETTE: Array[Color] = [
@@ -58,6 +68,13 @@ func reset() -> void:
 	_color_index = 0
 	preview_cells.clear()
 	_flash_cells.clear()
+	if _clear_anim_tween and _clear_anim_tween.is_running():
+		_clear_anim_tween.kill()
+	_clear_anim_cells.clear()
+	_clear_anim_colors.clear()
+	_clear_anim_delays.clear()
+	_clear_anim_elapsed = 0.0
+	is_clear_animating = false
 	queue_redraw()
 
 
@@ -167,7 +184,7 @@ func check_and_clear() -> Dictionary:
 		_flash_saved_colors.append(cell_colors[p.y * GRID_SIZE + p.x])
 
 	# Spawn neon effects before clearing
-	if ThemeManager.is_neon:
+	if ThemeManager.is_neon and SettingsManager.particle_effects_enabled:
 		var cell_size := _get_cell_size()
 		var origin := _get_grid_origin()
 
@@ -227,10 +244,26 @@ func check_and_clear() -> Dictionary:
 
 	# Animate flash overlay
 	_flash_alpha = 1.0
-	var tween := create_tween()
-	tween.tween_method(_set_flash_alpha, 1.0, 0.0, 0.3)
-	tween.tween_callback(func() -> void:
+	_clear_anim_cells = _flash_cells.duplicate()
+	_clear_anim_colors = _flash_saved_colors.duplicate()
+	_clear_anim_delays.clear()
+	for pos in _clear_anim_cells:
+		var p: Vector2i = pos
+		_clear_anim_delays.append(_compute_clear_cell_delay(p, rows_to_clear, cols_to_clear))
+	_clear_anim_elapsed = 0.0
+	is_clear_animating = true
+	if _clear_anim_tween and _clear_anim_tween.is_running():
+		_clear_anim_tween.kill()
+	_clear_anim_tween = create_tween()
+	_clear_anim_tween.tween_method(_set_flash_alpha, 1.0, 0.0, CLEAR_FLASH_DURATION)
+	_clear_anim_tween.tween_method(_set_clear_anim_elapsed, 0.0, CLEAR_SWEEP_DURATION, CLEAR_SWEEP_DURATION)
+	_clear_anim_tween.tween_callback(func() -> void:
 		_flash_cells.clear()
+		_clear_anim_cells.clear()
+		_clear_anim_colors.clear()
+		_clear_anim_delays.clear()
+		_clear_anim_elapsed = 0.0
+		is_clear_animating = false
 		queue_redraw()
 	)
 
@@ -244,6 +277,27 @@ func check_and_clear() -> Dictionary:
 func _set_flash_alpha(alpha: float) -> void:
 	_flash_alpha = alpha
 	queue_redraw()
+
+
+func _set_clear_anim_elapsed(elapsed: float) -> void:
+	_clear_anim_elapsed = elapsed
+	queue_redraw()
+
+
+func _compute_clear_cell_delay(p: Vector2i, rows_to_clear: Array[int], cols_to_clear: Array[int]) -> float:
+	var row_delay := INF
+	if rows_to_clear.has(p.y):
+		row_delay = (float(p.x) / float(max(1, GRID_SIZE - 1))) * CLEAR_CELL_DELAY_MAX
+
+	var col_delay := INF
+	if cols_to_clear.has(p.x):
+		col_delay = (float(p.y) / float(max(1, GRID_SIZE - 1))) * CLEAR_CELL_DELAY_MAX
+
+	var delay := minf(row_delay, col_delay)
+	if is_inf(delay):
+		var diag_norm := float(p.x + p.y) / float(max(1, (GRID_SIZE - 1) * 2))
+		delay = diag_norm * CLEAR_CELL_DELAY_MAX
+	return delay
 
 
 func show_preview(shape: Array, grid_col: int, grid_row: int) -> void:
@@ -301,6 +355,14 @@ func set_state(state: Dictionary) -> void:
 	else:
 		_deserialize_colors(state.get("cell_colors", []))
 	_color_index = state.get("color_index", 0)
+	if _clear_anim_tween and _clear_anim_tween.is_running():
+		_clear_anim_tween.kill()
+	_flash_cells.clear()
+	_clear_anim_cells.clear()
+	_clear_anim_colors.clear()
+	_clear_anim_delays.clear()
+	_clear_anim_elapsed = 0.0
+	is_clear_animating = false
 	queue_redraw()
 
 
@@ -379,6 +441,23 @@ func _draw() -> void:
 			var p: Vector2i = pos
 			var cell_origin := origin + Vector2(p.x * cell_size, p.y * cell_size)
 			draw_rect(Rect2(cell_origin, Vector2(cell_size, cell_size)), flash_color)
+
+	# Clear dissolve animation
+	if not _clear_anim_cells.is_empty():
+		for i in _clear_anim_cells.size():
+			var p: Vector2i = _clear_anim_cells[i]
+			var delay := _clear_anim_delays[i] if i < _clear_anim_delays.size() else 0.0
+			var t := clamp((_clear_anim_elapsed - delay) / CLEAR_SWEEP_DURATION, 0.0, 1.0)
+			if t >= 1.0:
+				continue
+			var base_color := _clear_anim_colors[i] if i < _clear_anim_colors.size() else tm.get_color("cell_given")
+			var alpha := (1.0 - t)
+			var scale := lerpf(1.0, 0.6, t)
+			var draw_size := Vector2(cell_size, cell_size) * scale
+			var offset := (Vector2(cell_size, cell_size) - draw_size) * 0.5
+			var cell_origin := origin + Vector2(p.x * cell_size, p.y * cell_size)
+			var draw_color := Color(base_color.r, base_color.g, base_color.b, alpha)
+			draw_rect(Rect2(cell_origin + offset, draw_size), draw_color)
 
 	# Preview
 	if not preview_cells.is_empty():

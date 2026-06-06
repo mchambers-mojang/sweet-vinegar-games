@@ -154,7 +154,7 @@ func _create_block_panel(index: int, fixed_height: float) -> Control:
 
 	# Input handling for drag
 	panel.gui_input.connect(func(event: InputEvent) -> void:
-		if is_game_over:
+		if is_game_over or board.is_clear_animating:
 			return
 		if event is InputEventMouseButton:
 			var mb := event as InputEventMouseButton
@@ -179,6 +179,8 @@ func _create_block_panel(index: int, fixed_height: float) -> Control:
 
 
 func _start_drag(index: int, screen_pos: Vector2) -> void:
+	if board.is_clear_animating:
+		return
 	_dragging = true
 	_drag_block_index = index
 	_drag_shape = available_blocks[index]
