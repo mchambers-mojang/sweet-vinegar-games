@@ -63,6 +63,8 @@ const NEON_CELL_COLORS: Array[Color] = [
 ]
 
 const DIFFICULTY_NAMES := ["Easy", "Medium", "Hard", "Expert", "Evil"]
+const LEGACY_SEED_HASH_INITIAL := 17
+const LEGACY_SEED_HASH_MULTIPLIER := 31
 
 var _number_buttons: Array[Button] = []
 var _strike_indicators: Array[Control] = []
@@ -116,7 +118,7 @@ func _setup_help_button() -> void:
 func start_new_game(diff: int) -> void:
 	difficulty = diff
 	difficulty_label.text = DIFFICULTY_NAMES[difficulty]
-	random_seed = Time.get_ticks_usec()
+	random_seed = _create_session_seed()
 
 	var generator := SudokuGenerator.new()
 	var result := generator.generate(difficulty, random_seed)
@@ -170,6 +172,8 @@ func resume_game(data: Dictionary) -> void:
 	_can_continue_after_failure = data.get("can_continue_after_failure", false)
 	hints_used = data.get("hints_used", 0)
 	random_seed = int(data.get("random_seed", 0))
+	if random_seed == 0:
+		random_seed = _derive_seed_from_puzzle(puzzle)
 	replay_id = str(data.get("replay_id", ""))
 	is_completed = false
 	is_paused = false
@@ -1143,3 +1147,18 @@ func _count_filled_cells() -> int:
 		if int(value) != 0:
 			count += 1
 	return count
+
+
+func _derive_seed_from_puzzle(values: Array[int]) -> int:
+	# Legacy fallback for saves created before explicit replay seeds existed.
+	# 17/31 are standard hash multipliers chosen for stable deterministic mixing.
+	var seed := LEGACY_SEED_HASH_INITIAL
+	for value in values:
+		seed = int((seed * LEGACY_SEED_HASH_MULTIPLIER + int(value)) & 0x7fffffff)
+	return seed
+
+
+func _create_session_seed() -> int:
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	return int(Time.get_ticks_usec() ^ rng.randi())

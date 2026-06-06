@@ -6,19 +6,26 @@ const REPLAYS_PATH := "user://replays.json"
 const ACTIVE_REPLAY_PATH := "user://active_replay.json"
 const FORMAT_VERSION := 1
 const MAX_AUTO_REPLAYS := 20
+const SECONDS_TO_MS := 1000.0
+const MIN_PLAYBACK_SPEED := 0.25
+const MAX_PLAYBACK_SPEED := 4.0
 
 var _replays: Array[Dictionary] = []
 var _active_replay: Dictionary = {}
+var _id_rng := RandomNumberGenerator.new()
+var _active_sequence: int = 0
+var playback_speed: float = 1.0
 
 
 func _ready() -> void:
+	_id_rng.randomize()
 	_load_replays()
 	_load_active_replay()
 
 
 func start_session(game_mode: String, seed: int, initial_state: Dictionary, settings_snapshot: Dictionary = {}) -> String:
 	_active_replay = {
-		"id": "%d_%d" % [Time.get_unix_time_from_system(), Time.get_ticks_usec()],
+		"id": "%d_%d_%d" % [Time.get_unix_time_from_system(), Time.get_ticks_usec(), _id_rng.randi()],
 		"header": {
 			"game_mode": game_mode,
 			"version": _get_game_version(),
@@ -30,6 +37,7 @@ func start_session(game_mode: String, seed: int, initial_state: Dictionary, sett
 		"frames": [],
 		"footer": {},
 	}
+	_active_sequence = 0
 	_save_active_replay()
 	return str(_active_replay["id"])
 
@@ -43,12 +51,14 @@ func record_input(elapsed_time: float, event_type: String, payload: Dictionary) 
 		return
 	var frames: Array[Dictionary] = _active_replay.get("frames", [])
 	frames.append({
-		"tick": int(maxf(0.0, elapsed_time) * 1000.0),
+		"tick": roundi(maxf(0.0, elapsed_time) * SECONDS_TO_MS),
+		"seq": _active_sequence,
 		"input_event": {
 			"type": event_type,
 			"payload": payload,
 		},
 	})
+	_active_sequence += 1
 	_active_replay["frames"] = frames
 	_save_active_replay()
 
@@ -127,7 +137,11 @@ func simulate_replay(replay: Dictionary, apply_event: Callable) -> bool:
 		return false
 	var frames: Array = replay.get("frames", [])
 	frames.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		return int(a.get("tick", 0)) < int(b.get("tick", 0))
+		var a_tick := int(a.get("tick", 0))
+		var b_tick := int(b.get("tick", 0))
+		if a_tick == b_tick:
+			return int(a.get("seq", 0)) < int(b.get("seq", 0))
+		return a_tick < b_tick
 	)
 	for frame in frames:
 		apply_event.call(frame)
@@ -135,7 +149,8 @@ func simulate_replay(replay: Dictionary, apply_event: Callable) -> bool:
 
 
 func set_playback_speed(multiplier: float) -> float:
-	return clampf(multiplier, 0.25, 4.0)
+	playback_speed = clampf(multiplier, MIN_PLAYBACK_SPEED, MAX_PLAYBACK_SPEED)
+	return playback_speed
 
 
 func scrub_frames_to_tick(replay: Dictionary, tick_ms: int) -> Array[Dictionary]:
@@ -157,6 +172,9 @@ func get_crash_recovery_payload() -> Dictionary:
 
 
 func _get_game_version() -> String:
+	var version := str(ProjectSettings.get_setting("application/config/version", ""))
+	if not version.is_empty():
+		return version
 	var features = ProjectSettings.get_setting("application/config/features", PackedStringArray())
 	return ",".join(features)
 

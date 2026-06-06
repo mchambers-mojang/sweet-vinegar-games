@@ -65,7 +65,7 @@ func start_new_game() -> void:
 	combo_count = 0
 	elapsed_time = 0.0
 	is_game_over = false
-	random_seed = Time.get_ticks_usec()
+	random_seed = _create_session_seed()
 	_rng.seed = random_seed
 	board.reset()
 	_deal_new_blocks()
@@ -87,11 +87,10 @@ func resume_game(data: Dictionary) -> void:
 	combo_count = data.get("combo_count", 0)
 	elapsed_time = data.get("elapsed_time", 0.0)
 	is_game_over = false
-	random_seed = int(data.get("random_seed", Time.get_ticks_usec()))
+	random_seed = int(data.get("random_seed", 0))
 	_rng.seed = random_seed
-	var loaded_rng_state := int(data.get("rng_state", 0))
-	if loaded_rng_state != 0:
-		_rng.state = loaded_rng_state
+	if data.has("rng_state"):
+		_rng.state = int(data.get("rng_state", 0))
 	replay_id = str(data.get("replay_id", ""))
 	board.set_state(data.get("board_state", {}))
 
@@ -569,3 +568,9 @@ func _serialize_blocks(blocks: Array) -> Array:
 			shape_data.append({"x": c.x, "y": c.y})
 		blocks_data.append(shape_data)
 	return blocks_data
+
+
+func _create_session_seed() -> int:
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	return int(Time.get_ticks_usec() ^ rng.randi())

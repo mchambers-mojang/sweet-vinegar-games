@@ -3,6 +3,10 @@ extends Control
 ## Shikaku game screen — board, timer, controls
 
 const SIZE_NAMES := {5: "5×5", 7: "7×7", 8: "8×8", 10: "10×10", 12: "12×12", 15: "15×15"}
+const LEGACY_SEED_HASH_INITIAL := 23
+const LEGACY_SEED_HASH_MULTIPLIER := 31
+const LEGACY_SEED_HASH_X_FACTOR := 7
+const LEGACY_SEED_HASH_Y_FACTOR := 13
 
 # Game state
 var puzzle_data: Dictionary = {}  # width, height, numbers, solution
@@ -67,7 +71,7 @@ func _setup_help_button() -> void:
 func start_new_game(w: int, h: int) -> void:
 	grid_width = w
 	grid_height = h
-	random_seed = Time.get_ticks_usec()
+	random_seed = _create_session_seed()
 	puzzle_data = ShikakuGenerator.generate(w, h, random_seed)
 	board.setup(w, h, puzzle_data["numbers"])
 	size_label.text = SIZE_NAMES.get(w, "%dx%d" % [w, h])
@@ -107,6 +111,8 @@ func resume_game(data: Dictionary) -> void:
 	elapsed_time = data.get("elapsed_time", 0.0)
 	hints_used = data.get("hints_used", 0)
 	random_seed = int(data.get("random_seed", 0))
+	if random_seed == 0:
+		random_seed = _derive_seed_from_numbers(puzzle_data["numbers"])
 	replay_id = str(data.get("replay_id", ""))
 	is_completed = false
 	size_label.text = SIZE_NAMES.get(grid_width, "%dx%d" % [grid_width, grid_height])
@@ -439,3 +445,25 @@ func _deserialize_rects(data) -> Array[Rect2i]:
 			if entry is Dictionary:
 				result.append(Rect2i(int(entry.get("x", 0)), int(entry.get("y", 0)), int(entry.get("w", 1)), int(entry.get("h", 1))))
 	return result
+
+
+func _derive_seed_from_numbers(nums: Dictionary) -> int:
+	# Legacy fallback for saves created before explicit replay seeds existed.
+	# Multipliers keep the fold deterministic while distributing coordinate/value changes.
+	var keys: Array = nums.keys()
+	keys.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		if a.y == b.y:
+			return a.x < b.x
+		return a.y < b.y
+	)
+	var seed := LEGACY_SEED_HASH_INITIAL
+	for key in keys:
+		var pos: Vector2i = key
+		seed = int((seed * LEGACY_SEED_HASH_MULTIPLIER + pos.x * LEGACY_SEED_HASH_X_FACTOR + pos.y * LEGACY_SEED_HASH_Y_FACTOR + int(nums[pos])) & 0x7fffffff)
+	return seed
+
+
+func _create_session_seed() -> int:
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	return int(Time.get_ticks_usec() ^ rng.randi())
