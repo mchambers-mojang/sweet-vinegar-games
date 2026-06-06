@@ -54,12 +54,13 @@ func _physics_process(_delta: float) -> void:
 	if speed > max_speed:
 		cage.linear_velocity = cage.linear_velocity.normalized() * max_speed
 
-	# Speed clamp on ball
-	var ball_speed := ball.linear_velocity.length()
-	if ball_speed > max_speed:
-		ball.linear_velocity = ball.linear_velocity.normalized() * max_speed
+	# Ball follows cage position (they translate together) but rotates freely
+	# This simulates the ball bearing rolling inside the fixed frame
+	ball.global_position = cage.global_position
+	ball.linear_velocity = cage.linear_velocity
+	# Angular velocity is untouched — ball spins from contact forces
 
-	# Stall nudge — apply to cage (ball follows via collision)
+	# Stall nudge — apply to cage (ball follows)
 	if stall_nudge_force > 0.0 and speed <= stall_speed_threshold:
 		_apply_goal_nudge()
 

@@ -76,6 +76,8 @@ linear_damp = 0.4
 angular_damp = 1.0
 continuous_cd = true
 lock_rotation = true
+collision_layer = 1
+collision_mask = 1
 
 ; Fin 1: 0 degrees
 [node name="Fin1Col" type="CollisionShape3D" parent="Cage"]
@@ -135,13 +137,15 @@ rotation = Vector3(0, 5.149, 0)
 mesh = SubResource("6")
 material_override = SubResource("7")
 
-; === BALL BODY: free rolling sphere inside the cage ===
+; === BALL BODY: free rolling sphere, visual only for rotation ===
 [node name="Ball" type="RigidBody3D" parent="."]
 mass = 2.0
 physics_material_override = SubResource("11")
 linear_damp = 0.2
 angular_damp = 0.05
 continuous_cd = true
+collision_layer = 2
+collision_mask = 0
 
 [node name="BallCollision" type="CollisionShape3D" parent="Ball"]
 position = Vector3(0, 0.4, 0)
