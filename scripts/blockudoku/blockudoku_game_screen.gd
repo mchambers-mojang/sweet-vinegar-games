@@ -286,6 +286,9 @@ func _end_drag(screen_pos: Vector2) -> void:
 	if SettingsManager.blockudoku_rotation_mode and not _drag_moved and _drag_block_index >= 0 and _drag_block_index < available_blocks.size():
 		var shape: Array = available_blocks[_drag_block_index]
 		if shape.size() > 0:
+			ReplayManager.record_input(elapsed_time, "piece_rotated", {
+				"tray_index": _drag_block_index,
+			})
 			available_blocks[_drag_block_index] = BlockudokuShapes.rotate_clockwise(shape)
 			_build_tray()
 			_save_current_state()
