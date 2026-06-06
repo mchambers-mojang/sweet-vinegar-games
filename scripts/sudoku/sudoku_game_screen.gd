@@ -635,11 +635,11 @@ func _check_win() -> bool:
 func _handle_win() -> void:
 	is_completed = true
 	var won := not is_failed
-	var is_new_best := _is_new_best_time()
+	var previous_best: float = StatsManager.best_times.get(difficulty, -1.0)
 	StatsManager.record_game_completed(difficulty, elapsed_time, SettingsManager.error_mode == "strict", won)
 	SaveManager.clear_save()
 	_play_win_celebration()
-	if is_new_best:
+	if previous_best < 0.0 or elapsed_time < previous_best:
 		_show_new_best_indicator()
 
 
@@ -663,13 +663,9 @@ func _play_win_celebration() -> void:
 	tween.tween_callback(_show_win_dialog).set_delay(0.5)
 
 
-func _is_new_best_time() -> bool:
-	var best: float = StatsManager.best_times.get(difficulty, -1.0)
-	return best < 0.0 or elapsed_time < best
-
-
 func _show_new_best_indicator() -> void:
-	var center_rect := board.get_cell_rect(40)  # Center cell (row 4, col 4)
+	var center_index := int(board.cells.size() / 2)
+	var center_rect := board.get_cell_rect(center_index)
 	var center := center_rect.position + center_rect.size / 2.0
 	var color := Color(0.0, 2.0, 1.5) if ThemeManager.is_neon else Color(0.2, 0.75, 1.0)
 	ComboLabel.create(board, center, "NEW BEST!", color)
