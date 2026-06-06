@@ -1,4 +1,4 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://carom/scripts/carom_puck.gd" id="1"]
 
@@ -21,9 +21,14 @@ emission = Color(0.25, 1.4, 1.6, 1)
 emission_energy_multiplier = 1.8
 roughness = 0.08
 
+[sub_resource type="PhysicsMaterial" id="5"]
+friction = 0.1
+bounce = 0.85
+
 [node name="CaromPuck" type="RigidBody3D"]
 script = ExtResource("1")
 mass = 1.4
+physics_material_override = SubResource("5")
 linear_damp = 0.35
 angular_damp = 0.12
 continuous_cd = true

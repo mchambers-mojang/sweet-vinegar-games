@@ -41,6 +41,9 @@ func get_goal_targets() -> Array[Vector3]:
 
 
 func _on_south_goal_body_entered(body: Node) -> void:
+	if body is CaromProjectile:
+		(body as CaromProjectile).enter_goal()
+		return
 	if _goal_locked or not body is CaromPuck:
 		return
 	_goal_locked = true
@@ -48,6 +51,9 @@ func _on_south_goal_body_entered(body: Node) -> void:
 
 
 func _on_north_goal_body_entered(body: Node) -> void:
+	if body is CaromProjectile:
+		(body as CaromProjectile).enter_goal()
+		return
 	if _goal_locked or not body is CaromPuck:
 		return
 	_goal_locked = true

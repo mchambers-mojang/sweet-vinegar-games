@@ -1,15 +1,14 @@
 class_name CaromProjectile
 extends CharacterBody3D
 
-## Straight-line projectile that imparts force to the puck and self-destructs on impact.
+## Straight-line projectile that imparts force to the puck and bounces off walls.
+## Only leaves play when entering a goal area.
 
 @export var speed: float = 18.0
-@export var max_lifetime: float = 2.0
 @export var puck_impulse: float = 4.0
 
 var direction: Vector3 = Vector3.FORWARD
 var owner_side: StringName = StringName()
-var _elapsed: float = 0.0
 
 
 func _ready() -> void:
@@ -26,11 +25,6 @@ func setup(new_direction: Vector3, new_speed: float, new_owner_side: StringName)
 
 
 func _physics_process(delta: float) -> void:
-	_elapsed += delta
-	if _elapsed >= max_lifetime:
-		queue_free()
-		return
-
 	var collision: KinematicCollision3D = move_and_collide(direction * speed * delta)
 	if collision:
 		_handle_collision(collision)
@@ -45,3 +39,8 @@ func _handle_collision(collision: KinematicCollision3D) -> void:
 	# Bounce off everything (walls, puck, other projectiles)
 	var normal := collision.get_normal()
 	direction = direction.bounce(normal).normalized()
+
+
+## Called by goal Area3D when this projectile enters — removes from play.
+func enter_goal() -> void:
+	queue_free()
