@@ -77,12 +77,12 @@ func _spawn_entities() -> void:
 	ai_turret.name = "AITurret"
 	puck.name = "Puck"
 
-	player_turret.global_position = arena.get_turret_spawn_position(&"south")
-	ai_turret.global_position = arena.get_turret_spawn_position(&"north")
+	player_turret.global_position = arena.get_turret_spawn_position(&"north")
+	ai_turret.global_position = arena.get_turret_spawn_position(&"south")
 	puck.global_position = arena.get_puck_spawn_position()
 
-	player_turret.configure(&"south", CaromTurret.ControlMode.HUMAN, 180.0)
-	ai_turret.configure(&"north", CaromTurret.ControlMode.AI, 0.0)
+	player_turret.configure(&"north", CaromTurret.ControlMode.HUMAN, 0.0, Color(0.2, 0.6, 1.0))
+	ai_turret.configure(&"south", CaromTurret.ControlMode.AI, 180.0, Color(1.0, 0.25, 0.2))
 	puck.configure(arena.get_goal_targets(), arena.get_puck_spawn_position())
 
 	player_turret.ammo_changed.connect(_on_player_ammo_changed)
@@ -119,7 +119,7 @@ func _on_goal_scored(scoring_side: StringName, goal_puck: CaromPuck) -> void:
 	ai_turret.set_active(false)
 	goal_puck.reset_to_center(arena.get_puck_spawn_position())
 
-	if scoring_side == &"south":
+	if scoring_side == &"north":
 		player_score += 1
 		status_label.text = "Player scores!"
 	else:

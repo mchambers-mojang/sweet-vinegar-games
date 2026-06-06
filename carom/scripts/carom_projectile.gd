@@ -15,13 +15,22 @@ func _ready() -> void:
 	motion_mode = CharacterBody3D.MOTION_MODE_FLOATING
 
 
-func setup(new_direction: Vector3, new_speed: float, new_owner_side: StringName) -> void:
+func setup(new_direction: Vector3, new_speed: float, new_owner_side: StringName, color: Color = Color(0.16, 0.95, 1.0)) -> void:
 	direction = new_direction.normalized()
 	if new_speed > 0.0:
 		speed = new_speed
 	owner_side = new_owner_side
 	if direction.length_squared() > 0.0:
 		look_at(global_position + direction, Vector3.UP)
+	# Apply team color to mesh
+	var mesh_instance := get_node_or_null("MeshInstance3D") as MeshInstance3D
+	if mesh_instance:
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = color
+		mat.emission_enabled = true
+		mat.emission = color * 1.4
+		mat.emission_energy_multiplier = 2.0
+		mesh_instance.material_override = mat
 
 
 func _physics_process(delta: float) -> void:

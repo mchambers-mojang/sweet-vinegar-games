@@ -23,6 +23,8 @@ enum ControlMode {
 @export var control_mode: ControlMode = ControlMode.HUMAN
 @export var touch_drag_sensitivity: float = 0.12
 
+@export var team_color: Color = Color(0.16, 0.95, 1.0, 1.0)
+
 var side: StringName = &"south"
 var current_ammo: int = 0
 var is_reloading: bool = false
@@ -47,10 +49,12 @@ func _ready() -> void:
 	ammo_changed.emit(current_ammo, clip_size)
 
 
-func configure(new_side: StringName, new_control_mode: ControlMode, new_base_yaw_degrees: float) -> void:
+func configure(new_side: StringName, new_control_mode: ControlMode, new_base_yaw_degrees: float, new_color: Color = Color(-1, -1, -1)) -> void:
 	side = new_side
 	control_mode = new_control_mode
 	base_yaw_degrees = new_base_yaw_degrees
+	if new_color.r >= 0.0:
+		team_color = new_color
 	_update_rotation()
 
 
@@ -137,7 +141,7 @@ func try_fire() -> bool:
 		parent_scene = get_parent()
 	parent_scene.add_child(projectile)
 	projectile.global_position = projectile_spawn.global_position
-	projectile.setup(-projectile_spawn.global_transform.basis.z.normalized(), projectile_speed, side)
+	projectile.setup(-projectile_spawn.global_transform.basis.z.normalized(), projectile_speed, side, team_color)
 	projectile_fired.emit(projectile)
 
 	if control_mode == ControlMode.AI and current_ammo <= 0:
