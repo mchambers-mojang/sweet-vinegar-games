@@ -279,6 +279,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 
 	var local_pos := board.get_local_mouse_position()
 	var cell_size := board._get_cell_size()
+	var origin := board._get_grid_origin()
 	var offset_multiplier := SettingsManager.blockudoku_drag_offset
 	if offset_multiplier > 0:
 		local_pos.y -= cell_size * offset_multiplier
@@ -315,7 +316,6 @@ func _end_drag(screen_pos: Vector2) -> void:
 
 		# Neon placement effects
 		if ThemeManager.is_neon:
-			var origin := board._get_grid_origin()
 
 			# Per-cell burst — small burst on each cell of the shape
 			for cell_offset in _drag_shape:
@@ -376,7 +376,6 @@ func _end_drag(screen_pos: Vector2) -> void:
 					_pulse_board_for_combo(combo_count)
 				# Scale shockwave with combo
 				if ThemeManager.is_neon:
-					var origin := board._get_grid_origin()
 					var combo_center := origin + Vector2(cell_size * 4.5, cell_size * 4.5)
 					var combo_amp := minf(0.5 + combo_count * 0.3, 2.0)
 					NeonRing.create(board, combo_center, Color(2.0, 0.3, 1.8), cell_size * (4.0 + combo_count), 0.4, combo_amp)
