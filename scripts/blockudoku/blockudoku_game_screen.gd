@@ -182,11 +182,10 @@ func _build_tray() -> void:
 
 
 func _create_block_panel(index: int, fixed_height: float) -> Control:
-	var shape: Array = available_blocks[index]
-	var bounds := BlockudokuShapes.get_bounds(shape)
 	var cell_px := 20.0  # small preview cell size
 	var panel := Control.new()
-	panel.custom_minimum_size = Vector2(bounds.x * cell_px + 16, fixed_height)
+	# Fixed 5x5 grid slot so rotation/different shapes don't shift the tray
+	panel.custom_minimum_size = Vector2(5 * cell_px + 16, fixed_height)
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
 
 	# Draw function
@@ -688,6 +687,7 @@ func _capture_move_state() -> Dictionary:
 		"board_state": board.get_state(),
 		"available_blocks": _serialize_blocks(available_blocks),
 		"blocks_placed_this_set": blocks_placed_this_set,
+		"rng_state": _rng.state,
 	}
 
 
@@ -698,6 +698,8 @@ func _apply_move_state(state: Dictionary) -> void:
 	board.set_state(state.get("board_state", board.get_state()))
 	available_blocks = _deserialize_blocks(state.get("available_blocks", []))
 	blocks_placed_this_set = state.get("blocks_placed_this_set", blocks_placed_this_set)
+	if state.has("rng_state"):
+		_rng.state = state.get("rng_state")
 	_build_tray()
 	_update_score_display()
 
