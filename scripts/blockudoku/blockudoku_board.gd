@@ -57,6 +57,7 @@ func _get_sweep_duration() -> float:
 
 
 func _ready() -> void:
+	add_to_group("debug_grid_source")
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	_init_grid()
 
@@ -337,6 +338,19 @@ func screen_to_grid(screen_pos: Vector2) -> Vector2i:
 	var cell_size := _get_cell_size()
 	var col := int((screen_pos.x - origin.x) / cell_size)
 	var row := int((screen_pos.y - origin.y) / cell_size)
+	return Vector2i(col, row)
+
+
+func debug_screen_to_grid(screen_pos: Vector2) -> Vector2i:
+	var local_pos := to_local(screen_pos)
+	var origin := _get_grid_origin()
+	var cell_size := _get_cell_size()
+	var grid_px := cell_size * GRID_SIZE
+	var bounds := Rect2(origin, Vector2(grid_px, grid_px))
+	if not bounds.has_point(local_pos):
+		return Vector2i(-1, -1)
+	var col := int((local_pos.x - origin.x) / cell_size)
+	var row := int((local_pos.y - origin.y) / cell_size)
 	return Vector2i(col, row)
 
 
