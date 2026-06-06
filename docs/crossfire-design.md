@@ -184,6 +184,19 @@ carom/
 - [ ] Arena hazards (bumpers, gravity wells)
 - [ ] Team modes (2v2)
 - [ ] Cosmetic unlocks tied to achievement system
+- [ ] Trick shot / physics puzzle mode (see below)
+
+## Trick Shot Mode (Physics Puzzles)
+
+A single-player puzzle mode that uses the core Carom mechanics in a different context:
+
+- **Concept**: Given a fixed arena layout with bumpers/walls/obstacles, score a goal using a limited number of shots (par system like golf)
+- **Trajectory preview**: Optional faint line showing first bounce to help plan
+- **Star rating**: 3 stars for par, 2 for par+1, 1 for completing at all
+- **Progression**: Unlock packs of increasingly complex arenas
+- **Level editor**: Reuse arena editor to let players create and share trick shot puzzles
+- **Leaderboard**: Fewest shots / fastest completion per puzzle
+- **Training value**: Teaches ricochet angles that transfer to competitive play
 
 ## Open Questions
 
