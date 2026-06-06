@@ -295,7 +295,8 @@ func _end_drag(screen_pos: Vector2) -> void:
 				"shape": _serialize_shape(rotated_shape),
 			})
 			available_blocks[_drag_block_index] = rotated_shape
-			_build_tray()
+			if _drag_block_index < _tray_panels.size():
+				_tray_panels[_drag_block_index].queue_redraw()
 			_save_current_state()
 		_drag_block_index = -1
 		_drag_shape = []
