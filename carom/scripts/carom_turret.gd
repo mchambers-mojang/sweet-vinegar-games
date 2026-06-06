@@ -107,7 +107,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventScreenDrag:
 		var drag := event as InputEventScreenDrag
 		aim_offset_degrees = clampf(
-			aim_offset_degrees + drag.relative.x * touch_drag_sensitivity,
+			aim_offset_degrees - drag.relative.x * touch_drag_sensitivity,
 			-aim_arc_degrees * 0.5,
 			aim_arc_degrees * 0.5
 		)
@@ -169,7 +169,7 @@ func _process_human_input(delta: float) -> void:
 	var horizontal_input := Input.get_action_strength("ui_right") - Input.get_action_strength("ui_left")
 	if absf(horizontal_input) > 0.0:
 		aim_offset_degrees = clampf(
-			aim_offset_degrees + horizontal_input * aim_speed_degrees * delta,
+			aim_offset_degrees - horizontal_input * aim_speed_degrees * delta,
 			-aim_arc_degrees * 0.5,
 			aim_arc_degrees * 0.5
 		)
