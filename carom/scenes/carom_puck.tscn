@@ -1,0 +1,54 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://carom/scripts/carom_puck.gd" id="1"]
+
+; Placeholder compound sphere setup for M1.
+; Replace these collision pieces with a more irregular/star-like contact profile after the prototype is playable.
+[sub_resource type="SphereShape3D" id="1"]
+radius = 0.45
+
+[sub_resource type="SphereShape3D" id="2"]
+radius = 0.14
+
+[sub_resource type="SphereMesh" id="3"]
+radius = 0.45
+height = 0.9
+
+[sub_resource type="StandardMaterial3D" id="4"]
+albedo_color = Color(0.22, 0.95, 1, 1)
+emission_enabled = true
+emission = Color(0.25, 1.4, 1.6, 1)
+emission_energy_multiplier = 1.8
+roughness = 0.08
+
+[node name="CaromPuck" type="RigidBody3D"]
+script = ExtResource("1")
+mass = 1.4
+linear_damp = 0.35
+angular_damp = 0.12
+continuous_cd = true
+
+[node name="CoreCollision" type="CollisionShape3D" parent="."]
+position = Vector3(0, 0.45, 0)
+shape = SubResource("1")
+
+[node name="BumpXPositive" type="CollisionShape3D" parent="."]
+position = Vector3(0.32, 0.45, 0)
+shape = SubResource("2")
+
+[node name="BumpXNegative" type="CollisionShape3D" parent="."]
+position = Vector3(-0.32, 0.45, 0)
+shape = SubResource("2")
+
+[node name="BumpZPositive" type="CollisionShape3D" parent="."]
+position = Vector3(0, 0.45, 0.32)
+shape = SubResource("2")
+
+[node name="BumpZNegative" type="CollisionShape3D" parent="."]
+position = Vector3(0, 0.45, -0.32)
+shape = SubResource("2")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.45, 0)
+mesh = SubResource("3")
+material_override = SubResource("4")
