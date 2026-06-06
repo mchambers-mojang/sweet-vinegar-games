@@ -35,10 +35,11 @@ func _ready() -> void:
 
 
 func _setup() -> void:
-	# Ripple distortion overlay
+	# Ripple distortion overlay (hidden until drag starts)
 	_ripple_rect = ColorRect.new()
 	_ripple_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_ripple_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_ripple_rect.visible = false
 	_ripple_material = ShaderMaterial.new()
 	_ripple_material.shader = RIPPLE_SHADER
 	var viewport := get_viewport()
@@ -49,11 +50,12 @@ func _setup() -> void:
 	_ripple_rect.material = _ripple_material
 	add_child(_ripple_rect)
 
-	# Trail drawing canvas
+	# Trail drawing canvas (hidden until drag starts)
 	_trail_canvas = Control.new()
 	_trail_canvas.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_trail_canvas.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_trail_canvas.z_index = 50
+	_trail_canvas.visible = false
 	add_child(_trail_canvas)
 	_trail_canvas.draw.connect(_draw_trail)
 
@@ -129,6 +131,8 @@ func _on_drag(pos: Vector2) -> void:
 			return
 		_drag_active = true
 		_last_ring_pos = pos
+		_ripple_rect.visible = true
+		_trail_canvas.visible = true
 
 	_last_pos = pos
 
@@ -190,6 +194,12 @@ func _process(_delta: float) -> void:
 		changed = true
 	if changed or (_released and _trail_points.size() > 0):
 		_trail_canvas.queue_redraw()
+
+	# Hide overlays when nothing is active (saves GPU memory)
+	if not _dragging and _rings.size() == 0 and _trail_points.size() == 0:
+		if _ripple_rect.visible:
+			_ripple_rect.visible = false
+			_trail_canvas.visible = false
 
 
 func _draw_trail() -> void:

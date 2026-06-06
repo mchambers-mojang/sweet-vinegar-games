@@ -14,7 +14,7 @@ func _ready() -> void:
 	_environment.tonemap_mode = Environment.TONE_MAPPER_ACES
 
 	# Glow settings for synthwave neon bloom
-	_environment.glow_enabled = false
+	_environment.glow_enabled = true
 	_environment.glow_intensity = 0.7
 	_environment.glow_strength = 1.05
 	_environment.glow_bloom = 0.25
@@ -25,21 +25,25 @@ func _ready() -> void:
 	_environment.set_glow_level(0, true)   # Fine detail
 	_environment.set_glow_level(1, true)   # Medium spread
 	_environment.set_glow_level(2, true)   # Wide glow
-	_environment.set_glow_level(3, true)   # Very wide
+	_environment.set_glow_level(3, false)
 	_environment.set_glow_level(4, false)
 	_environment.set_glow_level(5, false)
 	_environment.set_glow_level(6, false)
 
 	_world_env = WorldEnvironment.new()
 	_world_env.environment = _environment
-	add_child(_world_env)
-
+	# Don't add to tree unless neon is active — saves ~20-40MB on mobile
 	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _update_glow())
 	_update_glow()
 
 
 func _update_glow() -> void:
-	_environment.glow_enabled = ThemeManager.is_neon
+	if ThemeManager.is_neon:
+		if not _world_env.is_inside_tree():
+			add_child(_world_env)
+	else:
+		if _world_env.is_inside_tree():
+			remove_child(_world_env)
 
 
 ## Create a screen-shake / impact effect
