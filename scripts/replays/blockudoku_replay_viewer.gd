@@ -84,7 +84,7 @@ func _toggle_play() -> void:
 func _cycle_speed() -> void:
 	_speed_index = (_speed_index + 1) % SPEED_OPTIONS.size()
 	_playback_speed = SPEED_OPTIONS[_speed_index]
-	speed_button.text = "%gx" % _playback_speed
+	speed_button.text = str(_playback_speed) + "x"
 
 
 func _process(delta: float) -> void:
