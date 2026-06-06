@@ -142,6 +142,23 @@ jobs:
           mkdir -p build/ios
           godot --headless --export-debug "iOS" build/ios/${EXPORT_NAME}.ipa 2>&1 || true
 
+      - name: Patch Info.plist for status bar visibility
+        run: |
+          PROJ_DIR=$(find build/ios -name "*.xcodeproj" -print -quit | xargs dirname)
+          PLIST="$PROJ_DIR/${EXPORT_NAME}-Info.plist"
+          if [ ! -f "$PLIST" ]; then
+            PLIST=$(find build/ios -name "*Info.plist" -print -quit)
+          fi
+          if [ -f "$PLIST" ]; then
+            echo "Patching $PLIST for status bar"
+            /usr/libexec/PlistBuddy -c "Set :UIStatusBarHidden false" "$PLIST" 2>/dev/null || \
+              /usr/libexec/PlistBuddy -c "Add :UIStatusBarHidden bool false" "$PLIST"
+            /usr/libexec/PlistBuddy -c "Set :UIViewControllerBasedStatusBarAppearance false" "$PLIST" 2>/dev/null || \
+              /usr/libexec/PlistBuddy -c "Add :UIViewControllerBasedStatusBarAppearance bool false" "$PLIST"
+          else
+            echo "WARNING: Could not find Info.plist to patch"
+          fi
+
       - name: Build with xcodebuild
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}

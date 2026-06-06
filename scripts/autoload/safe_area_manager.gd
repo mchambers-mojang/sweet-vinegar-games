@@ -23,6 +23,10 @@ func _update_safe_area() -> void:
 		screen_size.x - safe_area.end.x,
 		screen_size.y - safe_area.end.y,
 	)
+	# iOS fallback: if safe area reports zero insets but we're on iPhone,
+	# apply minimum top inset for status bar / Dynamic Island
+	if OS.has_feature("ios") and _safe_insets.position.y == 0:
+		_safe_insets.position.y = 59  # Dynamic Island minimum safe area
 
 
 ## Returns the safe area insets as a dictionary with top, bottom, left, right
