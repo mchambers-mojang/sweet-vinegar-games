@@ -243,6 +243,13 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			_cheat_timer = 0.0
 			print("Cheat auto-solve: %s" % ("ON" if _cheat_active else "OFF"))
 			get_viewport().set_input_as_handled()
+		elif key.keycode >= KEY_1 and key.keycode <= KEY_9:
+			var number := key.keycode - KEY_0
+			_on_number_pressed(number)
+			get_viewport().set_input_as_handled()
+		elif key.keycode == KEY_BACKSPACE or key.keycode == KEY_DELETE:
+			_on_erase_pressed()
+			get_viewport().set_input_as_handled()
 
 
 func _cheat_place_one() -> void:
