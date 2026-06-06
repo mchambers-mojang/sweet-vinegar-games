@@ -287,7 +287,9 @@ func debug_screen_to_grid(screen_pos: Vector2) -> Vector2i:
 	var bounds := Rect2(origin, Vector2(grid_px, grid_px))
 	if not bounds.has_point(local_pos):
 		return Vector2i(-1, -1)
-	return screen_to_grid(local_pos)
+	var col := int((local_pos.x - origin.x) / cell_size)
+	var row := int((local_pos.y - origin.y) / cell_size)
+	return Vector2i(col, row)
 
 
 func get_filled_count() -> int:

@@ -151,7 +151,7 @@ func _build_ui() -> void:
 	_root.add_child(_info_label)
 
 	_analytics_label = RichTextLabel.new()
-	_analytics_label.position = Vector2(10, 92)
+	_analytics_label.position = Vector2(10, 100)
 	_analytics_label.size = Vector2(460, 180)
 	_analytics_label.bbcode_enabled = false
 	_analytics_label.fit_content = false
@@ -219,6 +219,7 @@ func _refresh_overlay_text() -> void:
 	if SettingsManager.debug_show_grid_coordinates:
 		lines.append("Grid: %s" % _get_grid_coordinate_label())
 	_info_label.text = "\n".join(PackedStringArray(lines))
+	_analytics_label.position.y = _info_label.position.y + _info_label.get_combined_minimum_size().y + 10.0
 
 	if SettingsManager.debug_show_analytics_tail:
 		_analytics_label.text = "Analytics events:\n%s" % "\n".join(PackedStringArray(_analytics_tail))
@@ -242,7 +243,7 @@ func _draw_debug_overlay() -> void:
 			Vector2(left, top),
 			Vector2(maxf(1.0, viewport_size.x - left - right), maxf(1.0, viewport_size.y - top - bottom))
 		)
-		_draw_layer.draw_rect(safe_rect, Color(0.2, 1.0, 0.2, 0.0), false, 2.0)
+		_draw_layer.draw_rect(safe_rect, Color(0.2, 1.0, 0.2, 0.9), false, 2.0)
 
 
 func _get_current_scene_name() -> String:
@@ -256,6 +257,7 @@ func _get_current_scene_name() -> String:
 
 func _get_grid_coordinate_label() -> String:
 	var point := get_viewport().get_mouse_position()
+	# Prefer active touch point on mobile while still falling back to mouse on desktop.
 	for id in _touch_points.keys():
 		point = _touch_points[id]
 		break
