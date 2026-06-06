@@ -224,11 +224,14 @@ static func _get_diagonal_shapes() -> Array[Array]:
 
 
 ## Pick n random shapes from the pool
-static func pick_random(count: int) -> Array[Array]:
+static func pick_random(count: int, rng: RandomNumberGenerator = null) -> Array[Array]:
 	var all := get_all_shapes()
 	var result: Array[Array] = []
 	for i in count:
-		result.append(all[randi() % all.size()])
+		if rng:
+			result.append(all[rng.randi_range(0, all.size() - 1)])
+		else:
+			result.append(all[randi() % all.size()])
 	return result
 
 

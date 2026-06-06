@@ -18,6 +18,8 @@ func save_game(data: Dictionary) -> void:
 	config.set_value("game", "placed_rects", data.get("placed_rects", []))
 	config.set_value("game", "elapsed_time", data.get("elapsed_time", 0.0))
 	config.set_value("game", "hints_used", data.get("hints_used", 0))
+	config.set_value("game", "random_seed", data.get("random_seed", 0))
+	config.set_value("game", "replay_id", data.get("replay_id", ""))
 	config.save(SAVE_PATH)
 
 
@@ -33,6 +35,8 @@ func load_game() -> Dictionary:
 		"placed_rects": config.get_value("game", "placed_rects", []),
 		"elapsed_time": config.get_value("game", "elapsed_time", 0.0),
 		"hints_used": config.get_value("game", "hints_used", 0),
+		"random_seed": config.get_value("game", "random_seed", 0),
+		"replay_id": config.get_value("game", "replay_id", ""),
 	}
 
 

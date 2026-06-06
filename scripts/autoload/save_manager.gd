@@ -25,6 +25,8 @@ func save_game(data: Dictionary) -> void:
 	config.set_value("game", "error_mode", data.get("error_mode", "strict"))
 	config.set_value("game", "is_failed", data.get("is_failed", false))
 	config.set_value("game", "hints_used", data.get("hints_used", 0))
+	config.set_value("game", "random_seed", data.get("random_seed", 0))
+	config.set_value("game", "replay_id", data.get("replay_id", ""))
 	config.save(SAVE_PATH)
 
 
@@ -44,6 +46,8 @@ func load_game() -> Dictionary:
 		"error_mode": config.get_value("game", "error_mode", "strict"),
 		"is_failed": config.get_value("game", "is_failed", false),
 		"hints_used": config.get_value("game", "hints_used", 0),
+		"random_seed": config.get_value("game", "random_seed", 0),
+		"replay_id": config.get_value("game", "replay_id", ""),
 	}
 	game_loaded.emit()
 	return data

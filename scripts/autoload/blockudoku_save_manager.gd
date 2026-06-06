@@ -18,6 +18,9 @@ func save_game(data: Dictionary) -> void:
 	config.set_value("game", "board_state", data.get("board_state", {}))
 	config.set_value("game", "available_blocks", data.get("available_blocks", []))
 	config.set_value("game", "blocks_placed_this_set", data.get("blocks_placed_this_set", 0))
+	config.set_value("game", "random_seed", data.get("random_seed", 0))
+	config.set_value("game", "rng_state", data.get("rng_state", 0))
+	config.set_value("game", "replay_id", data.get("replay_id", ""))
 	config.save(SAVE_PATH)
 
 
@@ -33,6 +36,9 @@ func load_game() -> Dictionary:
 		"board_state": config.get_value("game", "board_state", {}),
 		"available_blocks": config.get_value("game", "available_blocks", []),
 		"blocks_placed_this_set": config.get_value("game", "blocks_placed_this_set", 0),
+		"random_seed": config.get_value("game", "random_seed", 0),
+		"rng_state": config.get_value("game", "rng_state", 0),
+		"replay_id": config.get_value("game", "replay_id", ""),
 	}
 
 

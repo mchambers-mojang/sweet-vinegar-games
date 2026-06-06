@@ -29,10 +29,15 @@ const MAX_ATTEMPTS := 10
 
 ## Generate a puzzle of the requested difficulty.
 ## Returns a dictionary with "puzzle" (Array[int]) and "solution" (Array[int]).
-func generate(difficulty: SudokuSolver.Difficulty) -> Dictionary:
+func generate(difficulty: SudokuSolver.Difficulty, seed: int = -1) -> Dictionary:
+	var rng := RandomNumberGenerator.new()
+	if seed >= 0:
+		rng.seed = seed
+	else:
+		rng.randomize()
 	for attempt in MAX_ATTEMPTS:
-		var full_grid := _generate_full_grid()
-		var puzzle := _remove_cells(full_grid, difficulty)
+		var full_grid := _generate_full_grid(rng)
+		var puzzle := _remove_cells(full_grid, difficulty, rng)
 		if puzzle.is_empty():
 			continue
 
@@ -55,10 +60,10 @@ func generate(difficulty: SudokuSolver.Difficulty) -> Dictionary:
 			}
 
 	# Fallback: return whatever we get closest to
-	var full_grid := _generate_full_grid()
-	var puzzle := _remove_cells(full_grid, difficulty)
+	var full_grid := _generate_full_grid(rng)
+	var puzzle := _remove_cells(full_grid, difficulty, rng)
 	if puzzle.is_empty():
-		puzzle = _simple_remove(full_grid, CLUE_TARGETS[difficulty])
+		puzzle = _simple_remove(full_grid, CLUE_TARGETS[difficulty], rng)
 	var solver := SudokuSolver.new()
 	solver.analyze(puzzle)
 	return {
@@ -69,13 +74,13 @@ func generate(difficulty: SudokuSolver.Difficulty) -> Dictionary:
 
 
 ## Generate a complete valid grid by transforming the seed
-func _generate_full_grid() -> Array[int]:
+func _generate_full_grid(rng: RandomNumberGenerator) -> Array[int]:
 	var grid: Array[int] = []
 	grid.assign(SEED_GRID.duplicate())
 
 	# Shuffle digits (relabel)
 	var digits := [1, 2, 3, 4, 5, 6, 7, 8, 9]
-	digits.shuffle()
+	_shuffle_array(digits, rng)
 	var mapping := {}
 	for i in 9:
 		mapping[i + 1] = digits[i]
@@ -85,7 +90,7 @@ func _generate_full_grid() -> Array[int]:
 	# Shuffle rows within each band
 	for band in 3:
 		var rows := [band * 3, band * 3 + 1, band * 3 + 2]
-		rows.shuffle()
+		_shuffle_array(rows, rng)
 		var new_grid: Array[int] = []
 		new_grid.resize(81)
 		for i in 3:
@@ -93,28 +98,28 @@ func _generate_full_grid() -> Array[int]:
 				# This band's rows get rearranged
 				pass
 		# Rebuild the band
-		_shuffle_rows_in_band(grid, band)
+		_shuffle_rows_in_band(grid, band, rng)
 
 	# Shuffle columns within each stack
 	for stack in 3:
-		_shuffle_cols_in_stack(grid, stack)
+		_shuffle_cols_in_stack(grid, stack, rng)
 
 	# Shuffle bands (groups of 3 rows)
 	var band_order := [0, 1, 2]
-	band_order.shuffle()
+	_shuffle_array(band_order, rng)
 	grid = _reorder_bands(grid, band_order)
 
 	# Shuffle stacks (groups of 3 columns)
 	var stack_order := [0, 1, 2]
-	stack_order.shuffle()
+	_shuffle_array(stack_order, rng)
 	grid = _reorder_stacks(grid, stack_order)
 
 	return grid
 
 
-func _shuffle_rows_in_band(grid: Array[int], band: int) -> void:
+func _shuffle_rows_in_band(grid: Array[int], band: int, rng: RandomNumberGenerator) -> void:
 	var rows := [0, 1, 2]
-	rows.shuffle()
+	_shuffle_array(rows, rng)
 	var temp: Array[Array] = [[], [], []]
 	for i in 3:
 		var src_row := band * 3 + i
@@ -126,9 +131,9 @@ func _shuffle_rows_in_band(grid: Array[int], band: int) -> void:
 			grid[dst_row * 9 + c] = temp[rows[i]][c]
 
 
-func _shuffle_cols_in_stack(grid: Array[int], stack: int) -> void:
+func _shuffle_cols_in_stack(grid: Array[int], stack: int, rng: RandomNumberGenerator) -> void:
 	var cols := [0, 1, 2]
-	cols.shuffle()
+	_shuffle_array(cols, rng)
 	var temp: Array[Array] = [[], [], []]
 	for i in 3:
 		var src_col := stack * 3 + i
@@ -163,14 +168,14 @@ func _reorder_stacks(grid: Array[int], order: Array) -> Array[int]:
 
 
 ## Remove cells to create a puzzle, ensuring unique solution and target difficulty
-func _remove_cells(full_grid: Array[int], target_difficulty: SudokuSolver.Difficulty) -> Array[int]:
+func _remove_cells(full_grid: Array[int], target_difficulty: SudokuSolver.Difficulty, rng: RandomNumberGenerator) -> Array[int]:
 	var puzzle: Array[int] = []
 	puzzle.assign(full_grid.duplicate())
 	var target_clues: int = CLUE_TARGETS[target_difficulty]
 
 	# Create a random removal order
 	var indices := range(81)
-	indices.shuffle()
+	_shuffle_array(indices, rng)
 
 	var removed_count := 0
 	for idx in indices:
@@ -196,11 +201,11 @@ func _remove_cells(full_grid: Array[int], target_difficulty: SudokuSolver.Diffic
 
 
 ## Simple fallback: just remove random cells without difficulty targeting
-func _simple_remove(full_grid: Array[int], target_clues: int) -> Array[int]:
+func _simple_remove(full_grid: Array[int], target_clues: int, rng: RandomNumberGenerator) -> Array[int]:
 	var puzzle: Array[int] = []
 	puzzle.assign(full_grid.duplicate())
 	var indices := range(81)
-	indices.shuffle()
+	_shuffle_array(indices, rng)
 
 	var removed := 0
 	for idx in indices:
@@ -218,3 +223,11 @@ func _simple_remove(full_grid: Array[int], target_clues: int) -> Array[int]:
 			break
 
 	return puzzle
+
+
+func _shuffle_array(arr: Array, rng: RandomNumberGenerator) -> void:
+	for i in range(arr.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var tmp = arr[i]
+		arr[i] = arr[j]
+		arr[j] = tmp
