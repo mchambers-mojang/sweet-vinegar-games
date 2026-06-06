@@ -92,6 +92,7 @@ func start_new_game() -> void:
 	_update_score_display()
 	_update_undo_redo_buttons()
 	BlockudokuStatsManager.record_game_started()
+	AchievementManager.track_game_started("blockudoku")
 	AnalyticsManager.log_event("game_started", {
 		"game": "blockudoku",
 	})
@@ -345,6 +346,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 			var clear_score := (lines + boxes) * 18 + cleared + combo_bonus
 			score += clear_score
 			BlockudokuStatsManager.record_clears(lines + boxes)
+			AchievementManager.track_blockudoku_clear(lines + boxes)
 			AnalyticsManager.log_event("line_cleared", {
 				"game": "blockudoku",
 				"cleared": cleared,
