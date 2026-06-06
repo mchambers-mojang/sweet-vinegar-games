@@ -270,10 +270,13 @@ func _show_toast(definition: Dictionary) -> void:
 	label.text = "Achievement Unlocked: %s" % str(definition.get("title", ""))
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.custom_minimum_size = Vector2(420, 48)
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	var vp_size := root.get_visible_rect().size
 	var safe_top: int = SafeAreaManager.get_insets().get("top", 0)
-	label.position = Vector2((vp_size.x - label.custom_minimum_size.x) * 0.5, safe_top + 24)
+	var toast_width := minf(420.0, vp_size.x * 0.85)
+	label.custom_minimum_size = Vector2(toast_width, 48)
+	label.size = Vector2(toast_width, 48)
+	label.position = Vector2((vp_size.x - toast_width) * 0.5, safe_top + 24)
 	label.add_theme_font_size_override("font_size", 24)
 	label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.35))
 	label.add_theme_constant_override("outline_size", 5)
@@ -281,7 +284,7 @@ func _show_toast(definition: Dictionary) -> void:
 	label.add_theme_constant_override("shadow_offset_x", 2)
 	label.add_theme_constant_override("shadow_offset_y", 2)
 	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.6))
-	label.pivot_offset = label.custom_minimum_size / 2.0
+	label.pivot_offset = Vector2(toast_width, 48) / 2.0
 	label.scale = Vector2(1.2, 1.2)
 	_toast_layer.add_child(label)
 
