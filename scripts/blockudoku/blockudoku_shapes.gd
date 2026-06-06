@@ -247,6 +247,15 @@ static func normalize(shape: Array) -> Array[Vector2i]:
 	return result
 
 
+## Rotate a shape 90° clockwise and normalize to origin.
+static func rotate_clockwise(shape: Array) -> Array[Vector2i]:
+	var rotated: Array[Vector2i] = []
+	for cell in shape:
+		var c: Vector2i = cell
+		rotated.append(Vector2i(c.y, -c.x))
+	return normalize(rotated)
+
+
 ## Get bounding size of a shape (width, height)
 static func get_bounds(shape: Array) -> Vector2i:
 	var max_x := 0

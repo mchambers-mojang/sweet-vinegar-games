@@ -3,12 +3,18 @@ extends Control
 ## Blockudoku game screen — board, score, block tray, drag-to-place
 
 const BLOCKS_PER_SET := 3
+const ROTATE_TAP_DISTANCE_THRESHOLD := 12.0
+const COMBO_PULSE_BASE_SCALE := 1.02
+const COMBO_PULSE_SCALE_PER_COMBO := 0.002
+const COMBO_PULSE_MAX_SCALE := 1.04
+const COMBO_PULSE_HALF_DURATION := 0.15
 
 # Game state
 var score: int = 0
 var turns: int = 0
 var combo_count: int = 0
 var is_game_over: bool = false
+var _new_best_shown: bool = false
 
 # Current set of blocks to place (each is Array of Vector2i)
 var available_blocks: Array[Array] = []
@@ -19,23 +25,34 @@ var _dragging: bool = false
 var _drag_block_index: int = -1
 var _drag_shape: Array = []
 var _drag_screen_pos: Vector2 = Vector2.ZERO
+var _drag_start_screen_pos: Vector2 = Vector2.ZERO
+var _drag_moved: bool = false
 var _drag_last_grid_pos := Vector2i(-999, -999)
+var _board_pulse_tween: Tween = null
 
 # Node references
 @onready var board: BlockudokuBoard = %BlockudokuBoard
 @onready var score_label: Label = %ScoreLabel
 @onready var timer_label: Label = %TimerLabel
 @onready var back_button: Button = %BackButton
+@onready var undo_button: Button = %UndoButton
+@onready var redo_button: Button = %RedoButton
 @onready var block_tray: HBoxContainer = %BlockTray
 
 var elapsed_time: float = 0.0
 
 # Block tray piece display nodes
 var _tray_panels: Array[Control] = []
+var undo_stack: Array[Dictionary] = []
+var redo_stack: Array[Dictionary] = []
 
 
 func _ready() -> void:
+	CrashReporter.register_state_provider(_get_crash_state)
+	CrashReporter.register_user_action("blockudoku_screen_opened")
 	back_button.pressed.connect(_on_back)
+	undo_button.pressed.connect(_on_undo_pressed)
+	redo_button.pressed.connect(_on_redo_pressed)
 	_setup_help_button()
 	_apply_theme()
 	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
@@ -48,6 +65,10 @@ func _ready() -> void:
 	# Cosmetic drag effect is now a global autoload
 
 
+func _exit_tree() -> void:
+	CrashReporter.unregister_state_provider(_get_crash_state)
+
+
 func _setup_help_button() -> void:
 	var btn := Button.new()
 	btn.text = "?"
@@ -57,41 +78,43 @@ func _setup_help_button() -> void:
 
 
 func start_new_game() -> void:
+	CrashReporter.register_user_action("blockudoku_start_new_game")
 	score = 0
 	turns = 0
 	combo_count = 0
+	_new_best_shown = false
 	elapsed_time = 0.0
 	is_game_over = false
+	undo_stack.clear()
+	redo_stack.clear()
 	board.reset()
 	_deal_new_blocks()
 	_update_score_display()
+	_update_undo_redo_buttons()
 	BlockudokuStatsManager.record_game_started()
 	AchievementManager.track_game_started("blockudoku")
 	_save_current_state()
 
 
 func resume_game(data: Dictionary) -> void:
+	CrashReporter.register_user_action("blockudoku_resume_game", {"score": data.get("score", 0)})
 	score = data.get("score", 0)
 	turns = data.get("turns", 0)
 	combo_count = data.get("combo_count", 0)
+	_new_best_shown = data.get("new_best_shown", false)
 	elapsed_time = data.get("elapsed_time", 0.0)
 	is_game_over = false
+	undo_stack.clear()
+	redo_stack.clear()
 	board.set_state(data.get("board_state", {}))
 
 	# Restore available blocks
-	available_blocks.clear()
-	var saved_blocks: Array = data.get("available_blocks", [])
-	for block_data in saved_blocks:
-		var shape: Array = []
-		for cell_data in block_data:
-			if cell_data is Dictionary:
-				shape.append(Vector2i(int(cell_data.get("x", 0)), int(cell_data.get("y", 0))))
-		available_blocks.append(shape)
+	available_blocks = _deserialize_blocks(data.get("available_blocks", []))
 
 	blocks_placed_this_set = data.get("blocks_placed_this_set", 0)
 	_build_tray()
 	_update_score_display()
-	AchievementManager.track_game_started("blockudoku")
+	_update_undo_redo_buttons()
 
 
 func _process(delta: float) -> void:
@@ -156,7 +179,7 @@ func _create_block_panel(index: int, fixed_height: float) -> Control:
 
 	# Input handling for drag
 	panel.gui_input.connect(func(event: InputEvent) -> void:
-		if is_game_over:
+		if is_game_over or board.is_clear_animating:
 			return
 		if event is InputEventMouseButton:
 			var mb := event as InputEventMouseButton
@@ -181,16 +204,22 @@ func _create_block_panel(index: int, fixed_height: float) -> Control:
 
 
 func _start_drag(index: int, screen_pos: Vector2) -> void:
+	if board.is_clear_animating:
+		return
 	_dragging = true
 	_drag_block_index = index
 	_drag_shape = available_blocks[index]
 	_drag_screen_pos = screen_pos
+	_drag_start_screen_pos = screen_pos
+	_drag_moved = false
 	_drag_last_grid_pos = Vector2i(-999, -999)
 	DragEffect.suppress()
 	_update_board_preview(screen_pos)
 
 
 func _update_drag(screen_pos: Vector2) -> void:
+	if not _drag_moved and screen_pos.distance_to(_drag_start_screen_pos) >= ROTATE_TAP_DISTANCE_THRESHOLD:
+		_drag_moved = true
 	_drag_screen_pos = screen_pos
 	_update_board_preview(screen_pos)
 
@@ -224,7 +253,18 @@ func _end_drag(screen_pos: Vector2) -> void:
 
 	board.clear_preview()
 
+	if SettingsManager.blockudoku_rotation_mode and not _drag_moved and _drag_block_index >= 0 and _drag_block_index < available_blocks.size():
+		var shape: Array = available_blocks[_drag_block_index]
+		if shape.size() > 0:
+			available_blocks[_drag_block_index] = BlockudokuShapes.rotate_clockwise(shape)
+			_build_tray()
+			_save_current_state()
+		_drag_block_index = -1
+		_drag_shape = []
+		return
+
 	if board.can_place(_drag_shape, grid_pos.x, grid_pos.y):
+		var before_state := _capture_move_state()
 		var block_color := BlockudokuShapes.get_shape_color(_drag_shape)
 		board.place_block(_drag_shape, grid_pos.x, grid_pos.y, block_color)
 		SoundManager.play_place()
@@ -283,6 +323,8 @@ func _end_drag(screen_pos: Vector2) -> void:
 			var combo_bonus := 0
 			if combo_count > 1:
 				combo_bonus = combo_count * 10
+				if lines + boxes >= 2:
+					_pulse_board_for_combo(combo_count)
 				# Scale shockwave with combo
 				if ThemeManager.is_neon:
 					var cell_size := board._get_cell_size()
@@ -303,6 +345,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 		else:
 			combo_count = 0
 
+		_check_for_new_best()
 		_update_score_display()
 
 		# Check if we need new blocks
@@ -314,9 +357,16 @@ func _end_drag(screen_pos: Vector2) -> void:
 		for shape in available_blocks:
 			if shape.size() > 0:
 				remaining_shapes.append(shape)
+		redo_stack.clear()
 		if not board.has_valid_placement(remaining_shapes):
+			_update_undo_redo_buttons()
 			_handle_game_over()
 		else:
+			undo_stack.append({
+				"before": before_state,
+				"after": _capture_move_state(),
+			})
+			_update_undo_redo_buttons()
 			_save_current_state()
 	else:
 		# Invalid placement — do nothing
@@ -328,8 +378,31 @@ func _end_drag(screen_pos: Vector2) -> void:
 
 var _shatter_tween: Tween = null
 
+
+func _pulse_board_for_combo(combo: int) -> void:
+	if not SettingsManager.screen_shake_enabled:
+		return
+
+	if _board_pulse_tween and _board_pulse_tween.is_valid():
+		_board_pulse_tween.kill()
+
+	board.scale = Vector2.ONE
+	var peak_scale_factor := minf(
+		COMBO_PULSE_BASE_SCALE + COMBO_PULSE_SCALE_PER_COMBO * float(combo - 1),
+		COMBO_PULSE_MAX_SCALE
+	)
+	_board_pulse_tween = create_tween()
+	var pulse_up := _board_pulse_tween.tween_property(board, "scale", Vector2(peak_scale_factor, peak_scale_factor), COMBO_PULSE_HALF_DURATION)
+	pulse_up.set_trans(Tween.TRANS_BACK)
+	pulse_up.set_ease(Tween.EASE_OUT)
+	var pulse_down := _board_pulse_tween.tween_property(board, "scale", Vector2.ONE, COMBO_PULSE_HALF_DURATION)
+	pulse_down.set_trans(Tween.TRANS_BACK)
+	pulse_down.set_ease(Tween.EASE_IN)
+
 func _handle_game_over() -> void:
+	CrashReporter.register_user_action("blockudoku_game_over", {"score": score, "turns": turns})
 	is_game_over = true
+	_update_undo_redo_buttons()
 	BlockudokuStatsManager.record_game_over(score, turns)
 	BlockudokuSaveManager.clear_save()
 	HapticManager.vibrate_success()
@@ -468,7 +541,23 @@ func _show_combo_text(total_clears: int, combo: int) -> void:
 	ComboLabel.create(board, center, text, color)
 
 
+func _check_for_new_best() -> void:
+	if _new_best_shown:
+		return
+	if not BlockudokuStatsManager.record_high_score_candidate(score):
+		return
+	_new_best_shown = true
+
+	var color := Color(0.0, 2.0, 1.5) if ThemeManager.is_neon else Color(0.2, 0.75, 1.0)
+	var cell_size := board._get_cell_size()
+	var origin := board._get_grid_origin()
+	var center := origin + Vector2(cell_size * 4.5, cell_size * 4.5)
+	ComboLabel.create(board, center, "NEW BEST!", color)
+	HapticManager.vibrate_medium()
+
+
 func _on_back() -> void:
+	CrashReporter.register_user_action("blockudoku_back_to_menu")
 	if not is_game_over:
 		_save_current_state()
 	SceneTransition.transition_to("res://scenes/blockudoku_menu.tscn")
@@ -476,6 +565,79 @@ func _on_back() -> void:
 
 func _update_score_display() -> void:
 	score_label.text = "Score: %d" % score
+
+
+func _on_undo_pressed() -> void:
+	if is_game_over:
+		return
+	if undo_stack.is_empty():
+		return
+	var move: Dictionary = undo_stack.pop_back()
+	redo_stack.append(move)
+	_apply_move_state(move.get("before", {}))
+	_update_undo_redo_buttons()
+	_save_current_state()
+
+
+func _on_redo_pressed() -> void:
+	if is_game_over:
+		return
+	if redo_stack.is_empty():
+		return
+	var move: Dictionary = redo_stack.pop_back()
+	undo_stack.append(move)
+	_apply_move_state(move.get("after", {}))
+	_update_undo_redo_buttons()
+	_save_current_state()
+
+
+func _update_undo_redo_buttons() -> void:
+	undo_button.disabled = is_game_over or undo_stack.is_empty()
+	redo_button.disabled = is_game_over or redo_stack.is_empty()
+
+
+func _capture_move_state() -> Dictionary:
+	return {
+		"score": score,
+		"turns": turns,
+		"combo_count": combo_count,
+		"board_state": board.get_state(),
+		"available_blocks": _serialize_blocks(available_blocks),
+		"blocks_placed_this_set": blocks_placed_this_set,
+	}
+
+
+func _apply_move_state(state: Dictionary) -> void:
+	score = state.get("score", score)
+	turns = state.get("turns", turns)
+	combo_count = state.get("combo_count", combo_count)
+	board.set_state(state.get("board_state", board.get_state()))
+	available_blocks = _deserialize_blocks(state.get("available_blocks", []))
+	blocks_placed_this_set = state.get("blocks_placed_this_set", blocks_placed_this_set)
+	_build_tray()
+	_update_score_display()
+
+
+func _serialize_blocks(blocks: Array) -> Array:
+	var blocks_data: Array = []
+	for shape in blocks:
+		var shape_data: Array = []
+		for cell in shape:
+			var c: Vector2i = cell
+			shape_data.append({"x": c.x, "y": c.y})
+		blocks_data.append(shape_data)
+	return blocks_data
+
+
+func _deserialize_blocks(data: Array) -> Array[Array]:
+	var blocks: Array[Array] = []
+	for block_data in data:
+		var shape: Array = []
+		for cell_data in block_data:
+			if cell_data is Dictionary:
+				shape.append(Vector2i(int(cell_data.get("x", 0)), int(cell_data.get("y", 0))))
+		blocks.append(shape)
+	return blocks
 
 
 func _format_time(seconds: float) -> String:
@@ -493,19 +655,26 @@ func _apply_theme() -> void:
 func _save_current_state() -> void:
 	if is_game_over:
 		return
-	var blocks_data: Array = []
-	for shape in available_blocks:
-		var shape_data: Array = []
-		for cell in shape:
-			var c: Vector2i = cell
-			shape_data.append({"x": c.x, "y": c.y})
-		blocks_data.append(shape_data)
 	BlockudokuSaveManager.save_game({
 		"score": score,
 		"turns": turns,
 		"combo_count": combo_count,
+		"new_best_shown": _new_best_shown,
 		"elapsed_time": elapsed_time,
 		"board_state": board.get_state(),
-		"available_blocks": blocks_data,
+		"available_blocks": _serialize_blocks(available_blocks),
 		"blocks_placed_this_set": blocks_placed_this_set,
 	})
+
+
+func _get_crash_state() -> Dictionary:
+	return {
+		"game": "blockudoku",
+		"score": score,
+		"turns": turns,
+		"combo_count": combo_count,
+		"elapsed_time": elapsed_time,
+		"is_game_over": is_game_over,
+		"blocks_placed_this_set": blocks_placed_this_set,
+		"available_block_count": available_blocks.size(),
+	}

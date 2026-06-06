@@ -27,6 +27,15 @@ var screen_shake_enabled: bool = true
 var shockwave_enabled: bool = true
 var particle_effects_enabled: bool = true
 
+## Debug overlay (dev-only UI reads these values)
+var debug_show_fps: bool = true
+var debug_show_touch_points: bool = true
+var debug_show_safe_area: bool = true
+var debug_show_scene_name: bool = true
+var debug_show_memory: bool = true
+var debug_show_analytics_tail: bool = true
+var debug_show_grid_coordinates: bool = true
+
 ## Blockudoku shape families
 var blockudoku_pentominoes: bool = true
 var blockudoku_p_pentomino: bool = false
@@ -37,6 +46,7 @@ var blockudoku_n_pentomino: bool = false
 var blockudoku_hexominoes: bool = false
 var blockudoku_diagonals: bool = false
 var blockudoku_drag_offset: int = 1  # 0=None, 1=Small, 2=Medium, 3=Large
+var blockudoku_rotation_mode: bool = false
 
 
 func _ready() -> void:
@@ -54,6 +64,13 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			print("Reloading current scene...")
 			get_tree().reload_current_scene()
 			get_viewport().set_input_as_handled()
+		# Ctrl+Shift+C: copy latest crash report for easy sharing
+		elif key.keycode == KEY_C and key.ctrl_pressed and key.shift_pressed:
+			if CrashReporter.copy_latest_report_to_clipboard():
+				print("Copied latest crash report to clipboard")
+			else:
+				print("No crash report found to copy")
+			get_viewport().set_input_as_handled()
 
 
 func save_settings() -> void:
@@ -69,6 +86,13 @@ func save_settings() -> void:
 	config.set_value("effects", "screen_shake", screen_shake_enabled)
 	config.set_value("effects", "shockwave", shockwave_enabled)
 	config.set_value("effects", "particles", particle_effects_enabled)
+	config.set_value("debug", "show_fps", debug_show_fps)
+	config.set_value("debug", "show_touch_points", debug_show_touch_points)
+	config.set_value("debug", "show_safe_area", debug_show_safe_area)
+	config.set_value("debug", "show_scene_name", debug_show_scene_name)
+	config.set_value("debug", "show_memory", debug_show_memory)
+	config.set_value("debug", "show_analytics_tail", debug_show_analytics_tail)
+	config.set_value("debug", "show_grid_coordinates", debug_show_grid_coordinates)
 	config.set_value("blockudoku", "pentominoes", blockudoku_pentominoes)
 	config.set_value("blockudoku", "p_pentomino", blockudoku_p_pentomino)
 	config.set_value("blockudoku", "w_pentomino", blockudoku_w_pentomino)
@@ -78,6 +102,7 @@ func save_settings() -> void:
 	config.set_value("blockudoku", "hexominoes", blockudoku_hexominoes)
 	config.set_value("blockudoku", "diagonals", blockudoku_diagonals)
 	config.set_value("blockudoku", "drag_offset", blockudoku_drag_offset)
+	config.set_value("blockudoku", "rotation_mode", blockudoku_rotation_mode)
 	config.save(SAVE_PATH)
 	settings_changed.emit()
 
@@ -97,6 +122,13 @@ func load_settings() -> void:
 	screen_shake_enabled = config.get_value("effects", "screen_shake", screen_shake_enabled)
 	shockwave_enabled = config.get_value("effects", "shockwave", shockwave_enabled)
 	particle_effects_enabled = config.get_value("effects", "particles", particle_effects_enabled)
+	debug_show_fps = config.get_value("debug", "show_fps", debug_show_fps)
+	debug_show_touch_points = config.get_value("debug", "show_touch_points", debug_show_touch_points)
+	debug_show_safe_area = config.get_value("debug", "show_safe_area", debug_show_safe_area)
+	debug_show_scene_name = config.get_value("debug", "show_scene_name", debug_show_scene_name)
+	debug_show_memory = config.get_value("debug", "show_memory", debug_show_memory)
+	debug_show_analytics_tail = config.get_value("debug", "show_analytics_tail", debug_show_analytics_tail)
+	debug_show_grid_coordinates = config.get_value("debug", "show_grid_coordinates", debug_show_grid_coordinates)
 	blockudoku_pentominoes = config.get_value("blockudoku", "pentominoes", blockudoku_pentominoes)
 	blockudoku_p_pentomino = config.get_value("blockudoku", "p_pentomino", blockudoku_p_pentomino)
 	blockudoku_w_pentomino = config.get_value("blockudoku", "w_pentomino", blockudoku_w_pentomino)
@@ -106,3 +138,4 @@ func load_settings() -> void:
 	blockudoku_hexominoes = config.get_value("blockudoku", "hexominoes", blockudoku_hexominoes)
 	blockudoku_diagonals = config.get_value("blockudoku", "diagonals", blockudoku_diagonals)
 	blockudoku_drag_offset = config.get_value("blockudoku", "drag_offset", blockudoku_drag_offset)
+	blockudoku_rotation_mode = config.get_value("blockudoku", "rotation_mode", blockudoku_rotation_mode)
