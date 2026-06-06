@@ -29,6 +29,9 @@ var _drag_last_grid_pos := Vector2i(-999, -999)
 @onready var block_tray: HBoxContainer = %BlockTray
 
 var elapsed_time: float = 0.0
+var random_seed: int = 0
+var replay_id: String = ""
+var _rng := RandomNumberGenerator.new()
 
 # Block tray piece display nodes
 var _tray_panels: Array[Control] = []
@@ -62,10 +65,19 @@ func start_new_game() -> void:
 	combo_count = 0
 	elapsed_time = 0.0
 	is_game_over = false
+	random_seed = Time.get_ticks_usec()
+	_rng.seed = random_seed
 	board.reset()
 	_deal_new_blocks()
 	_update_score_display()
 	BlockudokuStatsManager.record_game_started()
+	replay_id = ReplayManager.start_session("blockudoku", random_seed, {
+		"board_state": board.get_state(),
+		"available_blocks": _serialize_blocks(available_blocks),
+	}, {
+		"drag_offset": SettingsManager.blockudoku_drag_offset,
+		"show_timer": SettingsManager.show_timer,
+	})
 	_save_current_state()
 
 
@@ -75,6 +87,12 @@ func resume_game(data: Dictionary) -> void:
 	combo_count = data.get("combo_count", 0)
 	elapsed_time = data.get("elapsed_time", 0.0)
 	is_game_over = false
+	random_seed = int(data.get("random_seed", Time.get_ticks_usec()))
+	_rng.seed = random_seed
+	var loaded_rng_state := int(data.get("rng_state", 0))
+	if loaded_rng_state != 0:
+		_rng.state = loaded_rng_state
+	replay_id = str(data.get("replay_id", ""))
 	board.set_state(data.get("board_state", {}))
 
 	# Restore available blocks
@@ -90,6 +108,14 @@ func resume_game(data: Dictionary) -> void:
 	blocks_placed_this_set = data.get("blocks_placed_this_set", 0)
 	_build_tray()
 	_update_score_display()
+	if not ReplayManager.has_active_session():
+		replay_id = ReplayManager.start_session("blockudoku", random_seed, {
+			"board_state": board.get_state(),
+			"available_blocks": _serialize_blocks(available_blocks),
+		}, {
+			"drag_offset": SettingsManager.blockudoku_drag_offset,
+			"show_timer": SettingsManager.show_timer,
+		})
 
 
 func _process(delta: float) -> void:
@@ -103,7 +129,7 @@ func _process(delta: float) -> void:
 
 
 func _deal_new_blocks() -> void:
-	available_blocks = BlockudokuShapes.pick_random(BLOCKS_PER_SET)
+	available_blocks = BlockudokuShapes.pick_random(BLOCKS_PER_SET, _rng)
 	# Normalize all shapes
 	for i in available_blocks.size():
 		available_blocks[i] = BlockudokuShapes.normalize(available_blocks[i])
@@ -184,6 +210,9 @@ func _start_drag(index: int, screen_pos: Vector2) -> void:
 	_drag_shape = available_blocks[index]
 	_drag_screen_pos = screen_pos
 	_drag_last_grid_pos = Vector2i(-999, -999)
+	ReplayManager.record_input(elapsed_time, "piece_selected", {
+		"tray_index": index,
+	})
 	DragEffect.suppress()
 	_update_board_preview(screen_pos)
 
@@ -223,6 +252,11 @@ func _end_drag(screen_pos: Vector2) -> void:
 	board.clear_preview()
 
 	if board.can_place(_drag_shape, grid_pos.x, grid_pos.y):
+		ReplayManager.record_input(elapsed_time, "piece_placed", {
+			"tray_index": _drag_block_index,
+			"grid_x": grid_pos.x,
+			"grid_y": grid_pos.y,
+		})
 		var block_color := BlockudokuShapes.get_shape_color(_drag_shape)
 		board.place_block(_drag_shape, grid_pos.x, grid_pos.y, block_color)
 		SoundManager.play_place()
@@ -317,7 +351,11 @@ func _end_drag(screen_pos: Vector2) -> void:
 			_save_current_state()
 	else:
 		# Invalid placement — do nothing
-		pass
+		ReplayManager.record_input(elapsed_time, "placement_rejected", {
+			"tray_index": _drag_block_index,
+			"grid_x": grid_pos.x,
+			"grid_y": grid_pos.y,
+		})
 
 	_drag_block_index = -1
 	_drag_shape = []
@@ -327,6 +365,10 @@ var _shatter_tween: Tween = null
 
 func _handle_game_over() -> void:
 	is_game_over = true
+	ReplayManager.finish_session("game_over", score, elapsed_time, {
+		"turns": turns,
+		"board_state": board.get_state(),
+	})
 	BlockudokuStatsManager.record_game_over(score, turns)
 	BlockudokuSaveManager.clear_save()
 	HapticManager.vibrate_success()
@@ -409,6 +451,7 @@ func _show_game_over_dialog() -> void:
 	dialog.dialog_text = "Score: %d\nTurns: %d" % [score, turns]
 	dialog.ok_button_text = "Play Again"
 	dialog.add_button("Back to Menu", true, "menu")
+	dialog.add_button("Bookmark Replay", true, "bookmark")
 	dialog.min_size = Vector2i(280, 0)
 	add_child(dialog)
 	dialog.get_label().horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -423,6 +466,8 @@ func _show_game_over_dialog() -> void:
 			_stop_shatter()
 			dialog.queue_free()
 			SceneTransition.transition_to("res://scenes/blockudoku_menu.tscn")
+		elif action == "bookmark":
+			ReplayManager.bookmark_latest_replay()
 	)
 
 
@@ -467,6 +512,10 @@ func _show_combo_text(total_clears: int, combo: int) -> void:
 
 func _on_back() -> void:
 	if not is_game_over:
+		ReplayManager.finish_session("abandoned", score, elapsed_time, {
+			"turns": turns,
+			"board_state": board.get_state(),
+		})
 		_save_current_state()
 	SceneTransition.transition_to("res://scenes/blockudoku_menu.tscn")
 
@@ -505,4 +554,18 @@ func _save_current_state() -> void:
 		"board_state": board.get_state(),
 		"available_blocks": blocks_data,
 		"blocks_placed_this_set": blocks_placed_this_set,
+		"random_seed": random_seed,
+		"rng_state": _rng.state,
+		"replay_id": replay_id,
 	})
+
+
+func _serialize_blocks(blocks: Array) -> Array:
+	var blocks_data: Array = []
+	for shape in blocks:
+		var shape_data: Array = []
+		for cell in shape:
+			var c: Vector2i = cell
+			shape_data.append({"x": c.x, "y": c.y})
+		blocks_data.append(shape_data)
+	return blocks_data

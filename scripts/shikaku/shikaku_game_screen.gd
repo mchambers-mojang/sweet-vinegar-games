@@ -12,6 +12,8 @@ var elapsed_time: float = 0.0
 var is_completed: bool = false
 var is_paused: bool = false
 var hints_used: int = 0
+var random_seed: int = 0
+var replay_id: String = ""
 
 # Undo/redo
 var undo_stack: Array[Dictionary] = []
@@ -65,7 +67,8 @@ func _setup_help_button() -> void:
 func start_new_game(w: int, h: int) -> void:
 	grid_width = w
 	grid_height = h
-	puzzle_data = ShikakuGenerator.generate(w, h)
+	random_seed = Time.get_ticks_usec()
+	puzzle_data = ShikakuGenerator.generate(w, h, random_seed)
 	board.setup(w, h, puzzle_data["numbers"])
 	size_label.text = SIZE_NAMES.get(w, "%dx%d" % [w, h])
 	elapsed_time = 0.0
@@ -74,6 +77,13 @@ func start_new_game(w: int, h: int) -> void:
 	undo_stack.clear()
 	redo_stack.clear()
 	ShikakuStatsManager.record_game_started(w)
+	replay_id = ReplayManager.start_session("shikaku", random_seed, {
+		"width": w,
+		"height": h,
+		"numbers": _serialize_numbers(puzzle_data["numbers"]),
+	}, {
+		"show_timer": SettingsManager.show_timer,
+	})
 	_update_button_states()
 	_save_current_state()
 
@@ -96,9 +106,19 @@ func resume_game(data: Dictionary) -> void:
 
 	elapsed_time = data.get("elapsed_time", 0.0)
 	hints_used = data.get("hints_used", 0)
+	random_seed = int(data.get("random_seed", 0))
+	replay_id = str(data.get("replay_id", ""))
 	is_completed = false
 	size_label.text = SIZE_NAMES.get(grid_width, "%dx%d" % [grid_width, grid_height])
 	_update_button_states()
+	if not ReplayManager.has_active_session():
+		replay_id = ReplayManager.start_session("shikaku", random_seed, {
+			"width": grid_width,
+			"height": grid_height,
+			"numbers": _serialize_numbers(puzzle_data["numbers"]),
+		}, {
+			"show_timer": SettingsManager.show_timer,
+		})
 
 
 func _process(delta: float) -> void:
@@ -130,6 +150,12 @@ func _unhandled_key_input(event: InputEvent) -> void:
 func _on_rectangle_placed(rect: Rect2i) -> void:
 	if is_completed:
 		return
+	ReplayManager.record_input(elapsed_time, "rectangle_placed", {
+		"x": rect.position.x,
+		"y": rect.position.y,
+		"w": rect.size.x,
+		"h": rect.size.y,
+	})
 	# Push current state for undo
 	undo_stack.append({"action": "place", "rect": rect})
 	redo_stack.clear()
@@ -153,6 +179,7 @@ func _on_rectangle_placed(rect: Rect2i) -> void:
 func _on_rectangle_tapped(index: int) -> void:
 	if is_completed:
 		return
+	ReplayManager.record_input(elapsed_time, "rectangle_removed", {"index": index})
 	var rect := board.placed_rects[index]
 	undo_stack.append({"action": "remove", "rect": rect, "color_idx": index})
 	redo_stack.clear()
@@ -247,6 +274,10 @@ func _on_pause() -> void:
 
 
 func _on_back() -> void:
+	ReplayManager.finish_session("abandoned", board.placed_rects.size(), elapsed_time, {
+		"width": grid_width,
+		"height": grid_height,
+	})
 	_save_current_state()
 	SceneTransition.transition_to("res://scenes/shikaku_menu.tscn")
 
@@ -262,6 +293,11 @@ func _check_completion() -> void:
 
 func _handle_win() -> void:
 	is_completed = true
+	ReplayManager.finish_session("win", board.placed_rects.size(), elapsed_time, {
+		"width": grid_width,
+		"height": grid_height,
+		"hints_used": hints_used,
+	})
 	ShikakuStatsManager.record_game_completed(grid_width, elapsed_time)
 	ShikakuSaveManager.clear_save()
 	SoundManager.play_win()
@@ -289,6 +325,7 @@ func _show_win_dialog() -> void:
 		dialog.dialog_text += "\nHints used: %d" % hints_used
 	dialog.ok_button_text = "Play Again"
 	dialog.add_button("Back to Menu", true, "menu")
+	dialog.add_button("Bookmark Replay", true, "bookmark")
 	dialog.min_size = Vector2i(300, 0)
 	add_child(dialog)
 	dialog.get_label().horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -301,6 +338,8 @@ func _show_win_dialog() -> void:
 		if action == "menu":
 			dialog.queue_free()
 			SceneTransition.transition_to("res://scenes/shikaku_menu.tscn")
+		elif action == "bookmark":
+			ReplayManager.bookmark_latest_replay()
 	)
 
 
@@ -365,6 +404,8 @@ func _save_current_state() -> void:
 		"placed_rects": _serialize_rects(board.placed_rects),
 		"elapsed_time": elapsed_time,
 		"hints_used": hints_used,
+		"random_seed": random_seed,
+		"replay_id": replay_id,
 	})
 
 

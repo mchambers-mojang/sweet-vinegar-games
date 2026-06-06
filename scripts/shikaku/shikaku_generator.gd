@@ -11,9 +11,14 @@ const MAX_AREA := 8
 ## Returns { "width": int, "height": int, "numbers": Dictionary, "solution": Array[Rect2i] }
 ## numbers: { Vector2i(col, row) -> area_value }
 ## solution: Array of Rect2i rectangles covering the grid
-static func generate(width: int, height: int) -> Dictionary:
-	var solution := _generate_partition(width, height)
-	var numbers := _place_numbers(solution)
+static func generate(width: int, height: int, seed: int = -1) -> Dictionary:
+	var rng := RandomNumberGenerator.new()
+	if seed >= 0:
+		rng.seed = seed
+	else:
+		rng.randomize()
+	var solution := _generate_partition(width, height, rng)
+	var numbers := _place_numbers(solution, rng)
 	return {
 		"width": width,
 		"height": height,
@@ -22,17 +27,17 @@ static func generate(width: int, height: int) -> Dictionary:
 	}
 
 
-static func _generate_partition(width: int, height: int) -> Array[Rect2i]:
+static func _generate_partition(width: int, height: int, rng: RandomNumberGenerator) -> Array[Rect2i]:
 	# Retry from scratch if we paint ourselves into a corner (isolated single cells)
 	for _attempt in range(200):
-		var result := _try_partition(width, height)
+		var result := _try_partition(width, height, rng)
 		if result.size() > 0:
 			return result
 	# Should never reach here, but return whatever we get
-	return _try_partition(width, height)
+	return _try_partition(width, height, rng)
 
 
-static func _try_partition(width: int, height: int) -> Array[Rect2i]:
+static func _try_partition(width: int, height: int, rng: RandomNumberGenerator) -> Array[Rect2i]:
 	var covered := PackedByteArray()
 	covered.resize(width * height)
 	covered.fill(0)
@@ -72,7 +77,7 @@ static func _try_partition(width: int, height: int) -> Array[Rect2i]:
 			return []
 
 		# Weighted random selection
-		var rect := _weighted_pick(candidates, weights)
+		var rect := _weighted_pick(candidates, weights, rng)
 		rectangles.append(rect)
 
 		# Mark cells as covered
@@ -131,11 +136,11 @@ static func _rect_fits(col: int, row: int, w: int, h: int, grid_width: int, cove
 	return true
 
 
-static func _weighted_pick(items: Array[Rect2i], weights: Array[float]) -> Rect2i:
+static func _weighted_pick(items: Array[Rect2i], weights: Array[float], rng: RandomNumberGenerator) -> Rect2i:
 	var total := 0.0
 	for w in weights:
 		total += w
-	var roll := randf() * total
+	var roll := rng.randf() * total
 	var accum := 0.0
 	for i in range(items.size()):
 		accum += weights[i]
@@ -144,12 +149,12 @@ static func _weighted_pick(items: Array[Rect2i], weights: Array[float]) -> Rect2
 	return items[items.size() - 1]
 
 
-static func _place_numbers(solution: Array[Rect2i]) -> Dictionary:
+static func _place_numbers(solution: Array[Rect2i], rng: RandomNumberGenerator) -> Dictionary:
 	var numbers := {}
 	for rect in solution:
 		var area := rect.size.x * rect.size.y
 		# Pick a random cell anywhere inside the rectangle
-		var col := rect.position.x + randi_range(0, rect.size.x - 1)
-		var row := rect.position.y + randi_range(0, rect.size.y - 1)
+		var col := rect.position.x + rng.randi_range(0, rect.size.x - 1)
+		var row := rect.position.y + rng.randi_range(0, rect.size.y - 1)
 		numbers[Vector2i(col, row)] = area
 	return numbers

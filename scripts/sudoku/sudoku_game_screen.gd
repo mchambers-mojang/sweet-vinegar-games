@@ -74,6 +74,8 @@ var _multi_selected_color: Color = Color.TRANSPARENT  # Active multi-selection c
 var _last_cell_press_time: float = 0.0
 var _last_cell_pressed: int = -1
 var _selected_number: int = 0  # For number-first mode
+var random_seed: int = 0
+var replay_id: String = ""
 
 
 func _ready() -> void:
@@ -114,9 +116,10 @@ func _setup_help_button() -> void:
 func start_new_game(diff: int) -> void:
 	difficulty = diff
 	difficulty_label.text = DIFFICULTY_NAMES[difficulty]
+	random_seed = Time.get_ticks_usec()
 
 	var generator := SudokuGenerator.new()
-	var result := generator.generate(difficulty)
+	var result := generator.generate(difficulty, random_seed)
 
 	puzzle = []
 	puzzle.assign(result["puzzle"])
@@ -142,6 +145,14 @@ func start_new_game(diff: int) -> void:
 	_update_number_completion()
 
 	StatsManager.record_game_started(difficulty)
+	replay_id = ReplayManager.start_session("sudoku", random_seed, {
+		"difficulty": difficulty,
+		"puzzle": puzzle.duplicate(),
+	}, {
+		"input_mode": SettingsManager.input_mode,
+		"error_mode": SettingsManager.error_mode,
+		"show_timer": SettingsManager.show_timer,
+	})
 	_save_current_state()
 
 
@@ -158,6 +169,8 @@ func resume_game(data: Dictionary) -> void:
 	is_failed = data["is_failed"]
 	_can_continue_after_failure = data.get("can_continue_after_failure", false)
 	hints_used = data.get("hints_used", 0)
+	random_seed = int(data.get("random_seed", 0))
+	replay_id = str(data.get("replay_id", ""))
 	is_completed = false
 	is_paused = false
 	notes_mode = false
@@ -172,6 +185,15 @@ func resume_game(data: Dictionary) -> void:
 	if is_failed and _is_board_locked():
 		# Re-show the fail dialog for failed saves so players can choose Continue/Menu.
 		call_deferred("_show_fail_dialog")
+	if not ReplayManager.has_active_session():
+		replay_id = ReplayManager.start_session("sudoku", random_seed, {
+			"difficulty": difficulty,
+			"puzzle": puzzle.duplicate(),
+		}, {
+			"input_mode": SettingsManager.input_mode,
+			"error_mode": SettingsManager.error_mode,
+			"show_timer": SettingsManager.show_timer,
+		})
 
 
 func _process(delta: float) -> void:
@@ -240,6 +262,7 @@ func _cheat_place_one() -> void:
 func _on_cell_selected(index: int) -> void:
 	if _is_board_locked():
 		return
+	ReplayManager.record_input(elapsed_time, "cell_selected", {"index": index})
 
 	var now := Time.get_ticks_msec() / 1000.0
 	var cell := board.cells[index]
@@ -282,6 +305,12 @@ func _handle_number_first_cell_tap(index: int) -> void:
 	if cell.is_given:
 		return
 	# Place the pre-selected number into this cell
+	ReplayManager.record_input(elapsed_time, "number_input", {
+		"index": index,
+		"number": _selected_number,
+		"notes_mode": notes_mode,
+		"input_mode": "number_first",
+	})
 	if notes_mode:
 		_push_undo(index)
 		cell.toggle_pencil_mark(_selected_number)
@@ -347,6 +376,11 @@ func _handle_number_first_cell_tap(index: int) -> void:
 func _on_number_pressed(number: int) -> void:
 	if _is_board_locked():
 		return
+	ReplayManager.record_input(elapsed_time, "number_button", {
+		"number": number,
+		"notes_mode": notes_mode,
+		"input_mode": SettingsManager.input_mode,
+	})
 
 	# If multi-selection is active, apply to all selected cells
 	if _multi_selected_color != Color.TRANSPARENT:
@@ -372,6 +406,12 @@ func _place_or_note_number(number: int) -> void:
 	var cell := board.cells[index]
 	if cell.is_given:
 		return
+	ReplayManager.record_input(elapsed_time, "number_input", {
+		"index": index,
+		"number": number,
+		"notes_mode": notes_mode,
+		"input_mode": "cell_first",
+	})
 
 	if notes_mode:
 		_push_undo(index)
@@ -463,6 +503,7 @@ func _on_notes_pressed() -> void:
 func _on_hint_pressed() -> void:
 	if _is_board_locked() or hints_used >= 1:
 		return
+	ReplayManager.record_input(elapsed_time, "hint_pressed", {})
 
 	var index: int = -1
 
@@ -518,6 +559,7 @@ func _on_erase_pressed() -> void:
 	var cell := board.cells[index]
 	if cell.is_given:
 		return
+	ReplayManager.record_input(elapsed_time, "erase_pressed", {"index": index})
 	# Don't allow erasing correctly placed cells in strict mode
 	if SettingsManager.error_mode == "strict" and cell.value != 0 and cell.value == solution[index]:
 		return
@@ -541,6 +583,10 @@ func _on_pause_pressed() -> void:
 
 
 func _on_back_pressed() -> void:
+	ReplayManager.finish_session("abandoned", _count_filled_cells(), elapsed_time, {
+		"difficulty": difficulty,
+		"strikes": strikes,
+	})
 	_save_current_state()
 	SceneTransition.transition_to("res://scenes/main_menu.tscn")
 
@@ -635,6 +681,11 @@ func _check_win() -> bool:
 func _handle_win() -> void:
 	is_completed = true
 	var won := not is_failed
+	ReplayManager.finish_session("win" if won else "completed_after_failure", _count_filled_cells(), elapsed_time, {
+		"difficulty": difficulty,
+		"strikes": strikes,
+		"hints_used": hints_used,
+	})
 	StatsManager.record_game_completed(difficulty, elapsed_time, SettingsManager.error_mode == "strict", won)
 	SaveManager.clear_save()
 	_play_win_celebration()
@@ -815,6 +866,10 @@ func _show_fail_dialog() -> void:
 	add_child(dialog)
 	dialog.popup_centered()
 	dialog.confirmed.connect(func() -> void:
+		ReplayManager.finish_session("failed", _count_filled_cells(), elapsed_time, {
+			"difficulty": difficulty,
+			"strikes": strikes,
+		})
 		dialog.queue_free()
 		_restart_same_game()
 	)
@@ -825,6 +880,10 @@ func _show_fail_dialog() -> void:
 			_save_current_state()
 			dialog.queue_free()
 		elif action == "menu":
+			ReplayManager.finish_session("failed", _count_filled_cells(), elapsed_time, {
+				"difficulty": difficulty,
+				"strikes": strikes,
+			})
 			dialog.queue_free()
 			SceneTransition.transition_to("res://scenes/main_menu.tscn")
 	)
@@ -839,6 +898,7 @@ func _show_win_dialog() -> void:
 		dialog.dialog_text += "\nHints used: %d" % hints_used
 	dialog.ok_button_text = "Play Again"
 	dialog.add_button("Back to Menu", true, "menu")
+	dialog.add_button("Bookmark Replay", true, "bookmark")
 	add_child(dialog)
 	dialog.popup_centered()
 	dialog.confirmed.connect(func() -> void:
@@ -849,6 +909,8 @@ func _show_win_dialog() -> void:
 		if action == "menu":
 			dialog.queue_free()
 			SceneTransition.transition_to("res://scenes/main_menu.tscn")
+		elif action == "bookmark":
+			ReplayManager.bookmark_latest_replay()
 	)
 
 
@@ -914,6 +976,10 @@ func _setup_color_buttons() -> void:
 func _on_color_pressed(color: Color) -> void:
 	if _is_board_locked():
 		return
+	ReplayManager.record_input(elapsed_time, "color_pressed", {
+		"color": color.to_html(),
+		"selected_index": board.selected_index,
+	})
 	var now := Time.get_ticks_msec() / 1000.0
 
 	# Double-click detection: apply number to all cells with this color
@@ -1046,6 +1112,8 @@ func _save_current_state() -> void:
 		"is_failed": is_failed,
 		"can_continue_after_failure": _can_continue_after_failure,
 		"hints_used": hints_used,
+		"random_seed": random_seed,
+		"replay_id": replay_id,
 	})
 
 
@@ -1067,3 +1135,11 @@ func _apply_theme() -> void:
 	style.bg_color = bg
 	add_theme_stylebox_override("panel", style)
 	_update_strikes_display()
+
+
+func _count_filled_cells() -> int:
+	var count := 0
+	for value in current_grid:
+		if int(value) != 0:
+			count += 1
+	return count
