@@ -44,17 +44,27 @@ func _on_south_goal_body_entered(body: Node) -> void:
 	if body is CaromProjectile:
 		(body as CaromProjectile).enter_goal()
 		return
-	if _goal_locked or not body is CaromPuck:
+	# Cage or Ball RigidBody3D — check if parent is the puck
+	var puck_node := _get_puck_from_body(body)
+	if _goal_locked or puck_node == null:
 		return
 	_goal_locked = true
-	goal_scored.emit(&"north", body as CaromPuck)
+	goal_scored.emit(&"north", puck_node)
 
 
 func _on_north_goal_body_entered(body: Node) -> void:
 	if body is CaromProjectile:
 		(body as CaromProjectile).enter_goal()
 		return
-	if _goal_locked or not body is CaromPuck:
+	var puck_node := _get_puck_from_body(body)
+	if _goal_locked or puck_node == null:
 		return
 	_goal_locked = true
-	goal_scored.emit(&"south", body as CaromPuck)
+	goal_scored.emit(&"south", puck_node)
+
+
+func _get_puck_from_body(body: Node) -> CaromPuck:
+	var parent := body.get_parent()
+	if parent is CaromPuck:
+		return parent as CaromPuck
+	return null

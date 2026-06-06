@@ -1,36 +1,26 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=14 format=3]
 
 [ext_resource type="Script" path="res://carom/scripts/carom_puck.gd" id="1"]
 
-; Crossfire-style puck: central rolling ball with 5 radiating fins.
-; Projectiles hitting fins create off-center torque → unpredictable rolling.
+; === CAGE: plastic star frame, stays flat, provides irregular collision profile ===
 
-; Central ball — the part that actually rolls
-[sub_resource type="SphereShape3D" id="1"]
-radius = 0.35
-
-; Fin collision — thin paddles radiating from center, extending past ball radius
+; Cage ring — hollow cylinder approximated as thin box walls forming a circle
+; Using boxes for the fins that also act as cage walls to contain the ball
 [sub_resource type="BoxShape3D" id="2"]
 size = Vector3(0.08, 0.25, 0.9)
 
-; Ball mesh
-[sub_resource type="SphereMesh" id="3"]
-radius = 0.35
-height = 0.7
+[sub_resource type="BoxShape3D" id="8"]
+size = Vector3(0.08, 0.25, 1.0)
 
-; Ball material — bright cyan neon core
-[sub_resource type="StandardMaterial3D" id="4"]
-albedo_color = Color(0.05, 0.2, 0.25, 1)
-emission_enabled = true
-emission = Color(0.15, 0.9, 1.0, 1)
-emission_energy_multiplier = 1.0
-roughness = 0.08
-
-; Fin mesh — flat rectangular paddle
+; Fin mesh
 [sub_resource type="BoxMesh" id="6"]
 size = Vector3(0.06, 0.23, 0.88)
 
-; Fin material — dimmer neon outline look
+; Wider fin mesh
+[sub_resource type="BoxMesh" id="9"]
+size = Vector3(0.06, 0.23, 0.98)
+
+; Fin material — dim neon outline
 [sub_resource type="StandardMaterial3D" id="7"]
 albedo_color = Color(0.02, 0.08, 0.1, 1)
 emission_enabled = true
@@ -38,19 +28,7 @@ emission = Color(0.08, 0.5, 0.6, 1)
 emission_energy_multiplier = 0.8
 roughness = 0.2
 
-[sub_resource type="PhysicsMaterial" id="5"]
-friction = 0.1
-bounce = 0.85
-
-; Fin collision — slightly wider variant for asymmetry
-[sub_resource type="BoxShape3D" id="8"]
-size = Vector3(0.08, 0.25, 1.0)
-
-; Wider fin mesh
-[sub_resource type="BoxMesh" id="9"]
-size = Vector3(0.06, 0.23, 0.98)
-
-; Wider fin material — slightly different color for visual variety
+; Wider fin material
 [sub_resource type="StandardMaterial3D" id="10"]
 albedo_color = Color(0.02, 0.06, 0.12, 1)
 emission_enabled = true
@@ -58,82 +36,118 @@ emission = Color(0.05, 0.4, 0.7, 1)
 emission_energy_multiplier = 0.8
 roughness = 0.2
 
-[node name="CaromPuck" type="RigidBody3D"]
+; Cage physics material — bouncy, low friction
+[sub_resource type="PhysicsMaterial" id="5"]
+friction = 0.1
+bounce = 0.8
+
+; === BALL: steel ball bearing, rolls freely inside cage ===
+
+[sub_resource type="SphereShape3D" id="1"]
+radius = 0.28
+
+[sub_resource type="SphereMesh" id="3"]
+radius = 0.28
+height = 0.56
+
+; Ball material — bright neon core
+[sub_resource type="StandardMaterial3D" id="4"]
+albedo_color = Color(0.05, 0.2, 0.25, 1)
+emission_enabled = true
+emission = Color(0.15, 0.9, 1.0, 1)
+emission_energy_multiplier = 1.0
+roughness = 0.08
+
+; Ball physics material — very bouncy, low friction (steel bearing)
+[sub_resource type="PhysicsMaterial" id="11"]
+friction = 0.05
+bounce = 0.9
+
+; === ROOT: Node3D container (script manages both bodies) ===
+
+[node name="CaromPuck" type="Node3D"]
 script = ExtResource("1")
-mass = 1.4
+
+; === CAGE BODY: locked rotation so frame stays flat ===
+[node name="Cage" type="RigidBody3D" parent="."]
+mass = 0.8
 physics_material_override = SubResource("5")
-linear_damp = 0.35
-angular_damp = 0.12
+linear_damp = 0.4
+angular_damp = 1.0
 continuous_cd = true
+lock_rotation = true
 
-; Central ball collision
-[node name="BallCollision" type="CollisionShape3D" parent="."]
-position = Vector3(0, 0.4, 0)
-shape = SubResource("1")
-
-; 5 fins at irregular angles (not evenly spaced — more unpredictable)
 ; Fin 1: 0 degrees
-[node name="Fin1Collision" type="CollisionShape3D" parent="."]
+[node name="Fin1Col" type="CollisionShape3D" parent="Cage"]
 position = Vector3(0, 0.4, 0)
-rotation = Vector3(0, 0, 0)
 shape = SubResource("2")
 
-[node name="Fin1Mesh" type="MeshInstance3D" parent="."]
+[node name="Fin1Mesh" type="MeshInstance3D" parent="Cage"]
 position = Vector3(0, 0.4, 0)
-rotation = Vector3(0, 0, 0)
 mesh = SubResource("6")
 material_override = SubResource("7")
 
-; Fin 2: 65 degrees (not 72 — deliberately uneven)
-[node name="Fin2Collision" type="CollisionShape3D" parent="."]
+; Fin 2: 65 degrees
+[node name="Fin2Col" type="CollisionShape3D" parent="Cage"]
 position = Vector3(0, 0.4, 0)
 rotation = Vector3(0, 1.134, 0)
 shape = SubResource("8")
 
-[node name="Fin2Mesh" type="MeshInstance3D" parent="."]
+[node name="Fin2Mesh" type="MeshInstance3D" parent="Cage"]
 position = Vector3(0, 0.4, 0)
 rotation = Vector3(0, 1.134, 0)
 mesh = SubResource("9")
 material_override = SubResource("10")
 
 ; Fin 3: 140 degrees
-[node name="Fin3Collision" type="CollisionShape3D" parent="."]
+[node name="Fin3Col" type="CollisionShape3D" parent="Cage"]
 position = Vector3(0, 0.4, 0)
 rotation = Vector3(0, 2.443, 0)
 shape = SubResource("2")
 
-[node name="Fin3Mesh" type="MeshInstance3D" parent="."]
+[node name="Fin3Mesh" type="MeshInstance3D" parent="Cage"]
 position = Vector3(0, 0.4, 0)
 rotation = Vector3(0, 2.443, 0)
 mesh = SubResource("6")
 material_override = SubResource("7")
 
 ; Fin 4: 210 degrees
-[node name="Fin4Collision" type="CollisionShape3D" parent="."]
+[node name="Fin4Col" type="CollisionShape3D" parent="Cage"]
 position = Vector3(0, 0.4, 0)
 rotation = Vector3(0, 3.665, 0)
 shape = SubResource("8")
 
-[node name="Fin4Mesh" type="MeshInstance3D" parent="."]
+[node name="Fin4Mesh" type="MeshInstance3D" parent="Cage"]
 position = Vector3(0, 0.4, 0)
 rotation = Vector3(0, 3.665, 0)
 mesh = SubResource("9")
 material_override = SubResource("10")
 
 ; Fin 5: 295 degrees
-[node name="Fin5Collision" type="CollisionShape3D" parent="."]
+[node name="Fin5Col" type="CollisionShape3D" parent="Cage"]
 position = Vector3(0, 0.4, 0)
 rotation = Vector3(0, 5.149, 0)
 shape = SubResource("2")
 
-[node name="Fin5Mesh" type="MeshInstance3D" parent="."]
+[node name="Fin5Mesh" type="MeshInstance3D" parent="Cage"]
 position = Vector3(0, 0.4, 0)
 rotation = Vector3(0, 5.149, 0)
 mesh = SubResource("6")
 material_override = SubResource("7")
 
-; Central ball visual
-[node name="BallMesh" type="MeshInstance3D" parent="."]
+; === BALL BODY: free rolling sphere inside the cage ===
+[node name="Ball" type="RigidBody3D" parent="."]
+mass = 2.0
+physics_material_override = SubResource("11")
+linear_damp = 0.2
+angular_damp = 0.05
+continuous_cd = true
+
+[node name="BallCollision" type="CollisionShape3D" parent="Ball"]
+position = Vector3(0, 0.4, 0)
+shape = SubResource("1")
+
+[node name="BallMesh" type="MeshInstance3D" parent="Ball"]
 position = Vector3(0, 0.4, 0)
 mesh = SubResource("3")
 material_override = SubResource("4")
