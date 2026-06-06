@@ -3,7 +3,7 @@ extends Node
 ## Local-first analytics manager with bounded storage and pluggable sinks.
 
 const SAVE_PATH := "user://analytics_events.json"
-const MAX_EVENTS := 5000
+const MAX_EVENTS := 500
 
 var _events: Array[Dictionary] = []
 var _session_id: String = ""

@@ -122,7 +122,8 @@ func _add_replay_row(replay: Dictionary) -> void:
 		play_btn.custom_minimum_size = Vector2(36, 36)
 		var scene_path := replay_scene
 		play_btn.pressed.connect(func() -> void:
-			ReplayManager.set_pending_playback(replay)
+			var full_replay := ReplayManager.get_replay_by_id(replay_id)
+			ReplayManager.set_pending_playback(full_replay)
 			SceneTransition.transition_to(scene_path)
 		)
 		row.add_child(play_btn)
