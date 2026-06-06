@@ -10,7 +10,6 @@ extends Control
 @onready var settings_button: Button = %SettingsButton
 @onready var replays_button: Button = %ReplaysButton
 @onready var achievements_button: Button = %AchievementsButton
-@onready var version_label: Label = %VersionLabel
 
 
 func _ready() -> void:
@@ -34,8 +33,9 @@ func _ready() -> void:
 	replays_button.pressed.connect(func() -> void:
 		SceneTransition.transition_to("res://scenes/replays.tscn")
 	)
-	version_label.text = "v%s" % ProjectSettings.get_setting("application/config/version", "dev")
-	version_label.gui_input.connect(_on_version_label_gui_input)
+	# Hidden debug trigger: 7 rapid taps on the title
+	title_label.mouse_filter = Control.MOUSE_FILTER_STOP
+	title_label.gui_input.connect(_on_title_gui_input)
 	_apply_theme()
 	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
 
@@ -50,7 +50,7 @@ func _apply_theme() -> void:
 	add_theme_stylebox_override("panel", style)
 
 
-func _on_version_label_gui_input(event: InputEvent) -> void:
+func _on_title_gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_LEFT and not mb.pressed:

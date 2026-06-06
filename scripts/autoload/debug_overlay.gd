@@ -2,15 +2,10 @@ extends CanvasLayer
 
 const MAX_ANALYTICS_EVENTS := 8
 const VERSION_TAP_WINDOW_SEC := 0.8
-const SHAKE_COOLDOWN_SEC := 1.2
-const SHAKE_DELTA_THRESHOLD := 12.0
 
 var _enabled: bool = false
 var _overlay_active: bool = false
 var _version_taps: Array[float] = []
-var _last_shake_time: float = -100.0
-var _has_last_accel: bool = false
-var _last_accel: Vector3 = Vector3.ZERO
 var _touch_points: Dictionary = {} # id -> Vector2
 var _analytics_tail: Array[String] = []
 var _last_scene_path: String = ""
@@ -50,7 +45,7 @@ func register_version_label_tap() -> void:
 	_version_taps.append(now)
 	while _version_taps.size() > 0 and now - _version_taps[0] > VERSION_TAP_WINDOW_SEC:
 		_version_taps.remove_at(0)
-	if _version_taps.size() >= 3:
+	if _version_taps.size() >= 7:
 		_version_taps.clear()
 		_toggle_overlay("version_tap")
 
@@ -68,11 +63,11 @@ func _input(event: InputEvent) -> void:
 	if not _enabled:
 		return
 
-	# Global keyboard shortcut: F12 or backtick to toggle debug overlay
+	# Global keyboard shortcut: Ctrl+Shift+D or F12 to toggle debug overlay
 	if event is InputEventKey:
 		var key := event as InputEventKey
 		if key.pressed and not key.echo:
-			if key.keycode == KEY_F12 or key.keycode == KEY_QUOTELEFT:
+			if key.keycode == KEY_F12 or (key.keycode == KEY_D and key.ctrl_pressed and key.shift_pressed):
 				_toggle_overlay("keyboard")
 				get_viewport().set_input_as_handled()
 				return
@@ -81,9 +76,9 @@ func _input(event: InputEvent) -> void:
 		var st := event as InputEventScreenTouch
 		if st.pressed:
 			_touch_points[st.index] = st.position
-			# 3-finger tap toggles debug overlay on mobile
-			if _touch_points.size() >= 3:
-				_toggle_overlay("three_finger_tap")
+			# 4-finger tap toggles debug overlay on mobile
+			if _touch_points.size() >= 4:
+				_toggle_overlay("four_finger_tap")
 		else:
 			_touch_points.erase(st.index)
 	elif event is InputEventScreenDrag:
@@ -105,26 +100,11 @@ func _process(_delta: float) -> void:
 	if not _enabled:
 		return
 
-	_detect_shake()
 	_track_scene_changes()
 
 	if _overlay_active:
 		_refresh_overlay_text()
 		_draw_layer.queue_redraw()
-
-
-func _detect_shake() -> void:
-	if not OS.has_feature("mobile"):
-		return
-	var now := Time.get_ticks_msec() / 1000.0
-	var accel := Input.get_accelerometer()
-	if _has_last_accel:
-		var delta := (accel - _last_accel).length()
-		if delta >= SHAKE_DELTA_THRESHOLD and now - _last_shake_time >= SHAKE_COOLDOWN_SEC:
-			_last_shake_time = now
-			_toggle_overlay("shake")
-	_last_accel = accel
-	_has_last_accel = true
 
 
 func _track_scene_changes() -> void:
