@@ -1,113 +1,66 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://carom/scripts/carom_puck.gd" id="1"]
-
-; === CAGE: triangular prism (3 thick walls forming a triangle) ===
 
 ; Wall collision shape — each side of the triangle
 [sub_resource type="BoxShape3D" id="2"]
 size = Vector3(1.1, 0.3, 0.15)
 
-; Wall mesh (visual, slightly smaller than collision)
+; Wall mesh
 [sub_resource type="BoxMesh" id="6"]
 size = Vector3(1.08, 0.28, 0.1)
 
-; Wall material — dim neon edges
+; Wall material — neon edges
 [sub_resource type="StandardMaterial3D" id="7"]
 albedo_color = Color(0.02, 0.08, 0.1, 1)
 emission_enabled = true
-emission = Color(0.08, 0.5, 0.6, 1)
-emission_energy_multiplier = 0.8
+emission = Color(0.1, 0.7, 0.8, 1)
+emission_energy_multiplier = 1.0
 roughness = 0.2
 
-; Cage physics material
+; Physics material
 [sub_resource type="PhysicsMaterial" id="5"]
 friction = 0.15
 bounce = 0.75
 
-; === BALL: sphere rolling inside the triangle ===
-
-[sub_resource type="SphereShape3D" id="1"]
-radius = 0.22
-
-[sub_resource type="SphereMesh" id="3"]
-radius = 0.22
-height = 0.44
-
-; Ball material — bright neon core
-[sub_resource type="StandardMaterial3D" id="4"]
-albedo_color = Color(0.05, 0.2, 0.25, 1)
-emission_enabled = true
-emission = Color(0.15, 0.9, 1.0, 1)
-emission_energy_multiplier = 1.0
-roughness = 0.08
-
-; Ball physics material — steel bearing
-[sub_resource type="PhysicsMaterial" id="8"]
-friction = 0.05
-bounce = 0.9
-
-; === ROOT ===
-
-[node name="CaromPuck" type="Node3D"]
+[node name="CaromPuck" type="RigidBody3D"]
 script = ExtResource("1")
-
-; === CAGE: triangular prism, lock_rotation stays flat ===
-[node name="Cage" type="RigidBody3D" parent="."]
-mass = 1.0
+mass = 1.4
 physics_material_override = SubResource("5")
 linear_damp = 0.35
-angular_damp = 1.0
+angular_damp = 0.4
 continuous_cd = true
-lock_rotation = true
 
-; Wall A: top side (Z+), facing inward
-[node name="WallACol" type="CollisionShape3D" parent="Cage"]
+; Wall A: top side
+[node name="WallACol" type="CollisionShape3D" parent="."]
 position = Vector3(0, 0.4, 0.42)
 shape = SubResource("2")
 
-[node name="WallAMesh" type="MeshInstance3D" parent="Cage"]
+[node name="WallAMesh" type="MeshInstance3D" parent="."]
 position = Vector3(0, 0.4, 0.42)
 mesh = SubResource("6")
 material_override = SubResource("7")
 
 ; Wall B: bottom-right, rotated 120 degrees
-[node name="WallBCol" type="CollisionShape3D" parent="Cage"]
+[node name="WallBCol" type="CollisionShape3D" parent="."]
 position = Vector3(0.364, 0.4, -0.21)
 rotation = Vector3(0, 2.094, 0)
 shape = SubResource("2")
 
-[node name="WallBMesh" type="MeshInstance3D" parent="Cage"]
+[node name="WallBMesh" type="MeshInstance3D" parent="."]
 position = Vector3(0.364, 0.4, -0.21)
 rotation = Vector3(0, 2.094, 0)
 mesh = SubResource("6")
 material_override = SubResource("7")
 
 ; Wall C: bottom-left, rotated 240 degrees
-[node name="WallCCol" type="CollisionShape3D" parent="Cage"]
+[node name="WallCCol" type="CollisionShape3D" parent="."]
 position = Vector3(-0.364, 0.4, -0.21)
 rotation = Vector3(0, 4.189, 0)
 shape = SubResource("2")
 
-[node name="WallCMesh" type="MeshInstance3D" parent="Cage"]
+[node name="WallCMesh" type="MeshInstance3D" parent="."]
 position = Vector3(-0.364, 0.4, -0.21)
 rotation = Vector3(0, 4.189, 0)
 mesh = SubResource("6")
 material_override = SubResource("7")
-
-; === BALL: free-rolling sphere inside the triangle ===
-[node name="Ball" type="RigidBody3D" parent="."]
-mass = 2.0
-physics_material_override = SubResource("8")
-linear_damp = 0.15
-angular_damp = 0.05
-continuous_cd = true
-
-[node name="BallCol" type="CollisionShape3D" parent="Ball"]
-position = Vector3(0, 0.4, 0)
-shape = SubResource("1")
-
-[node name="BallMesh" type="MeshInstance3D" parent="Ball"]
-position = Vector3(0, 0.4, 0)
-mesh = SubResource("3")
-material_override = SubResource("4")

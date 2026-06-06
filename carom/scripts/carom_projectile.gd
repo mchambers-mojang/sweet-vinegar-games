@@ -41,15 +41,10 @@ func _physics_process(delta: float) -> void:
 
 func _handle_collision(collision: KinematicCollision3D) -> void:
 	var collider := collision.get_collider()
-	# Collider may be the Cage or Ball RigidBody3D — check parent for CaromPuck
-	var puck_node: CaromPuck = null
-	if collider is Node:
-		var parent := (collider as Node).get_parent()
-		if parent is CaromPuck:
-			puck_node = parent as CaromPuck
-	if puck_node:
-		var impact_offset := collision.get_position() - puck_node.get_puck_position()
-		puck_node.apply_impulse(direction * puck_impulse, impact_offset)
+	if collider is CaromPuck:
+		var puck := collider as CaromPuck
+		var impact_offset := collision.get_position() - puck.global_position
+		puck.apply_impulse(direction * puck_impulse, impact_offset)
 	# Bounce off everything (walls, puck, other projectiles)
 	var normal := collision.get_normal()
 	direction = direction.bounce(normal).normalized()
