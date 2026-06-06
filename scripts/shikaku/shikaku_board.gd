@@ -39,6 +39,7 @@ var _color_index: int = 0
 
 
 func _ready() -> void:
+	add_to_group("debug_grid_source")
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 
@@ -73,6 +74,16 @@ func _pos_to_cell(pos: Vector2) -> Vector2i:
 	col = clampi(col, 0, grid_width - 1)
 	row = clampi(row, 0, grid_height - 1)
 	return Vector2i(col, row)
+
+
+func debug_screen_to_grid(screen_pos: Vector2) -> Vector2i:
+	var local_pos := to_local(screen_pos)
+	var origin := _get_grid_origin()
+	var cell_size := _get_cell_size()
+	var bounds := Rect2(origin, Vector2(cell_size * grid_width, cell_size * grid_height))
+	if not bounds.has_point(local_pos):
+		return Vector2i(-1, -1)
+	return _pos_to_cell(local_pos)
 
 
 func _gui_input(event: InputEvent) -> void:
