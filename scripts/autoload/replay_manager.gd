@@ -49,7 +49,7 @@ func has_active_session() -> bool:
 func record_input(elapsed_time: float, event_type: String, payload: Dictionary) -> void:
 	if _active_replay.is_empty():
 		return
-	var frames: Array[Dictionary] = _active_replay.get("frames", [])
+	var frames: Array = _active_replay.get("frames", [])
 	frames.append({
 		"tick": roundi(maxf(0.0, elapsed_time) * SECONDS_TO_MS),
 		"seq": _active_sequence,
