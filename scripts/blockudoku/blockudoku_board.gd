@@ -134,36 +134,36 @@ func check_and_clear() -> Dictionary:
 
 	# Check rows
 	for r in GRID_SIZE:
-		var full := true
+		var row_full := true
 		for c in GRID_SIZE:
 			if grid[r * GRID_SIZE + c] == 0:
-				full = false
+				row_full = false
 				break
-		if full:
+		if row_full:
 			rows_to_clear.append(r)
 
 	# Check columns
 	for c in GRID_SIZE:
-		var full := true
+		var col_full := true
 		for r in GRID_SIZE:
 			if grid[r * GRID_SIZE + c] == 0:
-				full = false
+				col_full = false
 				break
-		if full:
+		if col_full:
 			cols_to_clear.append(c)
 
 	# Check 3x3 boxes
 	for box_r in range(0, GRID_SIZE, BOX_SIZE):
 		for box_c in range(0, GRID_SIZE, BOX_SIZE):
-			var full := true
+			var box_full := true
 			for r in range(box_r, box_r + BOX_SIZE):
 				for c in range(box_c, box_c + BOX_SIZE):
 					if grid[r * GRID_SIZE + c] == 0:
-						full = false
+						box_full = false
 						break
-				if not full:
+				if not box_full:
 					break
-			if full:
+			if box_full:
 				boxes_to_clear.append(Vector2i(box_c, box_r))
 
 	if rows_to_clear.is_empty() and cols_to_clear.is_empty() and boxes_to_clear.is_empty():
@@ -207,19 +207,19 @@ func check_and_clear() -> Dictionary:
 
 		# Sweep effects on cleared rows
 		for r in rows_to_clear:
-			var sweep_rect := Rect2(
+			var row_rect := Rect2(
 				origin + Vector2(0, r * cell_size),
 				Vector2(GRID_SIZE * cell_size, cell_size)
 			)
-			NeonSweep.create(self, sweep_rect, true, Color(0.0, 2.0, 1.5))
+			NeonSweep.create(self, row_rect, true, Color(0.0, 2.0, 1.5))
 
 		# Sweep effects on cleared columns
 		for c in cols_to_clear:
-			var sweep_rect := Rect2(
+			var col_rect := Rect2(
 				origin + Vector2(c * cell_size, 0),
 				Vector2(cell_size, GRID_SIZE * cell_size)
 			)
-			NeonSweep.create(self, sweep_rect, false, Color(2.0, 0.3, 1.8))
+			NeonSweep.create(self, col_rect, false, Color(2.0, 0.3, 1.8))
 
 		# Burst on cleared boxes
 		for box_pos in boxes_to_clear:
@@ -448,21 +448,21 @@ func _draw() -> void:
 	for r in GRID_SIZE:
 		for c in GRID_SIZE:
 			if grid[r * GRID_SIZE + c] != 0:
-				var cell_origin := origin + Vector2(c * cell_size, r * cell_size)
+				var filled_origin := origin + Vector2(c * cell_size, r * cell_size)
 				var color := cell_colors[r * GRID_SIZE + c]
-				draw_rect(Rect2(cell_origin + Vector2(0.5, 0.5), Vector2(cell_size - 1, cell_size - 1)), color)
+				draw_rect(Rect2(filled_origin + Vector2(0.5, 0.5), Vector2(cell_size - 1, cell_size - 1)), color)
 				# Neon cell glow
 				if tm.is_neon:
-					var glow := Color(color.r * 1.5, color.g * 1.5, color.b * 1.5, 0.3)
-					draw_rect(Rect2(cell_origin - Vector2(1, 1), Vector2(cell_size + 2, cell_size + 2)), glow, false, 1.5)
+					var cell_glow := Color(color.r * 1.5, color.g * 1.5, color.b * 1.5, 0.3)
+					draw_rect(Rect2(filled_origin - Vector2(1, 1), Vector2(cell_size + 2, cell_size + 2)), cell_glow, false, 1.5)
 
 	# Flash animation
 	if not _flash_cells.is_empty():
 		var flash_color := Color(1.0, 1.0, 0.7, _flash_alpha * 0.6)
 		for pos in _flash_cells:
 			var p: Vector2i = pos
-			var cell_origin := origin + Vector2(p.x * cell_size, p.y * cell_size)
-			draw_rect(Rect2(cell_origin, Vector2(cell_size, cell_size)), flash_color)
+			var flash_origin := origin + Vector2(p.x * cell_size, p.y * cell_size)
+			draw_rect(Rect2(flash_origin, Vector2(cell_size, cell_size)), flash_color)
 
 	# Clear dissolve animation
 	if not _clear_anim_cells.is_empty():
@@ -478,9 +478,9 @@ func _draw() -> void:
 			var scale := lerpf(1.0, 0.6, t)
 			var draw_size := Vector2(cell_size, cell_size) * scale
 			var offset := (Vector2(cell_size, cell_size) - draw_size) * 0.5
-			var cell_origin := origin + Vector2(p.x * cell_size, p.y * cell_size)
+			var dissolve_origin := origin + Vector2(p.x * cell_size, p.y * cell_size)
 			var draw_color := Color(base_color.r, base_color.g, base_color.b, alpha)
-			draw_rect(Rect2(cell_origin + offset, draw_size), draw_color)
+			draw_rect(Rect2(dissolve_origin + offset, draw_size), draw_color)
 
 	# Preview
 	if not preview_cells.is_empty():
@@ -491,31 +491,31 @@ func _draw() -> void:
 			preview_color = Color(1.0, 0.3, 0.3, 0.25)
 		for pos in preview_cells:
 			if pos.x >= 0 and pos.x < GRID_SIZE and pos.y >= 0 and pos.y < GRID_SIZE:
-				var cell_origin := origin + Vector2(pos.x * cell_size, pos.y * cell_size)
-				draw_rect(Rect2(cell_origin + Vector2(0.5, 0.5), Vector2(cell_size - 1, cell_size - 1)), preview_color)
+				var preview_origin := origin + Vector2(pos.x * cell_size, pos.y * cell_size)
+				draw_rect(Rect2(preview_origin + Vector2(0.5, 0.5), Vector2(cell_size - 1, cell_size - 1)), preview_color)
 
 	# Grid lines (thin)
 	var thin_color := tm.get_color("grid_line_thin")
 	var neon_mode := tm.is_neon
 	for i in range(GRID_SIZE + 1):
-		var x := origin.x + i * cell_size
-		draw_line(Vector2(x, origin.y), Vector2(x, origin.y + grid_px), thin_color, LINE_WIDTH)
-		var y := origin.y + i * cell_size
-		draw_line(Vector2(origin.x, y), Vector2(origin.x + grid_px, y), thin_color, LINE_WIDTH)
+		var lx := origin.x + i * cell_size
+		draw_line(Vector2(lx, origin.y), Vector2(lx, origin.y + grid_px), thin_color, LINE_WIDTH)
+		var ly := origin.y + i * cell_size
+		draw_line(Vector2(origin.x, ly), Vector2(origin.x + grid_px, ly), thin_color, LINE_WIDTH)
 
 	# Box lines (thick) — in neon mode these are HDR and will bloom
 	var thick_color := tm.get_color("grid_line_thick")
 	var box_line_w := BOX_LINE_WIDTH if not neon_mode else 1.5
 	for i in range(0, GRID_SIZE + 1, BOX_SIZE):
-		var x := origin.x + i * cell_size
-		draw_line(Vector2(x, origin.y), Vector2(x, origin.y + grid_px), thick_color, box_line_w)
-		var y := origin.y + i * cell_size
-		draw_line(Vector2(origin.x, y), Vector2(origin.x + grid_px, y), thick_color, box_line_w)
+		var bx := origin.x + i * cell_size
+		draw_line(Vector2(bx, origin.y), Vector2(bx, origin.y + grid_px), thick_color, box_line_w)
+		var by := origin.y + i * cell_size
+		draw_line(Vector2(origin.x, by), Vector2(origin.x + grid_px, by), thick_color, box_line_w)
 		# Extra glow pass for neon
 		if neon_mode:
-			var glow := Color(thick_color.r * 0.5, thick_color.g * 0.5, thick_color.b * 0.5, 0.3)
-			draw_line(Vector2(x, origin.y), Vector2(x, origin.y + grid_px), glow, 4.0)
-			draw_line(Vector2(origin.x, y), Vector2(origin.x + grid_px, y), glow, 4.0)
+			var line_glow := Color(thick_color.r * 0.5, thick_color.g * 0.5, thick_color.b * 0.5, 0.3)
+			draw_line(Vector2(bx, origin.y), Vector2(bx, origin.y + grid_px), line_glow, 4.0)
+			draw_line(Vector2(origin.x, by), Vector2(origin.x + grid_px, by), line_glow, 4.0)
 
 	# Outer border
 	draw_rect(grid_rect, thick_color, false, BORDER_WIDTH)
