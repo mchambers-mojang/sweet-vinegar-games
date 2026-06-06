@@ -277,7 +277,6 @@ func _end_drag(screen_pos: Vector2) -> void:
 
 		# Neon placement effects
 		if ThemeManager.is_neon:
-			var cell_size := board._get_cell_size()
 			var origin := board._get_grid_origin()
 
 			# Per-cell burst — small burst on each cell of the shape
@@ -339,7 +338,6 @@ func _end_drag(screen_pos: Vector2) -> void:
 					_pulse_board_for_combo(combo_count)
 				# Scale shockwave with combo
 				if ThemeManager.is_neon:
-					var cell_size := board._get_cell_size()
 					var origin := board._get_grid_origin()
 					var combo_center := origin + Vector2(cell_size * 4.5, cell_size * 4.5)
 					var combo_amp := minf(0.5 + combo_count * 0.3, 2.0)
