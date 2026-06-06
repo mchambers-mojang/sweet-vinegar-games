@@ -35,6 +35,8 @@ var is_clear_animating: bool = false
 const CLEAR_FLASH_DURATION := 0.1
 const CLEAR_SWEEP_DURATION := 0.26
 const CLEAR_CELL_DELAY_MAX := 0.12
+const MIN_SWEEP_DURATION := 0.001
+const INVALID_CLEAR_DELAY := CLEAR_CELL_DELAY_MAX + 1.0
 
 ## Color palette for placed blocks
 const PALETTE: Array[Color] = [
@@ -48,6 +50,10 @@ const PALETTE: Array[Color] = [
 	Color(0.9, 0.6, 0.75),     # Pink
 ]
 var _color_index: int = 0
+
+
+func _get_sweep_duration() -> float:
+	return maxf(CLEAR_SWEEP_DURATION, MIN_SWEEP_DURATION)
 
 
 func _ready() -> void:
@@ -248,15 +254,15 @@ func check_and_clear() -> Dictionary:
 	_clear_anim_colors = _flash_saved_colors.duplicate()
 	_clear_anim_delays.clear()
 	for pos in _clear_anim_cells:
-		var p: Vector2i = pos
-		_clear_anim_delays.append(_compute_clear_cell_delay(p, rows_to_clear, cols_to_clear))
+		_clear_anim_delays.append(_compute_clear_cell_delay(pos, rows_to_clear, cols_to_clear))
 	_clear_anim_elapsed = 0.0
 	is_clear_animating = true
+	var sweep_duration := _get_sweep_duration()
 	if _clear_anim_tween and _clear_anim_tween.is_running():
 		_clear_anim_tween.kill()
 	_clear_anim_tween = create_tween()
 	_clear_anim_tween.tween_method(_set_flash_alpha, 1.0, 0.0, CLEAR_FLASH_DURATION)
-	_clear_anim_tween.tween_method(_set_clear_anim_elapsed, 0.0, CLEAR_SWEEP_DURATION, CLEAR_SWEEP_DURATION)
+	_clear_anim_tween.tween_method(_set_clear_anim_elapsed, 0.0, sweep_duration, sweep_duration)
 	_clear_anim_tween.tween_callback(func() -> void:
 		_flash_cells.clear()
 		_clear_anim_cells.clear()
@@ -285,19 +291,21 @@ func _set_clear_anim_elapsed(elapsed: float) -> void:
 
 
 func _compute_clear_cell_delay(p: Vector2i, rows_to_clear: Array[int], cols_to_clear: Array[int]) -> float:
-	var row_delay := INF
-	if rows_to_clear.has(p.y):
+	var has_row := rows_to_clear.has(p.y)
+	var has_col := cols_to_clear.has(p.x)
+
+	var row_delay := INVALID_CLEAR_DELAY
+	if has_row:
 		row_delay = (float(p.x) / float(max(1, GRID_SIZE - 1))) * CLEAR_CELL_DELAY_MAX
 
-	var col_delay := INF
-	if cols_to_clear.has(p.x):
+	var col_delay := INVALID_CLEAR_DELAY
+	if has_col:
 		col_delay = (float(p.y) / float(max(1, GRID_SIZE - 1))) * CLEAR_CELL_DELAY_MAX
 
-	var delay := minf(row_delay, col_delay)
-	if is_inf(delay):
-		var diag_norm := float(p.x + p.y) / float(max(1, (GRID_SIZE - 1) * 2))
-		delay = diag_norm * CLEAR_CELL_DELAY_MAX
-	return delay
+	if has_row or has_col:
+		return minf(row_delay, col_delay)
+	var diag_norm := float(p.x + p.y) / float(max(1, (GRID_SIZE - 1) * 2))
+	return diag_norm * CLEAR_CELL_DELAY_MAX
 
 
 func show_preview(shape: Array, grid_col: int, grid_row: int) -> void:
@@ -444,10 +452,11 @@ func _draw() -> void:
 
 	# Clear dissolve animation
 	if not _clear_anim_cells.is_empty():
+		var sweep_duration := _get_sweep_duration()
 		for i in _clear_anim_cells.size():
 			var p: Vector2i = _clear_anim_cells[i]
 			var delay := _clear_anim_delays[i] if i < _clear_anim_delays.size() else 0.0
-			var t := clamp((_clear_anim_elapsed - delay) / CLEAR_SWEEP_DURATION, 0.0, 1.0)
+			var t := clamp((_clear_anim_elapsed - delay) / sweep_duration, 0.0, 1.0)
 			if t >= 1.0:
 				continue
 			var base_color := _clear_anim_colors[i] if i < _clear_anim_colors.size() else tm.get_color("cell_given")
