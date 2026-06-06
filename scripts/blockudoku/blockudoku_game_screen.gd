@@ -3,6 +3,7 @@ extends Control
 ## Blockudoku game screen — board, score, block tray, drag-to-place
 
 const BLOCKS_PER_SET := 3
+const ROTATE_TAP_DISTANCE_THRESHOLD := 12.0
 const COMBO_PULSE_BASE_SCALE := 1.02
 const COMBO_PULSE_SCALE_PER_COMBO := 0.002
 const COMBO_PULSE_MAX_SCALE := 1.04
@@ -23,6 +24,8 @@ var _dragging: bool = false
 var _drag_block_index: int = -1
 var _drag_shape: Array = []
 var _drag_screen_pos: Vector2 = Vector2.ZERO
+var _drag_start_screen_pos: Vector2 = Vector2.ZERO
+var _drag_moved: bool = false
 var _drag_last_grid_pos := Vector2i(-999, -999)
 var _board_pulse_tween: Tween = null
 
@@ -193,12 +196,16 @@ func _start_drag(index: int, screen_pos: Vector2) -> void:
 	_drag_block_index = index
 	_drag_shape = available_blocks[index]
 	_drag_screen_pos = screen_pos
+	_drag_start_screen_pos = screen_pos
+	_drag_moved = false
 	_drag_last_grid_pos = Vector2i(-999, -999)
 	DragEffect.suppress()
 	_update_board_preview(screen_pos)
 
 
 func _update_drag(screen_pos: Vector2) -> void:
+	if not _drag_moved and screen_pos.distance_to(_drag_start_screen_pos) >= ROTATE_TAP_DISTANCE_THRESHOLD:
+		_drag_moved = true
 	_drag_screen_pos = screen_pos
 	_update_board_preview(screen_pos)
 
@@ -231,6 +238,16 @@ func _end_drag(screen_pos: Vector2) -> void:
 	var grid_pos := board.screen_to_grid(local_pos)
 
 	board.clear_preview()
+
+	if SettingsManager.blockudoku_rotation_mode and not _drag_moved and _drag_block_index >= 0 and _drag_block_index < available_blocks.size():
+		var shape: Array = available_blocks[_drag_block_index]
+		if shape.size() > 0:
+			available_blocks[_drag_block_index] = BlockudokuShapes.rotate_clockwise(shape)
+			_build_tray()
+			_save_current_state()
+		_drag_block_index = -1
+		_drag_shape = []
+		return
 
 	if board.can_place(_drag_shape, grid_pos.x, grid_pos.y):
 		var before_state := _capture_move_state()

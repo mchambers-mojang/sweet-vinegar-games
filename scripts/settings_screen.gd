@@ -123,6 +123,12 @@ func _build_settings_ui() -> void:
 				SettingsManager.save_settings()
 		)
 
+		_add_toggle("Rotation Mode (tap to rotate)", SettingsManager.blockudoku_rotation_mode,
+			func(value: bool) -> void:
+				SettingsManager.blockudoku_rotation_mode = value
+				SettingsManager.save_settings()
+		)
+
 		_add_separator()
 
 	# --- General settings ---
