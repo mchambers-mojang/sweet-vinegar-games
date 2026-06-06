@@ -51,6 +51,7 @@ func _add_achievement_row(achievement: Dictionary) -> void:
 
     var panel := PanelContainer.new()
     panel.custom_minimum_size = Vector2(0, 94)
+    panel.mouse_filter = Control.MOUSE_FILTER_PASS
     achievements_list.add_child(panel)
 
     var margin := MarginContainer.new()
@@ -58,10 +59,12 @@ func _add_achievement_row(achievement: Dictionary) -> void:
     margin.add_theme_constant_override("margin_top", 10)
     margin.add_theme_constant_override("margin_right", 12)
     margin.add_theme_constant_override("margin_bottom", 10)
+    margin.mouse_filter = Control.MOUSE_FILTER_PASS
     panel.add_child(margin)
 
     var content := VBoxContainer.new()
     content.add_theme_constant_override("separation", 6)
+    content.mouse_filter = Control.MOUSE_FILTER_PASS
     margin.add_child(content)
 
     var header_row := HBoxContainer.new()
