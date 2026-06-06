@@ -2,13 +2,13 @@
 
 [ext_resource type="Script" path="res://carom/scripts/carom_puck.gd" id="1"]
 
-; Wall collision shape — each side of the triangle
-[sub_resource type="BoxShape3D" id="2"]
-size = Vector3(1.1, 0.3, 0.15)
+; Solid triangular prism collision — 6 vertices forming a filled triangle
+[sub_resource type="ConvexPolygonShape3D" id="1"]
+points = PackedVector3Array(0, 0.25, 0.5, 0.433, 0.25, -0.25, -0.433, 0.25, -0.25, 0, 0.55, 0.5, 0.433, 0.55, -0.25, -0.433, 0.55, -0.25)
 
-; Wall mesh
+; Visual mesh — 3 box walls to show the triangle edges (neon outline look)
 [sub_resource type="BoxMesh" id="6"]
-size = Vector3(1.08, 0.28, 0.1)
+size = Vector3(1.08, 0.28, 0.08)
 
 ; Wall material — neon edges
 [sub_resource type="StandardMaterial3D" id="7"]
@@ -31,35 +31,23 @@ linear_damp = 0.35
 angular_damp = 0.4
 continuous_cd = true
 
-; Wall A: top side
-[node name="WallACol" type="CollisionShape3D" parent="."]
-position = Vector3(0, 0.4, 0.42)
-shape = SubResource("2")
+; Single solid triangular prism collision
+[node name="PrismCollision" type="CollisionShape3D" parent="."]
+shape = SubResource("1")
 
-[node name="WallAMesh" type="MeshInstance3D" parent="."]
+; Visual: 3 edge meshes forming triangle outline (Geometry Wars style)
+[node name="EdgeAMesh" type="MeshInstance3D" parent="."]
 position = Vector3(0, 0.4, 0.42)
 mesh = SubResource("6")
 material_override = SubResource("7")
 
-; Wall B: bottom-right, rotated 120 degrees
-[node name="WallBCol" type="CollisionShape3D" parent="."]
-position = Vector3(0.364, 0.4, -0.21)
-rotation = Vector3(0, 2.094, 0)
-shape = SubResource("2")
-
-[node name="WallBMesh" type="MeshInstance3D" parent="."]
+[node name="EdgeBMesh" type="MeshInstance3D" parent="."]
 position = Vector3(0.364, 0.4, -0.21)
 rotation = Vector3(0, 2.094, 0)
 mesh = SubResource("6")
 material_override = SubResource("7")
 
-; Wall C: bottom-left, rotated 240 degrees
-[node name="WallCCol" type="CollisionShape3D" parent="."]
-position = Vector3(-0.364, 0.4, -0.21)
-rotation = Vector3(0, 4.189, 0)
-shape = SubResource("2")
-
-[node name="WallCMesh" type="MeshInstance3D" parent="."]
+[node name="EdgeCMesh" type="MeshInstance3D" parent="."]
 position = Vector3(-0.364, 0.4, -0.21)
 rotation = Vector3(0, 4.189, 0)
 mesh = SubResource("6")

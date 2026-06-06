@@ -58,6 +58,3 @@ func _on_north_goal_body_entered(body: Node) -> void:
 		return
 	_goal_locked = true
 	goal_scored.emit(&"south", body as CaromPuck)
-
-
-
