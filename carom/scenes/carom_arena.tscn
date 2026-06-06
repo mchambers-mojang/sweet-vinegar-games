@@ -28,10 +28,10 @@ size = Vector3(2.2, 1.5, 0.45)
 size = Vector3(2.2, 1.5, 0.45)
 
 [sub_resource type="BoxShape3D" id="9"]
-size = Vector3(3.8, 1.6, 1.2)
+size = Vector3(3.8, 1.6, 0.4)
 
 [sub_resource type="BoxMesh" id="10"]
-size = Vector3(3.8, 1.6, 1.2)
+size = Vector3(3.8, 1.6, 0.4)
 
 [sub_resource type="StandardMaterial3D" id="11"]
 albedo_color = Color(0.03, 0.04, 0.08, 1)
@@ -179,7 +179,7 @@ mesh = SubResource("8")
 material_override = SubResource("12")
 
 [node name="SouthGoal" type="Area3D" parent="."]
-position = Vector3(0, 0.6, 0)
+position = Vector3(0, 0.6, -0.4)
 monitoring = true
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="SouthGoal"]
@@ -190,7 +190,7 @@ mesh = SubResource("10")
 material_override = SubResource("13")
 
 [node name="NorthGoal" type="Area3D" parent="."]
-position = Vector3(0, 0.6, 12)
+position = Vector3(0, 0.6, 12.4)
 monitoring = true
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="NorthGoal"]
