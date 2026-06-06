@@ -68,10 +68,22 @@ func _input(event: InputEvent) -> void:
 	if not _enabled:
 		return
 
+	# Global keyboard shortcut: F12 or backtick to toggle debug overlay
+	if event is InputEventKey:
+		var key := event as InputEventKey
+		if key.pressed and not key.echo:
+			if key.keycode == KEY_F12 or key.keycode == KEY_QUOTELEFT:
+				_toggle_overlay("keyboard")
+				get_viewport().set_input_as_handled()
+				return
+
 	if event is InputEventScreenTouch:
 		var st := event as InputEventScreenTouch
 		if st.pressed:
 			_touch_points[st.index] = st.position
+			# 3-finger tap toggles debug overlay on mobile
+			if _touch_points.size() >= 3:
+				_toggle_overlay("three_finger_tap")
 		else:
 			_touch_points.erase(st.index)
 	elif event is InputEventScreenDrag:
@@ -134,6 +146,8 @@ func _toggle_overlay(source: String) -> void:
 
 
 func _build_ui() -> void:
+	var safe_top := float(SafeAreaManager.get_insets().get("top", 0))
+
 	_root = Control.new()
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -146,12 +160,12 @@ func _build_ui() -> void:
 	_root.add_child(_draw_layer)
 
 	_info_label = Label.new()
-	_info_label.position = Vector2(10, 10)
+	_info_label.position = Vector2(10, safe_top + 10)
 	_info_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(_info_label)
 
 	_analytics_label = RichTextLabel.new()
-	_analytics_label.position = Vector2(10, 100)
+	_analytics_label.position = Vector2(10, safe_top + 100)
 	_analytics_label.size = Vector2(460, 180)
 	_analytics_label.bbcode_enabled = false
 	_analytics_label.fit_content = false
@@ -161,7 +175,7 @@ func _build_ui() -> void:
 
 	_settings_button = Button.new()
 	_settings_button.text = "Debug"
-	_settings_button.position = Vector2(0, 10)
+	_settings_button.position = Vector2(0, safe_top + 10)
 	_settings_button.size = Vector2(86, 34)
 	_settings_button.mouse_filter = Control.MOUSE_FILTER_STOP
 	_settings_button.pressed.connect(func() -> void:
@@ -170,7 +184,7 @@ func _build_ui() -> void:
 	_root.add_child(_settings_button)
 
 	_settings_panel = PanelContainer.new()
-	_settings_panel.position = Vector2(0, 50)
+	_settings_panel.position = Vector2(0, safe_top + 50)
 	_settings_panel.size = Vector2(280, 300)
 	_settings_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	_root.add_child(_settings_panel)
