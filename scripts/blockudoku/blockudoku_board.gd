@@ -373,12 +373,15 @@ func get_state() -> Dictionary:
 
 
 func set_state(state: Dictionary) -> void:
-	grid = state.get("grid", [])
-	if grid.size() != GRID_SIZE * GRID_SIZE:
+	var raw_grid: Array = state.get("grid", [])
+	if raw_grid.size() != GRID_SIZE * GRID_SIZE:
 		_init_grid()
 	else:
+		grid.resize(GRID_SIZE * GRID_SIZE)
+		for i in raw_grid.size():
+			grid[i] = int(raw_grid[i])
 		_deserialize_colors(state.get("cell_colors", []))
-	_color_index = state.get("color_index", 0)
+	_color_index = int(state.get("color_index", 0))
 	if _clear_anim_tween and _clear_anim_tween.is_running():
 		_clear_anim_tween.kill()
 	_flash_cells.clear()

@@ -234,22 +234,29 @@ func _replay_file_path(replay_id: String) -> String:
 
 
 func _save_replay_file(replay_id: String, replay: Dictionary) -> void:
+	_ensure_replays_dir()
 	var path := _replay_file_path(replay_id)
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	if file:
 		file.store_string(JSON.stringify(replay))
+	else:
+		push_error("ReplayManager: Failed to save replay file: %s (error: %d)" % [path, FileAccess.get_open_error()])
 
 
 func _load_replay_file(replay_id: String) -> Dictionary:
 	var path := _replay_file_path(replay_id)
 	if not FileAccess.file_exists(path):
+		push_warning("ReplayManager: Replay file not found: %s" % path)
 		return {}
 	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null:
+		push_error("ReplayManager: Failed to open replay file: %s (error: %d)" % [path, FileAccess.get_open_error()])
 		return {}
-	var parsed = JSON.parse_string(file.get_as_text())
+	var text := file.get_as_text()
+	var parsed = JSON.parse_string(text)
 	if parsed is Dictionary:
 		return parsed
+	push_error("ReplayManager: Failed to parse replay JSON: %s (length: %d)" % [path, text.length()])
 	return {}
 
 

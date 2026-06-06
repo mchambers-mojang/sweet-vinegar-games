@@ -119,10 +119,12 @@ func _apply_frame(frame: Dictionary) -> void:
 		elif cell is Dictionary:
 			shape.append(Vector2i(int(cell.get("x", 0)), int(cell.get("y", 0))))
 
-	# Place on board
-	if board.can_place(shape, grid_x, grid_y):
-		board.place_block(shape, grid_x, grid_y)
-		board.check_and_clear()
+	if shape.is_empty():
+		return
+
+	# Place on board (skip occupancy check — replay data is trusted)
+	board.place_block(shape, grid_x, grid_y)
+	board.check_and_clear()
 	board.queue_redraw()
 
 
