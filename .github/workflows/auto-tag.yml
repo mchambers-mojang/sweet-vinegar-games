@@ -81,9 +81,8 @@ jobs:
 
           echo "Gathering commits from $RANGE"
 
-          # Collect feat: and fix: commits
+          # Collect feat: commits only (fixes excluded to reduce noise)
           FEATS=$(git log "$RANGE" --pretty=format:"%s" | grep -iE "^feat:" | sed 's/^[Ff]eat: *//' || true)
-          FIXES=$(git log "$RANGE" --pretty=format:"%s" | grep -iE "^fix:" | sed 's/^[Ff]ix: *//' || true)
 
           # Build release notes
           NOTES=""
@@ -92,13 +91,6 @@ jobs:
             while IFS= read -r line; do
               NOTES+="- $line"$'\n'
             done <<< "$FEATS"
-            NOTES+=$'\n'
-          fi
-          if [ -n "$FIXES" ]; then
-            NOTES+="## 🐛 Bug Fixes"$'\n'
-            while IFS= read -r line; do
-              NOTES+="- $line"$'\n'
-            done <<< "$FIXES"
             NOTES+=$'\n'
           fi
           if [ -z "$NOTES" ]; then
