@@ -66,5 +66,5 @@ func _draw() -> void:
 			draw_circle(point, 2.5, line_color)
 
 	for i in _scores.size():
-		if int(_scores[i]) == _best_score:
+		if _scores[i] == _best_score:
 			draw_circle(points[i], 4.5, best_color)
