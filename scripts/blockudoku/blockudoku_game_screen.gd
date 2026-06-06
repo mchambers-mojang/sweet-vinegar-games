@@ -31,16 +31,22 @@ var _board_pulse_tween: Tween = null
 @onready var score_label: Label = %ScoreLabel
 @onready var timer_label: Label = %TimerLabel
 @onready var back_button: Button = %BackButton
+@onready var undo_button: Button = %UndoButton
+@onready var redo_button: Button = %RedoButton
 @onready var block_tray: HBoxContainer = %BlockTray
 
 var elapsed_time: float = 0.0
 
 # Block tray piece display nodes
 var _tray_panels: Array[Control] = []
+var undo_stack: Array[Dictionary] = []
+var redo_stack: Array[Dictionary] = []
 
 
 func _ready() -> void:
 	back_button.pressed.connect(_on_back)
+	undo_button.pressed.connect(_on_undo_pressed)
+	redo_button.pressed.connect(_on_redo_pressed)
 	_setup_help_button()
 	_apply_theme()
 	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
@@ -67,9 +73,12 @@ func start_new_game() -> void:
 	combo_count = 0
 	elapsed_time = 0.0
 	is_game_over = false
+	undo_stack.clear()
+	redo_stack.clear()
 	board.reset()
 	_deal_new_blocks()
 	_update_score_display()
+	_update_undo_redo_buttons()
 	BlockudokuStatsManager.record_game_started()
 	_save_current_state()
 
@@ -80,21 +89,17 @@ func resume_game(data: Dictionary) -> void:
 	combo_count = data.get("combo_count", 0)
 	elapsed_time = data.get("elapsed_time", 0.0)
 	is_game_over = false
+	undo_stack.clear()
+	redo_stack.clear()
 	board.set_state(data.get("board_state", {}))
 
 	# Restore available blocks
-	available_blocks.clear()
-	var saved_blocks: Array = data.get("available_blocks", [])
-	for block_data in saved_blocks:
-		var shape: Array = []
-		for cell_data in block_data:
-			if cell_data is Dictionary:
-				shape.append(Vector2i(int(cell_data.get("x", 0)), int(cell_data.get("y", 0))))
-		available_blocks.append(shape)
+	available_blocks = _deserialize_blocks(data.get("available_blocks", []))
 
 	blocks_placed_this_set = data.get("blocks_placed_this_set", 0)
 	_build_tray()
 	_update_score_display()
+	_update_undo_redo_buttons()
 
 
 func _process(delta: float) -> void:
@@ -228,6 +233,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 	board.clear_preview()
 
 	if board.can_place(_drag_shape, grid_pos.x, grid_pos.y):
+		var before_state := _capture_move_state()
 		var block_color := BlockudokuShapes.get_shape_color(_drag_shape)
 		board.place_block(_drag_shape, grid_pos.x, grid_pos.y, block_color)
 		SoundManager.play_place()
@@ -318,9 +324,16 @@ func _end_drag(screen_pos: Vector2) -> void:
 		for shape in available_blocks:
 			if shape.size() > 0:
 				remaining_shapes.append(shape)
+		redo_stack.clear()
 		if not board.has_valid_placement(remaining_shapes):
+			_update_undo_redo_buttons()
 			_handle_game_over()
 		else:
+			undo_stack.append({
+				"before": before_state,
+				"after": _capture_move_state(),
+			})
+			_update_undo_redo_buttons()
 			_save_current_state()
 	else:
 		# Invalid placement — do nothing
@@ -355,6 +368,7 @@ func _pulse_board_for_combo(combo: int) -> void:
 
 func _handle_game_over() -> void:
 	is_game_over = true
+	_update_undo_redo_buttons()
 	BlockudokuStatsManager.record_game_over(score, turns)
 	BlockudokuSaveManager.clear_save()
 	HapticManager.vibrate_success()
@@ -503,6 +517,79 @@ func _update_score_display() -> void:
 	score_label.text = "Score: %d" % score
 
 
+func _on_undo_pressed() -> void:
+	if is_game_over:
+		return
+	if undo_stack.is_empty():
+		return
+	var move: Dictionary = undo_stack.pop_back()
+	redo_stack.append(move)
+	_apply_move_state(move.get("before", {}))
+	_update_undo_redo_buttons()
+	_save_current_state()
+
+
+func _on_redo_pressed() -> void:
+	if is_game_over:
+		return
+	if redo_stack.is_empty():
+		return
+	var move: Dictionary = redo_stack.pop_back()
+	undo_stack.append(move)
+	_apply_move_state(move.get("after", {}))
+	_update_undo_redo_buttons()
+	_save_current_state()
+
+
+func _update_undo_redo_buttons() -> void:
+	undo_button.disabled = is_game_over or undo_stack.is_empty()
+	redo_button.disabled = is_game_over or redo_stack.is_empty()
+
+
+func _capture_move_state() -> Dictionary:
+	return {
+		"score": score,
+		"turns": turns,
+		"combo_count": combo_count,
+		"board_state": board.get_state(),
+		"available_blocks": _serialize_blocks(available_blocks),
+		"blocks_placed_this_set": blocks_placed_this_set,
+	}
+
+
+func _apply_move_state(state: Dictionary) -> void:
+	score = state.get("score", score)
+	turns = state.get("turns", turns)
+	combo_count = state.get("combo_count", combo_count)
+	board.set_state(state.get("board_state", board.get_state()))
+	available_blocks = _deserialize_blocks(state.get("available_blocks", []))
+	blocks_placed_this_set = state.get("blocks_placed_this_set", blocks_placed_this_set)
+	_build_tray()
+	_update_score_display()
+
+
+func _serialize_blocks(blocks: Array) -> Array:
+	var blocks_data: Array = []
+	for shape in blocks:
+		var shape_data: Array = []
+		for cell in shape:
+			var c: Vector2i = cell
+			shape_data.append({"x": c.x, "y": c.y})
+		blocks_data.append(shape_data)
+	return blocks_data
+
+
+func _deserialize_blocks(data: Array) -> Array[Array]:
+	var blocks: Array[Array] = []
+	for block_data in data:
+		var shape: Array = []
+		for cell_data in block_data:
+			if cell_data is Dictionary:
+				shape.append(Vector2i(int(cell_data.get("x", 0)), int(cell_data.get("y", 0))))
+		blocks.append(shape)
+	return blocks
+
+
 func _format_time(seconds: float) -> String:
 	var mins := int(seconds) / 60
 	var secs := int(seconds) % 60
@@ -518,19 +605,12 @@ func _apply_theme() -> void:
 func _save_current_state() -> void:
 	if is_game_over:
 		return
-	var blocks_data: Array = []
-	for shape in available_blocks:
-		var shape_data: Array = []
-		for cell in shape:
-			var c: Vector2i = cell
-			shape_data.append({"x": c.x, "y": c.y})
-		blocks_data.append(shape_data)
 	BlockudokuSaveManager.save_game({
 		"score": score,
 		"turns": turns,
 		"combo_count": combo_count,
 		"elapsed_time": elapsed_time,
 		"board_state": board.get_state(),
-		"available_blocks": blocks_data,
+		"available_blocks": _serialize_blocks(available_blocks),
 		"blocks_placed_this_set": blocks_placed_this_set,
 	})
