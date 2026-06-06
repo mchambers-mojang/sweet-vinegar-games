@@ -5,17 +5,72 @@ extends Node
 const LOG_DIR := "user://crash_logs"
 const MAX_LOG_FILES := 15
 const MAX_ACTIONS := 20
+const ERROR_CHECK_INTERVAL := 1.0  # Check for new errors every second
 
 var _recent_actions: Array[Dictionary] = []
 var _state_providers: Array[Callable] = []
 var _replay_hooks: Array[Callable] = []
 var _latest_report_path: String = ""
 var _latest_report_text: String = ""
+var _log_file_path: String = ""
+var _last_log_size: int = 0
+var _error_check_timer: float = 0.0
 
 
 func _ready() -> void:
 	_ensure_log_dir()
 	_trim_old_logs()
+	_log_file_path = _find_godot_log_path()
+	if _log_file_path != "":
+		var file := FileAccess.open(_log_file_path, FileAccess.READ)
+		if file:
+			_last_log_size = file.get_length()
+
+
+func _process(delta: float) -> void:
+	_error_check_timer += delta
+	if _error_check_timer < ERROR_CHECK_INTERVAL:
+		return
+	_error_check_timer = 0.0
+	_check_log_for_errors()
+
+
+func _check_log_for_errors() -> void:
+	if _log_file_path == "":
+		return
+	var file := FileAccess.open(_log_file_path, FileAccess.READ)
+	if file == null:
+		return
+	var current_size := file.get_length()
+	if current_size <= _last_log_size:
+		return
+	# Read only the new portion
+	file.seek(_last_log_size)
+	var new_content := file.get_buffer(current_size - _last_log_size).get_string_from_utf8()
+	_last_log_size = current_size
+
+	# Parse for script errors
+	var lines := new_content.split("\n")
+	var error_lines: Array[String] = []
+	for line in lines:
+		if line.contains("SCRIPT ERROR:") or line.contains("ERROR:") or line.contains("Parse Error"):
+			error_lines.append(line.strip_edges())
+
+	if error_lines.size() > 0:
+		var error_msg := "\n".join(error_lines)
+		capture_error(error_msg, "", {"source": "log_monitor"})
+
+
+func _find_godot_log_path() -> String:
+	var log_dir := OS.get_user_data_dir().path_join("logs")
+	var dir := DirAccess.open(log_dir)
+	if dir == null:
+		return ""
+	# Find the current log (godot.log is the active one)
+	var path := log_dir.path_join("godot.log")
+	if FileAccess.file_exists(path):
+		return path
+	return ""
 
 
 func _notification(what: int) -> void:
