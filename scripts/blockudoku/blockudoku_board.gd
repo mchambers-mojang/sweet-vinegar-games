@@ -202,7 +202,7 @@ func check_and_clear() -> Dictionary:
 				origin + Vector2(flash_cell_pos.x * cell_size, flash_cell_pos.y * cell_size),
 				Vector2(cell_size, cell_size)
 			)
-			var shard_color := _flash_saved_colors[i] if i < _flash_saved_colors.size() else Color(0.0, 1.5, 1.5)
+			var shard_color: Color = _flash_saved_colors[i] if i < _flash_saved_colors.size() else Color(0.0, 1.5, 1.5)
 			GlassShatter.create(self, cell_rect, shard_color, 4)
 
 		# Sweep effects on cleared rows
