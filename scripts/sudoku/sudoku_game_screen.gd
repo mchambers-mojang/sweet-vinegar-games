@@ -320,13 +320,7 @@ func _handle_number_first_cell_tap(index: int) -> void:
 				is_failed = true
 				_can_continue_after_failure = false
 				_update_button_states()
-				AnalyticsManager.log_event("game_over", {
-					"game": "sudoku",
-					"won": false,
-					"difficulty": difficulty,
-					"elapsed_time": elapsed_time,
-					"strikes": strikes,
-				})
+				_log_game_over_analytics(false)
 				_show_fail_dialog()
 			_save_current_state()
 			_update_number_completion()
@@ -428,13 +422,7 @@ func _place_or_note_number(number: int) -> void:
 				is_failed = true
 				_can_continue_after_failure = false
 				_update_button_states()
-				AnalyticsManager.log_event("game_over", {
-					"game": "sudoku",
-					"won": false,
-					"difficulty": difficulty,
-					"elapsed_time": elapsed_time,
-					"strikes": strikes,
-				})
+				_log_game_over_analytics(false)
 				_show_fail_dialog()
 			_save_current_state()
 			_update_number_completion()
@@ -654,14 +642,7 @@ func _handle_win() -> void:
 	is_completed = true
 	var won := not is_failed
 	StatsManager.record_game_completed(difficulty, elapsed_time, SettingsManager.error_mode == "strict", won)
-	AnalyticsManager.log_event("game_over", {
-		"game": "sudoku",
-		"won": won,
-		"difficulty": difficulty,
-		"elapsed_time": elapsed_time,
-		"strikes": strikes,
-		"hints_used": hints_used,
-	})
+	_log_game_over_analytics(won)
 	SaveManager.clear_save()
 	_play_win_celebration()
 
@@ -1025,13 +1006,7 @@ func _apply_number_to_multi_selection(number: int) -> void:
 			is_failed = true
 			_can_continue_after_failure = false
 			_update_button_states()
-			AnalyticsManager.log_event("game_over", {
-				"game": "sudoku",
-				"won": false,
-				"difficulty": difficulty,
-				"elapsed_time": elapsed_time,
-				"strikes": strikes,
-			})
+			_log_game_over_analytics(false)
 			_show_fail_dialog()
 
 	redo_stack.clear()
@@ -1085,6 +1060,17 @@ func _save_current_state() -> void:
 func _is_board_locked() -> bool:
 	# Locked after completion, or after failure until Continue is chosen.
 	return is_completed or (is_failed and not _can_continue_after_failure)
+
+
+func _log_game_over_analytics(won: bool) -> void:
+	AnalyticsManager.log_event("game_over", {
+		"game": "sudoku",
+		"won": won,
+		"difficulty": difficulty,
+		"elapsed_time": elapsed_time,
+		"strikes": strikes,
+		"hints_used": hints_used,
+	})
 
 
 func _format_time(seconds: float) -> String:

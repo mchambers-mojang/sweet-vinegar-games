@@ -353,6 +353,7 @@ func _handle_game_over() -> void:
 	AnalyticsManager.log_event("game_over", {
 		"game": "blockudoku",
 		"won": false,
+		"ended_reason": "no_valid_moves",
 		"score": score,
 		"turns": turns,
 		"elapsed_time": elapsed_time,

@@ -51,7 +51,7 @@ func track_achievement_unlocked(achievement_id: String, properties: Dictionary =
 
 func query_events(event_name: String = "", since_timestamp: float = 0.0, limit: int = 1000) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
-	var max_results := maxi(limit, 0)
+	var unlimited := limit <= 0
 	for i in range(_events.size() - 1, -1, -1):
 		var event := _events[i]
 		if not event_name.is_empty() and str(event.get("name", "")) != event_name:
@@ -59,7 +59,7 @@ func query_events(event_name: String = "", since_timestamp: float = 0.0, limit: 
 		if since_timestamp > 0.0 and float(event.get("timestamp", 0.0)) < since_timestamp:
 			continue
 		result.append(event)
-		if max_results > 0 and result.size() >= max_results:
+		if not unlimited and result.size() >= limit:
 			break
 	result.reverse()
 	return result
@@ -79,7 +79,7 @@ func _start_session() -> void:
 	_session_id = "%d-%d" % [int(Time.get_unix_time_from_system()), rng.randi()]
 	log_event("session", {
 		"platform": OS.get_name(),
-		"app_name": str(ProjectSettings.get_setting("application/config/name", "Sweet Vinegar Games")),
+		"app_name": str(ProjectSettings.get_setting("application/config/name", "")),
 	})
 
 
@@ -87,8 +87,7 @@ func _append_local_event(event: Dictionary) -> void:
 	_events.append(event)
 	var overflow := _events.size() - MAX_EVENTS
 	if overflow > 0:
-		for _i in range(overflow):
-			_events.remove_at(0)
+		_events = _events.slice(overflow, _events.size())
 	_save_events()
 
 
