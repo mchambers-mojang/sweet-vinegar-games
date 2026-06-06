@@ -23,8 +23,10 @@ var cell_color: Color = Color.TRANSPARENT  # User-applied color coding
 
 var _bounce_tween: Tween
 var _flash_tween: Tween
+var _select_tween: Tween
 var _flash_base_color: Color = Color.TRANSPARENT
 var _flash_alpha: float = 0.0  # 0 = no flash, 1 = full flash
+var _select_alpha: float = 0.0  # 0 = unselected, 1 = fully selected
 
 
 func _init() -> void:
@@ -85,7 +87,20 @@ func set_cell_color(color: Color) -> void:
 
 
 func set_selected(selected: bool) -> void:
+	if is_selected == selected:
+		return
 	is_selected = selected
+	if _select_tween and _select_tween.is_running():
+		_select_tween.kill()
+	_select_tween = create_tween()
+	if selected:
+		_select_tween.tween_method(_set_select_alpha, _select_alpha, 1.0, 0.12)
+	else:
+		_select_tween.tween_method(_set_select_alpha, _select_alpha, 0.0, 0.08)
+
+
+func _set_select_alpha(val: float) -> void:
+	_select_alpha = val
 	queue_redraw()
 
 
@@ -169,12 +184,13 @@ func _draw() -> void:
 			bg_color = tm.get_color("cell_selected")
 	elif cell_color != Color.TRANSPARENT:
 		bg_color = cell_color
-		if is_selected:
-			bg_color = bg_color.lerp(tm.get_color("cell_selected"), 0.5)
+		if is_selected and _select_alpha > 0.0:
+			bg_color = bg_color.lerp(tm.get_color("cell_selected"), 0.5 * _select_alpha)
 		elif is_same_color:
 			bg_color = bg_color.lightened(0.15)
-	elif is_selected:
-		bg_color = tm.get_color("cell_selected")
+	elif is_selected and _select_alpha > 0.0:
+		var base := tm.get_color("cell_background")
+		bg_color = base.lerp(tm.get_color("cell_selected"), _select_alpha)
 	elif is_same_number and value != 0:
 		bg_color = tm.get_color("cell_same_number")
 	elif is_highlighted:
