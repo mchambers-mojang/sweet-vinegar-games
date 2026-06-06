@@ -77,8 +77,9 @@ func _add_achievement_row(achievement: Dictionary) -> void:
     header_row.add_child(title)
 
     var badge := Label.new()
-    badge.text = "Unlocked" if unlocked else str(achievement.get("tier", "Bronze"))
+    badge.text = "✓" if unlocked else str(achievement.get("tier", "Bronze"))
     badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    badge.add_theme_font_size_override("font_size", 14)
     if unlocked:
         badge.add_theme_color_override("font_color", Color(0.3, 0.9, 0.45))
     header_row.add_child(badge)
@@ -86,23 +87,28 @@ func _add_achievement_row(achievement: Dictionary) -> void:
     var desc := Label.new()
     desc.text = desc_text
     desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    desc.add_theme_font_size_override("font_size", 14)
     content.add_child(desc)
 
-    var progress := Label.new()
     if unlocked:
         var unlocked_at := int(achievement.get("unlocked_at", 0))
         if unlocked_at > 0:
             var dt := Time.get_datetime_dict_from_unix_time(unlocked_at)
-            progress.text = "Unlocked %s %d, %d" % [
+            var date_label := Label.new()
+            date_label.text = "%s %d, %d" % [
                 _month_name(int(dt.get("month", 1))),
                 int(dt.get("day", 1)),
                 int(dt.get("year", 2026))
             ]
-        else:
-            progress.text = "Complete"
+            date_label.add_theme_font_size_override("font_size", 12)
+            date_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+            content.add_child(date_label)
     else:
-        progress.text = "Progress: %d / %d" % [current, target]
-    content.add_child(progress)
+        var progress := Label.new()
+        progress.text = "%d / %d" % [current, target]
+        progress.add_theme_font_size_override("font_size", 12)
+        progress.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+        content.add_child(progress)
 
     var reward_type := str(achievement.get("reward_type", ""))
     var reward_id := str(achievement.get("reward_id", ""))
