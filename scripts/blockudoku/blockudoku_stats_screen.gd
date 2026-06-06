@@ -22,6 +22,7 @@ func _build_stats_ui() -> void:
 		child.queue_free()
 
 	_add_header("Blockudoku Stats")
+	var score_history: Array = BlockudokuStatsManager.get_score_history()
 
 	_add_stat_row("Games Played", str(BlockudokuStatsManager.games_played))
 	_add_stat_row("High Score", str(BlockudokuStatsManager.high_score))
@@ -33,12 +34,11 @@ func _build_stats_ui() -> void:
 	_add_stat_row("Total Score", str(BlockudokuStatsManager.total_score))
 	_add_stat_row("Total Turns", str(BlockudokuStatsManager.total_turns))
 	_add_stat_row("Total Lines Cleared", str(BlockudokuStatsManager.total_clears))
-	_add_stat_row("Average Score", "%.1f" % BlockudokuStatsManager.get_average_score() if BlockudokuStatsManager.games_played > 0 else "--")
+	_add_stat_row("Average Score", "%.1f" % BlockudokuStatsManager.get_average_score() if not score_history.is_empty() else "--")
 
 	_add_separator()
 	_add_header("Score History (Last 30 Games)")
 
-	var score_history: Array = BlockudokuStatsManager.get_score_history()
 	if score_history.is_empty():
 		_add_stat_row("History", "No completed games yet")
 	else:
