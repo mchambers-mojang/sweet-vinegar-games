@@ -95,10 +95,10 @@ func _add_achievement_row(achievement: Dictionary) -> void:
         if unlocked_at > 0:
             var dt := Time.get_datetime_dict_from_unix_time(unlocked_at)
             var date_label := Label.new()
-            date_label.text = "%s %d, %d" % [
-                _month_name(int(dt.get("month", 1))),
+            date_label.text = "%02d/%02d/%02d" % [
+                int(dt.get("month", 1)),
                 int(dt.get("day", 1)),
-                int(dt.get("year", 2026))
+                int(dt.get("year", 2026)) % 100
             ]
             date_label.add_theme_font_size_override("font_size", 12)
             date_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
