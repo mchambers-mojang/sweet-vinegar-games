@@ -49,7 +49,9 @@ func load_replay(replay: Dictionary) -> void:
 	var numbers_data: Dictionary = initial_state.get("numbers", {})
 	var numbers: Dictionary = {}
 	for key in numbers_data.keys():
-		numbers[key] = int(numbers_data[key])
+		var parts := str(key).split(",")
+		if parts.size() == 2:
+			numbers[Vector2i(int(parts[0]), int(parts[1]))] = int(numbers_data[key])
 	board.setup(w, h, numbers)
 
 	# Collect placement frames
@@ -77,7 +79,9 @@ func _toggle_play() -> void:
 		var numbers_data: Dictionary = initial_state.get("numbers", {})
 		var numbers: Dictionary = {}
 		for key in numbers_data.keys():
-			numbers[key] = int(numbers_data[key])
+			var parts := str(key).split(",")
+			if parts.size() == 2:
+				numbers[Vector2i(int(parts[0]), int(parts[1]))] = int(numbers_data[key])
 		board.setup(w, h, numbers)
 		board.queue_redraw()
 
