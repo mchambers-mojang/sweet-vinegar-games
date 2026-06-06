@@ -147,8 +147,8 @@ func get_achievement_snapshot() -> Array[Dictionary]:
             "unlocked_at": int(progress_entry.get("unlocked_at", 0)),
         })
     result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-        var tier_a := TIER_ORDER.get(str(a.get("tier", "Bronze")), 0)
-        var tier_b := TIER_ORDER.get(str(b.get("tier", "Bronze")), 0)
+        var tier_a = TIER_ORDER.get(str(a.get("tier", "Bronze")), 0)
+        var tier_b = TIER_ORDER.get(str(b.get("tier", "Bronze")), 0)
         if tier_a == tier_b:
             return str(a.get("id", "")) < str(b.get("id", ""))
         return tier_a < tier_b
