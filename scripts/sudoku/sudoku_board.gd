@@ -17,6 +17,7 @@ const THICK_LINE := 3.0
 
 
 func _ready() -> void:
+	add_to_group("debug_grid_source")
 	_create_cells()
 	ThemeManager.theme_changed.connect(func(_d: bool) -> void: queue_redraw(); _redraw_cells())
 
@@ -210,6 +211,27 @@ func get_cell_rect(index: int) -> Rect2:
 	if c < _col_positions.size() and r < _row_positions.size():
 		return Rect2(Vector2(_col_positions[c], _row_positions[r]), Vector2(_cell_w, _cell_h))
 	return Rect2()
+
+
+func debug_screen_to_grid(screen_pos: Vector2) -> Vector2i:
+	var local_pos := to_local(screen_pos)
+	if not _grid_rect.has_point(local_pos):
+		return Vector2i(-1, -1)
+
+	var col := -1
+	var row := -1
+	for i in _col_positions.size():
+		if local_pos.x >= _col_positions[i] and local_pos.x < _col_positions[i] + _cell_w:
+			col = i
+			break
+	for i in _row_positions.size():
+		if local_pos.y >= _row_positions[i] and local_pos.y < _row_positions[i] + _cell_h:
+			row = i
+			break
+
+	if col < 0 or row < 0:
+		return Vector2i(-1, -1)
+	return Vector2i(col, row)
 
 
 func _draw() -> void:

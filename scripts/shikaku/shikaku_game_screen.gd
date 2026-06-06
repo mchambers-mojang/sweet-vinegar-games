@@ -267,6 +267,7 @@ func _check_completion() -> void:
 
 func _handle_win() -> void:
 	is_completed = true
+	var is_new_best := _is_new_best_time()
 	ShikakuStatsManager.record_game_completed(grid_width, elapsed_time)
 	AnalyticsManager.log_event("game_over", {
 		"game": "shikaku",
@@ -279,6 +280,8 @@ func _handle_win() -> void:
 	ShikakuSaveManager.clear_save()
 	SoundManager.play_win()
 	HapticManager.vibrate_success()
+	if is_new_best:
+		_show_new_best_indicator()
 	# Neon win shockwave
 	if ThemeManager.is_neon:
 		var cell_size := board._get_cell_size()
@@ -292,6 +295,23 @@ func _handle_win() -> void:
 	board.flash_all(Color(1.2, 1.1, 0.8), 0.4)
 	var timer := get_tree().create_timer(0.5)
 	timer.timeout.connect(_show_win_dialog)
+
+
+func _is_new_best_time() -> bool:
+	var best: float = ShikakuStatsManager.best_times.get(grid_width, -1.0)
+	return best < 0.0 or elapsed_time < best
+
+
+func _show_new_best_indicator() -> void:
+	var cell_size := board._get_cell_size()
+	var origin := board._get_grid_origin()
+	var center := origin + Vector2(
+		(board.grid_width / 2.0) * cell_size,
+		(board.grid_height / 2.0) * cell_size
+	)
+	var color := Color(0.0, 2.0, 1.5) if ThemeManager.is_neon else Color(0.2, 0.75, 1.0)
+	ComboLabel.create(board, center, "NEW BEST!", color)
+	HapticManager.vibrate_medium()
 
 
 func _show_win_dialog() -> void:
