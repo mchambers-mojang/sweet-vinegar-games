@@ -380,7 +380,7 @@ func _show_win_dialog() -> void:
 	dialog.add_button("Back to Menu", true, "menu")
 	dialog.add_button("Bookmark Replay", true, "bookmark")
 	dialog.min_size = Vector2i(300, 0)
-	dialog.max_size = Vector2i(int(get_viewport_rect().size.x * 0.9), 0)
+	dialog.max_size = Vector2i(int(get_viewport_rect().size.x * 0.9), 600)
 	add_child(dialog)
 	dialog.get_label().horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	dialog.popup_centered()
