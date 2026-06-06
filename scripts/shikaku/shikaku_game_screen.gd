@@ -388,7 +388,7 @@ func _get_crash_state() -> Dictionary:
 		"is_completed": is_completed,
 		"is_paused": is_paused,
 		"hints_used": hints_used,
-		"placed_rectangles": board.placed_rects.size() if board else 0,
+		"placed_rectangles": board.placed_rects.size(),
 	}
 
 

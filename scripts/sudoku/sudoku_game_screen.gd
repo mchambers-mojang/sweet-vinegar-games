@@ -1072,7 +1072,7 @@ func _get_crash_state() -> Dictionary:
 		"is_completed": is_completed,
 		"is_paused": is_paused,
 		"hints_used": hints_used,
-		"selected_index": board.selected_index if board else -1,
+		"selected_index": board.selected_index,
 	}
 
 
