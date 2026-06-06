@@ -75,7 +75,7 @@ func resume_game(data: Dictionary) -> void:
 	score = data.get("score", 0)
 	turns = data.get("turns", 0)
 	combo_count = data.get("combo_count", 0)
-	_new_best_shown = score > BlockudokuStatsManager.high_score
+	_new_best_shown = data.get("new_best_shown", false)
 	elapsed_time = data.get("elapsed_time", 0.0)
 	is_game_over = false
 	board.set_state(data.get("board_state", {}))
@@ -481,7 +481,7 @@ func _check_for_new_best() -> void:
 	var origin := board._get_grid_origin()
 	var center := origin + Vector2(cell_size * 4.5, cell_size * 4.5)
 	ComboLabel.create(board, center, "NEW BEST!", color)
-	HapticManager.vibrate_success()
+	HapticManager.vibrate_medium()
 
 
 func _on_back() -> void:
@@ -520,6 +520,7 @@ func _save_current_state() -> void:
 		"score": score,
 		"turns": turns,
 		"combo_count": combo_count,
+		"new_best_shown": _new_best_shown,
 		"elapsed_time": elapsed_time,
 		"board_state": board.get_state(),
 		"available_blocks": blocks_data,
