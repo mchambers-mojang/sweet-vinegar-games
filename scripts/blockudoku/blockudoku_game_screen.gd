@@ -250,8 +250,10 @@ func _end_drag(screen_pos: Vector2) -> void:
 	DragEffect.unsuppress()
 
 	var local_pos := board.get_local_mouse_position()
-	if OS.has_feature("mobile"):
-		local_pos.y -= board._get_cell_size()
+	var cell_size := board._get_cell_size()
+	var offset_multiplier := SettingsManager.blockudoku_drag_offset
+	if offset_multiplier > 0:
+		local_pos.y -= cell_size * offset_multiplier
 	var grid_pos := board.screen_to_grid(local_pos)
 
 	board.clear_preview()
