@@ -76,6 +76,7 @@ func _try_apply_icon(button: Button) -> void:
 		apply_icon(button, TEXT_TO_ICON[text])
 	elif text == "Replays":
 		apply_icon(button, "replays", true)
+		button.expand_icon = false
 
 
 func get_icon(icon_name: String) -> Texture2D:
