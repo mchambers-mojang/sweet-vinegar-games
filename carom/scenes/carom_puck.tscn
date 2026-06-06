@@ -1,22 +1,31 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://carom/scripts/carom_puck.gd" id="1"]
 
-; Solid triangular prism collision — 6 vertices forming a filled triangle
-[sub_resource type="ConvexPolygonShape3D" id="1"]
-points = PackedVector3Array(0, 0.25, 0.5, 0.433, 0.25, -0.25, -0.433, 0.25, -0.25, 0, 0.55, 0.5, 0.433, 0.55, -0.25, -0.433, 0.55, -0.25)
+; Solid cylinder collision matching triangle circumradius
+[sub_resource type="CylinderShape3D" id="1"]
+height = 0.3
+radius = 0.5
 
-; Visual mesh — 3 box walls to show the triangle edges (neon outline look)
-[sub_resource type="BoxMesh" id="6"]
-size = Vector3(1.08, 0.28, 0.08)
+; Prism mesh for visual (Godot built-in triangular prism)
+[sub_resource type="PrismMesh" id="2"]
+size = Vector3(1.0, 0.28, 0.866)
 
-; Wall material — neon edges
+; Prism material — neon edges
 [sub_resource type="StandardMaterial3D" id="7"]
-albedo_color = Color(0.02, 0.08, 0.1, 1)
+albedo_color = Color(0.02, 0.08, 0.1, 0.6)
 emission_enabled = true
 emission = Color(0.1, 0.7, 0.8, 1)
 emission_energy_multiplier = 1.0
 roughness = 0.2
+
+; Wireframe-ish material — just edges visible
+[sub_resource type="StandardMaterial3D" id="8"]
+albedo_color = Color(0.01, 0.04, 0.05, 1)
+emission_enabled = true
+emission = Color(0.1, 0.7, 0.8, 1)
+emission_energy_multiplier = 1.2
+roughness = 0.1
 
 ; Physics material
 [sub_resource type="PhysicsMaterial" id="5"]
@@ -31,24 +40,13 @@ linear_damp = 0.35
 angular_damp = 0.4
 continuous_cd = true
 
-; Single solid triangular prism collision
-[node name="PrismCollision" type="CollisionShape3D" parent="."]
+; Solid collision — cylinder ensures nothing passes through
+[node name="Collision" type="CollisionShape3D" parent="."]
+position = Vector3(0, 0.4, 0)
 shape = SubResource("1")
 
-; Visual: 3 edge meshes forming triangle outline (Geometry Wars style)
-[node name="EdgeAMesh" type="MeshInstance3D" parent="."]
-position = Vector3(0, 0.4, 0.42)
-mesh = SubResource("6")
-material_override = SubResource("7")
-
-[node name="EdgeBMesh" type="MeshInstance3D" parent="."]
-position = Vector3(0.364, 0.4, -0.21)
-rotation = Vector3(0, 2.094, 0)
-mesh = SubResource("6")
-material_override = SubResource("7")
-
-[node name="EdgeCMesh" type="MeshInstance3D" parent="."]
-position = Vector3(-0.364, 0.4, -0.21)
-rotation = Vector3(0, 4.189, 0)
-mesh = SubResource("6")
-material_override = SubResource("7")
+; Visual triangular prism
+[node name="PrismMesh" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.4, 0)
+mesh = SubResource("2")
+material_override = SubResource("8")
