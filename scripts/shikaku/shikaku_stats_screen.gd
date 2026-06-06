@@ -43,6 +43,11 @@ func _build_stats_ui() -> void:
 		var avg := ShikakuStatsManager.get_average_time(s)
 		_add_stat_row("Average Time", _format_time(avg) if avg >= 0 else "--")
 
+		# Time history graph
+		var history := ShikakuStatsManager.get_time_history(s)
+		if not history.is_empty():
+			_add_time_graph(history)
+
 		var started: int = ShikakuStatsManager.games_started.get(s, 0)
 		var completed: int = ShikakuStatsManager.games_completed.get(s, 0)
 		var abandoned: int = ShikakuStatsManager.games_abandoned.get(s, 0)
@@ -87,6 +92,15 @@ func _add_separator() -> void:
 	var sep := HSeparator.new()
 	sep.custom_minimum_size = Vector2(0, 10)
 	stats_list.add_child(sep)
+
+
+func _add_time_graph(times: Array) -> void:
+	var graph_script := load("res://scripts/ui/time_history_graph.gd")
+	var graph := Control.new()
+	graph.set_script(graph_script)
+	graph.custom_minimum_size = Vector2(0, 100)
+	stats_list.add_child(graph)
+	graph.set_times(times)
 
 
 func _format_time(seconds: float) -> String:

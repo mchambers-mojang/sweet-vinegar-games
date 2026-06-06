@@ -12,11 +12,14 @@ var games_completed: Dictionary = {} # difficulty -> int
 var games_abandoned: Dictionary = {} # difficulty -> int
 var games_won: Dictionary = {}       # difficulty -> int (strict mode wins)
 var games_lost: Dictionary = {}      # difficulty -> int (strict mode losses)
+var time_history: Dictionary = {}    # difficulty -> Array of floats (last 30 times)
 
 ## Global stats
 var total_games_played: int = 0
 var current_streak: int = 0
 var best_streak: int = 0
+
+const TIME_HISTORY_LIMIT := 30
 
 
 func _ready() -> void:
@@ -40,6 +43,8 @@ func _init_difficulty_dicts() -> void:
 			games_won[d] = 0
 		if not games_lost.has(d):
 			games_lost[d] = 0
+		if not time_history.has(d):
+			time_history[d] = []
 
 
 func record_game_started(difficulty: int) -> void:
@@ -54,6 +59,14 @@ func record_game_completed(difficulty: int, time: float, was_strict: bool, won: 
 
 	if best_times[difficulty] < 0 or time < best_times[difficulty]:
 		best_times[difficulty] = time
+
+	# Track time history (last 30)
+	if not time_history.has(difficulty):
+		time_history[difficulty] = []
+	var history: Array = time_history[difficulty]
+	history.append(time)
+	if history.size() > TIME_HISTORY_LIMIT:
+		time_history[difficulty] = history.slice(history.size() - TIME_HISTORY_LIMIT)
 
 	if was_strict:
 		if won:
@@ -81,6 +94,10 @@ func get_average_time(difficulty: int) -> float:
 	return total_times.get(difficulty, 0.0) / completed
 
 
+func get_time_history(difficulty: int) -> Array:
+	return (time_history.get(difficulty, []) as Array).duplicate()
+
+
 func get_completion_rate(difficulty: int) -> float:
 	var started: int = games_started.get(difficulty, 0)
 	if started == 0:
@@ -97,6 +114,7 @@ func reset_all() -> void:
 		games_abandoned[d] = 0
 		games_won[d] = 0
 		games_lost[d] = 0
+		time_history[d] = []
 	total_games_played = 0
 	current_streak = 0
 	best_streak = 0
@@ -113,6 +131,7 @@ func save_stats() -> void:
 		config.set_value("games", "abandoned_%d" % d, games_abandoned.get(d, 0))
 		config.set_value("games", "won_%d" % d, games_won.get(d, 0))
 		config.set_value("games", "lost_%d" % d, games_lost.get(d, 0))
+		config.set_value("time_history", str(d), time_history.get(d, []))
 	config.set_value("global", "total_played", total_games_played)
 	config.set_value("global", "current_streak", current_streak)
 	config.set_value("global", "best_streak", best_streak)
@@ -131,6 +150,11 @@ func load_stats() -> void:
 		games_abandoned[d] = config.get_value("games", "abandoned_%d" % d, 0)
 		games_won[d] = config.get_value("games", "won_%d" % d, 0)
 		games_lost[d] = config.get_value("games", "lost_%d" % d, 0)
+		var raw_history = config.get_value("time_history", str(d), [])
+		if raw_history is Array:
+			time_history[d] = raw_history
+		else:
+			time_history[d] = []
 	total_games_played = config.get_value("global", "total_played", 0)
 	current_streak = config.get_value("global", "current_streak", 0)
 	best_streak = config.get_value("global", "best_streak", 0)
