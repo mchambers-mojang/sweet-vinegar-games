@@ -902,7 +902,7 @@ func _show_fail_dialog() -> void:
 	dialog.dialog_text = "You've used all 3 strikes!"
 	dialog.ok_button_text = "Play Again"
 	dialog.add_button("Continue", true, "continue")
-	dialog.add_button("Back to Menu", true, "menu")
+	dialog.add_button("Menu", true, "menu")
 	add_child(dialog)
 	dialog.popup_centered()
 	dialog.confirmed.connect(func() -> void:
@@ -937,8 +937,8 @@ func _show_win_dialog() -> void:
 	if hints_used > 0:
 		dialog.dialog_text += "\nHints used: %d" % hints_used
 	dialog.ok_button_text = "Play Again"
-	dialog.add_button("Back to Menu", true, "menu")
-	dialog.add_button("Bookmark Replay", true, "bookmark")
+	dialog.add_button("Menu", true, "menu")
+	dialog.add_button("Bookmark", true, "bookmark")
 	dialog.max_size = Vector2i(int(get_viewport_rect().size.x * 0.9), 600)
 	add_child(dialog)
 	dialog.popup_centered()

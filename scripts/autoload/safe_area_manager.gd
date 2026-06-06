@@ -13,7 +13,8 @@ func _ready() -> void:
 
 func _update_safe_area() -> void:
 	if not OS.has_feature("mobile"):
-		_safe_insets = Rect2i()
+		# Desktop: apply a minimum top padding so UI isn't flush against the edge
+		_safe_insets = Rect2i(0, 16, 0, 0)
 		return
 	var screen_size := DisplayServer.screen_get_size()
 	var safe_area := DisplayServer.get_display_safe_area()
@@ -27,6 +28,9 @@ func _update_safe_area() -> void:
 	# apply minimum top inset for status bar / Dynamic Island
 	if OS.has_feature("ios") and _safe_insets.position.y == 0:
 		_safe_insets.position.y = 59  # Dynamic Island minimum safe area
+	# Ensure a minimum top padding on all platforms
+	if _safe_insets.position.y < 16:
+		_safe_insets.position.y = 16
 
 
 ## Returns the safe area insets as a dictionary with top, bottom, left, right

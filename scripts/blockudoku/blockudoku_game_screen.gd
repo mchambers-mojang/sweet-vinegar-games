@@ -560,8 +560,8 @@ func _show_game_over_dialog() -> void:
 	dialog.title = "Game Over"
 	dialog.dialog_text = "Score: %d\nTurns: %d" % [score, turns]
 	dialog.ok_button_text = "Play Again"
-	dialog.add_button("Back to Menu", true, "menu")
-	dialog.add_button("Bookmark Replay", true, "bookmark")
+	dialog.add_button("Menu", true, "menu")
+	dialog.add_button("Bookmark", true, "bookmark")
 	dialog.min_size = Vector2i(300, 0)
 	dialog.max_size = Vector2i(int(get_viewport_rect().size.x * 0.9), 600)
 	add_child(dialog)
