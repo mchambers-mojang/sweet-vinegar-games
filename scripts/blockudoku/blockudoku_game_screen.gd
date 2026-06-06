@@ -202,8 +202,10 @@ func _update_board_preview(screen_pos: Vector2) -> void:
 		local_pos.y -= cell_size * offset_multiplier
 	var grid_pos := board.screen_to_grid(local_pos)
 	if grid_pos != _drag_last_grid_pos:
+		# Only haptic if we've moved before (skip initial grab) and piece is on the board
+		if _drag_last_grid_pos != Vector2i(-999, -999) and grid_pos.x >= 0 and grid_pos.x < 9 and grid_pos.y >= 0 and grid_pos.y < 9:
+			HapticManager.vibrate_light()
 		_drag_last_grid_pos = grid_pos
-		HapticManager.vibrate_light()
 	board.show_preview(_drag_shape, grid_pos.x, grid_pos.y)
 
 
