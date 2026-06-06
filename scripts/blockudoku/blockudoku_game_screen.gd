@@ -38,6 +38,7 @@ var _board_pulse_tween: Tween = null
 @onready var undo_button: Button = %UndoButton
 @onready var redo_button: Button = %RedoButton
 @onready var block_tray: HBoxContainer = %BlockTray
+@onready var settings_button: Button = %SettingsButton
 
 var elapsed_time: float = 0.0
 var random_seed: int = 0
@@ -56,6 +57,9 @@ func _ready() -> void:
 	back_button.pressed.connect(_on_back)
 	undo_button.pressed.connect(_on_undo_pressed)
 	redo_button.pressed.connect(_on_redo_pressed)
+	settings_button.pressed.connect(func() -> void:
+		SceneTransition.transition_to("res://scenes/settings.tscn")
+	)
 	_setup_help_button()
 	_apply_theme()
 	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_theme())

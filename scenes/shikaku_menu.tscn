@@ -30,7 +30,7 @@ layout_mode = 2
 [node name="BackButton" type="Button" parent="MarginContainer/VBoxContainer/TopBar"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "< Back"
+text = "←"
 
 [node name="TitleLabel" type="Label" parent="MarginContainer/VBoxContainer/TopBar"]
 layout_mode = 2
@@ -76,4 +76,4 @@ text = "Statistics"
 unique_name_in_owner = true
 layout_mode = 2
 custom_minimum_size = Vector2(0, 50)
-text = "Settings"
+text = "⚙"

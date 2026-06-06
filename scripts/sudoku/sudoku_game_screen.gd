@@ -39,6 +39,7 @@ var redo_stack: Array[Dictionary] = []
 @onready var color_container: HBoxContainer = %ColorContainer
 @onready var pause_button: Button = %PauseButton
 @onready var back_button: Button = %BackButton
+@onready var settings_button: Button = %SettingsButton
 
 # Color palette for cell coloring
 const CELL_COLORS: Array[Color] = [
@@ -91,6 +92,9 @@ func _ready() -> void:
 	erase_button.pressed.connect(_on_erase_pressed)
 	pause_button.pressed.connect(_on_pause_pressed)
 	back_button.pressed.connect(_on_back_pressed)
+	settings_button.pressed.connect(func() -> void:
+		SceneTransition.transition_to("res://scenes/settings.tscn")
+	)
 
 	_setup_number_buttons()
 	_setup_color_buttons()

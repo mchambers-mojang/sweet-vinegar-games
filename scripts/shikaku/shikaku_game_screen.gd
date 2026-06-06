@@ -37,6 +37,7 @@ const CHEAT_INTERVAL := 0.3
 @onready var hint_button: Button = %HintButton
 @onready var pause_button: Button = %PauseButton
 @onready var back_button: Button = %BackButton
+@onready var settings_button: Button = %SettingsButton
 
 
 func _ready() -> void:
@@ -49,6 +50,9 @@ func _ready() -> void:
 	hint_button.pressed.connect(_on_hint)
 	pause_button.pressed.connect(_on_pause)
 	back_button.pressed.connect(_on_back)
+	settings_button.pressed.connect(func() -> void:
+		SceneTransition.transition_to("res://scenes/settings.tscn")
+	)
 	_setup_help_button()
 	_update_button_states()
 	_apply_theme()

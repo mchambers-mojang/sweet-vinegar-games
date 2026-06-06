@@ -30,12 +30,12 @@ layout_mode = 2
 [node name="BackButton" type="Button" parent="MarginContainer/VBoxContainer/TopBar"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "< Back"
+text = "←"
 
 [node name="Title" type="Label" parent="MarginContainer/VBoxContainer/TopBar"]
 layout_mode = 2
 size_flags_horizontal = 3
-text = "Settings"
+text = "⚙"
 horizontal_alignment = 1
 
 [node name="Spacer" type="Control" parent="MarginContainer/VBoxContainer/TopBar"]

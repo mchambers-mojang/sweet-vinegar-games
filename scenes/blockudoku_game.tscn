@@ -27,7 +27,7 @@ layout_mode = 2
 [node name="BackButton" type="Button" parent="MarginContainer/VBoxContainer/TopBar"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "< Back"
+text = "←"
 
 [node name="ScoreLabel" type="Label" parent="MarginContainer/VBoxContainer/TopBar"]
 unique_name_in_owner = true
@@ -39,17 +39,22 @@ horizontal_alignment = 1
 [node name="UndoButton" type="Button" parent="MarginContainer/VBoxContainer/TopBar"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Undo"
+text = "↺"
 
 [node name="RedoButton" type="Button" parent="MarginContainer/VBoxContainer/TopBar"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Redo"
+text = "↻"
 
 [node name="TimerLabel" type="Label" parent="MarginContainer/VBoxContainer/TopBar"]
 unique_name_in_owner = true
 layout_mode = 2
 text = "0:00"
+
+[node name="SettingsButton" type="Button" parent="MarginContainer/VBoxContainer/TopBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "⚙"
 
 [node name="BoardArea" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2
