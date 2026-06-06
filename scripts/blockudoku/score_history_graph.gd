@@ -53,7 +53,7 @@ func _draw() -> void:
 	var points: PackedVector2Array = PackedVector2Array()
 	var x_step := chart_rect.size.x / float(max(_scores.size() - 1, 1))
 	for i in _scores.size():
-		var score_ratio := clampf(float(int(_scores[i])) / float(max_score), 0.0, 1.0)
+		var score_ratio := clampf(float(_scores[i]) / float(max_score), 0.0, 1.0)
 		var x := chart_rect.position.x + float(i) * x_step
 		var y := chart_rect.position.y + chart_rect.size.y * (1.0 - score_ratio)
 		points.append(Vector2(x, y))

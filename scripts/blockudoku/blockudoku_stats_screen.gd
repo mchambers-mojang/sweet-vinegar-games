@@ -34,7 +34,10 @@ func _build_stats_ui() -> void:
 	_add_stat_row("Total Score", str(BlockudokuStatsManager.total_score))
 	_add_stat_row("Total Turns", str(BlockudokuStatsManager.total_turns))
 	_add_stat_row("Total Lines Cleared", str(BlockudokuStatsManager.total_clears))
-	_add_stat_row("Average Score", "%.1f" % BlockudokuStatsManager.get_average_score() if not score_history.is_empty() else "--")
+	var average_score_text := "--"
+	if not score_history.is_empty():
+		average_score_text = "%.1f" % BlockudokuStatsManager.get_average_score()
+	_add_stat_row("Average Score", average_score_text)
 
 	_add_separator()
 	_add_header("Score History (Last 30 Games)")
