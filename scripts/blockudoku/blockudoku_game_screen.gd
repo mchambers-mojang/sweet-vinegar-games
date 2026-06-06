@@ -170,10 +170,8 @@ func _build_tray() -> void:
 		child.queue_free()
 	_tray_panels.clear()
 
-	# Fixed tray height based on tallest possible piece (5 cells)
 	var cell_px := 20.0
-	var tray_height := 5 * cell_px + 16
-	block_tray.custom_minimum_size.y = tray_height
+	var tray_height := block_tray.custom_minimum_size.y
 
 	for i in available_blocks.size():
 		var panel := _create_block_panel(i, tray_height)

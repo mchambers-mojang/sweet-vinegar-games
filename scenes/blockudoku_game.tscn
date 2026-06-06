@@ -66,6 +66,6 @@ script = ExtResource("2")
 [node name="BlockTray" type="HBoxContainer" parent="MarginContainer/VBoxContainer/BoardArea"]
 unique_name_in_owner = true
 layout_mode = 2
-custom_minimum_size = Vector2(0, 80)
+custom_minimum_size = Vector2(0, 116)
 alignment = 1
 theme_override_constants/separation = 24
