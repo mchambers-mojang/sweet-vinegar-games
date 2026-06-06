@@ -132,7 +132,7 @@ func _on_goal_scored(scoring_side: StringName, goal_puck: CaromPuck) -> void:
 		_finish_match()
 		return
 
-	_call_deferred("_queue_round_restart")
+	call_deferred("_queue_round_restart")
 
 
 func _queue_round_restart() -> void:
