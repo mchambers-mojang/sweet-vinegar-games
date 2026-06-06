@@ -939,6 +939,7 @@ func _show_win_dialog() -> void:
 	dialog.ok_button_text = "Play Again"
 	dialog.add_button("Back to Menu", true, "menu")
 	dialog.add_button("Bookmark Replay", true, "bookmark")
+	dialog.max_size = Vector2i(int(get_viewport_rect().size.x * 0.9), 0)
 	add_child(dialog)
 	dialog.popup_centered()
 	dialog.confirmed.connect(func() -> void:

@@ -265,7 +265,9 @@ func _show_toast(definition: Dictionary) -> void:
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.custom_minimum_size = Vector2(420, 48)
-	label.position = Vector2((root.size.x - label.custom_minimum_size.x) * 0.5, 24)
+	var vp_size := root.get_visible_rect().size
+	var safe_top: int = SafeAreaManager.get_insets().get("top", 0)
+	label.position = Vector2((vp_size.x - label.custom_minimum_size.x) * 0.5, safe_top + 24)
 	label.add_theme_font_size_override("font_size", 24)
 	label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.35))
 	label.add_theme_constant_override("outline_size", 5)

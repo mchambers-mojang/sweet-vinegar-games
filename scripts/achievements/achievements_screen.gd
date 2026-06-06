@@ -94,9 +94,9 @@ func _add_achievement_row(achievement: Dictionary) -> void:
 
     var reward_type := str(achievement.get("reward_type", ""))
     var reward_id := str(achievement.get("reward_id", ""))
-    if reward_type != "":
+    if reward_type != "" and reward_id != "":
         var reward := Label.new()
-        reward.text = "Reward: %s%s" % [reward_type, (" (%s)" % reward_id) if reward_id != "" else ""]
+        reward.text = "Reward: %s (%s)" % [reward_type, reward_id]
         reward.add_theme_color_override("font_color", ThemeManager.get_color("timer_text"))
         content.add_child(reward)
 
