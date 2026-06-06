@@ -42,4 +42,6 @@ func _handle_collision(collision: KinematicCollision3D) -> void:
 		var puck := collider as CaromPuck
 		var impact_offset := collision.get_position() - puck.global_position
 		puck.apply_impulse(direction * puck_impulse, impact_offset)
-	queue_free()
+	# Bounce off everything (walls, puck, other projectiles)
+	var normal := collision.get_normal()
+	direction = direction.bounce(normal).normalized()

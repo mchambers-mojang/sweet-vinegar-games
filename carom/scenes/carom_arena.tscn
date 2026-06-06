@@ -41,10 +41,10 @@ emission_energy_multiplier = 0.8
 roughness = 0.3
 
 [sub_resource type="StandardMaterial3D" id="12"]
-albedo_color = Color(0.08, 0.12, 0.18, 1)
+albedo_color = Color(0.06, 0.09, 0.14, 1)
 emission_enabled = true
-emission = Color(0.14, 0.95, 1.0, 1)
-emission_energy_multiplier = 1.8
+emission = Color(0.08, 0.5, 0.65, 1)
+emission_energy_multiplier = 0.6
 roughness = 0.12
 
 [sub_resource type="StandardMaterial3D" id="13"]
@@ -247,6 +247,8 @@ theme_override_constants/separation = 18
 [node name="PlayerScoreLabel" type="Label" parent="HUD/MarginContainer/VBoxContainer/TopBar"]
 text = "PLAYER 0"
 theme_override_font_sizes/font_size = 28
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 4
 
 [node name="Spacer" type="Control" parent="HUD/MarginContainer/VBoxContainer/TopBar"]
 layout_mode = 2
@@ -255,11 +257,15 @@ size_flags_horizontal = 3
 [node name="AIScoreLabel" type="Label" parent="HUD/MarginContainer/VBoxContainer/TopBar"]
 text = "AI 0"
 theme_override_font_sizes/font_size = 28
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 4
 horizontal_alignment = 2
 
 [node name="StatusLabel" type="Label" parent="HUD/MarginContainer/VBoxContainer"]
 text = "Loading Carom prototype..."
 theme_override_font_sizes/font_size = 18
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
 
 [node name="AmmoBar" type="HBoxContainer" parent="HUD/MarginContainer/VBoxContainer"]
 layout_mode = 2
@@ -267,6 +273,8 @@ theme_override_constants/separation = 18
 
 [node name="PlayerAmmoLabel" type="Label" parent="HUD/MarginContainer/VBoxContainer/AmmoBar"]
 text = "Ammo 8/8"
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
 
 [node name="AmmoSpacer" type="Control" parent="HUD/MarginContainer/VBoxContainer/AmmoBar"]
 layout_mode = 2
@@ -274,4 +282,6 @@ size_flags_horizontal = 3
 
 [node name="AIAmmoLabel" type="Label" parent="HUD/MarginContainer/VBoxContainer/AmmoBar"]
 text = "AI Ammo 8/8"
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
 horizontal_alignment = 2
