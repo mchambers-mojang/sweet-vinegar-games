@@ -74,6 +74,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 
 func save_settings() -> void:
+	var previous := _settings_snapshot()
 	var config := ConfigFile.new()
 	config.set_value("input", "mode", input_mode)
 	config.set_value("error", "mode", error_mode)
@@ -105,6 +106,14 @@ func save_settings() -> void:
 	config.set_value("blockudoku", "rotation_mode", blockudoku_rotation_mode)
 	config.save(SAVE_PATH)
 	settings_changed.emit()
+
+	var current := _settings_snapshot()
+	for key in current.keys():
+		if previous.get(key) != current.get(key):
+			AnalyticsManager.log_event("setting_changed", {
+				"setting": key,
+				"value": current[key],
+			})
 
 
 func load_settings() -> void:
@@ -139,3 +148,36 @@ func load_settings() -> void:
 	blockudoku_diagonals = config.get_value("blockudoku", "diagonals", blockudoku_diagonals)
 	blockudoku_drag_offset = config.get_value("blockudoku", "drag_offset", blockudoku_drag_offset)
 	blockudoku_rotation_mode = config.get_value("blockudoku", "rotation_mode", blockudoku_rotation_mode)
+
+
+func _settings_snapshot() -> Dictionary:
+	return {
+		"input_mode": input_mode,
+		"error_mode": error_mode,
+		"show_timer": show_timer,
+		"highlight_row_col_box": highlight_row_col_box,
+		"auto_remove_pencil_marks": auto_remove_pencil_marks,
+		"dark_mode": dark_mode,
+		"sound_enabled": sound_enabled,
+		"haptic_enabled": haptic_enabled,
+		"screen_shake_enabled": screen_shake_enabled,
+		"shockwave_enabled": shockwave_enabled,
+		"particle_effects_enabled": particle_effects_enabled,
+		"debug_show_fps": debug_show_fps,
+		"debug_show_touch_points": debug_show_touch_points,
+		"debug_show_safe_area": debug_show_safe_area,
+		"debug_show_scene_name": debug_show_scene_name,
+		"debug_show_memory": debug_show_memory,
+		"debug_show_analytics_tail": debug_show_analytics_tail,
+		"debug_show_grid_coordinates": debug_show_grid_coordinates,
+		"blockudoku_pentominoes": blockudoku_pentominoes,
+		"blockudoku_p_pentomino": blockudoku_p_pentomino,
+		"blockudoku_w_pentomino": blockudoku_w_pentomino,
+		"blockudoku_y_pentomino": blockudoku_y_pentomino,
+		"blockudoku_f_pentomino": blockudoku_f_pentomino,
+		"blockudoku_n_pentomino": blockudoku_n_pentomino,
+		"blockudoku_hexominoes": blockudoku_hexominoes,
+		"blockudoku_diagonals": blockudoku_diagonals,
+		"blockudoku_drag_offset": blockudoku_drag_offset,
+		"blockudoku_rotation_mode": blockudoku_rotation_mode,
+	}

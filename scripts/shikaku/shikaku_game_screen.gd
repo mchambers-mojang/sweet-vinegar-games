@@ -82,6 +82,11 @@ func start_new_game(w: int, h: int) -> void:
 	redo_stack.clear()
 	ShikakuStatsManager.record_game_started(w)
 	AchievementManager.track_game_started("shikaku")
+	AnalyticsManager.log_event("game_started", {
+		"game": "shikaku",
+		"width": w,
+		"height": h,
+	})
 	_update_button_states()
 	_save_current_state()
 
@@ -278,6 +283,14 @@ func _handle_win() -> void:
 	var is_new_best := _is_new_best_time()
 	ShikakuStatsManager.record_game_completed(grid_width, elapsed_time)
 	AchievementManager.track_game_won("shikaku")
+	AnalyticsManager.log_event("game_over", {
+		"game": "shikaku",
+		"won": true,
+		"width": grid_width,
+		"height": grid_height,
+		"elapsed_time": elapsed_time,
+		"hints_used": hints_used,
+	})
 	ShikakuSaveManager.clear_save()
 	SoundManager.play_win()
 	HapticManager.vibrate_success()

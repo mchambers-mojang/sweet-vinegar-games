@@ -93,6 +93,9 @@ func start_new_game() -> void:
 	_update_undo_redo_buttons()
 	BlockudokuStatsManager.record_game_started()
 	AchievementManager.track_game_started("blockudoku")
+	AnalyticsManager.log_event("game_started", {
+		"game": "blockudoku",
+	})
 	_save_current_state()
 
 
@@ -310,6 +313,13 @@ func _end_drag(screen_pos: Vector2) -> void:
 		var shape_size := _drag_shape.size()
 		score += shape_size
 		turns += 1
+		AnalyticsManager.log_event("piece_placed", {
+			"game": "blockudoku",
+			"turn": turns,
+			"cells": shape_size,
+			"x": grid_pos.x,
+			"y": grid_pos.y,
+		})
 
 		# Check for clears
 		var result := board.check_and_clear()
@@ -337,6 +347,18 @@ func _end_drag(screen_pos: Vector2) -> void:
 			score += clear_score
 			BlockudokuStatsManager.record_clears(lines + boxes)
 			AchievementManager.track_blockudoku_clear(lines + boxes)
+			AnalyticsManager.log_event("line_cleared", {
+				"game": "blockudoku",
+				"cleared": cleared,
+				"lines": lines,
+				"boxes": boxes,
+			})
+			if combo_count > 1:
+				AnalyticsManager.log_event("combo", {
+					"game": "blockudoku",
+					"combo": combo_count,
+					"bonus": combo_bonus,
+				})
 			SoundManager.play_win()
 			HapticManager.vibrate_medium()
 
@@ -404,6 +426,15 @@ func _handle_game_over() -> void:
 	is_game_over = true
 	_update_undo_redo_buttons()
 	BlockudokuStatsManager.record_game_over(score, turns)
+	AnalyticsManager.log_event("game_over", {
+		"game": "blockudoku",
+		"won": false,
+		"ended_reason": "no_valid_moves",
+		"score": score,
+		"turns": turns,
+		"elapsed_time": elapsed_time,
+		"combo_count": combo_count,
+	})
 	BlockudokuSaveManager.clear_save()
 	HapticManager.vibrate_success()
 
