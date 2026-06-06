@@ -32,10 +32,9 @@ func reset_to_center(reset_position: Vector3 = Vector3.ZERO) -> void:
 	if reset_position == Vector3.ZERO:
 		reset_position = _reset_position
 	var pos := Vector3(reset_position.x, reset_height, reset_position.z)
-	cage.global_position = pos
+	set_puck_position(pos)
 	cage.linear_velocity = Vector3.ZERO
 	cage.angular_velocity = Vector3.ZERO
-	ball.global_position = pos
 	ball.linear_velocity = Vector3.ZERO
 	ball.angular_velocity = Vector3.ZERO
 
@@ -65,17 +64,19 @@ func _physics_process(_delta: float) -> void:
 		_apply_goal_nudge()
 
 
-## The "global_position" of the puck for external code (goal detection, etc.)
-var global_position: Vector3:
-	get:
-		if cage:
-			return cage.global_position
-		return Vector3.ZERO
-	set(value):
-		if cage:
-			cage.global_position = value
-		if ball:
-			ball.global_position = value
+## Get the puck position for external code (uses cage position)
+func get_puck_position() -> Vector3:
+	if cage:
+		return cage.global_position
+	return global_position
+
+
+## Set position of both bodies
+func set_puck_position(value: Vector3) -> void:
+	if cage:
+		cage.global_position = value
+	if ball:
+		ball.global_position = value
 
 
 ## Allow external code to apply impulse (projectiles hit the cage)

@@ -79,7 +79,7 @@ func _spawn_entities() -> void:
 
 	player_turret.global_position = arena.get_turret_spawn_position(&"north")
 	ai_turret.global_position = arena.get_turret_spawn_position(&"south")
-	puck.global_position = arena.get_puck_spawn_position()
+	puck.set_puck_position(arena.get_puck_spawn_position())
 
 	player_turret.configure(&"north", CaromTurret.ControlMode.HUMAN, 0.0, Color(0.2, 0.6, 1.0))
 	ai_turret.configure(&"south", CaromTurret.ControlMode.AI, 180.0, Color(1.0, 0.25, 0.2))

@@ -48,7 +48,7 @@ func _handle_collision(collision: KinematicCollision3D) -> void:
 		if parent is CaromPuck:
 			puck_node = parent as CaromPuck
 	if puck_node:
-		var impact_offset := collision.get_position() - puck_node.global_position
+		var impact_offset := collision.get_position() - puck_node.get_puck_position()
 		puck_node.apply_impulse(direction * puck_impulse, impact_offset)
 	# Bounce off everything (walls, puck, other projectiles)
 	var normal := collision.get_normal()
