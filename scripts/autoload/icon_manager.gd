@@ -15,6 +15,7 @@ const ICON_PATHS := {
 	"play": "res://assets/icons/play.svg",
 	"pause": "res://assets/icons/pause.svg",
 	"replays": "res://assets/icons/replays.svg",
+	"replays_small": "res://assets/icons/replays_small.svg",
 }
 
 # Map from emoji text to icon name
@@ -68,6 +69,10 @@ func _on_theme_changed(_dark: bool) -> void:
 			btn.add_theme_color_override("icon_normal_color", color)
 			btn.add_theme_color_override("icon_hover_color", color)
 			btn.add_theme_color_override("icon_pressed_color", color)
+			if btn.has_meta("_icon_tex_rect"):
+				var tex_rect = btn.get_meta("_icon_tex_rect")
+				if is_instance_valid(tex_rect):
+					tex_rect.modulate = color
 
 
 func _try_apply_icon(button: Button) -> void:
@@ -75,8 +80,31 @@ func _try_apply_icon(button: Button) -> void:
 	if text in TEXT_TO_ICON:
 		apply_icon(button, TEXT_TO_ICON[text])
 	elif text == "Replays":
-		apply_icon(button, "replays", true)
-		button.expand_icon = false
+		# Create icon+text as a centered child layout instead of using Button.icon
+		button.text = ""
+		button.alignment = HORIZONTAL_ALIGNMENT_CENTER
+		var hbox := HBoxContainer.new()
+		hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+		hbox.add_theme_constant_override("separation", 6)
+		hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		hbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		var tex_rect := TextureRect.new()
+		tex_rect.texture = get_icon("replays_small")
+		tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		tex_rect.custom_minimum_size = Vector2(20, 20)
+		tex_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var color := ThemeManager.get_color("button_text")
+		tex_rect.modulate = color
+		hbox.add_child(tex_rect)
+		var lbl := Label.new()
+		lbl.text = "Replays"
+		lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		hbox.add_child(lbl)
+		button.add_child(hbox)
+		# Track for theme changes
+		button.set_meta("_icon_tex_rect", tex_rect)
+		if button not in _icon_buttons:
+			_icon_buttons.append(button)
 
 
 func get_icon(icon_name: String) -> Texture2D:
