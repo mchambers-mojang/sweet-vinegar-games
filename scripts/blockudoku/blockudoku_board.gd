@@ -469,13 +469,13 @@ func _draw() -> void:
 		var sweep_duration := _get_sweep_duration()
 		for i in _clear_anim_cells.size():
 			var clear_anim_pos: Vector2i = _clear_anim_cells[i]
-			var delay := _clear_anim_delays[i] if i < _clear_anim_delays.size() else 0.0
-			var t := clamp((_clear_anim_elapsed - delay) / sweep_duration, 0.0, 1.0)
+			var delay: float = _clear_anim_delays[i] if i < _clear_anim_delays.size() else 0.0
+			var t := clampf((_clear_anim_elapsed - delay) / sweep_duration, 0.0, 1.0)
 			if t >= 1.0:
 				continue
-			var base_color := _clear_anim_colors[i] if i < _clear_anim_colors.size() else tm.get_color("cell_given")
-			var alpha := (1.0 - t)
-			var scale := lerpf(1.0, 0.6, t)
+			var base_color: Color = _clear_anim_colors[i] if i < _clear_anim_colors.size() else tm.get_color("cell_given")
+			var alpha: float = 1.0 - t
+			var scale: float = lerpf(1.0, 0.6, t)
 			var draw_size := Vector2(cell_size, cell_size) * scale
 			var offset := (Vector2(cell_size, cell_size) - draw_size) * 0.5
 			var dissolve_origin := origin + Vector2(clear_anim_pos.x * cell_size, clear_anim_pos.y * cell_size)
