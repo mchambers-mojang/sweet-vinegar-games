@@ -34,6 +34,8 @@ const CHEAT_INTERVAL := 0.3
 
 
 func _ready() -> void:
+	CrashReporter.register_state_provider(_get_crash_state)
+	CrashReporter.register_user_action("shikaku_screen_opened")
 	board.rectangle_placed.connect(_on_rectangle_placed)
 	board.rectangle_tapped.connect(_on_rectangle_tapped)
 	undo_button.pressed.connect(_on_undo)
@@ -54,6 +56,10 @@ func _ready() -> void:
 	# Cosmetic drag effect is now a global autoload
 
 
+func _exit_tree() -> void:
+	CrashReporter.unregister_state_provider(_get_crash_state)
+
+
 func _setup_help_button() -> void:
 	var btn := Button.new()
 	btn.text = "?"
@@ -63,6 +69,7 @@ func _setup_help_button() -> void:
 
 
 func start_new_game(w: int, h: int) -> void:
+	CrashReporter.register_user_action("shikaku_start_new_game", {"width": w, "height": h})
 	grid_width = w
 	grid_height = h
 	puzzle_data = ShikakuGenerator.generate(w, h)
@@ -79,6 +86,7 @@ func start_new_game(w: int, h: int) -> void:
 
 
 func resume_game(data: Dictionary) -> void:
+	CrashReporter.register_user_action("shikaku_resume_game", {"width": data.get("width", 10), "height": data.get("height", 10)})
 	grid_width = data.get("width", 10)
 	grid_height = data.get("height", 10)
 	puzzle_data = {
@@ -211,6 +219,7 @@ func _on_redo() -> void:
 func _on_hint() -> void:
 	if is_completed or hints_used >= 1:
 		return
+	CrashReporter.register_user_action("shikaku_hint_used")
 	var sol: Array[Rect2i] = puzzle_data.get("solution", [] as Array[Rect2i])
 	if sol.is_empty():
 		return
@@ -244,9 +253,11 @@ func _on_pause() -> void:
 	is_paused = not is_paused
 	pause_button.text = "Resume" if is_paused else "Pause"
 	board.visible = not is_paused
+	CrashReporter.register_user_action("shikaku_pause_toggled", {"is_paused": is_paused})
 
 
 func _on_back() -> void:
+	CrashReporter.register_user_action("shikaku_back_to_menu")
 	_save_current_state()
 	SceneTransition.transition_to("res://scenes/shikaku_menu.tscn")
 
@@ -366,6 +377,19 @@ func _save_current_state() -> void:
 		"elapsed_time": elapsed_time,
 		"hints_used": hints_used,
 	})
+
+
+func _get_crash_state() -> Dictionary:
+	return {
+		"game": "shikaku",
+		"width": grid_width,
+		"height": grid_height,
+		"elapsed_time": elapsed_time,
+		"is_completed": is_completed,
+		"is_paused": is_paused,
+		"hints_used": hints_used,
+		"placed_rectangles": board.placed_rects.size() if board else 0,
+	}
 
 
 func _serialize_numbers(nums: Dictionary) -> Dictionary:

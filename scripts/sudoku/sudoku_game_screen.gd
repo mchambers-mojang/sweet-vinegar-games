@@ -77,6 +77,8 @@ var _selected_number: int = 0  # For number-first mode
 
 
 func _ready() -> void:
+	CrashReporter.register_state_provider(_get_crash_state)
+	CrashReporter.register_user_action("sudoku_screen_opened")
 	board.cell_selected.connect(_on_cell_selected)
 	notes_button.pressed.connect(_on_notes_pressed)
 	hint_button.pressed.connect(_on_hint_pressed)
@@ -103,6 +105,10 @@ func _ready() -> void:
 	# Cosmetic drag effect is now a global autoload
 
 
+func _exit_tree() -> void:
+	CrashReporter.unregister_state_provider(_get_crash_state)
+
+
 func _setup_help_button() -> void:
 	var btn := Button.new()
 	btn.text = "?"
@@ -112,6 +118,7 @@ func _setup_help_button() -> void:
 
 
 func start_new_game(diff: int) -> void:
+	CrashReporter.register_user_action("sudoku_start_new_game", {"difficulty": diff})
 	difficulty = diff
 	difficulty_label.text = DIFFICULTY_NAMES[difficulty]
 
@@ -146,6 +153,7 @@ func start_new_game(diff: int) -> void:
 
 
 func resume_game(data: Dictionary) -> void:
+	CrashReporter.register_user_action("sudoku_resume_game", {"difficulty": data.get("difficulty", 0)})
 	puzzle = []
 	puzzle.assign(data["puzzle"])
 	solution = []
@@ -463,6 +471,7 @@ func _on_notes_pressed() -> void:
 func _on_hint_pressed() -> void:
 	if _is_board_locked() or hints_used >= 1:
 		return
+	CrashReporter.register_user_action("sudoku_hint_used", {"selected_index": board.selected_index})
 
 	var index: int = -1
 
@@ -538,9 +547,11 @@ func _on_pause_pressed() -> void:
 	pause_button.text = "Resume" if is_paused else "Pause"
 	# Hide board when paused
 	board.visible = not is_paused
+	CrashReporter.register_user_action("sudoku_pause_toggled", {"is_paused": is_paused})
 
 
 func _on_back_pressed() -> void:
+	CrashReporter.register_user_action("sudoku_back_to_menu")
 	_save_current_state()
 	SceneTransition.transition_to("res://scenes/main_menu.tscn")
 
@@ -550,6 +561,7 @@ func _on_undo_pressed() -> void:
 		return
 	if undo_stack.is_empty():
 		return
+	CrashReporter.register_user_action("sudoku_undo")
 	var state: Dictionary = undo_stack.pop_back()
 	var index: int = state["index"]
 	var cell := board.cells[index]
@@ -571,6 +583,7 @@ func _on_redo_pressed() -> void:
 		return
 	if redo_stack.is_empty():
 		return
+	CrashReporter.register_user_action("sudoku_redo")
 	var state: Dictionary = redo_stack.pop_back()
 	var index: int = state["index"]
 	var cell := board.cells[index]
@@ -1047,6 +1060,20 @@ func _save_current_state() -> void:
 		"can_continue_after_failure": _can_continue_after_failure,
 		"hints_used": hints_used,
 	})
+
+
+func _get_crash_state() -> Dictionary:
+	return {
+		"game": "sudoku",
+		"difficulty": difficulty,
+		"elapsed_time": elapsed_time,
+		"strikes": strikes,
+		"is_failed": is_failed,
+		"is_completed": is_completed,
+		"is_paused": is_paused,
+		"hints_used": hints_used,
+		"selected_index": board.selected_index if board else -1,
+	}
 
 
 func _is_board_locked() -> bool:
