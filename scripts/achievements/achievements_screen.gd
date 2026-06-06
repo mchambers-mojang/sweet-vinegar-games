@@ -90,7 +90,16 @@ func _add_achievement_row(achievement: Dictionary) -> void:
 
     var progress := Label.new()
     if unlocked:
-        progress.text = "Complete"
+        var unlocked_at := int(achievement.get("unlocked_at", 0))
+        if unlocked_at > 0:
+            var dt := Time.get_datetime_dict_from_unix_time(unlocked_at)
+            progress.text = "Unlocked %s %d, %d" % [
+                _month_name(int(dt.get("month", 1))),
+                int(dt.get("day", 1)),
+                int(dt.get("year", 2026))
+            ]
+        else:
+            progress.text = "Complete"
     else:
         progress.text = "Progress: %d / %d" % [current, target]
     content.add_child(progress)
@@ -108,3 +117,10 @@ func _apply_theme() -> void:
     var style := StyleBoxFlat.new()
     style.bg_color = ThemeManager.get_color("background")
     add_theme_stylebox_override("panel", style)
+
+
+func _month_name(month: int) -> String:
+    var months := ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    if month >= 1 and month <= 12:
+        return months[month - 1]
+    return "???"
