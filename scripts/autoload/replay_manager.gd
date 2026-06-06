@@ -125,7 +125,7 @@ func import_replay_code(code: String) -> Dictionary:
 	var decoded := Marshalls.base64_to_utf8(code)
 	if decoded.is_empty():
 		return {}
-	var parsed := JSON.parse_string(decoded)
+	var parsed = JSON.parse_string(decoded)
 	if not (parsed is Dictionary):
 		return {}
 	var blob: Dictionary = parsed
