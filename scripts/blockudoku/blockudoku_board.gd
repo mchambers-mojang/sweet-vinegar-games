@@ -86,13 +86,15 @@ func reset() -> void:
 
 
 func _get_cell_size() -> float:
-	# Use the smaller dimension so the grid always fits, and leave room for siblings
-	var available := minf(size.x, size.y) - BORDER_WIDTH * 2
-	# Also cap to the viewport height minus space for top bar + tray (~200px)
+	# Compute a stable cell size based on viewport, not the board's current size
+	# This prevents layout feedback loops where board size -> cell size -> draw -> layout
+	var viewport_w := get_viewport_rect().size.x
 	var viewport_h := get_viewport_rect().size.y
-	var max_grid := viewport_h - 200.0
-	available = minf(available, max_grid)
-	return available / GRID_SIZE
+	# Reserve space for top bar (~60px), tray (~130px), margins (~40px)
+	var max_grid_h := viewport_h - 230.0
+	var max_grid_w := viewport_w - 32.0  # side margins
+	var available := minf(max_grid_w, max_grid_h) - BORDER_WIDTH * 2
+	return maxf(available / GRID_SIZE, 8.0)
 
 
 func _get_grid_origin() -> Vector2:
