@@ -149,6 +149,10 @@ func start_new_game(diff: int) -> void:
 	_update_number_completion()
 
 	StatsManager.record_game_started(difficulty)
+	AnalyticsManager.log_event("game_started", {
+		"game": "sudoku",
+		"difficulty": difficulty,
+	})
 	_save_current_state()
 
 
@@ -324,6 +328,7 @@ func _handle_number_first_cell_tap(index: int) -> void:
 				is_failed = true
 				_can_continue_after_failure = false
 				_update_button_states()
+				_log_game_over_analytics(false)
 				_show_fail_dialog()
 			_save_current_state()
 			_update_number_completion()
@@ -425,6 +430,7 @@ func _place_or_note_number(number: int) -> void:
 				is_failed = true
 				_can_continue_after_failure = false
 				_update_button_states()
+				_log_game_over_analytics(false)
 				_show_fail_dialog()
 			_save_current_state()
 			_update_number_completion()
@@ -650,6 +656,7 @@ func _handle_win() -> void:
 	var won := not is_failed
 	var previous_best: float = StatsManager.best_times.get(difficulty, -1.0)
 	StatsManager.record_game_completed(difficulty, elapsed_time, SettingsManager.error_mode == "strict", won)
+	_log_game_over_analytics(won)
 	SaveManager.clear_save()
 	_play_win_celebration()
 	if previous_best < 0.0 or elapsed_time < previous_best:
@@ -1024,6 +1031,7 @@ func _apply_number_to_multi_selection(number: int) -> void:
 			is_failed = true
 			_can_continue_after_failure = false
 			_update_button_states()
+			_log_game_over_analytics(false)
 			_show_fail_dialog()
 
 	redo_stack.clear()
@@ -1091,6 +1099,17 @@ func _get_crash_state() -> Dictionary:
 func _is_board_locked() -> bool:
 	# Locked after completion, or after failure until Continue is chosen.
 	return is_completed or (is_failed and not _can_continue_after_failure)
+
+
+func _log_game_over_analytics(won: bool) -> void:
+	AnalyticsManager.log_event("game_over", {
+		"game": "sudoku",
+		"won": won,
+		"difficulty": difficulty,
+		"elapsed_time": elapsed_time,
+		"strikes": strikes,
+		"hints_used": hints_used,
+	})
 
 
 func _format_time(seconds: float) -> String:
