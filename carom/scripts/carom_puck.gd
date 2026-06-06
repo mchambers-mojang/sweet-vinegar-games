@@ -31,6 +31,12 @@ func reset_to_center(reset_position: Vector3 = Vector3.ZERO) -> void:
 
 
 func _physics_process(_delta: float) -> void:
+	# Safety: if puck escapes arena bounds, reset it
+	if abs(global_position.x) > 8.0 or global_position.z < -2.0 or global_position.z > 28.0 or abs(global_position.y) > 3.0:
+		push_warning("Puck escaped bounds at %s — resetting" % str(global_position))
+		reset_to_center()
+		return
+
 	if stall_nudge_force > 0.0 and linear_velocity.length() <= stall_speed_threshold:
 		_apply_goal_nudge()
 
