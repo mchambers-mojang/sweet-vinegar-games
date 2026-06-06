@@ -3,6 +3,10 @@ extends Control
 ## Blockudoku game screen — board, score, block tray, drag-to-place
 
 const BLOCKS_PER_SET := 3
+const COMBO_PULSE_BASE_SCALE := 1.02
+const COMBO_PULSE_SCALE_PER_COMBO := 0.002
+const COMBO_PULSE_MAX_SCALE := 1.04
+const COMBO_PULSE_HALF_DURATION := 0.15
 
 # Game state
 var score: int = 0
@@ -337,12 +341,15 @@ func _pulse_board_for_combo(combo: int) -> void:
 		_board_pulse_tween.kill()
 
 	board.scale = Vector2.ONE
-	var peak_scale := 1.02 + minf(0.002 * float(combo - 1), 0.02)
+	var peak_scale_factor := minf(
+		COMBO_PULSE_BASE_SCALE + COMBO_PULSE_SCALE_PER_COMBO * float(combo - 1),
+		COMBO_PULSE_MAX_SCALE
+	)
 	_board_pulse_tween = create_tween()
-	var pulse_up := _board_pulse_tween.tween_property(board, "scale", Vector2(peak_scale, peak_scale), 0.15)
+	var pulse_up := _board_pulse_tween.tween_property(board, "scale", Vector2(peak_scale_factor, peak_scale_factor), COMBO_PULSE_HALF_DURATION)
 	pulse_up.set_trans(Tween.TRANS_BACK)
 	pulse_up.set_ease(Tween.EASE_OUT)
-	var pulse_down := _board_pulse_tween.tween_property(board, "scale", Vector2.ONE, 0.15)
+	var pulse_down := _board_pulse_tween.tween_property(board, "scale", Vector2.ONE, COMBO_PULSE_HALF_DURATION)
 	pulse_down.set_trans(Tween.TRANS_BACK)
 	pulse_down.set_ease(Tween.EASE_IN)
 
