@@ -107,14 +107,23 @@ func _add_replay_row(replay: Dictionary) -> void:
 	details.add_theme_font_size_override("font_size", 13)
 	info.add_child(details)
 
-	# Right: play button (blockudoku only for now)
+	# Right: play button
+	var replay_scene := ""
 	if game_mode == "blockudoku":
+		replay_scene = "res://scenes/blockudoku_replay.tscn"
+	elif game_mode == "sudoku":
+		replay_scene = "res://scenes/sudoku_replay.tscn"
+	elif game_mode == "shikaku":
+		replay_scene = "res://scenes/shikaku_replay.tscn"
+
+	if replay_scene != "":
 		var play_btn := Button.new()
 		play_btn.text = "▶"
 		play_btn.custom_minimum_size = Vector2(36, 36)
+		var scene_path := replay_scene
 		play_btn.pressed.connect(func() -> void:
 			ReplayManager.set_pending_playback(replay)
-			SceneTransition.transition_to("res://scenes/blockudoku_replay.tscn")
+			SceneTransition.transition_to(scene_path)
 		)
 		row.add_child(play_btn)
 
