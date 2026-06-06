@@ -8,6 +8,7 @@ extends Control
 @onready var shikaku_button: Button = %ShikakuButton
 @onready var blockudoku_button: Button = %BlockudokuButton
 @onready var settings_button: Button = %SettingsButton
+@onready var achievements_button: Button = %AchievementsButton
 @onready var version_label: Label = %VersionLabel
 
 
@@ -25,6 +26,9 @@ func _ready() -> void:
 		var SettingsScreen := load("res://scripts/settings_screen.gd")
 		SettingsScreen.return_scene = "res://scenes/game_picker.tscn"
 		SceneTransition.transition_to("res://scenes/settings.tscn")
+	)
+	achievements_button.pressed.connect(func() -> void:
+		SceneTransition.transition_to("res://scenes/achievements.tscn")
 	)
 	version_label.text = "v%s" % ProjectSettings.get_setting("application/config/version", "dev")
 	version_label.gui_input.connect(_on_version_label_gui_input)

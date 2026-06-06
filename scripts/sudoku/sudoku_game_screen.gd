@@ -162,6 +162,7 @@ func start_new_game(diff: int) -> void:
 		"error_mode": SettingsManager.error_mode,
 		"show_timer": SettingsManager.show_timer,
 	})
+	AchievementManager.track_game_started("sudoku")
 	AnalyticsManager.log_event("game_started", {
 		"game": "sudoku",
 		"difficulty": difficulty,
@@ -210,6 +211,7 @@ func resume_game(data: Dictionary) -> void:
 			"error_mode": SettingsManager.error_mode,
 			"show_timer": SettingsManager.show_timer,
 		})
+	AchievementManager.track_game_started("sudoku")
 
 
 func _process(delta: float) -> void:
@@ -711,6 +713,8 @@ func _handle_win() -> void:
 	})
 	var previous_best: float = StatsManager.best_times.get(difficulty, -1.0)
 	StatsManager.record_game_completed(difficulty, elapsed_time, SettingsManager.error_mode == "strict", won)
+	if won:
+		AchievementManager.track_game_won("sudoku", {"strikes": strikes})
 	_log_game_over_analytics(won)
 	SaveManager.clear_save()
 	_play_win_celebration()

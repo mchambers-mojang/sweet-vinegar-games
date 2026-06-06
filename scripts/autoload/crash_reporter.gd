@@ -109,7 +109,7 @@ func get_recent_reports(limit: int = 10) -> Array[Dictionary]:
 		var file := FileAccess.open(path, FileAccess.READ)
 		if file == null:
 			continue
-		var parsed := JSON.parse_string(file.get_as_text())
+		var parsed = JSON.parse_string(file.get_as_text())
 		if parsed is Dictionary:
 			var report := parsed as Dictionary
 			report["path"] = path
