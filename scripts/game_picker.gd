@@ -8,6 +8,7 @@ extends Control
 @onready var shikaku_button: Button = %ShikakuButton
 @onready var blockudoku_button: Button = %BlockudokuButton
 @onready var settings_button: Button = %SettingsButton
+@onready var achievements_button: Button = %AchievementsButton
 
 
 func _ready() -> void:
@@ -24,6 +25,9 @@ func _ready() -> void:
 		var SettingsScreen := load("res://scripts/settings_screen.gd")
 		SettingsScreen.return_scene = "res://scenes/game_picker.tscn"
 		SceneTransition.transition_to("res://scenes/settings.tscn")
+	)
+	achievements_button.pressed.connect(func() -> void:
+		SceneTransition.transition_to("res://scenes/achievements.tscn")
 	)
 	_apply_theme()
 	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_theme())

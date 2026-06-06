@@ -19,6 +19,7 @@ config/icon="res://icon.svg"
 
 SettingsManager="*res://scripts/autoload/settings_manager.gd"
 StatsManager="*res://scripts/autoload/stats_manager.gd"
+AchievementManager="*res://scripts/autoload/achievement_manager.gd"
 SaveManager="*res://scripts/autoload/save_manager.gd"
 ThemeManager="*res://scripts/autoload/theme_manager.gd"
 SoundManager="*res://scripts/autoload/sound_manager.gd"

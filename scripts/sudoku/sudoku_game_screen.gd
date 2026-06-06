@@ -142,6 +142,7 @@ func start_new_game(diff: int) -> void:
 	_update_number_completion()
 
 	StatsManager.record_game_started(difficulty)
+	AchievementManager.track_game_started("sudoku")
 	_save_current_state()
 
 
@@ -172,6 +173,7 @@ func resume_game(data: Dictionary) -> void:
 	if is_failed and _is_board_locked():
 		# Re-show the fail dialog for failed saves so players can choose Continue/Menu.
 		call_deferred("_show_fail_dialog")
+	AchievementManager.track_game_started("sudoku")
 
 
 func _process(delta: float) -> void:
@@ -636,6 +638,8 @@ func _handle_win() -> void:
 	is_completed = true
 	var won := not is_failed
 	StatsManager.record_game_completed(difficulty, elapsed_time, SettingsManager.error_mode == "strict", won)
+	if won:
+		AchievementManager.track_game_won("sudoku", {"strikes": strikes})
 	SaveManager.clear_save()
 	_play_win_celebration()
 

@@ -66,6 +66,7 @@ func start_new_game() -> void:
 	_deal_new_blocks()
 	_update_score_display()
 	BlockudokuStatsManager.record_game_started()
+	AchievementManager.track_game_started("blockudoku")
 	_save_current_state()
 
 
@@ -90,6 +91,7 @@ func resume_game(data: Dictionary) -> void:
 	blocks_placed_this_set = data.get("blocks_placed_this_set", 0)
 	_build_tray()
 	_update_score_display()
+	AchievementManager.track_game_started("blockudoku")
 
 
 func _process(delta: float) -> void:
@@ -292,6 +294,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 			var clear_score := (lines + boxes) * 18 + cleared + combo_bonus
 			score += clear_score
 			BlockudokuStatsManager.record_clears(lines + boxes)
+			AchievementManager.track_blockudoku_clear(lines + boxes)
 			SoundManager.play_win()
 			HapticManager.vibrate_medium()
 

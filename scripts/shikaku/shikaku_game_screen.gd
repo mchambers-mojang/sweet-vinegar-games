@@ -74,6 +74,7 @@ func start_new_game(w: int, h: int) -> void:
 	undo_stack.clear()
 	redo_stack.clear()
 	ShikakuStatsManager.record_game_started(w)
+	AchievementManager.track_game_started("shikaku")
 	_update_button_states()
 	_save_current_state()
 
@@ -99,6 +100,7 @@ func resume_game(data: Dictionary) -> void:
 	is_completed = false
 	size_label.text = SIZE_NAMES.get(grid_width, "%dx%d" % [grid_width, grid_height])
 	_update_button_states()
+	AchievementManager.track_game_started("shikaku")
 
 
 func _process(delta: float) -> void:
@@ -263,6 +265,7 @@ func _check_completion() -> void:
 func _handle_win() -> void:
 	is_completed = true
 	ShikakuStatsManager.record_game_completed(grid_width, elapsed_time)
+	AchievementManager.track_game_won("shikaku")
 	ShikakuSaveManager.clear_save()
 	SoundManager.play_win()
 	HapticManager.vibrate_success()
