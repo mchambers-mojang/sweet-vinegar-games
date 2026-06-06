@@ -219,17 +219,17 @@ func _on_undo() -> void:
 	var entry: Dictionary = undo_stack.pop_back()
 	if entry["action"] == "place":
 		# Undo a placement = remove the last rect
-		var rect: Rect2i = entry["rect"]
+		var placed_rect: Rect2i = entry["rect"]
 		# Find and remove it
 		for i in range(board.placed_rects.size() - 1, -1, -1):
-			if board.placed_rects[i] == rect:
+			if board.placed_rects[i] == placed_rect:
 				board.remove_rect(i)
 				break
 		redo_stack.append(entry)
 	elif entry["action"] == "remove":
 		# Undo a removal = re-add the rect
-		var rect: Rect2i = entry["rect"]
-		board.add_rect(rect)
+		var removed_rect: Rect2i = entry["rect"]
+		board.add_rect(removed_rect)
 		redo_stack.append(entry)
 	_update_button_states()
 	_save_current_state()
@@ -242,13 +242,13 @@ func _on_redo() -> void:
 		return
 	var entry: Dictionary = redo_stack.pop_back()
 	if entry["action"] == "place":
-		var rect: Rect2i = entry["rect"]
-		board.add_rect(rect)
+		var redo_rect: Rect2i = entry["rect"]
+		board.add_rect(redo_rect)
 		undo_stack.append(entry)
 	elif entry["action"] == "remove":
-		var rect: Rect2i = entry["rect"]
+		var removed_rect: Rect2i = entry["rect"]
 		for i in range(board.placed_rects.size() - 1, -1, -1):
-			if board.placed_rects[i] == rect:
+			if board.placed_rects[i] == removed_rect:
 				board.remove_rect(i)
 				break
 		undo_stack.append(entry)

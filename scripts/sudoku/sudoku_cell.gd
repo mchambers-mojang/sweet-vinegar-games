@@ -217,7 +217,7 @@ func _draw() -> void:
 		pos.y += text_size.y * 0.85
 		draw_string(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, text_color)
 	elif pencil_marks.size() > 0:
-		var font := ThemeDB.fallback_font
+		var pencil_font := ThemeDB.fallback_font
 		var pencil_size := int(cell_size.y * 0.28)
 		var pencil_color: Color
 		if has_custom_color:
@@ -229,8 +229,8 @@ func _draw() -> void:
 		for mark in pencil_marks:
 			var pm_col := (mark - 1) % 3
 			var pm_row := (mark - 1) / 3
-			var text := str(mark)
-			var text_size := font.get_string_size(text, HORIZONTAL_ALIGNMENT_CENTER, -1, pencil_size)
-			var px := pm_col * cell_w + (cell_w - text_size.x) / 2.0
-			var py := pm_row * cell_h + (cell_h + text_size.y * 0.7) / 2.0
-			draw_string(font, Vector2(px, py), text, HORIZONTAL_ALIGNMENT_LEFT, -1, pencil_size, pencil_color)
+			var pencil_text := str(mark)
+			var pencil_text_size := pencil_font.get_string_size(pencil_text, HORIZONTAL_ALIGNMENT_CENTER, -1, pencil_size)
+			var px := pm_col * cell_w + (cell_w - pencil_text_size.x) / 2.0
+			var py := pm_row * cell_h + (cell_h + pencil_text_size.y * 0.7) / 2.0
+			draw_string(pencil_font, Vector2(px, py), pencil_text, HORIZONTAL_ALIGNMENT_LEFT, -1, pencil_size, pencil_color)

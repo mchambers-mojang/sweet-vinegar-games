@@ -245,8 +245,8 @@ static func normalize(shape: Array) -> Array[Vector2i]:
 		min_y = mini(min_y, c.y)
 	var result: Array[Vector2i] = []
 	for cell in shape:
-		var c: Vector2i = cell
-		result.append(Vector2i(c.x - min_x, c.y - min_y))
+		var normalized_cell: Vector2i = cell
+		result.append(Vector2i(normalized_cell.x - min_x, normalized_cell.y - min_y))
 	return result
 
 

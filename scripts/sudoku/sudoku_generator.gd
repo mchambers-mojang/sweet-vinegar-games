@@ -60,16 +60,16 @@ func generate(difficulty: SudokuSolver.Difficulty, seed: int = -1) -> Dictionary
 			}
 
 	# Fallback: return whatever we get closest to
-	var full_grid := _generate_full_grid(rng)
-	var puzzle := _remove_cells(full_grid, difficulty, rng)
-	if puzzle.is_empty():
-		puzzle = _simple_remove(full_grid, CLUE_TARGETS[difficulty], rng)
-	var solver := SudokuSolver.new()
-	solver.analyze(puzzle)
+	var fallback_full_grid := _generate_full_grid(rng)
+	var fallback_puzzle := _remove_cells(fallback_full_grid, difficulty, rng)
+	if fallback_puzzle.is_empty():
+		fallback_puzzle = _simple_remove(fallback_full_grid, CLUE_TARGETS[difficulty], rng)
+	var fallback_solver := SudokuSolver.new()
+	fallback_solver.analyze(fallback_puzzle)
 	return {
-		"puzzle": puzzle,
-		"solution": solver.solution if solver.is_unique else full_grid,
-		"difficulty": solver.difficulty,
+		"puzzle": fallback_puzzle,
+		"solution": fallback_solver.solution if fallback_solver.is_unique else fallback_full_grid,
+		"difficulty": fallback_solver.difficulty,
 	}
 
 

@@ -343,9 +343,9 @@ func _apply_pointing_pairs(grid: Array[int], candidates: Array[Array]) -> bool:
 						break
 				if same_row:
 					for c in 9:
-						var idx := pr * 9 + c
-						if not idx in positions and grid[idx] == 0 and val in candidates[idx]:
-							candidates[idx].erase(val)
+						var row_idx := pr * 9 + c
+						if not row_idx in positions and grid[row_idx] == 0 and val in candidates[row_idx]:
+							candidates[row_idx].erase(val)
 							found = true
 							if not Technique.POINTING_PAIR in techniques_used:
 								techniques_used.append(Technique.POINTING_PAIR)
@@ -358,9 +358,9 @@ func _apply_pointing_pairs(grid: Array[int], candidates: Array[Array]) -> bool:
 						break
 				if same_col:
 					for r in 9:
-						var idx := r * 9 + pc
-						if not idx in positions and grid[idx] == 0 and val in candidates[idx]:
-							candidates[idx].erase(val)
+						var col_idx := r * 9 + pc
+						if not col_idx in positions and grid[col_idx] == 0 and val in candidates[col_idx]:
+							candidates[col_idx].erase(val)
 							found = true
 							if not Technique.POINTING_PAIR in techniques_used:
 								techniques_used.append(Technique.POINTING_PAIR)
@@ -403,8 +403,8 @@ func _apply_x_wing(grid: Array[int], candidates: Array[Array]) -> bool:
 		for c in 9:
 			col_positions[c] = []
 			for r in 9:
-				var idx := r * 9 + c
-				if grid[idx] == 0 and val in candidates[idx]:
+				var col_scan_idx := r * 9 + c
+				if grid[col_scan_idx] == 0 and val in candidates[col_scan_idx]:
 					col_positions[c].append(r)
 		for c1 in range(9):
 			if col_positions[c1].size() != 2:
@@ -437,18 +437,18 @@ static func _get_all_units() -> Array[Array]:
 		units.append(unit)
 	# Columns
 	for c in 9:
-		var unit: Array[int] = []
+		var col_unit: Array[int] = []
 		for r in 9:
-			unit.append(r * 9 + c)
-		units.append(unit)
+			col_unit.append(r * 9 + c)
+		units.append(col_unit)
 	# Boxes
 	for br in range(0, 9, 3):
 		for bc in range(0, 9, 3):
-			var unit: Array[int] = []
+			var box_unit: Array[int] = []
 			for r in range(br, br + 3):
 				for c in range(bc, bc + 3):
-					unit.append(r * 9 + c)
-			units.append(unit)
+					box_unit.append(r * 9 + c)
+			units.append(box_unit)
 	return units
 
 

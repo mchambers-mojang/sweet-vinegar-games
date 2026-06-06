@@ -346,10 +346,10 @@ func _handle_number_first_cell_tap(index: int) -> void:
 
 			# Neon glass shatter + shockwave on error
 			if ThemeManager.is_neon:
-				var cell_rect := board.get_cell_rect(index)
-				GlassShatter.create(board, cell_rect, Color(2.0, 0.0, 0.2), 10)
-				var err_center := cell_rect.position + cell_rect.size / 2.0
-				NeonRing.create(board, err_center, Color(2.0, 0.0, 0.2), cell_rect.size.x * 2.5, 0.2, 0.4)
+				var error_cell_rect := board.get_cell_rect(index)
+				GlassShatter.create(board, error_cell_rect, Color(2.0, 0.0, 0.2), 10)
+				var err_center := error_cell_rect.position + error_cell_rect.size / 2.0
+				NeonRing.create(board, err_center, Color(2.0, 0.0, 0.2), error_cell_rect.size.x * 2.5, 0.2, 0.4)
 				NeonFxManager.screen_shake(5.0, 0.15)
 
 			var revert_tween := create_tween()
@@ -378,8 +378,8 @@ func _handle_number_first_cell_tap(index: int) -> void:
 
 		# Neon burst on correct placement
 		if ThemeManager.is_neon:
-			var cell_rect := board.get_cell_rect(index)
-			var center := cell_rect.position + cell_rect.size / 2.0
+			var placed_cell_rect := board.get_cell_rect(index)
+			var center := placed_cell_rect.position + placed_cell_rect.size / 2.0
 			NeonBurst.create(board, center, Color(0.0, 2.0, 1.6), 10, 0.8)
 
 		if SettingsManager.auto_remove_pencil_marks:
@@ -458,10 +458,10 @@ func _place_or_note_number(number: int) -> void:
 
 			# Neon glass shatter + shockwave on error
 			if ThemeManager.is_neon:
-				var cell_rect := board.get_cell_rect(index)
-				GlassShatter.create(board, cell_rect, Color(2.0, 0.0, 0.2), 10)
-				var err_center := cell_rect.position + cell_rect.size / 2.0
-				NeonRing.create(board, err_center, Color(2.0, 0.0, 0.2), cell_rect.size.x * 2.5, 0.2, 0.4)
+				var error_cell_rect := board.get_cell_rect(index)
+				GlassShatter.create(board, error_cell_rect, Color(2.0, 0.0, 0.2), 10)
+				var err_center := error_cell_rect.position + error_cell_rect.size / 2.0
+				NeonRing.create(board, err_center, Color(2.0, 0.0, 0.2), error_cell_rect.size.x * 2.5, 0.2, 0.4)
 				NeonFxManager.screen_shake(5.0, 0.15)
 
 			var revert_tween := create_tween()
@@ -494,8 +494,8 @@ func _place_or_note_number(number: int) -> void:
 
 		# Neon burst on correct placement
 		if ThemeManager.is_neon:
-			var cell_rect := board.get_cell_rect(index)
-			var center := cell_rect.position + cell_rect.size / 2.0
+			var placed_cell_rect := board.get_cell_rect(index)
+			var center := placed_cell_rect.position + placed_cell_rect.size / 2.0
 			NeonBurst.create(board, center, Color(0.0, 2.0, 1.6), 10, 0.8)
 
 		# Auto-remove pencil marks if enabled
@@ -808,24 +808,24 @@ func _check_unit_completion(index: int) -> void:
 
 			# Neon sweep on completed rows
 			if row_complete:
-				var first := board.get_cell_rect(row * 9)
-				var last := board.get_cell_rect(row * 9 + 8)
-				var sweep_rect := Rect2(first.position, Vector2(last.position.x + last.size.x - first.position.x, first.size.y))
-				NeonSweep.create(board, sweep_rect, true, Color(0.0, 2.0, 1.5))
+				var row_first := board.get_cell_rect(row * 9)
+				var row_last := board.get_cell_rect(row * 9 + 8)
+				var row_sweep_rect := Rect2(row_first.position, Vector2(row_last.position.x + row_last.size.x - row_first.position.x, row_first.size.y))
+				NeonSweep.create(board, row_sweep_rect, true, Color(0.0, 2.0, 1.5))
 
 			# Neon sweep on completed columns
 			if col_complete:
-				var first := board.get_cell_rect(col)
-				var last := board.get_cell_rect(72 + col)
-				var sweep_rect := Rect2(first.position, Vector2(first.size.x, last.position.y + last.size.y - first.position.y))
-				NeonSweep.create(board, sweep_rect, false, Color(2.0, 0.3, 1.8))
+				var col_first := board.get_cell_rect(col)
+				var col_last := board.get_cell_rect(72 + col)
+				var col_sweep_rect := Rect2(col_first.position, Vector2(col_first.size.x, col_last.position.y + col_last.size.y - col_first.position.y))
+				NeonSweep.create(board, col_sweep_rect, false, Color(2.0, 0.3, 1.8))
 
 			# Neon sweep on completed box
 			if box_complete:
-				var first := board.get_cell_rect(box_row * 9 + box_col)
-				var last := board.get_cell_rect((box_row + 2) * 9 + box_col + 2)
-				var sweep_rect := Rect2(first.position, Vector2(last.position.x + last.size.x - first.position.x, last.position.y + last.size.y - first.position.y))
-				NeonSweep.create(board, sweep_rect, true, Color(1.5, 0.2, 1.0))
+				var box_first := board.get_cell_rect(box_row * 9 + box_col)
+				var box_last := board.get_cell_rect((box_row + 2) * 9 + box_col + 2)
+				var box_sweep_rect := Rect2(box_first.position, Vector2(box_last.position.x + box_last.size.x - box_first.position.x, box_last.position.y + box_last.size.y - box_first.position.y))
+				NeonSweep.create(board, box_sweep_rect, true, Color(1.5, 0.2, 1.0))
 
 
 func _update_number_completion() -> void:

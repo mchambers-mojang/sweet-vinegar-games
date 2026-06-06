@@ -150,11 +150,11 @@ static func _weighted_pick(items: Array[Rect2i], weights: Array[float], rng: Ran
 
 
 static func _place_numbers(solution: Array[Rect2i], rng: RandomNumberGenerator) -> Dictionary:
-	var numbers := {}
+	var placed_numbers := {}
 	for rect in solution:
-		var area := rect.size.x * rect.size.y
+		var rect_area := rect.size.x * rect.size.y
 		# Pick a random cell anywhere inside the rectangle
 		var col := rect.position.x + rng.randi_range(0, rect.size.x - 1)
 		var row := rect.position.y + rng.randi_range(0, rect.size.y - 1)
-		numbers[Vector2i(col, row)] = area
-	return numbers
+		placed_numbers[Vector2i(col, row)] = rect_area
+	return placed_numbers

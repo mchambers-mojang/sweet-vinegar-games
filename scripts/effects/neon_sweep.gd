@@ -55,12 +55,12 @@ func _draw() -> void:
 		# Sweep top to bottom
 		var y := t * _size.y
 		var height := _size.y * 0.15
-		var sweep_rect := Rect2(0, y - height / 2.0, _size.x, height)
-		var glow_color := Color(_color.r, _color.g, _color.b, alpha * 0.6)
-		draw_rect(sweep_rect, glow_color)
+		var vertical_sweep_rect := Rect2(0, y - height / 2.0, _size.x, height)
+		var vertical_glow_color := Color(_color.r, _color.g, _color.b, alpha * 0.6)
+		draw_rect(vertical_sweep_rect, vertical_glow_color)
 
-		var core_color := Color(_color.r * 1.5, _color.g * 1.5, _color.b * 1.5, alpha)
-		draw_line(Vector2(0, y), Vector2(_size.x, y), core_color, 2.0)
+		var vertical_core_color := Color(_color.r * 1.5, _color.g * 1.5, _color.b * 1.5, alpha)
+		draw_line(Vector2(0, y), Vector2(_size.x, y), vertical_core_color, 2.0)
 
 	# Flash the whole area briefly at start
 	if t < 0.15:

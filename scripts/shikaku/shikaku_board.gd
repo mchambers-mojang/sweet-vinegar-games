@@ -221,26 +221,26 @@ func _draw() -> void:
 	# Placed rectangles (border)
 	var neon_mode := tm.is_neon
 	for i in range(placed_rects.size()):
-		var rect := placed_rects[i]
+		var border_rect := placed_rects[i]
 		var border_color := rect_colors[i]
 		border_color.a = 0.9
 		if neon_mode:
 			border_color = Color(border_color.r * 3.0, border_color.g * 3.0, border_color.b * 3.0, 0.9)
-		var draw_rect_pos := origin + Vector2(rect.position.x * cell_size, rect.position.y * cell_size)
-		var draw_rect_size := Vector2(rect.size.x * cell_size, rect.size.y * cell_size)
+		var border_rect_pos := origin + Vector2(border_rect.position.x * cell_size, border_rect.position.y * cell_size)
+		var border_rect_size := Vector2(border_rect.size.x * cell_size, border_rect.size.y * cell_size)
 		var bw := RECT_BORDER if not neon_mode else 1.5
 		# Top
-		draw_rect(Rect2(draw_rect_pos, Vector2(draw_rect_size.x, bw)), border_color)
+		draw_rect(Rect2(border_rect_pos, Vector2(border_rect_size.x, bw)), border_color)
 		# Bottom
-		draw_rect(Rect2(draw_rect_pos + Vector2(0, draw_rect_size.y - bw), Vector2(draw_rect_size.x, bw)), border_color)
+		draw_rect(Rect2(border_rect_pos + Vector2(0, border_rect_size.y - bw), Vector2(border_rect_size.x, bw)), border_color)
 		# Left
-		draw_rect(Rect2(draw_rect_pos, Vector2(bw, draw_rect_size.y)), border_color)
+		draw_rect(Rect2(border_rect_pos, Vector2(bw, border_rect_size.y)), border_color)
 		# Right
-		draw_rect(Rect2(draw_rect_pos + Vector2(draw_rect_size.x - bw, 0), Vector2(bw, draw_rect_size.y)), border_color)
+		draw_rect(Rect2(border_rect_pos + Vector2(border_rect_size.x - bw, 0), Vector2(bw, border_rect_size.y)), border_color)
 		# Extra glow pass for neon
 		if neon_mode:
-			var glow := Color(border_color.r * 0.3, border_color.g * 0.3, border_color.b * 0.3, 0.25)
-			draw_rect(Rect2(draw_rect_pos - Vector2(2, 2), draw_rect_size + Vector2(4, 4)), glow, false, 3.0)
+			var border_glow := Color(border_color.r * 0.3, border_color.g * 0.3, border_color.b * 0.3, 0.25)
+			draw_rect(Rect2(border_rect_pos - Vector2(2, 2), border_rect_size + Vector2(4, 4)), border_glow, false, 3.0)
 
 	# Drag preview
 	if _dragging and _drag_preview.size.x > 0:
@@ -272,8 +272,8 @@ func _draw() -> void:
 		border_col = Color(0.0, 1.5, 1.5)
 	draw_rect(grid_rect, border_col, false, BORDER_WIDTH)
 	if neon_mode:
-		var glow := Color(0.0, 0.6, 0.6, 0.25)
-		draw_rect(Rect2(origin - Vector2(3, 3), Vector2(cell_size * grid_width + 6, cell_size * grid_height + 6)), glow, false, 5.0)
+		var outline_glow := Color(0.0, 0.6, 0.6, 0.25)
+		draw_rect(Rect2(origin - Vector2(3, 3), Vector2(cell_size * grid_width + 6, cell_size * grid_height + 6)), outline_glow, false, 5.0)
 
 	# Numbers
 	var font := ThemeDB.fallback_font

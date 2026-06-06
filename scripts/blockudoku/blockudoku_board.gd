@@ -197,9 +197,9 @@ func check_and_clear() -> Dictionary:
 
 		# Glass shatter on each cleared cell
 		for i in _flash_cells.size():
-			var p: Vector2i = _flash_cells[i]
+			var flash_cell_pos: Vector2i = _flash_cells[i]
 			var cell_rect := Rect2(
-				origin + Vector2(p.x * cell_size, p.y * cell_size),
+				origin + Vector2(flash_cell_pos.x * cell_size, flash_cell_pos.y * cell_size),
 				Vector2(cell_size, cell_size)
 			)
 			var shard_color := _flash_saved_colors[i] if i < _flash_saved_colors.size() else Color(0.0, 1.5, 1.5)
@@ -468,7 +468,7 @@ func _draw() -> void:
 	if not _clear_anim_cells.is_empty():
 		var sweep_duration := _get_sweep_duration()
 		for i in _clear_anim_cells.size():
-			var p: Vector2i = _clear_anim_cells[i]
+			var clear_anim_pos: Vector2i = _clear_anim_cells[i]
 			var delay := _clear_anim_delays[i] if i < _clear_anim_delays.size() else 0.0
 			var t := clamp((_clear_anim_elapsed - delay) / sweep_duration, 0.0, 1.0)
 			if t >= 1.0:
@@ -478,7 +478,7 @@ func _draw() -> void:
 			var scale := lerpf(1.0, 0.6, t)
 			var draw_size := Vector2(cell_size, cell_size) * scale
 			var offset := (Vector2(cell_size, cell_size) - draw_size) * 0.5
-			var dissolve_origin := origin + Vector2(p.x * cell_size, p.y * cell_size)
+			var dissolve_origin := origin + Vector2(clear_anim_pos.x * cell_size, clear_anim_pos.y * cell_size)
 			var draw_color := Color(base_color.r, base_color.g, base_color.b, alpha)
 			draw_rect(Rect2(dissolve_origin + offset, draw_size), draw_color)
 
