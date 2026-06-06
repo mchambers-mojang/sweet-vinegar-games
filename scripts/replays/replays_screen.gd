@@ -41,7 +41,7 @@ func _build_ui() -> void:
 			recent.append(replay)
 
 	if not bookmarked.is_empty():
-		_add_section_header("🎥 Bookmarked")
+		_add_section_header("Bookmarked")
 		bookmarked.reverse()
 		for replay in bookmarked:
 			_add_replay_row(replay)
@@ -95,7 +95,7 @@ func _add_replay_row(replay: Dictionary) -> void:
 	row.add_child(info)
 
 	var title := Label.new()
-	var bookmark_prefix := "🎥 " if is_bookmarked else ""
+	var bookmark_prefix := "[Saved] " if is_bookmarked else ""
 	title.text = "%s%s — %s" % [bookmark_prefix, game_mode.capitalize(), outcome]
 	title.add_theme_font_size_override("font_size", 16)
 	info.add_child(title)

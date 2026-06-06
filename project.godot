@@ -36,6 +36,7 @@ SceneTransition="*res://scripts/autoload/scene_transition.gd"
 SafeAreaManager="*res://scripts/autoload/safe_area_manager.gd"
 DragEffect="*res://scripts/effects/drag_effect.gd"
 DebugOverlay="*res://scripts/autoload/debug_overlay.gd"
+IconManager="*res://scripts/autoload/icon_manager.gd"
 
 [debug]
 

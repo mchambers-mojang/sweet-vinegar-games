@@ -382,7 +382,7 @@ func _show_win_dialog() -> void:
 		dialog.dialog_text += "\nHints used: %d" % hints_used
 	dialog.ok_button_text = "Play Again"
 	dialog.add_button("Menu", true, "menu")
-	dialog.add_button("🎥", true, "bookmark")
+	dialog.add_button("Save Replay", true, "bookmark")
 	dialog.min_size = Vector2i(300, 0)
 	dialog.max_size = Vector2i(int(get_viewport_rect().size.x * 0.9), 600)
 	add_child(dialog)
