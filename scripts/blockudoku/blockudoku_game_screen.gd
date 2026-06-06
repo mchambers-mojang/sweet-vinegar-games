@@ -310,6 +310,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 			"tray_index": _drag_block_index,
 			"grid_x": grid_pos.x,
 			"grid_y": grid_pos.y,
+			"shape": _serialize_shape(_drag_shape),
 		})
 		var block_color := BlockudokuShapes.get_shape_color(_drag_shape)
 		board.place_block(_drag_shape, grid_pos.x, grid_pos.y, block_color)

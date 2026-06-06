@@ -15,6 +15,17 @@ var _active_replay: Dictionary = {}
 var _id_rng := RandomNumberGenerator.new()
 var _active_sequence: int = 0
 var playback_speed: float = 1.0
+var _pending_playback: Dictionary = {}
+
+
+func set_pending_playback(replay: Dictionary) -> void:
+	_pending_playback = replay
+
+
+func get_pending_playback() -> Dictionary:
+	var replay := _pending_playback
+	_pending_playback = {}
+	return replay
 
 
 func _ready() -> void:

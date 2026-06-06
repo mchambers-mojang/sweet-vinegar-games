@@ -107,6 +107,17 @@ func _add_replay_row(replay: Dictionary) -> void:
 	details.add_theme_font_size_override("font_size", 13)
 	info.add_child(details)
 
+	# Right: play button (blockudoku only for now)
+	if game_mode == "blockudoku":
+		var play_btn := Button.new()
+		play_btn.text = "▶"
+		play_btn.custom_minimum_size = Vector2(36, 36)
+		play_btn.pressed.connect(func() -> void:
+			ReplayManager.set_pending_playback(replay)
+			SceneTransition.transition_to("res://scenes/blockudoku_replay.tscn")
+		)
+		row.add_child(play_btn)
+
 	# Right: delete button
 	var delete_btn := Button.new()
 	delete_btn.text = "✕"
