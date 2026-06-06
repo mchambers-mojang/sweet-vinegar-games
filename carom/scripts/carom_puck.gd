@@ -1,26 +1,24 @@
 class_name CaromPuck
 extends Node3D
 
-## Crossfire-style puck: two physics objects.
-## - Cage: plastic frame with fins. Stays flat (lock_rotation). Provides the irregular hit profile.
-## - Ball: steel ball bearing inside the cage. Rolls freely within the cage walls.
-## Projectiles hit the cage fins → cage moves → cage walls push the ball → ball rolls.
+## Crossfire-style puck: cage (RigidBody3D with fins) + visual ball mesh.
+## The cage is the physics body. The ball mesh just visually rolls inside.
 
 @export var max_speed: float = 14.0
 @export var stall_nudge_force: float = 0.18
 @export var stall_speed_threshold: float = 1.8
 @export var reset_height: float = 0.4
+@export var ball_visual_radius: float = 0.28
 
 var _goal_targets: Array[Vector3] = []
 var _reset_position: Vector3 = Vector3.ZERO
 
 @onready var cage: RigidBody3D = $Cage
-@onready var ball: RigidBody3D = $Ball
+@onready var ball_mesh: MeshInstance3D = $BallMesh
 
 
 func _ready() -> void:
 	cage.can_sleep = false
-	ball.can_sleep = false
 
 
 func configure(goal_targets: Array[Vector3], reset_position: Vector3) -> void:
@@ -32,55 +30,55 @@ func reset_to_center(reset_position: Vector3 = Vector3.ZERO) -> void:
 	if reset_position == Vector3.ZERO:
 		reset_position = _reset_position
 	var pos := Vector3(reset_position.x, reset_height, reset_position.z)
-	set_puck_position(pos)
+	cage.global_position = pos
 	cage.linear_velocity = Vector3.ZERO
 	cage.angular_velocity = Vector3.ZERO
-	ball.linear_velocity = Vector3.ZERO
-	ball.angular_velocity = Vector3.ZERO
+	if ball_mesh:
+		ball_mesh.global_position = pos
+		ball_mesh.rotation = Vector3.ZERO
 
 
-func _physics_process(_delta: float) -> void:
-	# Use cage position as the "puck position" for game logic
+func _physics_process(delta: float) -> void:
 	var pos := cage.global_position
 
-	# Safety: if either part escapes bounds, reset both
+	# Safety: if puck escapes bounds, reset
 	if abs(pos.x) > 8.0 or pos.z < -2.0 or pos.z > 28.0 or abs(pos.y) > 3.0:
 		push_warning("Puck escaped bounds at %s — resetting" % str(pos))
 		reset_to_center()
 		return
 
-	# Speed clamp on cage
+	# Speed clamp
 	var speed := cage.linear_velocity.length()
 	if speed > max_speed:
 		cage.linear_velocity = cage.linear_velocity.normalized() * max_speed
 
-	# Ball follows cage position (they translate together) but rotates freely
-	# This simulates the ball bearing rolling inside the fixed frame
-	ball.global_position = cage.global_position
-	ball.linear_velocity = cage.linear_velocity
-	# Angular velocity is untouched — ball spins from contact forces
+	# Visual ball follows cage and rolls based on movement
+	if ball_mesh:
+		ball_mesh.global_position = pos
+		if speed > 0.1:
+			var vel_flat := Vector3(cage.linear_velocity.x, 0.0, cage.linear_velocity.z).normalized()
+			var roll_axis := vel_flat.cross(Vector3.UP).normalized()
+			if roll_axis.length_squared() > 0.001:
+				ball_mesh.rotate(roll_axis, speed / ball_visual_radius * delta)
 
-	# Stall nudge — apply to cage (ball follows)
+	# Stall nudge
 	if stall_nudge_force > 0.0 and speed <= stall_speed_threshold:
 		_apply_goal_nudge()
 
 
-## Get the puck position for external code (uses cage position)
 func get_puck_position() -> Vector3:
 	if cage:
 		return cage.global_position
 	return global_position
 
 
-## Set position of both bodies
 func set_puck_position(value: Vector3) -> void:
 	if cage:
 		cage.global_position = value
-	if ball:
-		ball.global_position = value
+	if ball_mesh:
+		ball_mesh.global_position = value
 
 
-## Allow external code to apply impulse (projectiles hit the cage)
 func apply_impulse(impulse: Vector3, position: Vector3 = Vector3.ZERO) -> void:
 	cage.apply_impulse(impulse, position)
 
