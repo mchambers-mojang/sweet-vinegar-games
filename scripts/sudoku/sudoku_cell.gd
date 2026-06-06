@@ -24,9 +24,15 @@ var cell_color: Color = Color.TRANSPARENT  # User-applied color coding
 var _bounce_tween: Tween
 var _flash_tween: Tween
 var _select_tween: Tween
+var _highlight_tween: Tween
+var _same_num_tween: Tween
+var _same_color_tween: Tween
 var _flash_base_color: Color = Color.TRANSPARENT
 var _flash_alpha: float = 0.0  # 0 = no flash, 1 = full flash
 var _select_alpha: float = 0.0  # 0 = unselected, 1 = fully selected
+var _highlight_alpha: float = 0.0  # row/col/box highlight
+var _same_num_alpha: float = 0.0  # same number highlight
+var _same_color_alpha: float = 0.0  # same color highlight
 
 
 func _init() -> void:
@@ -105,17 +111,56 @@ func _set_select_alpha(val: float) -> void:
 
 
 func set_highlighted(highlighted: bool) -> void:
+	if is_highlighted == highlighted:
+		return
 	is_highlighted = highlighted
+	if _highlight_tween and _highlight_tween.is_running():
+		_highlight_tween.kill()
+	_highlight_tween = create_tween()
+	if highlighted:
+		_highlight_tween.tween_method(_set_highlight_alpha, _highlight_alpha, 1.0, 0.12)
+	else:
+		_highlight_tween.tween_method(_set_highlight_alpha, _highlight_alpha, 0.0, 0.08)
+
+
+func _set_highlight_alpha(val: float) -> void:
+	_highlight_alpha = val
 	queue_redraw()
 
 
 func set_same_number(same: bool) -> void:
+	if is_same_number == same:
+		return
 	is_same_number = same
+	if _same_num_tween and _same_num_tween.is_running():
+		_same_num_tween.kill()
+	_same_num_tween = create_tween()
+	if same:
+		_same_num_tween.tween_method(_set_same_num_alpha, _same_num_alpha, 1.0, 0.12)
+	else:
+		_same_num_tween.tween_method(_set_same_num_alpha, _same_num_alpha, 0.0, 0.08)
+
+
+func _set_same_num_alpha(val: float) -> void:
+	_same_num_alpha = val
 	queue_redraw()
 
 
 func set_same_color(same: bool) -> void:
+	if is_same_color == same:
+		return
 	is_same_color = same
+	if _same_color_tween and _same_color_tween.is_running():
+		_same_color_tween.kill()
+	_same_color_tween = create_tween()
+	if same:
+		_same_color_tween.tween_method(_set_same_color_alpha, _same_color_alpha, 1.0, 0.12)
+	else:
+		_same_color_tween.tween_method(_set_same_color_alpha, _same_color_alpha, 0.0, 0.08)
+
+
+func _set_same_color_alpha(val: float) -> void:
+	_same_color_alpha = val
 	queue_redraw()
 
 
@@ -177,6 +222,12 @@ func _draw() -> void:
 
 	# Background
 	var bg_color: Color
+	var base_color: Color
+	if is_given:
+		base_color = tm.get_color("cell_given")
+	else:
+		base_color = tm.get_color("cell_background")
+
 	if is_multi_selected:
 		if cell_color != Color.TRANSPARENT:
 			bg_color = cell_color.lerp(tm.get_color("cell_selected"), 0.5)
@@ -184,21 +235,18 @@ func _draw() -> void:
 			bg_color = tm.get_color("cell_selected")
 	elif cell_color != Color.TRANSPARENT:
 		bg_color = cell_color
-		if is_selected and _select_alpha > 0.0:
+		if _select_alpha > 0.0:
 			bg_color = bg_color.lerp(tm.get_color("cell_selected"), 0.5 * _select_alpha)
-		elif is_same_color:
-			bg_color = bg_color.lightened(0.15)
-	elif is_selected and _select_alpha > 0.0:
-		var base := tm.get_color("cell_background")
-		bg_color = base.lerp(tm.get_color("cell_selected"), _select_alpha)
-	elif is_same_number and value != 0:
-		bg_color = tm.get_color("cell_same_number")
-	elif is_highlighted:
-		bg_color = tm.get_color("cell_highlighted")
-	elif is_given:
-		bg_color = tm.get_color("cell_given")
+		elif _same_color_alpha > 0.0:
+			bg_color = bg_color.lightened(0.15 * _same_color_alpha)
+	elif _select_alpha > 0.0:
+		bg_color = base_color.lerp(tm.get_color("cell_selected"), _select_alpha)
+	elif _same_num_alpha > 0.0 and value != 0:
+		bg_color = base_color.lerp(tm.get_color("cell_same_number"), _same_num_alpha)
+	elif _highlight_alpha > 0.0:
+		bg_color = base_color.lerp(tm.get_color("cell_highlighted"), _highlight_alpha)
 	else:
-		bg_color = tm.get_color("cell_background")
+		bg_color = base_color
 
 	if is_error:
 		bg_color = bg_color.lerp(tm.get_color("cell_error"), 0.6)
