@@ -77,7 +77,7 @@ func _pos_to_cell(pos: Vector2) -> Vector2i:
 
 
 func debug_screen_to_grid(screen_pos: Vector2) -> Vector2i:
-	var local_pos := to_local(screen_pos)
+	var local_pos := screen_pos - global_position
 	var origin := _get_grid_origin()
 	var cell_size := _get_cell_size()
 	var bounds := Rect2(origin, Vector2(cell_size * grid_width, cell_size * grid_height))

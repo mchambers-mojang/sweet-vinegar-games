@@ -214,7 +214,7 @@ func get_cell_rect(index: int) -> Rect2:
 
 
 func debug_screen_to_grid(screen_pos: Vector2) -> Vector2i:
-	var local_pos := to_local(screen_pos)
+	var local_pos := screen_pos - global_position
 	if not _grid_rect.has_point(local_pos):
 		return Vector2i(-1, -1)
 
