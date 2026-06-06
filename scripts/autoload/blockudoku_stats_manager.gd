@@ -35,6 +35,14 @@ func record_game_over(final_score: int, final_turns: int, mode: String = DEFAULT
 	save_stats()
 
 
+func record_high_score_candidate(candidate_score: int) -> bool:
+	if candidate_score <= high_score:
+		return false
+	high_score = candidate_score
+	save_stats()
+	return true
+
+
 func record_clears(count: int) -> void:
 	total_clears += count
 	save_stats()

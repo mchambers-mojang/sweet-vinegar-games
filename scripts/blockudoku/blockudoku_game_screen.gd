@@ -14,6 +14,7 @@ var score: int = 0
 var turns: int = 0
 var combo_count: int = 0
 var is_game_over: bool = false
+var _new_best_shown: bool = false
 
 # Current set of blocks to place (each is Array of Vector2i)
 var available_blocks: Array[Array] = []
@@ -74,6 +75,7 @@ func start_new_game() -> void:
 	score = 0
 	turns = 0
 	combo_count = 0
+	_new_best_shown = false
 	elapsed_time = 0.0
 	is_game_over = false
 	undo_stack.clear()
@@ -90,6 +92,7 @@ func resume_game(data: Dictionary) -> void:
 	score = data.get("score", 0)
 	turns = data.get("turns", 0)
 	combo_count = data.get("combo_count", 0)
+	_new_best_shown = data.get("new_best_shown", false)
 	elapsed_time = data.get("elapsed_time", 0.0)
 	is_game_over = false
 	undo_stack.clear()
@@ -332,6 +335,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 		else:
 			combo_count = 0
 
+		_check_for_new_best()
 		_update_score_display()
 
 		# Check if we need new blocks
@@ -526,6 +530,21 @@ func _show_combo_text(total_clears: int, combo: int) -> void:
 	ComboLabel.create(board, center, text, color)
 
 
+func _check_for_new_best() -> void:
+	if _new_best_shown:
+		return
+	if not BlockudokuStatsManager.record_high_score_candidate(score):
+		return
+	_new_best_shown = true
+
+	var color := Color(0.0, 2.0, 1.5) if ThemeManager.is_neon else Color(0.2, 0.75, 1.0)
+	var cell_size := board._get_cell_size()
+	var origin := board._get_grid_origin()
+	var center := origin + Vector2(cell_size * 4.5, cell_size * 4.5)
+	ComboLabel.create(board, center, "NEW BEST!", color)
+	HapticManager.vibrate_medium()
+
+
 func _on_back() -> void:
 	if not is_game_over:
 		_save_current_state()
@@ -628,6 +647,7 @@ func _save_current_state() -> void:
 		"score": score,
 		"turns": turns,
 		"combo_count": combo_count,
+		"new_best_shown": _new_best_shown,
 		"elapsed_time": elapsed_time,
 		"board_state": board.get_state(),
 		"available_blocks": _serialize_blocks(available_blocks),
