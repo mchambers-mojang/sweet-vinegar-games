@@ -34,8 +34,9 @@ var puck: CaromPuck = null
 
 func _ready() -> void:
 	arena.goal_scored.connect(_on_goal_scored)
-	_spawn_entities()
-	_start_match()
+	# Defer spawn until parent arena's @onready vars are resolved
+	call_deferred("_spawn_entities")
+	call_deferred("_start_match")
 
 
 func _unhandled_input(event: InputEvent) -> void:
