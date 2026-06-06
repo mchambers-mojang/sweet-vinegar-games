@@ -18,7 +18,7 @@ var _playback_timer: float = 0.0
 var _playback_speed: float = 1.0
 var _last_tick: int = 0
 
-const SPEED_OPTIONS := [1.0, 2.0, 4.0, 0.5]
+const SPEED_OPTIONS := [1, 2, 4]
 var _speed_index: int = 0
 
 

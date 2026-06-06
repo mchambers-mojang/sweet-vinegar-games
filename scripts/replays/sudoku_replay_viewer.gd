@@ -17,7 +17,7 @@ var _playing: bool = false
 var _playback_timer: float = 0.0
 var _playback_speed: float = 1.0
 
-const SPEED_OPTIONS := [1.0, 2.0, 4.0, 0.5]
+const SPEED_OPTIONS := [1, 2, 4]
 var _speed_index: int = 0
 
 
@@ -51,7 +51,7 @@ func load_replay(replay: Dictionary) -> void:
 	if puzzle.size() == 81:
 		board.load_puzzle(puzzle)
 
-	# Collect number_input frames (skip notes for visual clarity)
+	# Collect number_input and hint_pressed frames (skip notes for visual clarity)
 	_frames = []
 	for frame in _replay.get("frames", []):
 		var input_event: Dictionary = frame.get("input_event", {})
@@ -60,6 +60,8 @@ func load_replay(replay: Dictionary) -> void:
 			var payload: Dictionary = input_event.get("payload", {})
 			if not bool(payload.get("notes_mode", false)):
 				_frames.append(frame)
+		elif event_type == "hint_pressed":
+			_frames.append(frame)
 
 	_current_frame = 0
 	_playing = false
@@ -109,9 +111,15 @@ func _process(delta: float) -> void:
 
 func _apply_frame(frame: Dictionary) -> void:
 	var input_event: Dictionary = frame.get("input_event", {})
+	var event_type := str(input_event.get("type", ""))
 	var payload: Dictionary = input_event.get("payload", {})
 	var index := int(payload.get("index", -1))
-	var number := int(payload.get("number", 0))
+	var number := 0
+
+	if event_type == "hint_pressed":
+		number = int(payload.get("value", 0))
+	else:
+		number = int(payload.get("number", 0))
 
 	if index < 0 or index >= 81 or number <= 0 or number > 9:
 		return

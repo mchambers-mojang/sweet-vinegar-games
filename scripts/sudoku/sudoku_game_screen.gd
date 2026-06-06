@@ -534,7 +534,6 @@ func _on_notes_pressed() -> void:
 func _on_hint_pressed() -> void:
 	if _is_board_locked() or hints_used >= 1:
 		return
-	ReplayManager.record_input(elapsed_time, "hint_pressed", {})
 	CrashReporter.register_user_action("sudoku_hint_used", {"selected_index": board.selected_index})
 
 	var index: int = -1
@@ -559,6 +558,7 @@ func _on_hint_pressed() -> void:
 
 	var cell := board.cells[index]
 	board.selected_index = index
+	ReplayManager.record_input(elapsed_time, "hint_pressed", {"index": index, "value": solution[index]})
 
 	_push_undo(index)
 	cell.set_value(solution[index])
