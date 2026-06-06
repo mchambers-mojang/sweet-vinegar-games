@@ -225,8 +225,8 @@ static func _get_diagonal_shapes() -> Array[Array]:
 
 ## Weight per cell count — bell curve favoring 3-4 cell pieces
 const SIZE_WEIGHTS := {
-	1: 0.5,
-	2: 2.0,
+	1: 0.2,
+	2: 0.5,
 	3: 4.0,
 	4: 4.0,
 	5: 1.5,
