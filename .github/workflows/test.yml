@@ -1,0 +1,50 @@
+name: Run Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  GODOT_VERSION: "4.6.3"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Godot
+        uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-${{ env.GODOT_VERSION }}-linux
+
+      - name: Install Godot
+        run: |
+          if [ ! -f ~/godot/godot ]; then
+            mkdir -p ~/godot
+            wget -q https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip -O /tmp/godot.zip
+            unzip -o /tmp/godot.zip -d ~/godot
+            mv ~/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64 ~/godot/godot
+            chmod +x ~/godot/godot
+          fi
+
+      - name: Import project
+        run: ~/godot/godot --headless --import 2>&1 | tail -5 || true
+
+      - name: Run GUT tests
+        run: |
+          ~/godot/godot --headless -s res://addons/gut/gut_cmdln.gd 2>&1 | tee test_output.txt
+          # GUT exits 0 even on failure, so check output
+          if grep -q "Failing Tests" test_output.txt && ! grep -q "Failing Tests         0" test_output.txt; then
+            echo "::error::Tests failed!"
+            exit 1
+          fi
+          if grep -q "All tests passed" test_output.txt; then
+            echo "All tests passed!"
+          else
+            echo "::error::Test run did not complete successfully"
+            exit 1
+          fi
