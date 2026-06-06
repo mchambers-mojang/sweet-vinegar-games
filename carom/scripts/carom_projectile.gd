@@ -26,10 +26,10 @@ func setup(new_direction: Vector3, new_speed: float, new_owner_side: StringName,
 	var mesh_instance := get_node_or_null("MeshInstance3D") as MeshInstance3D
 	if mesh_instance:
 		var mat := StandardMaterial3D.new()
-		mat.albedo_color = color
+		mat.albedo_color = Color(color.r * 0.1, color.g * 0.1, color.b * 0.1)
 		mat.emission_enabled = true
-		mat.emission = color * 1.4
-		mat.emission_energy_multiplier = 2.0
+		mat.emission = color
+		mat.emission_energy_multiplier = 1.0
 		mesh_instance.material_override = mat
 
 
