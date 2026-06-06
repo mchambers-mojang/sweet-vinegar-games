@@ -227,12 +227,19 @@ func _on_undo() -> void:
 		# Find and remove it
 		for i in range(board.placed_rects.size() - 1, -1, -1):
 			if board.placed_rects[i] == placed_rect:
+				ReplayManager.record_input(elapsed_time, "rectangle_removed", {"index": i})
 				board.remove_rect(i)
 				break
 		redo_stack.append(entry)
 	elif entry["action"] == "remove":
 		# Undo a removal = re-add the rect
 		var removed_rect: Rect2i = entry["rect"]
+		ReplayManager.record_input(elapsed_time, "rectangle_placed", {
+			"x": removed_rect.position.x,
+			"y": removed_rect.position.y,
+			"w": removed_rect.size.x,
+			"h": removed_rect.size.y,
+		})
 		board.add_rect(removed_rect)
 		redo_stack.append(entry)
 	_update_button_states()
@@ -247,12 +254,19 @@ func _on_redo() -> void:
 	var entry: Dictionary = redo_stack.pop_back()
 	if entry["action"] == "place":
 		var redo_rect: Rect2i = entry["rect"]
+		ReplayManager.record_input(elapsed_time, "rectangle_placed", {
+			"x": redo_rect.position.x,
+			"y": redo_rect.position.y,
+			"w": redo_rect.size.x,
+			"h": redo_rect.size.y,
+		})
 		board.add_rect(redo_rect)
 		undo_stack.append(entry)
 	elif entry["action"] == "remove":
 		var removed_rect: Rect2i = entry["rect"]
 		for i in range(board.placed_rects.size() - 1, -1, -1):
 			if board.placed_rects[i] == removed_rect:
+				ReplayManager.record_input(elapsed_time, "rectangle_removed", {"index": i})
 				board.remove_rect(i)
 				break
 		undo_stack.append(entry)
@@ -281,6 +295,12 @@ func _on_hint() -> void:
 		return
 	candidates.shuffle()
 	var hint_rect := candidates[0]
+	ReplayManager.record_input(elapsed_time, "rectangle_placed", {
+		"x": hint_rect.position.x,
+		"y": hint_rect.position.y,
+		"w": hint_rect.size.x,
+		"h": hint_rect.size.y,
+	})
 	undo_stack.append({"action": "place", "rect": hint_rect})
 	redo_stack.clear()
 	board.add_rect(hint_rect)
