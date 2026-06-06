@@ -133,5 +133,6 @@ func _append_score_history(mode: String, score: int) -> void:
 	var history := score_history_by_mode[mode] as Array
 	history.append(score)
 	if history.size() > SCORE_HISTORY_LIMIT:
-		history = history.slice(history.size() - SCORE_HISTORY_LIMIT)
-	score_history_by_mode[mode] = history
+		score_history_by_mode[mode] = history.slice(history.size() - SCORE_HISTORY_LIMIT)
+	else:
+		score_history_by_mode[mode] = history

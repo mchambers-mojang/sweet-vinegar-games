@@ -45,11 +45,11 @@ func _build_stats_ui() -> void:
 	if score_history.is_empty():
 		_add_stat_row("History", "No completed games yet")
 	else:
-		var graph := ScoreHistoryGraph.new()
-		graph.custom_minimum_size = Vector2(0, 220)
-		graph.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		graph.set_scores(score_history)
-		stats_list.add_child(graph)
+		var score_graph := ScoreHistoryGraph.new()
+		score_graph.custom_minimum_size = Vector2(0, 220)
+		score_graph.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		score_graph.set_scores(score_history)
+		stats_list.add_child(score_graph)
 
 	_add_separator()
 
