@@ -5,6 +5,8 @@ extends Control
 @onready var back_button: Button = %BackButton
 @onready var stats_list: VBoxContainer = %StatsList
 
+const ScoreHistoryGraph := preload("res://scripts/blockudoku/score_history_graph.gd")
+
 
 func _ready() -> void:
 	back_button.pressed.connect(func() -> void:
@@ -20,6 +22,7 @@ func _build_stats_ui() -> void:
 		child.queue_free()
 
 	_add_header("Blockudoku Stats")
+	var score_history: Array = BlockudokuStatsManager.get_score_history()
 
 	_add_stat_row("Games Played", str(BlockudokuStatsManager.games_played))
 	_add_stat_row("High Score", str(BlockudokuStatsManager.high_score))
@@ -31,6 +34,22 @@ func _build_stats_ui() -> void:
 	_add_stat_row("Total Score", str(BlockudokuStatsManager.total_score))
 	_add_stat_row("Total Turns", str(BlockudokuStatsManager.total_turns))
 	_add_stat_row("Total Lines Cleared", str(BlockudokuStatsManager.total_clears))
+	var average_score_text := "--"
+	if not score_history.is_empty():
+		average_score_text = "%.1f" % BlockudokuStatsManager.get_average_score()
+	_add_stat_row("Average Score", average_score_text)
+
+	_add_separator()
+	_add_header("Score History (Last 30 Games)")
+
+	if score_history.is_empty():
+		_add_stat_row("History", "No completed games yet")
+	else:
+		var score_graph := ScoreHistoryGraph.new()
+		score_graph.custom_minimum_size = Vector2(0, 220)
+		score_graph.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		score_graph.set_scores(score_history)
+		stats_list.add_child(score_graph)
 
 	_add_separator()
 

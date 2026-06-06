@@ -18,6 +18,7 @@ config/icon="res://icon.svg"
 [autoload]
 
 SettingsManager="*res://scripts/autoload/settings_manager.gd"
+AnalyticsManager="*res://scripts/autoload/analytics_manager.gd"
 StatsManager="*res://scripts/autoload/stats_manager.gd"
 SaveManager="*res://scripts/autoload/save_manager.gd"
 ThemeManager="*res://scripts/autoload/theme_manager.gd"
@@ -28,10 +29,12 @@ ShikakuStatsManager="*res://scripts/autoload/shikaku_stats_manager.gd"
 BlockudokuSaveManager="*res://scripts/autoload/blockudoku_save_manager.gd"
 BlockudokuStatsManager="*res://scripts/autoload/blockudoku_stats_manager.gd"
 ReplayManager="*res://scripts/autoload/replay_manager.gd"
+CrashReporter="*res://scripts/autoload/crash_reporter.gd"
 NeonFxManager="*res://scripts/autoload/neon_fx_manager.gd"
 SceneTransition="*res://scripts/autoload/scene_transition.gd"
 SafeAreaManager="*res://scripts/autoload/safe_area_manager.gd"
 DragEffect="*res://scripts/effects/drag_effect.gd"
+DebugOverlay="*res://scripts/autoload/debug_overlay.gd"
 
 [debug]
 
