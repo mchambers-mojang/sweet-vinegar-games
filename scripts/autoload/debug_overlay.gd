@@ -187,6 +187,14 @@ func _build_ui() -> void:
 	_add_setting_toggle(list, "Analytics tail", "analytics")
 	_add_setting_toggle(list, "Grid coordinates", "grid")
 
+	var reset_btn := Button.new()
+	reset_btn.text = "Reset Achievements"
+	reset_btn.pressed.connect(func() -> void:
+		AchievementManager.reset_all_progress()
+		log_analytics_event("debug_cheat:reset_achievements")
+	)
+	list.add_child(reset_btn)
+
 	_update_overlay_visibility()
 
 

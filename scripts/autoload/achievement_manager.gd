@@ -221,6 +221,12 @@ func _is_visible(achievement_id: String) -> bool:
 	return bool(_progress.get(prereq, {}).get("unlocked", false))
 
 
+func reset_all_progress() -> void:
+	DirAccess.remove_absolute(SAVE_PATH)
+	_progress.clear()
+	_init_progress_defaults()
+
+
 func _save_progress() -> void:
 	var config := ConfigFile.new()
 	for id in _progress.keys():
