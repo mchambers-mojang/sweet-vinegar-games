@@ -20,6 +20,7 @@ var _drag_block_index: int = -1
 var _drag_shape: Array = []
 var _drag_screen_pos: Vector2 = Vector2.ZERO
 var _drag_last_grid_pos := Vector2i(-999, -999)
+var _board_pulse_tween: Tween = null
 
 # Node references
 @onready var board: BlockudokuBoard = %BlockudokuBoard
@@ -281,6 +282,8 @@ func _end_drag(screen_pos: Vector2) -> void:
 			var combo_bonus := 0
 			if combo_count > 1:
 				combo_bonus = combo_count * 10
+				if lines + boxes >= 2:
+					_pulse_board_for_combo(combo_count)
 				# Scale shockwave with combo
 				if ThemeManager.is_neon:
 					var cell_size := board._get_cell_size()
@@ -324,6 +327,24 @@ func _end_drag(screen_pos: Vector2) -> void:
 
 
 var _shatter_tween: Tween = null
+
+
+func _pulse_board_for_combo(combo: int) -> void:
+	if not SettingsManager.screen_shake_enabled:
+		return
+
+	if _board_pulse_tween and _board_pulse_tween.is_valid():
+		_board_pulse_tween.kill()
+
+	board.scale = Vector2.ONE
+	var peak_scale := 1.02 + minf(0.002 * float(combo - 1), 0.02)
+	_board_pulse_tween = create_tween()
+	var pulse_up := _board_pulse_tween.tween_property(board, "scale", Vector2(peak_scale, peak_scale), 0.15)
+	pulse_up.set_trans(Tween.TRANS_BACK)
+	pulse_up.set_ease(Tween.EASE_OUT)
+	var pulse_down := _board_pulse_tween.tween_property(board, "scale", Vector2.ONE, 0.15)
+	pulse_down.set_trans(Tween.TRANS_BACK)
+	pulse_down.set_ease(Tween.EASE_IN)
 
 func _handle_game_over() -> void:
 	is_game_over = true
