@@ -87,6 +87,15 @@ func bookmark_latest_replay() -> bool:
 	return true
 
 
+func delete_replay(replay_id: String) -> bool:
+	for i in range(_replays.size() - 1, -1, -1):
+		if str(_replays[i].get("id", "")) == replay_id:
+			_replays.remove_at(i)
+			_save_replays()
+			return true
+	return false
+
+
 func get_recent_replays(limit: int = MAX_AUTO_REPLAYS) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	var start := maxi(0, _replays.size() - limit)
