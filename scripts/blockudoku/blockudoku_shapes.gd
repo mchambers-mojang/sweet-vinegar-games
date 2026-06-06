@@ -223,16 +223,93 @@ static func _get_diagonal_shapes() -> Array[Array]:
 	return shapes
 
 
-## Pick n random shapes from the pool
+## Weight per cell count — bell curve favoring 3-4 cell pieces
+const SIZE_WEIGHTS := {
+	1: 0.5,
+	2: 2.0,
+	3: 4.0,
+	4: 4.0,
+	5: 1.5,
+	6: 0.5,
+}
+
+
+## Pick n random shapes with weighted distribution by size.
+## Each unique shape (ignoring rotations) has equal chance within its size class.
+## A random rotation is applied after selection.
 static func pick_random(count: int, rng: RandomNumberGenerator = null) -> Array[Array]:
 	var all := get_all_shapes()
+
+	# Deduplicate: group by normalized canonical key (smallest rotation)
+	var canonical_map: Dictionary = {}  # canonical_key -> shape
+	for shape in all:
+		var key := _canonical_key(shape)
+		if not canonical_map.has(key):
+			canonical_map[key] = shape
+
+	# Group unique shapes by size
+	var by_size: Dictionary = {}  # int -> Array of shapes
+	for shape in canonical_map.values():
+		var sz: int = shape.size()
+		if not by_size.has(sz):
+			by_size[sz] = []
+		by_size[sz].append(shape)
+
+	# Build weighted pool: each shape gets weight = SIZE_WEIGHTS[size] / count_in_size
+	var pool: Array[Array] = []
+	var weights: Array[float] = []
+	for sz in by_size.keys():
+		var shapes_in_size: Array = by_size[sz]
+		var base_weight: float = SIZE_WEIGHTS.get(sz, 1.0)
+		var per_shape_weight := base_weight / float(shapes_in_size.size())
+		for shape in shapes_in_size:
+			pool.append(shape)
+			weights.append(per_shape_weight)
+
+	# Compute cumulative weights for weighted random selection
+	var total_weight := 0.0
+	var cumulative: Array[float] = []
+	for w in weights:
+		total_weight += w
+		cumulative.append(total_weight)
+
+	# Pick shapes
 	var result: Array[Array] = []
 	for i in count:
-		if rng:
-			result.append(all[rng.randi_range(0, all.size() - 1)])
-		else:
-			result.append(all[randi() % all.size()])
+		var roll := (rng.randf() if rng else randf()) * total_weight
+		var picked_idx := 0
+		for j in cumulative.size():
+			if roll <= cumulative[j]:
+				picked_idx = j
+				break
+		var shape: Array = pool[picked_idx]
+		# Apply random rotation (0-3 times)
+		var rotations := (rng.randi_range(0, 3) if rng else randi() % 4)
+		for _r in rotations:
+			shape = rotate_clockwise(shape)
+		result.append(shape)
 	return result
+
+
+## Generate a canonical key for deduplication (normalized, smallest rotation)
+static func _canonical_key(shape: Array) -> String:
+	var best := ""
+	var current: Array = normalize(shape)
+	for _r in 4:
+		var sorted_cells := current.duplicate()
+		sorted_cells.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+			if a.y != b.y:
+				return a.y < b.y
+			return a.x < b.x
+		)
+		var key := ""
+		for cell in sorted_cells:
+			var c: Vector2i = cell
+			key += "%d,%d;" % [c.x, c.y]
+		if best == "" or key < best:
+			best = key
+		current = rotate_clockwise(current)
+	return best
 
 
 ## Normalize a shape so its minimum x/y offset is 0
