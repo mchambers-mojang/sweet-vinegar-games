@@ -576,7 +576,11 @@ func _show_game_over_dialog() -> void:
 			dialog.queue_free()
 			SceneTransition.transition_to("res://scenes/blockudoku_menu.tscn")
 		elif action == "bookmark":
-			ReplayManager.bookmark_latest_replay()
+			var success := ReplayManager.bookmark_latest_replay()
+			if success:
+				dialog.dialog_text += "\n\n✓ Replay bookmarked!"
+			else:
+				dialog.dialog_text += "\n\n✗ No replay to bookmark"
 	)
 
 

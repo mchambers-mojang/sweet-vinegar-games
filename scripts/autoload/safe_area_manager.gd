@@ -18,11 +18,18 @@ func _update_safe_area() -> void:
 		return
 	var screen_size := DisplayServer.screen_get_size()
 	var safe_area := DisplayServer.get_display_safe_area()
+	# Convert from physical screen pixels to viewport-relative insets
+	var viewport_size := Vector2(
+		ProjectSettings.get_setting("display/window/size/viewport_width", 390),
+		ProjectSettings.get_setting("display/window/size/viewport_height", 844),
+	)
+	var scale_x := viewport_size.x / float(screen_size.x) if screen_size.x > 0 else 1.0
+	var scale_y := viewport_size.y / float(screen_size.y) if screen_size.y > 0 else 1.0
 	_safe_insets = Rect2i(
-		safe_area.position.x,
-		safe_area.position.y,
-		screen_size.x - safe_area.end.x,
-		screen_size.y - safe_area.end.y,
+		int(safe_area.position.x * scale_x),
+		int(safe_area.position.y * scale_y),
+		int((screen_size.x - safe_area.end.x) * scale_x),
+		int((screen_size.y - safe_area.end.y) * scale_y),
 	)
 	# iOS fallback: if safe area reports zero insets but we're on iPhone,
 	# apply minimum top inset for status bar / Dynamic Island
