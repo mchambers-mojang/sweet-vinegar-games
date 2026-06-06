@@ -48,6 +48,8 @@ var redo_stack: Array[Dictionary] = []
 
 
 func _ready() -> void:
+	CrashReporter.register_state_provider(_get_crash_state)
+	CrashReporter.register_user_action("blockudoku_screen_opened")
 	back_button.pressed.connect(_on_back)
 	undo_button.pressed.connect(_on_undo_pressed)
 	redo_button.pressed.connect(_on_redo_pressed)
@@ -63,6 +65,10 @@ func _ready() -> void:
 	# Cosmetic drag effect is now a global autoload
 
 
+func _exit_tree() -> void:
+	CrashReporter.unregister_state_provider(_get_crash_state)
+
+
 func _setup_help_button() -> void:
 	var btn := Button.new()
 	btn.text = "?"
@@ -72,6 +78,7 @@ func _setup_help_button() -> void:
 
 
 func start_new_game() -> void:
+	CrashReporter.register_user_action("blockudoku_start_new_game")
 	score = 0
 	turns = 0
 	combo_count = 0
@@ -92,6 +99,7 @@ func start_new_game() -> void:
 
 
 func resume_game(data: Dictionary) -> void:
+	CrashReporter.register_user_action("blockudoku_resume_game", {"score": data.get("score", 0)})
 	score = data.get("score", 0)
 	turns = data.get("turns", 0)
 	combo_count = data.get("combo_count", 0)
@@ -412,6 +420,7 @@ func _pulse_board_for_combo(combo: int) -> void:
 	pulse_down.set_ease(Tween.EASE_IN)
 
 func _handle_game_over() -> void:
+	CrashReporter.register_user_action("blockudoku_game_over", {"score": score, "turns": turns})
 	is_game_over = true
 	_update_undo_redo_buttons()
 	BlockudokuStatsManager.record_game_over(score, turns)
@@ -577,6 +586,7 @@ func _check_for_new_best() -> void:
 
 
 func _on_back() -> void:
+	CrashReporter.register_user_action("blockudoku_back_to_menu")
 	if not is_game_over:
 		_save_current_state()
 	SceneTransition.transition_to("res://scenes/blockudoku_menu.tscn")
@@ -684,3 +694,16 @@ func _save_current_state() -> void:
 		"available_blocks": _serialize_blocks(available_blocks),
 		"blocks_placed_this_set": blocks_placed_this_set,
 	})
+
+
+func _get_crash_state() -> Dictionary:
+	return {
+		"game": "blockudoku",
+		"score": score,
+		"turns": turns,
+		"combo_count": combo_count,
+		"elapsed_time": elapsed_time,
+		"is_game_over": is_game_over,
+		"blocks_placed_this_set": blocks_placed_this_set,
+		"available_block_count": available_blocks.size(),
+	}
