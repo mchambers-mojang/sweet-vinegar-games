@@ -9,9 +9,9 @@
 [sub_resource type="SphereShape3D" id="1"]
 radius = 0.35
 
-; Fin collision — thin paddles radiating from center
+; Fin collision — thin paddles radiating from center, extending past ball radius
 [sub_resource type="BoxShape3D" id="2"]
-size = Vector3(0.08, 0.3, 0.45)
+size = Vector3(0.08, 0.25, 0.9)
 
 ; Ball mesh
 [sub_resource type="SphereMesh" id="3"]
@@ -28,7 +28,7 @@ roughness = 0.08
 
 ; Fin mesh — flat rectangular paddle
 [sub_resource type="BoxMesh" id="6"]
-size = Vector3(0.06, 0.28, 0.42)
+size = Vector3(0.06, 0.23, 0.88)
 
 ; Fin material — dimmer neon outline look
 [sub_resource type="StandardMaterial3D" id="7"]
@@ -44,11 +44,11 @@ bounce = 0.85
 
 ; Fin collision — slightly wider variant for asymmetry
 [sub_resource type="BoxShape3D" id="8"]
-size = Vector3(0.08, 0.3, 0.5)
+size = Vector3(0.08, 0.25, 1.0)
 
 ; Wider fin mesh
 [sub_resource type="BoxMesh" id="9"]
-size = Vector3(0.06, 0.28, 0.48)
+size = Vector3(0.06, 0.23, 0.98)
 
 ; Wider fin material — slightly different color for visual variety
 [sub_resource type="StandardMaterial3D" id="10"]
