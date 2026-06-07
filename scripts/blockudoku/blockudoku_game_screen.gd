@@ -492,6 +492,8 @@ func _handle_game_over() -> void:
 	})
 	_update_undo_redo_buttons()
 	BlockudokuStatsManager.record_game_over(score, turns)
+	AchievementManager.track_blockudoku_game_played(score)
+	AchievementManager.track_streak_broken()
 	AnalyticsManager.log_event("game_over", {
 		"game": "blockudoku",
 		"won": false,
@@ -668,6 +670,7 @@ func _on_back() -> void:
 			"turns": turns,
 			"board_state": board.get_state(),
 		})
+		AchievementManager.track_streak_broken()
 		_save_current_state()
 	SceneTransition.transition_to("res://scenes/blockudoku_menu.tscn")
 

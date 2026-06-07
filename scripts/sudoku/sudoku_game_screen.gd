@@ -376,6 +376,7 @@ func _handle_number_first_cell_tap(index: int) -> void:
 				is_failed = true
 				_can_continue_after_failure = false
 				_update_button_states()
+				AchievementManager.track_streak_broken()
 				_log_game_over_analytics(false)
 				_show_fail_dialog()
 			_save_current_state()
@@ -489,6 +490,7 @@ func _place_or_note_number(number: int) -> void:
 				is_failed = true
 				_can_continue_after_failure = false
 				_update_button_states()
+				AchievementManager.track_streak_broken()
 				_log_game_over_analytics(false)
 				_show_fail_dialog()
 			_save_current_state()
@@ -623,6 +625,8 @@ func _on_back_pressed() -> void:
 		"strikes": strikes,
 	})
 	CrashReporter.register_user_action("sudoku_back_to_menu")
+	if not is_completed:
+		AchievementManager.track_streak_broken()
 	_save_current_state()
 	SceneTransition.transition_to("res://scenes/main_menu.tscn")
 
@@ -727,7 +731,11 @@ func _handle_win() -> void:
 	var previous_best: float = StatsManager.best_times.get(difficulty, -1.0)
 	StatsManager.record_game_completed(difficulty, elapsed_time, SettingsManager.error_mode == "strict", won)
 	if won:
-		AchievementManager.track_game_won("sudoku", {"strikes": strikes})
+		AchievementManager.track_game_won("sudoku", {
+			"difficulty": difficulty,
+			"elapsed_time": elapsed_time,
+			"strikes": strikes,
+		})
 	_log_game_over_analytics(won)
 	SaveManager.clear_save()
 	_play_win_celebration()
@@ -1122,6 +1130,7 @@ func _apply_number_to_multi_selection(number: int) -> void:
 		if strikes >= 4 and not is_failed:
 			is_failed = true
 			_can_continue_after_failure = false
+			AchievementManager.track_streak_broken()
 			_update_button_states()
 			_log_game_over_analytics(false)
 			_show_fail_dialog()

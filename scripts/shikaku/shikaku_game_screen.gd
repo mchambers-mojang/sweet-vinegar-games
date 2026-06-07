@@ -328,6 +328,8 @@ func _on_back() -> void:
 		"height": grid_height,
 	})
 	CrashReporter.register_user_action("shikaku_back_to_menu")
+	if not is_completed:
+		AchievementManager.track_streak_broken()
 	_save_current_state()
 	SceneTransition.transition_to("res://scenes/shikaku_menu.tscn")
 
@@ -351,6 +353,7 @@ func _handle_win() -> void:
 	var is_new_best := _is_new_best_time()
 	ShikakuStatsManager.record_game_completed(grid_width, elapsed_time)
 	AchievementManager.track_game_won("shikaku")
+	AchievementManager.track_shikaku_won(grid_width, elapsed_time)
 	AnalyticsManager.log_event("game_over", {
 		"game": "shikaku",
 		"won": true,
