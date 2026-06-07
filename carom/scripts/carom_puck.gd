@@ -7,7 +7,7 @@ extends RigidBody3D
 @export var max_speed: float = 14.0
 @export var stall_nudge_force: float = 0.18
 @export var stall_speed_threshold: float = 1.8
-@export var reset_height: float = 0.4
+@export var reset_height: float = 0.0
 
 var _goal_targets: Array[Vector3] = []
 var _reset_position: Vector3 = Vector3.ZERO

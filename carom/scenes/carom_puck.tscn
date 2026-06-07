@@ -4,9 +4,9 @@
 
 ; Solid triangular prism — vertices of equilateral triangle (circumradius 0.5)
 ; Triangle in XZ plane: V1(0,_,0.5), V2(0.433,_,-0.25), V3(-0.433,_,-0.25)
-; Extruded from Y=0.25 to Y=0.55 (centered at Y=0.4)
+; Extruded from Y=0 to Y=0.3 (on the ground)
 [sub_resource type="ConvexPolygonShape3D" id="1"]
-points = PackedVector3Array(0, 0.25, 0.5, 0.433, 0.25, -0.25, -0.433, 0.25, -0.25, 0, 0.55, 0.5, 0.433, 0.55, -0.25, -0.433, 0.55, -0.25)
+points = PackedVector3Array(0, 0, 0.5, 0.433, 0, -0.25, -0.433, 0, -0.25, 0, 0.3, 0.5, 0.433, 0.3, -0.25, -0.433, 0.3, -0.25)
 
 ; Edge mesh — thin box matching edge length (0.866)
 [sub_resource type="BoxMesh" id="6"]
@@ -37,23 +37,23 @@ continuous_cd = true
 [node name="Collision" type="CollisionShape3D" parent="."]
 shape = SubResource("1")
 
-; Edge V1-V2: midpoint (0.217, 0.4, 0.125), rotated 60 degrees
+; Edge V1-V2: midpoint (0.217, 0.15, 0.125), rotated 60 degrees
 [node name="Edge1Mesh" type="MeshInstance3D" parent="."]
-position = Vector3(0.217, 0.4, 0.125)
+position = Vector3(0.217, 0.15, 0.125)
 rotation = Vector3(0, 1.047, 0)
 mesh = SubResource("6")
 material_override = SubResource("7")
 
-; Edge V2-V3: midpoint (0, 0.4, -0.25), rotated 180 degrees
+; Edge V2-V3: midpoint (0, 0.15, -0.25), rotated 180 degrees
 [node name="Edge2Mesh" type="MeshInstance3D" parent="."]
-position = Vector3(0, 0.4, -0.25)
+position = Vector3(0, 0.15, -0.25)
 rotation = Vector3(0, 3.1416, 0)
 mesh = SubResource("6")
 material_override = SubResource("7")
 
-; Edge V3-V1: midpoint (-0.217, 0.4, 0.125), rotated -60 degrees
+; Edge V3-V1: midpoint (-0.217, 0.15, 0.125), rotated -60 degrees
 [node name="Edge3Mesh" type="MeshInstance3D" parent="."]
-position = Vector3(-0.217, 0.4, 0.125)
+position = Vector3(-0.217, 0.15, 0.125)
 rotation = Vector3(0, -1.047, 0)
 mesh = SubResource("6")
 material_override = SubResource("7")
