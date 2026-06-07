@@ -42,6 +42,7 @@ func _ready() -> void:
 	_migrate_legacy_replays()
 	_load_index()
 	_load_active_replay()
+	CrashReporter.register_replay_hook(get_crash_recovery_payload)
 
 
 func _process(delta: float) -> void:
@@ -223,10 +224,12 @@ func get_crash_recovery_payload() -> Dictionary:
 	var payload := {
 		"active_replay": _active_replay,
 		"latest_completed_replay": {},
+		"replay_code": "",
 	}
 	if not _replay_index.is_empty():
 		var latest_id := str(_replay_index[-1].get("id", ""))
 		payload["latest_completed_replay"] = _load_replay_file(latest_id)
+		payload["replay_code"] = export_replay_code(latest_id)
 	return payload
 
 
