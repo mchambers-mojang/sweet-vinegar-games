@@ -58,13 +58,13 @@ func _ready() -> void:
 	undo_button.pressed.connect(_on_undo_pressed)
 	redo_button.pressed.connect(_on_redo_pressed)
 	settings_button.pressed.connect(func() -> void:
+		var SettingsScreen := load("res://scripts/settings_screen.gd")
+		SettingsScreen.return_scene = "res://scenes/blockudoku_game.tscn"
 		SceneTransition.transition_to("res://scenes/settings.tscn")
 	)
 	_setup_help_button()
 	_apply_theme()
 	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
-
-	# Adjust for mobile safe area (notch, status bar)
 	var margin := get_node_or_null("MarginContainer") as MarginContainer
 	if margin:
 		SafeAreaManager.apply(margin)

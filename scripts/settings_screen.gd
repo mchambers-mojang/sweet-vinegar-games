@@ -25,7 +25,7 @@ func _build_settings_ui() -> void:
 	for child in settings_list.get_children():
 		child.queue_free()
 
-	var is_sudoku := return_scene == "res://scenes/main_menu.tscn"
+	var is_sudoku := return_scene in ["res://scenes/main_menu.tscn", "res://scenes/game.tscn"]
 
 	# --- Sudoku-specific settings ---
 	if is_sudoku:
@@ -63,7 +63,7 @@ func _build_settings_ui() -> void:
 
 		_add_separator()
 
-	var is_blockudoku := return_scene == "res://scenes/blockudoku_menu.tscn"
+	var is_blockudoku := return_scene in ["res://scenes/blockudoku_menu.tscn", "res://scenes/blockudoku_game.tscn"]
 
 	# --- Blockudoku-specific settings ---
 	if is_blockudoku:

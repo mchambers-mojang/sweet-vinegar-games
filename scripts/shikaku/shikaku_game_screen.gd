@@ -51,6 +51,8 @@ func _ready() -> void:
 	pause_button.pressed.connect(_on_pause)
 	back_button.pressed.connect(_on_back)
 	settings_button.pressed.connect(func() -> void:
+		var SettingsScreen := load("res://scripts/settings_screen.gd")
+		SettingsScreen.return_scene = "res://scenes/shikaku_menu.tscn"
 		SceneTransition.transition_to("res://scenes/settings.tscn")
 	)
 	_setup_help_button()

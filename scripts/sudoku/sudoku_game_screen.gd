@@ -93,6 +93,8 @@ func _ready() -> void:
 	pause_button.pressed.connect(_on_pause_pressed)
 	back_button.pressed.connect(_on_back_pressed)
 	settings_button.pressed.connect(func() -> void:
+		var SettingsScreen := load("res://scripts/settings_screen.gd")
+		SettingsScreen.return_scene = "res://scenes/main_menu.tscn"
 		SceneTransition.transition_to("res://scenes/settings.tscn")
 	)
 
