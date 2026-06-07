@@ -246,6 +246,16 @@ func _start_drag(index: int, screen_pos: Vector2) -> void:
 		"tray_index": index,
 	})
 	DragEffect.suppress()
+
+	# Visual + haptic feedback on grab
+	HapticManager.vibrate_light()
+	if index < _tray_panels.size():
+		var panel := _tray_panels[index]
+		panel.pivot_offset = panel.size / 2.0
+		var tw := create_tween()
+		tw.tween_property(panel, "scale", Vector2(1.15, 1.15), 0.1).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+		tw.tween_property(panel, "modulate", Color(1.3, 1.3, 1.3, 1.0), 0.1)
+
 	_update_board_preview(screen_pos)
 
 
@@ -277,6 +287,14 @@ func _end_drag(screen_pos: Vector2) -> void:
 		return
 	_dragging = false
 	DragEffect.unsuppress()
+
+	# Reset tray panel visual
+	if _drag_block_index >= 0 and _drag_block_index < _tray_panels.size():
+		var panel := _tray_panels[_drag_block_index]
+		var tw := create_tween()
+		tw.set_parallel(true)
+		tw.tween_property(panel, "scale", Vector2(1.0, 1.0), 0.12).set_ease(Tween.EASE_OUT)
+		tw.tween_property(panel, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.12)
 
 	var local_pos := board.get_local_mouse_position()
 	var cell_size := board._get_cell_size()
