@@ -41,16 +41,15 @@ func _physics_process(delta: float) -> void:
 
 func _handle_collision(collision: KinematicCollision3D) -> void:
 	var collider := collision.get_collider()
-	var normal := collision.get_normal()
+	var normal: Vector3 = collision.get_normal()
 
 	if collider is CaromPuck:
 		var puck := collider as CaromPuck
-		# Impulse scales with how perpendicular the hit is
-		var hit_strength := abs(direction.dot(-normal))
-		var impulse_dir := -normal
+		var hit_strength: float = abs(direction.dot(-normal))
+		var impulse_dir: Vector3 = -normal
 		impulse_dir.y = 0.0
 		impulse_dir = impulse_dir.normalized()
-		var impact_offset := collision.get_position() - puck.global_position
+		var impact_offset: Vector3 = collision.get_position() - puck.global_position
 		impact_offset.y = 0.0
 		puck.apply_impulse(impulse_dir * puck_impulse * hit_strength, impact_offset)
 
