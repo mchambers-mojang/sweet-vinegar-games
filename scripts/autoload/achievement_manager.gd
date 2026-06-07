@@ -322,6 +322,102 @@ const ACHIEVEMENT_DEFINITIONS := {
 		"reward_id": "",
 		"target_value": 1,
 	},
+	"blockudoku_monster_clear": {
+		"id": "blockudoku_monster_clear",
+		"category": "Blockudoku",
+		"title": "M-M-M-Monster Clear",
+		"description": "Clear 5 or more lines or boxes at once in Blockudoku.",
+		"tier": "Gold",
+		"hidden": true,
+		"prerequisite_id": "blockudoku_clear_four",
+		"reward_type": "",
+		"reward_id": "",
+		"target_value": 1,
+	},
+	"blockudoku_combo_2": {
+		"id": "blockudoku_combo_2",
+		"category": "Blockudoku",
+		"title": "Double Up",
+		"description": "Achieve a 2x combo in Blockudoku.",
+		"tier": "Bronze",
+		"hidden": false,
+		"prerequisite_id": "",
+		"reward_type": "",
+		"reward_id": "",
+		"target_value": 1,
+	},
+	"blockudoku_combo_3": {
+		"id": "blockudoku_combo_3",
+		"category": "Blockudoku",
+		"title": "Hat Trick",
+		"description": "Achieve a 3x combo in Blockudoku.",
+		"tier": "Bronze",
+		"hidden": false,
+		"prerequisite_id": "blockudoku_combo_2",
+		"reward_type": "",
+		"reward_id": "",
+		"target_value": 1,
+	},
+	"blockudoku_combo_4": {
+		"id": "blockudoku_combo_4",
+		"category": "Blockudoku",
+		"title": "On Fire",
+		"description": "Achieve a 4x combo in Blockudoku.",
+		"tier": "Silver",
+		"hidden": true,
+		"prerequisite_id": "blockudoku_combo_3",
+		"reward_type": "",
+		"reward_id": "",
+		"target_value": 1,
+	},
+	"blockudoku_combo_5": {
+		"id": "blockudoku_combo_5",
+		"category": "Blockudoku",
+		"title": "Unstoppable Streak",
+		"description": "Achieve a 5x combo in Blockudoku.",
+		"tier": "Gold",
+		"hidden": true,
+		"prerequisite_id": "blockudoku_combo_4",
+		"reward_type": "",
+		"reward_id": "",
+		"target_value": 1,
+	},
+	"blockudoku_combo_6": {
+		"id": "blockudoku_combo_6",
+		"category": "Blockudoku",
+		"title": "Combo God",
+		"description": "Achieve a 6x combo in Blockudoku.",
+		"tier": "Gold",
+		"hidden": true,
+		"prerequisite_id": "blockudoku_combo_5",
+		"reward_type": "",
+		"reward_id": "",
+		"target_value": 1,
+	},
+	"blockudoku_clear_six": {
+		"id": "blockudoku_clear_six",
+		"category": "Blockudoku",
+		"title": "Cleartacular",
+		"description": "Clear 6 or more lines or boxes at once in Blockudoku.",
+		"tier": "Gold",
+		"hidden": true,
+		"prerequisite_id": "blockudoku_monster_clear",
+		"reward_type": "",
+		"reward_id": "",
+		"target_value": 1,
+	},
+	"blockudoku_clear_seven": {
+		"id": "blockudoku_clear_seven",
+		"category": "Blockudoku",
+		"title": "Clearamanjaro",
+		"description": "Clear 7 or more lines or boxes at once in Blockudoku.",
+		"tier": "Gold",
+		"hidden": true,
+		"prerequisite_id": "blockudoku_clear_six",
+		"reward_type": "",
+		"reward_id": "",
+		"target_value": 1,
+	},
 	"shikaku_first_win": {
 		"id": "shikaku_first_win",
 		"category": "Shikaku",
@@ -472,8 +568,28 @@ func track_blockudoku_clear(clear_count: int) -> void:
 		_set_progress_max("blockudoku_clear_three", 1)
 	if clear_count >= 4:
 		_set_progress_max("blockudoku_clear_four", 1)
+	if clear_count >= 5:
+		_set_progress_max("blockudoku_monster_clear", 1)
+	if clear_count >= 6:
+		_set_progress_max("blockudoku_clear_six", 1)
+	if clear_count >= 7:
+		_set_progress_max("blockudoku_clear_seven", 1)
 	_set_progress_max("blockudoku_50_clears", total_clears)
 	_set_progress_max("blockudoku_200_clears", total_clears)
+	_save_progress()
+
+
+func track_blockudoku_combo(combo_count: int) -> void:
+	if combo_count >= 2:
+		_set_progress_max("blockudoku_combo_2", 1)
+	if combo_count >= 3:
+		_set_progress_max("blockudoku_combo_3", 1)
+	if combo_count >= 4:
+		_set_progress_max("blockudoku_combo_4", 1)
+	if combo_count >= 5:
+		_set_progress_max("blockudoku_combo_5", 1)
+	if combo_count >= 6:
+		_set_progress_max("blockudoku_combo_6", 1)
 	_save_progress()
 
 

@@ -405,6 +405,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 			score += clear_score
 			BlockudokuStatsManager.record_clears(lines + boxes)
 			AchievementManager.track_blockudoku_clear(lines + boxes)
+			AchievementManager.track_blockudoku_combo(combo_count)
 			AnalyticsManager.log_event("line_cleared", {
 				"game": "blockudoku",
 				"cleared": cleared,
