@@ -51,9 +51,9 @@ rotation = Vector3(0, 3.1416, 0)
 mesh = SubResource("6")
 material_override = SubResource("7")
 
-; Edge V3-V1: midpoint (-0.217, 0.4, 0.125), rotated -120 degrees
+; Edge V3-V1: midpoint (-0.217, 0.4, 0.125), rotated -60 degrees
 [node name="Edge3Mesh" type="MeshInstance3D" parent="."]
 position = Vector3(-0.217, 0.4, 0.125)
-rotation = Vector3(0, -2.094, 0)
+rotation = Vector3(0, -1.047, 0)
 mesh = SubResource("6")
 material_override = SubResource("7")
