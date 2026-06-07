@@ -1,31 +1,24 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://carom/scripts/carom_puck.gd" id="1"]
 
-; Solid cylinder collision matching triangle circumradius
-[sub_resource type="CylinderShape3D" id="1"]
-height = 0.3
-radius = 0.5
+; Solid triangular prism — vertices of equilateral triangle (circumradius 0.5)
+; Triangle in XZ plane: V1(0,_,0.5), V2(0.433,_,-0.25), V3(-0.433,_,-0.25)
+; Extruded from Y=0.25 to Y=0.55 (centered at Y=0.4)
+[sub_resource type="ConvexPolygonShape3D" id="1"]
+points = PackedVector3Array(0, 0.25, 0.5, 0.433, 0.25, -0.25, -0.433, 0.25, -0.25, 0, 0.55, 0.5, 0.433, 0.55, -0.25, -0.433, 0.55, -0.25)
 
-; Prism mesh for visual (Godot built-in triangular prism)
-[sub_resource type="PrismMesh" id="2"]
-size = Vector3(1.0, 0.28, 0.866)
+; Edge mesh — thin box matching edge length (0.866)
+[sub_resource type="BoxMesh" id="6"]
+size = Vector3(0.866, 0.28, 0.06)
 
-; Prism material — neon edges
+; Edge material — neon
 [sub_resource type="StandardMaterial3D" id="7"]
-albedo_color = Color(0.02, 0.08, 0.1, 0.6)
+albedo_color = Color(0.02, 0.08, 0.1, 1)
 emission_enabled = true
 emission = Color(0.1, 0.7, 0.8, 1)
 emission_energy_multiplier = 1.0
 roughness = 0.2
-
-; Wireframe-ish material — just edges visible
-[sub_resource type="StandardMaterial3D" id="8"]
-albedo_color = Color(0.01, 0.04, 0.05, 1)
-emission_enabled = true
-emission = Color(0.1, 0.7, 0.8, 1)
-emission_energy_multiplier = 1.2
-roughness = 0.1
 
 ; Physics material
 [sub_resource type="PhysicsMaterial" id="5"]
@@ -40,13 +33,27 @@ linear_damp = 0.35
 angular_damp = 0.4
 continuous_cd = true
 
-; Solid collision — cylinder ensures nothing passes through
+; Solid triangle collision (no position offset — points include Y)
 [node name="Collision" type="CollisionShape3D" parent="."]
-position = Vector3(0, 0.4, 0)
 shape = SubResource("1")
 
-; Visual triangular prism
-[node name="PrismMesh" type="MeshInstance3D" parent="."]
-position = Vector3(0, 0.4, 0)
-mesh = SubResource("2")
-material_override = SubResource("8")
+; Edge V1-V2: midpoint (0.217, 0.4, 0.125), rotated 60 degrees
+[node name="Edge1Mesh" type="MeshInstance3D" parent="."]
+position = Vector3(0.217, 0.4, 0.125)
+rotation = Vector3(0, 1.047, 0)
+mesh = SubResource("6")
+material_override = SubResource("7")
+
+; Edge V2-V3: midpoint (0, 0.4, -0.25), rotated 180 degrees
+[node name="Edge2Mesh" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.4, -0.25)
+rotation = Vector3(0, 3.1416, 0)
+mesh = SubResource("6")
+material_override = SubResource("7")
+
+; Edge V3-V1: midpoint (-0.217, 0.4, 0.125), rotated -120 degrees
+[node name="Edge3Mesh" type="MeshInstance3D" parent="."]
+position = Vector3(-0.217, 0.4, 0.125)
+rotation = Vector3(0, -2.094, 0)
+mesh = SubResource("6")
+material_override = SubResource("7")
