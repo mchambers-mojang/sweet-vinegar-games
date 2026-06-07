@@ -80,6 +80,12 @@ func has_active_session() -> bool:
 	return not _active_replay.is_empty()
 
 
+func flush_active_replay() -> void:
+	if not _active_replay.is_empty():
+		_dirty = false
+		_save_active_replay()
+
+
 func record_input(elapsed_time: float, event_type: String, payload: Dictionary) -> void:
 	if _active_replay.is_empty():
 		return

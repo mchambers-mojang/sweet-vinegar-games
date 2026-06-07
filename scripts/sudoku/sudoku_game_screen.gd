@@ -1183,6 +1183,7 @@ func _save_current_state() -> void:
 		"random_seed": random_seed,
 		"replay_id": replay_id,
 	})
+	ReplayManager.flush_active_replay()
 
 
 func _get_crash_state() -> Dictionary:

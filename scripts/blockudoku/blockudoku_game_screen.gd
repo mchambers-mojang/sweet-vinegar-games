@@ -803,6 +803,7 @@ func _save_current_state() -> void:
 		"rng_state": _rng.state,
 		"replay_id": replay_id,
 	})
+	ReplayManager.flush_active_replay()
 
 
 func _create_session_seed() -> int:
