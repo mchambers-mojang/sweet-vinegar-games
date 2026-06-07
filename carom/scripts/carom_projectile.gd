@@ -44,10 +44,13 @@ func _handle_collision(collision: KinematicCollision3D) -> void:
 	if collider is CaromPuck:
 		var puck := collider as CaromPuck
 		var impact_offset := collision.get_position() - puck.global_position
+		impact_offset.y = 0.0
 		puck.apply_impulse(direction * puck_impulse, impact_offset)
 	# Bounce off everything (walls, puck, other projectiles)
 	var normal := collision.get_normal()
-	direction = direction.bounce(normal).normalized()
+	direction = direction.bounce(normal)
+	direction.y = 0.0
+	direction = direction.normalized()
 
 
 ## Called by goal Area3D when this projectile enters — removes from play.
