@@ -496,6 +496,8 @@ var _progress: Dictionary = {}
 var _session_modes: Dictionary = {}
 var _toast_layer: CanvasLayer
 var _current_win_streak: int = 0
+var _toast_queue: Array[Dictionary] = []
+var _toast_showing: bool = false
 
 
 func _ready() -> void:
@@ -802,8 +804,20 @@ func _get_category_order(category: String) -> int:
 func _show_toast(definition: Dictionary) -> void:
 	if definition.is_empty():
 		return
+	_toast_queue.append(definition)
+	if not _toast_showing:
+		_show_next_toast()
+
+
+func _show_next_toast() -> void:
+	if _toast_queue.is_empty():
+		_toast_showing = false
+		return
+	_toast_showing = true
+	var definition: Dictionary = _toast_queue.pop_front()
 	var root: Window = get_tree().root
 	if root == null:
+		_toast_showing = false
 		return
 	if _toast_layer == null or not is_instance_valid(_toast_layer):
 		_toast_layer = CanvasLayer.new()
@@ -838,4 +852,7 @@ func _show_toast(definition: Dictionary) -> void:
 	tween.tween_property(label, "scale", Vector2(1.0, 1.0), 0.3).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 	tween.tween_property(label, "position:y", label.position.y + 12.0, 3.5).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
 	tween.tween_property(label, "modulate:a", 0.0, 0.6).set_delay(2.8).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-	tween.chain().tween_callback(label.queue_free)
+	tween.chain().tween_callback(func() -> void:
+		label.queue_free()
+		_show_next_toast()
+	)
