@@ -154,7 +154,9 @@ func export_replay_code(replay_id: String) -> String:
 		"format_version": FORMAT_VERSION,
 		"replay": replay,
 	}
-	return Marshalls.utf8_to_base64(JSON.stringify(blob))
+	var json_str := JSON.stringify(blob)
+	var compressed := json_str.to_utf8_buffer().compress(FileAccess.COMPRESSION_GZIP)
+	return "SVG1_" + Marshalls.raw_to_base64(compressed)
 
 
 func export_latest_replay_code() -> String:
@@ -166,7 +168,19 @@ func export_latest_replay_code() -> String:
 func import_replay_code(code: String) -> Dictionary:
 	if code.is_empty():
 		return {}
-	var decoded := Marshalls.base64_to_utf8(code)
+	var decoded: String = ""
+	if code.begins_with("SVG1_"):
+		# Compressed format (v1)
+		var raw := Marshalls.base64_to_raw(code.substr(5))
+		if raw.is_empty():
+			return {}
+		var decompressed := raw.decompress_dynamic(-1, FileAccess.COMPRESSION_GZIP)
+		if decompressed.is_empty():
+			return {}
+		decoded = decompressed.get_string_from_utf8()
+	else:
+		# Legacy uncompressed base64
+		decoded = Marshalls.base64_to_utf8(code)
 	if decoded.is_empty():
 		return {}
 	var parsed = JSON.parse_string(decoded)

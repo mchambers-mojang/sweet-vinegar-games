@@ -22,6 +22,13 @@ func _build_ui() -> void:
 	for child in replay_list.get_children():
 		child.queue_free()
 
+	# Import button at top
+	var import_btn := Button.new()
+	import_btn.text = "📋 Import Replay Code"
+	import_btn.custom_minimum_size = Vector2(0, 44)
+	import_btn.pressed.connect(_import_from_clipboard)
+	replay_list.add_child(import_btn)
+
 	var replays := ReplayManager.get_recent_replays(50)
 	if replays.is_empty():
 		var empty_label := Label.new()
@@ -128,6 +135,19 @@ func _add_replay_row(replay: Dictionary) -> void:
 		)
 		row.add_child(play_btn)
 
+	# Share button
+	var share_btn := Button.new()
+	share_btn.text = "📤"
+	share_btn.custom_minimum_size = Vector2(36, 36)
+	share_btn.pressed.connect(func() -> void:
+		var code := ReplayManager.export_replay_code(replay_id)
+		if code.is_empty():
+			return
+		DisplayServer.clipboard_set(code)
+		_show_toast("Replay code copied!")
+	)
+	row.add_child(share_btn)
+
 	# Right: delete button
 	var delete_btn := Button.new()
 	delete_btn.text = "✕"
@@ -156,3 +176,45 @@ func _apply_theme() -> void:
 	var style := StyleBoxFlat.new()
 	style.bg_color = ThemeManager.get_color("background")
 	add_theme_stylebox_override("panel", style)
+
+
+func _import_from_clipboard() -> void:
+	var code := DisplayServer.clipboard_get().strip_edges()
+	if code.is_empty():
+		_show_toast("Clipboard is empty")
+		return
+	var replay := ReplayManager.import_replay_code(code)
+	if replay.is_empty():
+		_show_toast("Invalid replay code")
+		return
+	# Determine game mode and play it
+	var header: Dictionary = replay.get("header", {})
+	var game_mode := str(header.get("game_mode", ""))
+	var replay_scene := ""
+	if game_mode == "blockudoku":
+		replay_scene = "res://scenes/blockudoku_replay.tscn"
+	elif game_mode == "sudoku":
+		replay_scene = "res://scenes/sudoku_replay.tscn"
+	elif game_mode == "shikaku":
+		replay_scene = "res://scenes/shikaku_replay.tscn"
+	if replay_scene.is_empty():
+		_show_toast("Unknown game mode: %s" % game_mode)
+		return
+	ReplayManager.set_pending_playback(replay)
+	SceneTransition.transition_to(replay_scene)
+
+
+func _show_toast(message: String) -> void:
+	var toast := Label.new()
+	toast.text = message
+	toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	toast.add_theme_font_size_override("font_size", 14)
+	toast.add_theme_color_override("font_color", ThemeManager.get_color("text_given"))
+	toast.modulate.a = 1.0
+	add_child(toast)
+	toast.anchors_preset = Control.PRESET_CENTER_BOTTOM
+	toast.position.y -= 60
+	var tween := create_tween()
+	tween.tween_interval(2.0)
+	tween.tween_property(toast, "modulate:a", 0.0, 0.5)
+	tween.tween_callback(toast.queue_free)
