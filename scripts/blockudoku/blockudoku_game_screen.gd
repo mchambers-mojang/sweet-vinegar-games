@@ -432,13 +432,26 @@ func _end_drag(screen_pos: Vector2) -> void:
 		if blocks_placed_this_set >= BLOCKS_PER_SET:
 			_deal_new_blocks()
 
-		# Check game over (defer until clear animation finishes for clarity)
+		# Check game over (consider rotations if rotation mode is enabled)
 		var remaining_shapes: Array = []
 		for shape in available_blocks:
 			if shape.size() > 0:
 				remaining_shapes.append(shape)
 		redo_stack.clear()
-		if not board.has_valid_placement(remaining_shapes):
+		var has_valid_move := false
+		if SettingsManager.blockudoku_rotation_mode:
+			for shape in remaining_shapes:
+				var rotated: Array = shape
+				for _rot in 4:
+					if board.has_valid_placement([rotated]):
+						has_valid_move = true
+						break
+					rotated = BlockudokuShapes.rotate_clockwise(rotated)
+				if has_valid_move:
+					break
+		else:
+			has_valid_move = board.has_valid_placement(remaining_shapes)
+		if not has_valid_move:
 			if board.is_clear_animating:
 				# Wait for clear animation to finish before showing game over
 				await board.clear_animation_finished
