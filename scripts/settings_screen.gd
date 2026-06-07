@@ -200,10 +200,12 @@ func _build_settings_ui() -> void:
 func _add_toggle(label_text: String, initial: bool, callback: Callable) -> void:
 	var row := HBoxContainer.new()
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.mouse_filter = Control.MOUSE_FILTER_PASS
 
 	var label := Label.new()
 	label.text = label_text
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.mouse_filter = Control.MOUSE_FILTER_PASS
 	row.add_child(label)
 
 	var toggle := CheckButton.new()
@@ -219,22 +221,26 @@ func _add_header(text: String) -> void:
 	label.text = text
 	label.add_theme_font_size_override("font_size", 20)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	label.mouse_filter = Control.MOUSE_FILTER_PASS
 	settings_list.add_child(label)
 
 
 func _add_separator() -> void:
 	var sep := HSeparator.new()
 	sep.custom_minimum_size = Vector2(0, 10)
+	sep.mouse_filter = Control.MOUSE_FILTER_PASS
 	settings_list.add_child(sep)
 
 
 func _add_option_button(label_text: String, options: Array, selected: int, callback: Callable) -> void:
 	var row := HBoxContainer.new()
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.mouse_filter = Control.MOUSE_FILTER_PASS
 
 	var label := Label.new()
 	label.text = label_text
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.mouse_filter = Control.MOUSE_FILTER_PASS
 	row.add_child(label)
 
 	var option_btn := OptionButton.new()

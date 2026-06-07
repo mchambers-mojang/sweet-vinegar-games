@@ -38,6 +38,7 @@ func _add_tier_header(tier: String) -> void:
     header.text = "%s Tier" % tier
     header.add_theme_font_size_override("font_size", 20)
     header.add_theme_color_override("font_color", ThemeManager.get_color("text_given"))
+    header.mouse_filter = Control.MOUSE_FILTER_PASS
     achievements_list.add_child(header)
 
 
@@ -68,18 +69,21 @@ func _add_achievement_row(achievement: Dictionary) -> void:
     margin.add_child(content)
 
     var header_row := HBoxContainer.new()
+    header_row.mouse_filter = Control.MOUSE_FILTER_PASS
     content.add_child(header_row)
 
     var title := Label.new()
     title.text = title_text
     title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     title.add_theme_font_size_override("font_size", 18)
+    title.mouse_filter = Control.MOUSE_FILTER_PASS
     header_row.add_child(title)
 
     var badge := Label.new()
     badge.text = "✓" if unlocked else str(achievement.get("tier", "Bronze"))
     badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     badge.add_theme_font_size_override("font_size", 14)
+    badge.mouse_filter = Control.MOUSE_FILTER_PASS
     if unlocked:
         badge.add_theme_color_override("font_color", Color(0.3, 0.9, 0.45))
     header_row.add_child(badge)
@@ -88,6 +92,7 @@ func _add_achievement_row(achievement: Dictionary) -> void:
     desc.text = desc_text
     desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     desc.add_theme_font_size_override("font_size", 14)
+    desc.mouse_filter = Control.MOUSE_FILTER_PASS
     content.add_child(desc)
 
     if unlocked:
@@ -102,12 +107,14 @@ func _add_achievement_row(achievement: Dictionary) -> void:
             ]
             date_label.add_theme_font_size_override("font_size", 12)
             date_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+            date_label.mouse_filter = Control.MOUSE_FILTER_PASS
             content.add_child(date_label)
     else:
         var progress := Label.new()
         progress.text = "%d / %d" % [current, target]
         progress.add_theme_font_size_override("font_size", 12)
         progress.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+        progress.mouse_filter = Control.MOUSE_FILTER_PASS
         content.add_child(progress)
 
     var reward_type := str(achievement.get("reward_type", ""))
@@ -116,6 +123,7 @@ func _add_achievement_row(achievement: Dictionary) -> void:
         var reward := Label.new()
         reward.text = "Reward: %s (%s)" % [reward_type, reward_id]
         reward.add_theme_color_override("font_color", ThemeManager.get_color("timer_text"))
+        reward.mouse_filter = Control.MOUSE_FILTER_PASS
         content.add_child(reward)
 
 
