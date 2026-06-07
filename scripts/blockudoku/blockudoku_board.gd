@@ -5,6 +5,7 @@ extends Control
 
 signal cells_cleared(count: int, lines: int, boxes: int, is_combo: bool)
 signal block_placed
+signal clear_animation_finished
 
 const GRID_SIZE := 9
 const BOX_SIZE := 3
@@ -274,6 +275,7 @@ func check_and_clear() -> Dictionary:
 		_clear_anim_elapsed = 0.0
 		is_clear_animating = false
 		queue_redraw()
+		clear_animation_finished.emit()
 	)
 
 	queue_redraw()

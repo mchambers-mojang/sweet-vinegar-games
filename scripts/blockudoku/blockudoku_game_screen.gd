@@ -161,7 +161,6 @@ func _process(delta: float) -> void:
 
 func _deal_new_blocks() -> void:
 	available_blocks = BlockudokuShapes.pick_random(BLOCKS_PER_SET, _rng)
-	# Normalize all shapes
 	for i in available_blocks.size():
 		available_blocks[i] = BlockudokuShapes.normalize(available_blocks[i])
 	blocks_placed_this_set = 0
@@ -433,13 +432,16 @@ func _end_drag(screen_pos: Vector2) -> void:
 		if blocks_placed_this_set >= BLOCKS_PER_SET:
 			_deal_new_blocks()
 
-		# Check game over
+		# Check game over (defer until clear animation finishes for clarity)
 		var remaining_shapes: Array = []
 		for shape in available_blocks:
 			if shape.size() > 0:
 				remaining_shapes.append(shape)
 		redo_stack.clear()
 		if not board.has_valid_placement(remaining_shapes):
+			if board.is_clear_animating:
+				# Wait for clear animation to finish before showing game over
+				await board.clear_animation_finished
 			_update_undo_redo_buttons()
 			_handle_game_over()
 		else:
