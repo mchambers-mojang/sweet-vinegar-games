@@ -32,6 +32,7 @@ func _build_ui() -> void:
 	var replays := ReplayManager.get_recent_replays(50)
 	if replays.is_empty():
 		var empty_label := Label.new()
+		empty_label.mouse_filter = Control.MOUSE_FILTER_PASS
 		empty_label.text = "No replays yet.\nFinish a game to record one!"
 		empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		empty_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -62,6 +63,7 @@ func _build_ui() -> void:
 
 func _add_section_header(title: String) -> void:
 	var header := Label.new()
+	header.mouse_filter = Control.MOUSE_FILTER_PASS
 	header.text = title
 	header.add_theme_font_size_override("font_size", 20)
 	header.add_theme_color_override("font_color", ThemeManager.get_color("text_given"))
@@ -81,40 +83,47 @@ func _add_replay_row(replay: Dictionary) -> void:
 	var is_bookmarked := bool(replay.get("bookmarked", false))
 
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(0, 80)
+	panel.mouse_filter = Control.MOUSE_FILTER_PASS
 	replay_list.add_child(panel)
 
 	var margin := MarginContainer.new()
+	margin.mouse_filter = Control.MOUSE_FILTER_PASS
 	margin.add_theme_constant_override("margin_left", 12)
 	margin.add_theme_constant_override("margin_top", 8)
 	margin.add_theme_constant_override("margin_right", 12)
 	margin.add_theme_constant_override("margin_bottom", 8)
 	panel.add_child(margin)
 
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 12)
-	margin.add_child(row)
+	var vbox := VBoxContainer.new()
+	vbox.mouse_filter = Control.MOUSE_FILTER_PASS
+	vbox.add_theme_constant_override("separation", 6)
+	margin.add_child(vbox)
 
-	# Left: game info
-	var info := VBoxContainer.new()
-	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	info.add_theme_constant_override("separation", 4)
-	row.add_child(info)
-
+	# Top line: game info
 	var title := Label.new()
+	title.mouse_filter = Control.MOUSE_FILTER_PASS
 	var bookmark_prefix := "[Saved] " if is_bookmarked else ""
 	title.text = "%s%s — %s" % [bookmark_prefix, game_mode.capitalize(), outcome]
 	title.add_theme_font_size_override("font_size", 16)
-	info.add_child(title)
+	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	vbox.add_child(title)
 
 	var details := Label.new()
+	details.mouse_filter = Control.MOUSE_FILTER_PASS
 	var time_str := _format_time(duration)
 	var date_str := _format_date(timestamp)
 	details.text = "Score: %d  |  %s  |  %s" % [score, time_str, date_str]
 	details.add_theme_font_size_override("font_size", 13)
-	info.add_child(details)
+	details.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	vbox.add_child(details)
 
-	# Right: play button
+	# Bottom line: action buttons
+	var btn_row := HBoxContainer.new()
+	btn_row.mouse_filter = Control.MOUSE_FILTER_PASS
+	btn_row.add_theme_constant_override("separation", 8)
+	vbox.add_child(btn_row)
+
+	# Play button
 	var replay_scene := ""
 	if game_mode == "blockudoku":
 		replay_scene = "res://scenes/blockudoku_replay.tscn"
@@ -125,20 +134,20 @@ func _add_replay_row(replay: Dictionary) -> void:
 
 	if replay_scene != "":
 		var play_btn := Button.new()
-		play_btn.text = "▶"
-		play_btn.custom_minimum_size = Vector2(36, 36)
+		play_btn.text = "▶ Play"
+		play_btn.custom_minimum_size = Vector2(0, 36)
 		var scene_path := replay_scene
 		play_btn.pressed.connect(func() -> void:
 			var full_replay := ReplayManager.get_replay_by_id(replay_id)
 			ReplayManager.set_pending_playback(full_replay)
 			SceneTransition.transition_to(scene_path)
 		)
-		row.add_child(play_btn)
+		btn_row.add_child(play_btn)
 
 	# Share button
 	var share_btn := Button.new()
-	share_btn.text = "📤"
-	share_btn.custom_minimum_size = Vector2(36, 36)
+	share_btn.text = "📤 Share"
+	share_btn.custom_minimum_size = Vector2(0, 36)
 	share_btn.pressed.connect(func() -> void:
 		var code := ReplayManager.export_replay_code(replay_id)
 		if code.is_empty():
@@ -146,9 +155,9 @@ func _add_replay_row(replay: Dictionary) -> void:
 		DisplayServer.clipboard_set(code)
 		_show_toast("Replay code copied!")
 	)
-	row.add_child(share_btn)
+	btn_row.add_child(share_btn)
 
-	# Right: delete button
+	# Delete button
 	var delete_btn := Button.new()
 	delete_btn.text = "✕"
 	delete_btn.custom_minimum_size = Vector2(36, 36)
@@ -156,7 +165,7 @@ func _add_replay_row(replay: Dictionary) -> void:
 		ReplayManager.delete_replay(replay_id)
 		_build_ui()
 	)
-	row.add_child(delete_btn)
+	btn_row.add_child(delete_btn)
 
 
 func _format_time(seconds: float) -> String:
