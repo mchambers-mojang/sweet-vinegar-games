@@ -5,7 +5,7 @@ extends CharacterBody3D
 ## Only leaves play when entering a goal area.
 
 @export var speed: float = 18.0
-@export var puck_impulse: float = 4.0
+@export var puck_impulse: float = 2.5
 
 var direction: Vector3 = Vector3.FORWARD
 var owner_side: StringName = StringName()
@@ -49,9 +49,8 @@ func _handle_collision(collision: KinematicCollision3D) -> void:
 		var impulse_dir: Vector3 = -normal
 		impulse_dir.y = 0.0
 		impulse_dir = impulse_dir.normalized()
-		var impact_offset: Vector3 = collision.get_position() - puck.global_position
-		impact_offset.y = 0.0
-		puck.apply_impulse(impulse_dir * puck_impulse * hit_strength, impact_offset)
+		# Apply at center — no offset torque to prevent wild spins
+		puck.apply_central_impulse(impulse_dir * puck_impulse * hit_strength)
 
 	# Bounce off everything
 	direction = direction.bounce(normal)
