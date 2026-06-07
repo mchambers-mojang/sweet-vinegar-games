@@ -1,11 +1,10 @@
 class_name CaromProjectile
 extends CharacterBody3D
 
-## Straight-line projectile that imparts force to the puck and bounces off walls.
+## Straight-line projectile that bounces off walls and pushes the puck.
 ## Only leaves play when entering a goal area.
 
 @export var speed: float = 18.0
-@export var puck_impulse: float = 2.5
 
 var direction: Vector3 = Vector3.FORWARD
 var owner_side: StringName = StringName()
@@ -34,28 +33,19 @@ func setup(new_direction: Vector3, new_speed: float, new_owner_side: StringName,
 
 
 func _physics_process(delta: float) -> void:
-	var collision: KinematicCollision3D = move_and_collide(direction * speed * delta)
-	if collision:
-		_handle_collision(collision)
+	velocity = direction * speed
+	move_and_slide()
 
+	# Check for collisions and bounce
+	for i in range(get_slide_collision_count()):
+		var collision: KinematicCollision3D = get_slide_collision(i)
+		var normal: Vector3 = collision.get_normal()
+		direction = direction.bounce(normal)
+		direction.y = 0.0
+		direction = direction.normalized()
 
-func _handle_collision(collision: KinematicCollision3D) -> void:
-	var collider := collision.get_collider()
-	var normal: Vector3 = collision.get_normal()
-
-	if collider is CaromPuck:
-		var puck := collider as CaromPuck
-		var hit_strength: float = abs(direction.dot(-normal))
-		var impulse_dir: Vector3 = -normal
-		impulse_dir.y = 0.0
-		impulse_dir = impulse_dir.normalized()
-		# Apply at center — no offset torque to prevent wild spins
-		puck.apply_central_impulse(impulse_dir * puck_impulse * hit_strength)
-
-	# Bounce off everything
-	direction = direction.bounce(normal)
-	direction.y = 0.0
-	direction = direction.normalized()
+	# Keep on ground
+	global_position.y = 0.0
 
 
 ## Called by goal Area3D when this projectile enters — removes from play.

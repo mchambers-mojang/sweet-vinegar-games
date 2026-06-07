@@ -18,6 +18,8 @@ roughness = 0.05
 
 [node name="CaromProjectile" type="CharacterBody3D"]
 script = ExtResource("1")
+wall_min_slide_angle = 0.0
+push_rigid_bodies = true
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 shape = SubResource("1")
