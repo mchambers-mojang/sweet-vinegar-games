@@ -133,6 +133,8 @@ func _add_replay_row(replay: Dictionary) -> void:
 			var full_replay := ReplayManager.get_replay_by_id(replay_id)
 			ReplayManager.set_pending_playback(full_replay)
 			SceneTransition.transition_to(Scenes.REPLAY_VIEWER)
+		)
+		btn_row.add_child(play_btn)
 
 	# Share button
 	var share_btn := Button.new()

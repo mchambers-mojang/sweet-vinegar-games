@@ -612,6 +612,7 @@ func _show_game_over_dialog() -> void:
 			_stop_shatter()
 			dialog.queue_free()
 			SceneTransition.transition_to(Scenes.BLOCKUDOKU_MENU)
+		elif action == "bookmark":
 			var success := ReplayManager.bookmark_latest_replay()
 			if success:
 				dialog.dialog_text += "\n\n✓ Replay bookmarked!"

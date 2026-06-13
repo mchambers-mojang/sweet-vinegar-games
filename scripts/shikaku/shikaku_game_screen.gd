@@ -446,6 +446,7 @@ func _show_win_dialog() -> void:
 		if action == "menu":
 			dialog.queue_free()
 			SceneTransition.transition_to(Scenes.SHIKAKU_MENU)
+		elif action == "bookmark":
 			var success := ReplayManager.bookmark_latest_replay()
 			if success:
 				dialog.dialog_text += "\n\n✓ Replay bookmarked!"
