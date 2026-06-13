@@ -1,0 +1,61 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://carom/scripts/carom_puck.gd" id="1"]
+
+; Solid triangular prism — vertices of equilateral triangle (circumradius 0.5)
+; Triangle in XZ plane: V1(0,_,0.5), V2(0.433,_,-0.25), V3(-0.433,_,-0.25)
+; Extruded from Y=0 to Y=0.3 (on the ground)
+[sub_resource type="ConvexPolygonShape3D" id="1"]
+points = PackedVector3Array(0, 0, 0.5, 0.433, 0, -0.25, -0.433, 0, -0.25, 0, 0.3, 0.5, 0.433, 0.3, -0.25, -0.433, 0.3, -0.25)
+
+; Edge mesh — thin box matching edge length (0.866)
+[sub_resource type="BoxMesh" id="6"]
+size = Vector3(0.866, 0.28, 0.06)
+
+; Edge material — neon
+[sub_resource type="StandardMaterial3D" id="7"]
+albedo_color = Color(0.02, 0.08, 0.1, 1)
+emission_enabled = true
+emission = Color(0.1, 0.7, 0.8, 1)
+emission_energy_multiplier = 1.0
+roughness = 0.2
+
+; Physics material
+[sub_resource type="PhysicsMaterial" id="5"]
+friction = 0.15
+bounce = 0.75
+
+[node name="CaromPuck" type="RigidBody3D"]
+script = ExtResource("1")
+collision_layer = 4
+collision_mask = 15
+mass = 3.0
+physics_material_override = SubResource("5")
+linear_damp = 0.35
+angular_damp = 0.4
+continuous_cd = true
+
+; Solid triangle collision (no position offset — points include Y)
+[node name="Collision" type="CollisionShape3D" parent="."]
+shape = SubResource("1")
+
+; Edge V1-V2: midpoint (0.217, 0.15, 0.125), rotated 60 degrees
+[node name="Edge1Mesh" type="MeshInstance3D" parent="."]
+position = Vector3(0.217, 0.15, 0.125)
+rotation = Vector3(0, 1.047, 0)
+mesh = SubResource("6")
+material_override = SubResource("7")
+
+; Edge V2-V3: midpoint (0, 0.15, -0.25), rotated 180 degrees
+[node name="Edge2Mesh" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.15, -0.25)
+rotation = Vector3(0, 3.1416, 0)
+mesh = SubResource("6")
+material_override = SubResource("7")
+
+; Edge V3-V1: midpoint (-0.217, 0.15, 0.125), rotated -60 degrees
+[node name="Edge3Mesh" type="MeshInstance3D" parent="."]
+position = Vector3(-0.217, 0.15, 0.125)
+rotation = Vector3(0, -1.047, 0)
+mesh = SubResource("6")
+material_override = SubResource("7")

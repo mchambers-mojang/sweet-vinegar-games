@@ -7,6 +7,7 @@ extends Control
 @onready var sudoku_button: Button = %SudokuButton
 @onready var shikaku_button: Button = %ShikakuButton
 @onready var blockudoku_button: Button = %BlockudokuButton
+@onready var carom_button: Button = %CaromButton
 @onready var settings_button: Button = %SettingsButton
 @onready var replays_button: Button = %ReplaysButton
 @onready var achievements_button: Button = %AchievementsButton
@@ -21,6 +22,9 @@ func _ready() -> void:
 	)
 	blockudoku_button.pressed.connect(func() -> void:
 		SceneTransition.transition_to("res://scenes/blockudoku_menu.tscn")
+	)
+	carom_button.pressed.connect(func() -> void:
+		SceneTransition.transition_to("res://scenes/carom_menu.tscn")
 	)
 	settings_button.pressed.connect(func() -> void:
 		var SettingsScreen := load("res://scripts/settings_screen.gd")
