@@ -201,6 +201,9 @@ func _setup_game(saved_data: Dictionary) -> void:
 		is_failed = saved_data["is_failed"]
 		_can_continue_after_failure = saved_data.get("can_continue_after_failure", false)
 		hints_used = saved_data.get("hints_used", 0)
+		# Legacy fallback: old saves had no random_seed field. Derive one deterministically
+		# so replay/crash metadata is consistent. begin_session() calls ReplayManager AFTER
+		# _setup_game(), so this updated value is used by the replay session start.
 		if random_seed == 0:
 			random_seed = _derive_seed_from_puzzle(puzzle)
 		is_completed = false

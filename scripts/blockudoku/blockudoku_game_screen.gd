@@ -135,11 +135,13 @@ func _get_settings_snapshot() -> Dictionary:
 
 
 func _setup_game(saved_data: Dictionary) -> void:
-	_rng.seed = random_seed
 	if saved_data.is_empty():
+		_rng.seed = random_seed
 		board.reset()
 		_deal_new_blocks()
 	else:
+		# Restore seed first, then override the full internal state if available.
+		_rng.seed = random_seed
 		if saved_data.has("rng_state"):
 			_rng.state = int(saved_data.get("rng_state", 0))
 		board.set_state(saved_data.get("board_state", {}))

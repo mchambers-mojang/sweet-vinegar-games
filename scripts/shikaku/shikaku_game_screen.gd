@@ -139,6 +139,9 @@ func _setup_game(saved_data: Dictionary) -> void:
 		for rect in saved_rects:
 			board.add_rect(rect)
 		hints_used = saved_data.get("hints_used", 0)
+		# Legacy fallback: old saves had no random_seed field. Derive one deterministically
+		# so replay/crash metadata is consistent. begin_session() calls ReplayManager AFTER
+		# _setup_game(), so this updated value is used by the replay session start.
 		if random_seed == 0:
 			random_seed = _derive_seed_from_numbers(puzzle_data["numbers"])
 		is_completed = false
