@@ -201,7 +201,8 @@ func _on_rectangle_placed(rect: Rect2i) -> void:
 	HapticManager.vibrate_light()
 	# Neon shockwave on rect placement
 	if ThemeManager.is_neon:
-		var cell_size := board.get_cell_screen_rect(0, 0).size.x
+		var first_cell := board.get_cell_screen_rect(0, 0)
+		var cell_size := first_cell.size.x
 		var top_left := board.get_cell_screen_rect(rect.position.x, rect.position.y).position
 		var center := top_left + Vector2(rect.size.x * cell_size * 0.5, rect.size.y * cell_size * 0.5)
 		NeonRing.create(board, center, Color(0.0, 1.5, 1.5), cell_size * 2.5, 0.25, 0.3)
@@ -380,7 +381,7 @@ func _handle_win() -> void:
 		var cell_size := first_cell.size.x
 		var center := first_cell.position + Vector2(
 			(board.grid_width * cell_size) * 0.5,
-			(board.grid_height * first_cell.size.y) * 0.5
+			(board.grid_height * cell_size) * 0.5
 		)
 		NeonRing.create(board, center, Color(0.0, 2.0, 1.5), cell_size * 6.0, 0.5, 1.2)
 		NeonFxManager.screen_shake(6.0, 0.2)
