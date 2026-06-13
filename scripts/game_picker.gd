@@ -7,9 +7,15 @@ extends Control
 @onready var sudoku_button: Button = %SudokuButton
 @onready var shikaku_button: Button = %ShikakuButton
 @onready var blockudoku_button: Button = %BlockudokuButton
+@onready var carom_button: Button = get_node_or_null("%CaromButton") as Button
 @onready var settings_button: Button = %SettingsButton
 @onready var replays_button: Button = %ReplaysButton
 @onready var achievements_button: Button = %AchievementsButton
+
+const CAROM_UNLOCK_TAP_WINDOW_SEC := 0.8
+const CAROM_UNLOCK_TAP_COUNT := 7
+
+var _carom_unlock_taps: Array[float] = []
 
 
 func _ready() -> void:
@@ -22,6 +28,11 @@ func _ready() -> void:
 	blockudoku_button.pressed.connect(func() -> void:
 		SceneTransition.transition_to("res://scenes/blockudoku_menu.tscn")
 	)
+	if carom_button:
+		carom_button.visible = false
+		carom_button.pressed.connect(func() -> void:
+			SceneTransition.transition_to("res://scenes/carom_menu.tscn")
+		)
 	settings_button.pressed.connect(func() -> void:
 		var SettingsScreen := load("res://scripts/settings_screen.gd")
 		SettingsScreen.return_scene = "res://scenes/game_picker.tscn"
@@ -51,11 +62,30 @@ func _apply_theme() -> void:
 
 
 func _on_title_gui_input(event: InputEvent) -> void:
+	if not _is_title_tap_release(event):
+		return
+
+	DebugOverlay.register_version_label_tap()
+	_register_carom_unlock_tap(Time.get_ticks_msec() / 1000.0)
+
+
+func _is_title_tap_release(event: InputEvent) -> bool:
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
-		if mb.button_index == MOUSE_BUTTON_LEFT and not mb.pressed:
-			DebugOverlay.register_version_label_tap()
-	elif event is InputEventScreenTouch:
+		return mb.button_index == MOUSE_BUTTON_LEFT and not mb.pressed
+	if event is InputEventScreenTouch:
 		var st := event as InputEventScreenTouch
-		if not st.pressed:
-			DebugOverlay.register_version_label_tap()
+		return not st.pressed
+	return false
+
+
+func _register_carom_unlock_tap(now_sec: float) -> void:
+	_carom_unlock_taps.append(now_sec)
+	while _carom_unlock_taps.size() > 0 and now_sec - _carom_unlock_taps[0] > CAROM_UNLOCK_TAP_WINDOW_SEC:
+		_carom_unlock_taps.remove_at(0)
+	if _carom_unlock_taps.size() < CAROM_UNLOCK_TAP_COUNT:
+		return
+
+	_carom_unlock_taps.clear()
+	if carom_button:
+		carom_button.visible = true
