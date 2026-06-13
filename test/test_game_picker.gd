@@ -11,6 +11,13 @@ func before_each() -> void:
 	picker.carom_button.visible = false
 
 
+func after_each() -> void:
+	if is_instance_valid(picker.carom_button):
+		picker.carom_button.free()
+	if is_instance_valid(picker):
+		picker.free()
+
+
 func test_is_title_tap_release_handles_mouse_and_touch() -> void:
 	var mouse_press := InputEventMouseButton.new()
 	mouse_press.button_index = MOUSE_BUTTON_LEFT
