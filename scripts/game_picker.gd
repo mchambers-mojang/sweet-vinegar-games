@@ -48,9 +48,11 @@ func _ready() -> void:
 	replays_button.pressed.connect(func() -> void:
 		SceneTransition.transition_to("res://scenes/replays.tscn")
 	)
-	# Hidden debug trigger: 7 rapid taps on the title
+	# Hidden debug trigger: 7 rapid taps on the title area
 	title_label.mouse_filter = Control.MOUSE_FILTER_STOP
+	subtitle_label.mouse_filter = Control.MOUSE_FILTER_STOP
 	title_label.gui_input.connect(_on_title_gui_input)
+	subtitle_label.gui_input.connect(_on_title_gui_input)
 	_apply_theme()
 	AppTheme.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
 
