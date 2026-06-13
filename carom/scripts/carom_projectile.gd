@@ -15,9 +15,6 @@ func _ready() -> void:
 	axis_lock_linear_y = true
 	axis_lock_angular_x = true
 	axis_lock_angular_z = true
-	contact_monitor = true
-	max_contacts_reported = 4
-	body_entered.connect(_on_body_entered)
 
 
 func setup(new_direction: Vector3, new_speed: float, new_owner_side: StringName, color: Color = Color(0.16, 0.95, 1.0)) -> void:
@@ -47,12 +44,6 @@ func _physics_process(_delta: float) -> void:
 	# Keep on ground plane
 	global_position.y = 0.0
 	linear_velocity.y = 0.0
-
-
-func _on_body_entered(body: Node) -> void:
-	if body is CaromPuck:
-		# Destroy projectile after hitting the puck — physics impulse already transferred
-		queue_free()
 
 
 ## Called by goal Area3D when this projectile enters — removes from play.

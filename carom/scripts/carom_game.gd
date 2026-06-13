@@ -30,7 +30,7 @@ var player_score: int = 0
 var ai_score: int = 0
 var player_turret: CaromTurret = null
 var ai_turret: CaromTurret = null
-var puck: CaromPuck = null
+var pucks: Array[CaromPuck] = []
 
 @onready var arena: CaromArena = get_parent() as CaromArena
 @onready var actors: Node3D = arena.get_node("Actors") as Node3D
@@ -65,34 +65,41 @@ func _spawn_entities() -> void:
 		player_turret.queue_free()
 	if ai_turret:
 		ai_turret.queue_free()
-	if puck:
-		puck.queue_free()
+	for p in pucks:
+		if is_instance_valid(p):
+			p.queue_free()
+	pucks.clear()
 
 	player_turret = player_turret_scene.instantiate() as CaromTurret
 	ai_turret = ai_turret_scene.instantiate() as CaromTurret
-	puck = puck_scene.instantiate() as CaromPuck
 
 	actors.add_child(player_turret)
 	actors.add_child(ai_turret)
-	actors.add_child(puck)
+
+	# Spawn pucks at off-center positions
+	var spawn_positions := arena.get_puck_spawn_positions()
+	for i in spawn_positions.size():
+		var p := puck_scene.instantiate() as CaromPuck
+		actors.add_child(p)
+		p.name = "Puck%d" % (i + 1)
+		p.global_position = spawn_positions[i]
+		p.configure(arena.get_goal_targets(), spawn_positions[i])
+		pucks.append(p)
 
 	player_turret.name = "PlayerTurret"
 	ai_turret.name = "AITurret"
-	puck.name = "Puck"
 
 	player_turret.global_position = arena.get_turret_spawn_position(&"north")
 	ai_turret.global_position = arena.get_turret_spawn_position(&"south")
-	puck.global_position = arena.get_puck_spawn_position()
 
 	player_turret.configure(&"north", CaromTurret.ControlMode.HUMAN, 0.0, Color(0.2, 0.6, 1.0))
 	ai_turret.configure(&"south", CaromTurret.ControlMode.AI, 180.0, Color(1.0, 0.25, 0.2))
-	puck.configure(arena.get_goal_targets(), arena.get_puck_spawn_position())
 
-	# Set up AI controller with difficulty, puck awareness, and arena geometry
+	# Set up AI controller — track the first puck (AI will naturally react to nearest threat)
 	var midfield_z := arena.get_puck_spawn_position().z
 	var ai_goal_z := arena.get_turret_spawn_position(&"south").z
 	var ai_difficulty := CaromAIDifficulty.get_preset(ai_difficulty_level)
-	ai_turret.setup_ai(ai_difficulty, puck, player_turret, midfield_z, ai_goal_z)
+	ai_turret.setup_ai(ai_difficulty, pucks[0], player_turret, midfield_z, ai_goal_z)
 
 	player_turret.ammo_changed.connect(_on_player_ammo_changed)
 	player_turret.reload_state_changed.connect(_on_player_reload_state_changed)
@@ -110,7 +117,11 @@ func _start_match() -> void:
 func _begin_round() -> void:
 	match_state = MatchState.PLAYING
 	arena.reset_goal_lock()
-	puck.reset_to_center(arena.get_puck_spawn_position())
+	var spawn_positions := arena.get_puck_spawn_positions()
+	for i in pucks.size():
+		if is_instance_valid(pucks[i]):
+			var reset_pos := spawn_positions[i] if i < spawn_positions.size() else arena.get_puck_spawn_position()
+			pucks[i].reset_to_center(reset_pos)
 	player_turret.reset_for_round()
 	ai_turret.reset_for_round()
 	player_turret.set_active(true)
@@ -127,7 +138,13 @@ func _on_goal_scored(scoring_side: StringName, goal_puck: CaromPuck) -> void:
 	match_state = MatchState.GOAL_SCORED
 	player_turret.set_active(false)
 	ai_turret.set_active(false)
-	goal_puck.reset_to_center(arena.get_puck_spawn_position())
+
+	# Reset all pucks for the next round, not just the one that scored
+	var spawn_positions := arena.get_puck_spawn_positions()
+	for i in pucks.size():
+		if is_instance_valid(pucks[i]):
+			var reset_pos := spawn_positions[i] if i < spawn_positions.size() else arena.get_puck_spawn_position()
+			pucks[i].reset_to_center(reset_pos)
 
 	if scoring_side == &"north":
 		player_score += 1

@@ -15,6 +15,7 @@ var _goal_locked: bool = false
 @onready var south_turret_spawn: Marker3D = $SpawnMarkers/SouthTurretSpawn
 @onready var north_turret_spawn: Marker3D = $SpawnMarkers/NorthTurretSpawn
 @onready var puck_spawn: Marker3D = $SpawnMarkers/PuckSpawn
+@onready var puck_spawn_2: Marker3D = $SpawnMarkers/PuckSpawn2
 
 
 func _ready() -> void:
@@ -26,8 +27,13 @@ func reset_goal_lock() -> void:
 	_goal_locked = false
 
 
+func get_puck_spawn_positions() -> Array[Vector3]:
+	return [puck_spawn.global_position, puck_spawn_2.global_position]
+
+
 func get_puck_spawn_position() -> Vector3:
-	return puck_spawn.global_position
+	# Legacy — returns midpoint for AI reference
+	return (puck_spawn.global_position + puck_spawn_2.global_position) * 0.5
 
 
 func get_turret_spawn_position(side: StringName) -> Vector3:

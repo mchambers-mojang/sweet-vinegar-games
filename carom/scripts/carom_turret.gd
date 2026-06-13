@@ -18,7 +18,7 @@ enum ControlMode {
 @export var projectile_speed: float = 18.0
 @export var fire_cooldown: float = 0.18
 @export var aim_speed_degrees: float = 110.0
-@export var aim_arc_degrees: float = 90.0
+@export var aim_arc_degrees: float = 160.0
 @export var base_yaw_degrees: float = 180.0
 @export var control_mode: ControlMode = ControlMode.HUMAN
 @export var touch_drag_sensitivity: float = 0.12

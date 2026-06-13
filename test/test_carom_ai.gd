@@ -122,6 +122,7 @@ func test_ai_defends_when_puck_approaches_goal() -> void:
 	var turret = _create_turret()
 	add_child_autofree(turret)
 	var difficulty = AIDifficultyScript.brutal()
+	difficulty.decision_quality = 1.0  # Deterministic for testing
 	var ai = _create_ai(turret, difficulty)
 
 	var puck = RigidBody3D.new()
@@ -142,6 +143,7 @@ func test_ai_reloads_when_low_ammo_and_puck_far() -> void:
 	var turret = _create_turret()
 	add_child_autofree(turret)
 	var difficulty = AIDifficultyScript.brutal()
+	difficulty.decision_quality = 1.0
 	difficulty.reload_threshold = 3
 	var ai = _create_ai(turret, difficulty)
 
@@ -164,6 +166,7 @@ func test_ai_attacks_when_puck_in_opponent_half() -> void:
 	var turret = _create_turret()
 	add_child_autofree(turret)
 	var difficulty = AIDifficultyScript.brutal()
+	difficulty.decision_quality = 1.0
 	var ai = _create_ai(turret, difficulty)
 
 	turret.current_ammo = 6

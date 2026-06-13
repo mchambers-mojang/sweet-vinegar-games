@@ -177,6 +177,8 @@ material_override = SubResource("12")
 ; --- Goal zones (wide openings at each short end, behind the play area) ---
 [node name="SouthGoal" type="Area3D" parent="."]
 position = Vector3(0, 0.6, -0.4)
+collision_layer = 0
+collision_mask = 12
 monitoring = true
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="SouthGoal"]
@@ -188,6 +190,8 @@ material_override = SubResource("13")
 
 [node name="NorthGoal" type="Area3D" parent="."]
 position = Vector3(0, 0.6, 24.4)
+collision_layer = 0
+collision_mask = 12
 monitoring = true
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="NorthGoal"]
@@ -207,7 +211,10 @@ position = Vector3(0, 0, 2)
 position = Vector3(0, 0, 22)
 
 [node name="PuckSpawn" type="Marker3D" parent="SpawnMarkers"]
-position = Vector3(0, 0, 12)
+position = Vector3(-1.5, 0, 10)
+
+[node name="PuckSpawn2" type="Marker3D" parent="SpawnMarkers"]
+position = Vector3(1.5, 0, 14)
 
 ; --- Camera (top-down, centered on the long channel) ---
 [node name="Camera3D" type="Camera3D" parent="."]

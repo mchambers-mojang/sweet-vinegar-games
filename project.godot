@@ -50,8 +50,12 @@ window/size/viewport_height=844
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 window/handheld/orientation=1
-window/ios/hide_status_bar=false
 window/ios/hide_home_indicator=false
+window/ios/hide_status_bar=false
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/gut/plugin.cfg")
 
 [input]
 
@@ -64,7 +68,3 @@ touch={
 
 renderer/rendering_method="mobile"
 textures/vram_compression/import_etc2_astc=true
-
-[editor_plugins]
-
-enabled=PackedStringArray("res://addons/gut/plugin.cfg")
