@@ -377,7 +377,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 		HapticManager.vibrate_light()
 
 		# Neon placement effects
-		if ThemeManager.is_neon:
+		if AppTheme.is_neon:
 
 			# Per-cell burst — small burst on each cell of the shape
 			for cell_offset in _drag_shape:
@@ -437,7 +437,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 				if lines + boxes >= 2:
 					_pulse_board_for_combo(combo_count)
 				# Scale shockwave with combo
-				if ThemeManager.is_neon:
+				if AppTheme.is_neon:
 					var combo_center := origin + Vector2(cell_size * 4.5, cell_size * 4.5)
 					var combo_amp := minf(0.5 + combo_count * 0.3, 2.0)
 					NeonRing.create(board, combo_center, Color(2.0, 0.3, 1.8), cell_size * (4.0 + combo_count), 0.4, combo_amp)
@@ -610,14 +610,14 @@ func _play_board_shatter() -> void:
 				)
 				var color: Color = board.cell_colors[cell_pos.y * board.GRID_SIZE + cell_pos.x]
 				if color == Color.TRANSPARENT:
-					color = ThemeManager.get_color("cell_given")
+					color = AppTheme.get_color("cell_given")
 				GlassShatter.create(board, rect, color, 6)
 				board.grid[cell_pos.y * board.GRID_SIZE + cell_pos.x] = 0
 				board.cell_colors[cell_pos.y * board.GRID_SIZE + cell_pos.x] = Color.TRANSPARENT
 			board.queue_redraw()
 		).set_delay(delay if row_idx > 0 else 0.3)
 
-	if ThemeManager.is_neon:
+	if AppTheme.is_neon:
 		_shatter_tween.tween_callback(func() -> void:
 			var board_center := origin + Vector2(cell_size * 4.5, cell_size * 4.5)
 			NeonRing.create(board, board_center, Color(2.0, 0.0, 0.3), cell_size * 8.0, 0.5, 1.5)
@@ -695,7 +695,7 @@ func _show_combo_text(total_clears: int, combo: int) -> void:
 		return
 
 	var color: Color
-	if ThemeManager.is_neon:
+	if AppTheme.is_neon:
 		color = Color(0.0, 1.5, 1.5) if combo <= 2 else Color(2.0, 0.3, 1.8)
 	else:
 		color = Color(0.2, 0.6, 1.0) if combo <= 2 else Color(0.8, 0.2, 0.8)
@@ -714,7 +714,7 @@ func _check_for_new_best() -> void:
 		return
 	_new_best_shown = true
 
-	var color := Color(0.0, 2.0, 1.5) if ThemeManager.is_neon else Color(0.2, 0.75, 1.0)
+	var color := Color(0.0, 2.0, 1.5) if AppTheme.is_neon else Color(0.2, 0.75, 1.0)
 	var cell_size := board._get_cell_size()
 	var origin := board._get_grid_origin()
 	var center := origin + Vector2(cell_size * 4.5, cell_size * 4.5)
@@ -826,7 +826,7 @@ func _format_time(seconds: float) -> String:
 
 func _apply_theme() -> void:
 	var style := StyleBoxFlat.new()
-	style.bg_color = ThemeManager.get_color("background")
+	style.bg_color = AppTheme.get_color("background")
 	add_theme_stylebox_override("panel", style)
 
 

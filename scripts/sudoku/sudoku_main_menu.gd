@@ -50,7 +50,7 @@ func _on_menu_ready() -> void:
 
 
 func _apply_game_theme() -> void:
-	title_label.add_theme_color_override("font_color", ThemeManager.get_color("text_given"))
+	title_label.add_theme_color_override("font_color", AppTheme.get_color("text_given"))
 
 
 func _start_game() -> void:

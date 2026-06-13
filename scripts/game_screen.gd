@@ -78,7 +78,7 @@ func _ready() -> void:
 
 	# Theme
 	_apply_game_theme()
-	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_game_theme())
+	AppTheme.theme_changed.connect(func(_d: bool) -> void: _apply_game_theme())
 
 	# Safe area
 	var margin := get_node_or_null("MarginContainer") as MarginContainer
