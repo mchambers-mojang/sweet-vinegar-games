@@ -54,7 +54,10 @@ func _load_replay(replay: Dictionary) -> void:
 		push_error("ReplayPlayer: Unknown game mode '%s'" % game_mode)
 		return
 
-	# Build the board visual and add it to the container
+	# Build the board visual and add it to the container.
+	# add_child() triggers _ready() synchronously on the new node when the
+	# parent is already inside the scene tree, so the board is fully
+	# initialized by the time reset_to_state() is called below.
 	_visual = _adapter.setup_playback(_initial_state)
 	if _visual == null:
 		push_error("ReplayPlayer: Adapter returned null visual for '%s'" % game_mode)
@@ -63,7 +66,7 @@ func _load_replay(replay: Dictionary) -> void:
 	_visual.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	adapter_container.add_child(_visual)
 
-	# Initialize the board to the initial state (board _ready has now run)
+	# Board _ready() has now run; initialize to the recorded initial state.
 	_adapter.reset_to_state(_initial_state, _visual)
 
 	# Collect only visually meaningful frames
