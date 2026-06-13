@@ -10,21 +10,21 @@ static func get_all_shapes() -> Array[Array]:
 	var shapes: Array[Array] = []
 	shapes.append_array(_get_standard_shapes())
 
-	if SettingsManager.blockudoku_pentominoes:
+	if GameRulesRegistry.get_rule("blockudoku", "pentominoes"):
 		shapes.append_array(_get_pentomino_shapes())
-	if SettingsManager.blockudoku_p_pentomino:
+	if GameRulesRegistry.get_rule("blockudoku", "p_pentomino"):
 		shapes.append_array(_get_p_pentomino_shapes())
-	if SettingsManager.blockudoku_w_pentomino:
+	if GameRulesRegistry.get_rule("blockudoku", "w_pentomino"):
 		shapes.append_array(_get_w_pentomino_shapes())
-	if SettingsManager.blockudoku_y_pentomino:
+	if GameRulesRegistry.get_rule("blockudoku", "y_pentomino"):
 		shapes.append_array(_get_y_pentomino_shapes())
-	if SettingsManager.blockudoku_f_pentomino:
+	if GameRulesRegistry.get_rule("blockudoku", "f_pentomino"):
 		shapes.append_array(_get_f_pentomino_shapes())
-	if SettingsManager.blockudoku_n_pentomino:
+	if GameRulesRegistry.get_rule("blockudoku", "n_pentomino"):
 		shapes.append_array(_get_n_pentomino_shapes())
-	if SettingsManager.blockudoku_hexominoes:
+	if GameRulesRegistry.get_rule("blockudoku", "hexominoes"):
 		shapes.append_array(_get_hexomino_shapes())
-	if SettingsManager.blockudoku_diagonals:
+	if GameRulesRegistry.get_rule("blockudoku", "diagonals"):
 		shapes.append_array(_get_diagonal_shapes())
 
 	return shapes

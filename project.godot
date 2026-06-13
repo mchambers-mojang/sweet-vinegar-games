@@ -17,7 +17,9 @@ config/icon="res://icon.svg"
 
 [autoload]
 
-SettingsManager="*res://scripts/autoload/settings_manager.gd"
+PlatformSettings="*res://scripts/autoload/platform_settings.gd"
+GameRulesRegistry="*res://scripts/autoload/game_rules_registry.gd"
+DebugFlags="*res://scripts/autoload/debug_flags.gd"
 AnalyticsManager="*res://scripts/autoload/analytics_manager.gd"
 AchievementManager="*res://scripts/autoload/achievement_manager.gd"
 ThemeManager="*res://scripts/autoload/theme_manager.gd"
