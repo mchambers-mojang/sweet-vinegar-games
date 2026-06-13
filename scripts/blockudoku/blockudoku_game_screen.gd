@@ -1,4 +1,4 @@
-extends Control
+extends GameScreen
 
 ## Blockudoku game screen — board, score, block tray, drag-to-place
 
@@ -51,49 +51,65 @@ var undo_stack: Array[Dictionary] = []
 var redo_stack: Array[Dictionary] = []
 
 
-func _ready() -> void:
-	CrashReporter.register_state_provider(_get_crash_state)
-	CrashReporter.register_user_action("blockudoku_screen_opened")
+# --- GameScreen overrides ---
+
+func _get_game_id() -> String:
+	return "blockudoku"
+
+
+func _get_scene_path() -> String:
+	return "res://scenes/blockudoku_game.tscn"
+
+
+func _is_initialized() -> bool:
+	return not available_blocks.is_empty()
+
+
+func _is_completed() -> bool:
+	return is_game_over
+
+
+func _serialize_state() -> Dictionary:
+	return {
+		"score": score,
+		"turns": turns,
+		"combo_count": combo_count,
+		"new_best_shown": _new_best_shown,
+		"elapsed_time": elapsed_time,
+		"board_state": board.get_state(),
+		"available_blocks": _serialize_blocks(available_blocks),
+		"blocks_placed_this_set": blocks_placed_this_set,
+		"random_seed": random_seed,
+		"rng_state": _rng.state,
+		"replay_id": replay_id,
+	}
+
+
+func _deserialize_state(data: Dictionary) -> void:
+	resume_game(data)
+
+
+func _get_crash_state() -> Dictionary:
+	return {
+		"game": "blockudoku",
+		"score": score,
+		"turns": turns,
+		"combo_count": combo_count,
+		"elapsed_time": elapsed_time,
+		"is_game_over": is_game_over,
+		"blocks_placed_this_set": blocks_placed_this_set,
+		"available_block_count": available_blocks.size(),
+	}
+
+
+func _apply_game_theme() -> void:
+	_apply_theme()
+
+
+func _on_game_screen_ready() -> void:
 	back_button.pressed.connect(_on_back)
 	undo_button.pressed.connect(_on_undo_pressed)
 	redo_button.pressed.connect(_on_redo_pressed)
-	settings_button.pressed.connect(func() -> void:
-		var SettingsScreen := load("res://scripts/settings_screen.gd")
-		SettingsScreen.return_scene = "res://scenes/blockudoku_game.tscn"
-		SceneTransition.transition_to("res://scenes/settings.tscn")
-	)
-	_setup_help_button()
-	_apply_theme()
-	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
-	var margin := get_node_or_null("MarginContainer") as MarginContainer
-	if margin:
-		SafeAreaManager.apply(margin)
-
-	# Auto-resume from save if scene loaded directly (e.g., returning from settings)
-	_try_auto_resume.call_deferred()
-
-
-func _exit_tree() -> void:
-	CrashReporter.unregister_state_provider(_get_crash_state)
-
-
-func _try_auto_resume() -> void:
-	# If the game was already initialized by an explicit call (from the menu),
-	# available_blocks will be populated — skip auto-resume.
-	if not available_blocks.is_empty():
-		return
-	if GameSaveManager.has_saved_game("blockudoku"):
-		var data := GameSaveManager.load_game("blockudoku")
-		if not data.is_empty():
-			resume_game(data)
-
-
-func _setup_help_button() -> void:
-	var btn := Button.new()
-	btn.text = "?"
-	btn.custom_minimum_size = Vector2(36, 0)
-	btn.pressed.connect(func() -> void: HowToPlay.show_for(self, "blockudoku"))
-	back_button.get_parent().add_child(btn)
 
 
 func start_new_game() -> void:
@@ -531,7 +547,7 @@ func _handle_game_over() -> void:
 		"elapsed_time": elapsed_time,
 		"combo_count": combo_count,
 	})
-	GameSaveManager.clear_save("blockudoku")
+	clear_save()
 	HapticManager.vibrate_success()
 
 	# Shatter animation runs in background
@@ -801,21 +817,7 @@ func _apply_theme() -> void:
 
 
 func _save_current_state() -> void:
-	if is_game_over:
-		return
-	GameSaveManager.save_game("blockudoku", {
-		"score": score,
-		"turns": turns,
-		"combo_count": combo_count,
-		"new_best_shown": _new_best_shown,
-		"elapsed_time": elapsed_time,
-		"board_state": board.get_state(),
-		"available_blocks": _serialize_blocks(available_blocks),
-		"blocks_placed_this_set": blocks_placed_this_set,
-		"random_seed": random_seed,
-		"rng_state": _rng.state,
-		"replay_id": replay_id,
-	})
+	save_progress()
 	ReplayManager.flush_active_replay()
 
 
@@ -823,19 +825,6 @@ func _create_session_seed() -> int:
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
 	return int(Time.get_ticks_usec() ^ rng.randi())
-
-
-func _get_crash_state() -> Dictionary:
-	return {
-		"game": "blockudoku",
-		"score": score,
-		"turns": turns,
-		"combo_count": combo_count,
-		"elapsed_time": elapsed_time,
-		"is_game_over": is_game_over,
-		"blocks_placed_this_set": blocks_placed_this_set,
-		"available_block_count": available_blocks.size(),
-	}
 
 
 func _record_blockudoku_game_over(final_score: int, final_turns: int) -> void:

@@ -1,4 +1,4 @@
-extends Control
+extends GameScreen
 
 ## Shikaku game screen — board, timer, controls
 
@@ -40,9 +40,61 @@ const CHEAT_INTERVAL := 0.3
 @onready var settings_button: Button = %SettingsButton
 
 
-func _ready() -> void:
-	CrashReporter.register_state_provider(_get_crash_state)
-	CrashReporter.register_user_action("shikaku_screen_opened")
+
+# --- GameScreen overrides ---
+
+func _get_game_id() -> String:
+	return "shikaku"
+
+
+func _get_scene_path() -> String:
+	return "res://scenes/shikaku_game.tscn"
+
+
+func _is_initialized() -> bool:
+	return not puzzle_data.is_empty()
+
+
+func _is_completed() -> bool:
+	return is_completed
+
+
+func _serialize_state() -> Dictionary:
+	return {
+		"width": grid_width,
+		"height": grid_height,
+		"numbers": _serialize_numbers(puzzle_data["numbers"]),
+		"solution": _serialize_rects(puzzle_data["solution"]),
+		"placed_rects": _serialize_rects(board.placed_rects),
+		"elapsed_time": elapsed_time,
+		"hints_used": hints_used,
+		"random_seed": random_seed,
+		"replay_id": replay_id,
+	}
+
+
+func _deserialize_state(data: Dictionary) -> void:
+	resume_game(data)
+
+
+func _get_crash_state() -> Dictionary:
+	return {
+		"game": "shikaku",
+		"width": grid_width,
+		"height": grid_height,
+		"elapsed_time": elapsed_time,
+		"is_completed": is_completed,
+		"is_paused": is_paused,
+		"hints_used": hints_used,
+		"placed_rects": board.placed_rects.size() if board else 0,
+	}
+
+
+func _apply_game_theme() -> void:
+	_apply_theme()
+
+
+func _on_game_screen_ready() -> void:
 	board.rectangle_placed.connect(_on_rectangle_placed)
 	board.rectangle_tapped.connect(_on_rectangle_tapped)
 	undo_button.pressed.connect(_on_undo)
@@ -50,44 +102,7 @@ func _ready() -> void:
 	hint_button.pressed.connect(_on_hint)
 	pause_button.pressed.connect(_on_pause)
 	back_button.pressed.connect(_on_back)
-	settings_button.pressed.connect(func() -> void:
-		var SettingsScreen := load("res://scripts/settings_screen.gd")
-		SettingsScreen.return_scene = "res://scenes/shikaku_game.tscn"
-		SceneTransition.transition_to("res://scenes/settings.tscn")
-	)
-	_setup_help_button()
 	_update_button_states()
-	_apply_theme()
-	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
-
-	# Adjust for mobile safe area (notch, status bar)
-	var margin := get_node_or_null("MarginContainer") as MarginContainer
-	if margin:
-		SafeAreaManager.apply(margin)
-
-	# Auto-resume from save if scene loaded directly (e.g., returning from settings)
-	_try_auto_resume.call_deferred()
-
-
-func _exit_tree() -> void:
-	CrashReporter.unregister_state_provider(_get_crash_state)
-
-
-func _try_auto_resume() -> void:
-	if not puzzle_data.is_empty():
-		return
-	if GameSaveManager.has_saved_game("shikaku"):
-		var data := GameSaveManager.load_game("shikaku")
-		if not data.is_empty():
-			resume_game(data)
-
-
-func _setup_help_button() -> void:
-	var btn := Button.new()
-	btn.text = "?"
-	btn.custom_minimum_size = Vector2(36, 0)
-	btn.pressed.connect(func() -> void: HowToPlay.show_for(self, "shikaku"))
-	pause_button.get_parent().add_child(btn)
 
 
 func start_new_game(w: int, h: int) -> void:
@@ -373,7 +388,7 @@ func _handle_win() -> void:
 		"elapsed_time": elapsed_time,
 		"hints_used": hints_used,
 	})
-	GameSaveManager.clear_save("shikaku")
+	clear_save()
 	SoundManager.play_win()
 	HapticManager.vibrate_success()
 	if is_new_best:
@@ -492,33 +507,8 @@ func _cheat_place_one() -> void:
 
 
 func _save_current_state() -> void:
-	if is_completed:
-		return
-	GameSaveManager.save_game("shikaku", {
-		"width": grid_width,
-		"height": grid_height,
-		"numbers": _serialize_numbers(puzzle_data["numbers"]),
-		"solution": _serialize_rects(puzzle_data["solution"]),
-		"placed_rects": _serialize_rects(board.placed_rects),
-		"elapsed_time": elapsed_time,
-		"hints_used": hints_used,
-		"random_seed": random_seed,
-		"replay_id": replay_id,
-	})
+	save_progress()
 	ReplayManager.flush_active_replay()
-
-
-func _get_crash_state() -> Dictionary:
-	return {
-		"game": "shikaku",
-		"width": grid_width,
-		"height": grid_height,
-		"elapsed_time": elapsed_time,
-		"is_completed": is_completed,
-		"is_paused": is_paused,
-		"hints_used": hints_used,
-		"placed_rectangles": board.placed_rects.size(),
-	}
 
 
 func _serialize_numbers(nums: Dictionary) -> Dictionary:
