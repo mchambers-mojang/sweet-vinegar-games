@@ -34,9 +34,9 @@ var aim_offset_degrees: float = 0.0
 var _reload_timer: float = 0.0
 var _fire_cooldown_timer: float = 0.0
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
-var _ai_target_aim_degrees: float = 0.0
-var _ai_fire_timer: float = 0.0
-var _ai_retarget_timer: float = 0.0
+
+## AI controller (created when control_mode == AI)
+var ai_controller: CaromAI = null
 
 @onready var projectile_spawn: Marker3D = $ProjectileSpawn
 
@@ -44,9 +44,15 @@ var _ai_retarget_timer: float = 0.0
 func _ready() -> void:
 	_rng.randomize()
 	current_ammo = clip_size
-	_schedule_ai_behavior()
 	_update_rotation()
 	ammo_changed.emit(current_ammo, clip_size)
+
+
+func setup_ai(difficulty: CaromAIDifficulty, puck: CaromPuck, opponent: CaromTurret, midfield_z: float, own_goal_z: float) -> void:
+	ai_controller = CaromAI.new(self, difficulty)
+	ai_controller.configure_arena(midfield_z, own_goal_z)
+	ai_controller.set_puck(puck)
+	ai_controller.set_opponent(opponent)
 
 
 func configure(new_side: StringName, new_control_mode: ControlMode, new_base_yaw_degrees: float, new_color: Color = Color(-1, -1, -1)) -> void:
@@ -64,8 +70,8 @@ func reset_for_round() -> void:
 	_reload_timer = 0.0
 	_fire_cooldown_timer = 0.0
 	current_ammo = clip_size
-	if control_mode == ControlMode.AI:
-		_schedule_ai_behavior()
+	if ai_controller:
+		ai_controller.reset()
 	ammo_changed.emit(current_ammo, clip_size)
 	reload_state_changed.emit(false)
 
@@ -143,9 +149,6 @@ func try_fire() -> bool:
 	projectile.global_position = projectile_spawn.global_position
 	projectile.setup(-projectile_spawn.global_transform.basis.z.normalized(), projectile_speed, side, team_color)
 	projectile_fired.emit(projectile)
-
-	if control_mode == ControlMode.AI and current_ammo <= 0:
-		start_reload()
 	return true
 
 
@@ -183,30 +186,8 @@ func _process_human_input(delta: float) -> void:
 
 
 func _process_ai(delta: float) -> void:
-	_ai_retarget_timer -= delta
-	if _ai_retarget_timer <= 0.0:
-		_ai_target_aim_degrees = _rng.randf_range(-aim_arc_degrees * 0.5, aim_arc_degrees * 0.5)
-		_ai_retarget_timer = _rng.randf_range(0.6, 1.4)
-
-	aim_offset_degrees = move_toward(aim_offset_degrees, _ai_target_aim_degrees, aim_speed_degrees * delta * 0.7)
-
-	_ai_fire_timer -= delta
-	if _ai_fire_timer > 0.0:
-		return
-
-	if current_ammo <= 0:
-		start_reload()
-		_ai_fire_timer = _rng.randf_range(0.5, 0.9)
-		return
-
-	if is_reloading and current_ammo > 0 and _rng.randf() < 0.3:
-		try_fire()
-	elif not is_reloading:
-		if current_ammo <= 2 and _rng.randf() < 0.35:
-			start_reload()
-		else:
-			try_fire()
-	_ai_fire_timer = _rng.randf_range(0.7, 1.35)
+	if ai_controller:
+		ai_controller.process(delta)
 
 
 func _process_reload(delta: float) -> void:
@@ -224,12 +205,6 @@ func _process_reload(delta: float) -> void:
 		if current_ammo >= clip_size:
 			cancel_reload()
 			break
-
-
-func _schedule_ai_behavior() -> void:
-	_ai_target_aim_degrees = _rng.randf_range(-aim_arc_degrees * 0.5, aim_arc_degrees * 0.5)
-	_ai_fire_timer = _rng.randf_range(0.7, 1.2)
-	_ai_retarget_timer = _rng.randf_range(0.4, 1.0)
 
 
 func _update_rotation() -> void:

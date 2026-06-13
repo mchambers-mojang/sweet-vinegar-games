@@ -16,6 +16,9 @@ enum MatchState {
 @export var ai_turret_scene: PackedScene = preload("res://carom/scenes/carom_turret.tscn")
 @export var puck_scene: PackedScene = preload("res://carom/scenes/carom_puck.tscn")
 
+## AI difficulty level (0=Easy, 1=Medium, 2=Hard, 3=Brutal)
+var ai_difficulty_level: int = 1
+
 var match_state: int = MatchState.SETUP
 var player_score: int = 0
 var ai_score: int = 0
@@ -34,27 +37,18 @@ var puck: CaromPuck = null
 
 func _ready() -> void:
 	arena.goal_scored.connect(_on_goal_scored)
+	# Read difficulty from menu selection
+	var CaromMenu := load("res://carom/scripts/carom_menu.gd")
+	if CaromMenu:
+		ai_difficulty_level = CaromMenu.selected_difficulty
 	# Defer spawn until parent arena's @onready vars are resolved
 	call_deferred("_spawn_entities")
 	call_deferred("_start_match")
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if match_state != MatchState.GAME_OVER:
-		return
-
-	if event is InputEventMouseButton:
-		var mouse_button := event as InputEventMouseButton
-		if mouse_button.button_index == MOUSE_BUTTON_LEFT and mouse_button.pressed:
-			_start_match()
-	elif event is InputEventScreenTouch:
-		var screen_touch := event as InputEventScreenTouch
-		if screen_touch.pressed:
-			_start_match()
-	elif event is InputEventKey and event.pressed and not event.echo:
-		var key_event := event as InputEventKey
-		if key_event.keycode == KEY_ENTER or key_event.keycode == KEY_SPACE:
-			_start_match()
+	# No more tap-to-restart; handled by game over panel buttons
+	pass
 
 
 func _spawn_entities() -> void:
@@ -85,6 +79,12 @@ func _spawn_entities() -> void:
 	ai_turret.configure(&"south", CaromTurret.ControlMode.AI, 180.0, Color(1.0, 0.25, 0.2))
 	puck.configure(arena.get_goal_targets(), arena.get_puck_spawn_position())
 
+	# Set up AI controller with difficulty, puck awareness, and arena geometry
+	var midfield_z := arena.get_puck_spawn_position().z
+	var ai_goal_z := arena.get_turret_spawn_position(&"south").z
+	var ai_difficulty := CaromAIDifficulty.get_preset(ai_difficulty_level)
+	ai_turret.setup_ai(ai_difficulty, puck, player_turret, midfield_z, ai_goal_z)
+
 	player_turret.ammo_changed.connect(_on_player_ammo_changed)
 	player_turret.reload_state_changed.connect(_on_player_reload_state_changed)
 	ai_turret.ammo_changed.connect(_on_ai_ammo_changed)
@@ -106,7 +106,8 @@ func _begin_round() -> void:
 	ai_turret.reset_for_round()
 	player_turret.set_active(true)
 	ai_turret.set_active(true)
-	status_label.text = "First to %d • Enter/click to fire • R to reload" % score_limit
+	var diff_name := CaromAIDifficulty.get_preset(ai_difficulty_level).difficulty_name
+	status_label.text = "First to %d • %s AI • Enter/click to fire • R to reload" % [score_limit, diff_name]
 	_update_ammo_labels()
 
 
@@ -145,7 +146,98 @@ func _queue_round_restart() -> void:
 func _finish_match() -> void:
 	match_state = MatchState.GAME_OVER
 	var winner := "Player" if player_score > ai_score else "AI"
-	status_label.text = "%s wins! Click or press Enter to restart." % winner
+	status_label.text = ""
+	_show_game_over_panel(winner)
+
+
+var _game_over_panel: Control = null
+
+func _show_game_over_panel(winner: String) -> void:
+	if _game_over_panel:
+		_game_over_panel.queue_free()
+
+	_game_over_panel = PanelContainer.new()
+	_game_over_panel.set_anchors_preset(Control.PRESET_CENTER)
+	_game_over_panel.custom_minimum_size = Vector2(320, 260)
+
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.08, 0.08, 0.12, 0.95)
+	style.border_color = Color(0.2, 0.8, 1.0, 0.8)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(8)
+	_game_over_panel.add_theme_stylebox_override("panel", style)
+
+	var vbox := VBoxContainer.new()
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 16)
+	_game_over_panel.add_child(vbox)
+
+	# Winner text
+	var winner_label := Label.new()
+	winner_label.text = "%s Wins!" % winner
+	winner_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	winner_label.add_theme_font_size_override("font_size", 28)
+	winner_label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.6))
+	vbox.add_child(winner_label)
+
+	# Score
+	var score_text := Label.new()
+	score_text.text = "%d – %d" % [player_score, ai_score]
+	score_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	score_text.add_theme_font_size_override("font_size", 22)
+	vbox.add_child(score_text)
+
+	# Difficulty selector
+	var diff_row := HBoxContainer.new()
+	diff_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_child(diff_row)
+
+	var diff_label := Label.new()
+	diff_label.text = "Difficulty: "
+	diff_row.add_child(diff_label)
+
+	var diff_picker := OptionButton.new()
+	diff_picker.add_item("Easy")
+	diff_picker.add_item("Medium")
+	diff_picker.add_item("Hard")
+	diff_picker.add_item("Brutal")
+	diff_picker.selected = ai_difficulty_level
+	diff_picker.item_selected.connect(func(idx: int) -> void:
+		ai_difficulty_level = idx
+		var CaromMenu := load("res://carom/scripts/carom_menu.gd")
+		if CaromMenu:
+			CaromMenu.selected_difficulty = idx
+	)
+	diff_row.add_child(diff_picker)
+
+	# Buttons
+	var button_row := HBoxContainer.new()
+	button_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	button_row.add_theme_constant_override("separation", 12)
+	vbox.add_child(button_row)
+
+	var rematch_button := Button.new()
+	rematch_button.text = "Rematch"
+	rematch_button.custom_minimum_size = Vector2(120, 44)
+	rematch_button.pressed.connect(func() -> void:
+		_game_over_panel.queue_free()
+		_game_over_panel = null
+		_spawn_entities()
+		_start_match()
+	)
+	button_row.add_child(rematch_button)
+
+	var menu_button := Button.new()
+	menu_button.text = "Menu"
+	menu_button.custom_minimum_size = Vector2(120, 44)
+	menu_button.pressed.connect(func() -> void:
+		SceneTransition.transition_to("res://scenes/carom_menu.tscn")
+	)
+	button_row.add_child(menu_button)
+
+	# Add to HUD layer
+	var hud := arena.get_node("HUD") as CanvasLayer
+	hud.add_child(_game_over_panel)
 
 
 func _update_score_labels() -> void:

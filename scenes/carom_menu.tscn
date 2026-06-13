@@ -69,6 +69,27 @@ layout_mode = 2
 custom_minimum_size = Vector2(0, 54)
 text = "Play"
 
+[node name="DifficultyRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+alignment = 1
+
+[node name="DifficultyLabel" type="Label" parent="MarginContainer/VBoxContainer/DifficultyRow"]
+layout_mode = 2
+text = "Difficulty: "
+
+[node name="DifficultyButton" type="OptionButton" parent="MarginContainer/VBoxContainer/DifficultyRow"]
+unique_name_in_owner = true
+layout_mode = 2
+item_count = 4
+popup/item_0/text = "Easy"
+popup/item_1/text = "Medium"
+popup/item_1/id = 1
+popup/item_2/text = "Hard"
+popup/item_2/id = 2
+popup/item_3/text = "Brutal"
+popup/item_3/id = 3
+selected = 1
+
 [node name="HintLabel" type="Label" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2
 text = "Controls: Left/Right to aim, Enter/click to fire, R to reload"

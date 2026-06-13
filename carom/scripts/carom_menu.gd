@@ -5,10 +5,19 @@ extends PanelContainer
 @onready var play_button: Button = %PlayButton
 @onready var settings_button: Button = %SettingsButton
 @onready var back_button: Button = %BackButton
+@onready var difficulty_button: OptionButton = %DifficultyButton
+
+## Shared state so the arena scene can read the chosen difficulty.
+static var selected_difficulty: int = 1
 
 
 func _ready() -> void:
+	difficulty_button.selected = selected_difficulty
+	difficulty_button.item_selected.connect(func(idx: int) -> void:
+		selected_difficulty = idx
+	)
 	play_button.pressed.connect(func() -> void:
+		selected_difficulty = difficulty_button.selected
 		SceneTransition.transition_to("res://carom/scenes/carom_arena.tscn")
 	)
 	settings_button.pressed.connect(func() -> void:
