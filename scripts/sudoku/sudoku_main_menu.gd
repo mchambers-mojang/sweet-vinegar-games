@@ -38,6 +38,13 @@ func _get_help_topic() -> String:
 
 
 func _on_menu_ready() -> void:
+	# Defensive registration — handles direct entry (e.g. from replays).
+	GameRulesRegistry.register_rules("sudoku", {
+		"input_mode": "cell_first",
+		"error_mode": "strict",
+		"highlight_row_col_box": true,
+		"auto_remove_pencil_marks": true,
+	})
 	difficulty_container.visible = false
 	_setup_difficulty_buttons()
 

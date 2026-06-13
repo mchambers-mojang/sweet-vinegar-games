@@ -23,37 +23,37 @@ func _get_player() -> AudioStreamPlayer:
 
 
 func play_place() -> void:
-	if not SettingsManager.sound_enabled:
+	if not PlatformSettings.sound_enabled:
 		return
 	_play_tone(800.0, 0.06, -12.0)
 
 
 func play_pencil() -> void:
-	if not SettingsManager.sound_enabled:
+	if not PlatformSettings.sound_enabled:
 		return
 	_play_tone(1200.0, 0.03, -18.0)
 
 
 func play_erase() -> void:
-	if not SettingsManager.sound_enabled:
+	if not PlatformSettings.sound_enabled:
 		return
 	_play_tone(400.0, 0.08, -14.0)
 
 
 func play_error() -> void:
-	if not SettingsManager.sound_enabled:
+	if not PlatformSettings.sound_enabled:
 		return
 	_play_tone(200.0, 0.15, -10.0)
 
 
 func play_select() -> void:
-	if not SettingsManager.sound_enabled:
+	if not PlatformSettings.sound_enabled:
 		return
 	_play_tone(600.0, 0.03, -20.0)
 
 
 func play_win() -> void:
-	if not SettingsManager.sound_enabled:
+	if not PlatformSettings.sound_enabled:
 		return
 	# Rising arpeggio
 	_play_tone(523.0, 0.12, -10.0)  # C5
@@ -64,7 +64,7 @@ func play_win() -> void:
 
 
 func play_unit_complete() -> void:
-	if not SettingsManager.sound_enabled:
+	if not PlatformSettings.sound_enabled:
 		return
 	_play_tone(880.0, 0.08, -14.0)
 

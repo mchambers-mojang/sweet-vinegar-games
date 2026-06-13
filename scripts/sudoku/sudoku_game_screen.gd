@@ -109,7 +109,7 @@ func _serialize_state() -> Dictionary:
 		"difficulty": difficulty,
 		"elapsed_time": elapsed_time,
 		"strikes": strikes,
-		"error_mode": SettingsManager.error_mode,
+		"error_mode": GameRulesRegistry.get_rule("sudoku", "error_mode"),
 		"is_failed": is_failed,
 		"can_continue_after_failure": _can_continue_after_failure,
 		"hints_used": hints_used,
@@ -141,6 +141,14 @@ func _apply_game_theme() -> void:
 
 
 func _on_game_screen_ready() -> void:
+	# Defensive registration: register_rules is a no-op if already registered via menu.
+	# Ensures rules are available if the game screen is entered directly (e.g. from replays).
+	GameRulesRegistry.register_rules("sudoku", {
+		"input_mode": "cell_first",
+		"error_mode": "strict",
+		"highlight_row_col_box": true,
+		"auto_remove_pencil_marks": true,
+	})
 	board.cell_selected.connect(_on_cell_selected)
 	notes_button.pressed.connect(_on_notes_pressed)
 	hint_button.pressed.connect(_on_hint_pressed)
@@ -193,9 +201,9 @@ func start_new_game(diff: int) -> void:
 		"difficulty": difficulty,
 		"puzzle": puzzle.duplicate(),
 	}, {
-		"input_mode": SettingsManager.input_mode,
-		"error_mode": SettingsManager.error_mode,
-		"show_timer": SettingsManager.show_timer,
+		"input_mode": GameRulesRegistry.get_rule("sudoku", "input_mode"),
+		"error_mode": GameRulesRegistry.get_rule("sudoku", "error_mode"),
+		"show_timer": PlatformSettings.show_timer,
 	})
 	AchievementManager.track_game_started("sudoku")
 	AnalyticsManager.log_event("game_started", {
@@ -242,9 +250,9 @@ func resume_game(data: Dictionary) -> void:
 			"difficulty": difficulty,
 			"puzzle": puzzle.duplicate(),
 		}, {
-			"input_mode": SettingsManager.input_mode,
-			"error_mode": SettingsManager.error_mode,
-			"show_timer": SettingsManager.show_timer,
+			"input_mode": GameRulesRegistry.get_rule("sudoku", "input_mode"),
+			"error_mode": GameRulesRegistry.get_rule("sudoku", "error_mode"),
+			"show_timer": PlatformSettings.show_timer,
 		})
 	AchievementManager.track_game_started("sudoku")
 
@@ -252,7 +260,7 @@ func resume_game(data: Dictionary) -> void:
 func _process(delta: float) -> void:
 	if not is_completed and not is_paused:
 		elapsed_time += delta
-		if SettingsManager.show_timer:
+		if PlatformSettings.show_timer:
 			timer_label.text = _format_time(elapsed_time)
 			timer_label.visible = true
 		else:
@@ -308,7 +316,7 @@ func _cheat_place_one() -> void:
 	cell.set_error(false)
 	cell.set_cell_color(Color.TRANSPARENT)
 	current_grid[index] = number
-	if SettingsManager.auto_remove_pencil_marks:
+	if GameRulesRegistry.get_rule("sudoku", "auto_remove_pencil_marks"):
 		_remove_pencil_marks_for_number(index, number)
 	_check_unit_completion(index)
 	_update_number_completion()
@@ -334,7 +342,7 @@ func _on_cell_selected(index: int) -> void:
 			_fill_colored_cells(cell.cell_color)
 		else:
 			# Double-click on non-colored cell: toggle row/col/box highlighting
-			board.show_row_col_box = SettingsManager.highlight_row_col_box
+			board.show_row_col_box = GameRulesRegistry.get_rule("sudoku", "highlight_row_col_box")
 			board._update_highlighting()
 		_last_cell_pressed = -1
 		return
@@ -353,7 +361,7 @@ func _on_cell_selected(index: int) -> void:
 
 	board._update_highlighting()
 
-	if SettingsManager.input_mode == "number_first":
+	if GameRulesRegistry.get_rule("sudoku", "input_mode") == "number_first":
 		_handle_number_first_cell_tap(index)
 	_update_number_completion()
 
@@ -378,7 +386,7 @@ func _handle_number_first_cell_tap(index: int) -> void:
 	else:
 		if cell.value == _selected_number:
 			return
-		if SettingsManager.error_mode == "strict" and solution[index] != _selected_number:
+		if GameRulesRegistry.get_rule("sudoku", "error_mode") == "strict" and solution[index] != _selected_number:
 			strikes += 1
 			_update_strikes_display()
 			_play_error_feedback()
@@ -425,7 +433,7 @@ func _handle_number_first_cell_tap(index: int) -> void:
 			var center := placed_cell_rect.position + placed_cell_rect.size / 2.0
 			NeonBurst.create(board, center, Color(0.0, 2.0, 1.6), 10, 0.8)
 
-		if SettingsManager.auto_remove_pencil_marks:
+		if GameRulesRegistry.get_rule("sudoku", "auto_remove_pencil_marks"):
 			_remove_pencil_marks_for_number(index, _selected_number)
 		_check_unit_completion(index)
 		_update_number_completion()
@@ -441,7 +449,7 @@ func _on_number_pressed(number: int) -> void:
 	ReplayManager.record_input(elapsed_time, "number_button", {
 		"number": number,
 		"notes_mode": notes_mode,
-		"input_mode": SettingsManager.input_mode,
+		"input_mode": GameRulesRegistry.get_rule("sudoku", "input_mode"),
 	})
 
 	# If multi-selection is active, apply to all selected cells
@@ -449,7 +457,7 @@ func _on_number_pressed(number: int) -> void:
 		_apply_number_to_multi_selection(number)
 		return
 
-	if SettingsManager.input_mode == "cell_first":
+	if GameRulesRegistry.get_rule("sudoku", "input_mode") == "cell_first":
 		_place_or_note_number(number)
 	else:
 		# Number-first mode: just select the number, wait for cell tap
@@ -486,11 +494,11 @@ func _place_or_note_number(number: int) -> void:
 			return  # Already placed
 
 		# Lock correctly placed cells in strict mode
-		if SettingsManager.error_mode == "strict" and cell.value != 0 and cell.value == solution[index]:
+		if GameRulesRegistry.get_rule("sudoku", "error_mode") == "strict" and cell.value != 0 and cell.value == solution[index]:
 			return
 
 		# Check if correct in strict mode
-		if SettingsManager.error_mode == "strict" and solution[index] != number:
+		if GameRulesRegistry.get_rule("sudoku", "error_mode") == "strict" and solution[index] != number:
 			strikes += 1
 			_update_strikes_display()
 			_play_error_feedback()
@@ -543,7 +551,7 @@ func _place_or_note_number(number: int) -> void:
 			NeonBurst.create(board, center, Color(0.0, 2.0, 1.6), 10, 0.8)
 
 		# Auto-remove pencil marks if enabled
-		if SettingsManager.auto_remove_pencil_marks:
+		if GameRulesRegistry.get_rule("sudoku", "auto_remove_pencil_marks"):
 			_remove_pencil_marks_for_number(index, number)
 
 		_check_unit_completion(index)
@@ -602,7 +610,7 @@ func _on_hint_pressed() -> void:
 	redo_stack.clear()
 	hint_button.disabled = true
 
-	if SettingsManager.auto_remove_pencil_marks:
+	if GameRulesRegistry.get_rule("sudoku", "auto_remove_pencil_marks"):
 		_remove_pencil_marks_for_number(index, solution[index])
 
 	_check_unit_completion(index)
@@ -626,7 +634,7 @@ func _on_erase_pressed() -> void:
 		return
 	ReplayManager.record_input(elapsed_time, "erase_pressed", {"index": index})
 	# Don't allow erasing correctly placed cells in strict mode
-	if SettingsManager.error_mode == "strict" and cell.value != 0 and cell.value == solution[index]:
+	if GameRulesRegistry.get_rule("sudoku", "error_mode") == "strict" and cell.value != 0 and cell.value == solution[index]:
 		return
 
 	_push_undo(index)
@@ -758,7 +766,7 @@ func _handle_win() -> void:
 		"hints_used": hints_used,
 	})
 	var previous_best: float = _get_best_time(difficulty)
-	_record_sudoku_completion(difficulty, elapsed_time, SettingsManager.error_mode == "strict", won)
+	_record_sudoku_completion(difficulty, elapsed_time, GameRulesRegistry.get_rule("sudoku", "error_mode") == "strict", won)
 	if won:
 		AchievementManager.track_game_won("sudoku", {
 			"difficulty": difficulty,
@@ -898,7 +906,7 @@ func _update_number_completion() -> void:
 
 
 func _update_strikes_display() -> void:
-	if SettingsManager.error_mode != "strict":
+	if GameRulesRegistry.get_rule("sudoku", "error_mode") != "strict":
 		strikes_container.visible = false
 		return
 	strikes_container.visible = true
@@ -914,7 +922,7 @@ func _update_button_states() -> void:
 	var board_locked := _is_board_locked()
 	undo_button.disabled = board_locked or undo_stack.is_empty()
 	redo_button.disabled = board_locked or redo_stack.is_empty()
-	erase_button.visible = SettingsManager.error_mode != "strict"
+	erase_button.visible = GameRulesRegistry.get_rule("sudoku", "error_mode") != "strict"
 	hint_button.disabled = board_locked or hints_used >= 1
 
 
@@ -1130,7 +1138,7 @@ func _apply_number_to_multi_selection(number: int) -> void:
 		else:
 			if cell.value == number:
 				continue  # Already placed
-			if SettingsManager.error_mode == "strict" and solution[cell.index] != number:
+			if GameRulesRegistry.get_rule("sudoku", "error_mode") == "strict" and solution[cell.index] != number:
 				strikes += 1
 				cell.set_value(number)
 				cell.set_error(true)
@@ -1141,7 +1149,7 @@ func _apply_number_to_multi_selection(number: int) -> void:
 				cell.set_error(false)
 				cell.set_cell_color(Color.TRANSPARENT)
 				current_grid[cell.index] = number
-				if SettingsManager.auto_remove_pencil_marks:
+				if GameRulesRegistry.get_rule("sudoku", "auto_remove_pencil_marks"):
 					_remove_pencil_marks_for_number(cell.index, number)
 
 	# Flash and revert wrong cells after a delay
