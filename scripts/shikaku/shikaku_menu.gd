@@ -5,9 +5,9 @@ extends GameMenu
 @onready var continue_button: Button = %ContinueButton
 @onready var new_game_button: Button = %NewGameButton
 @onready var stats_button: Button = %StatsButton
-@onready var settings_button: Button = %SettingsButton
+@onready var settings_button: Button = $MarginContainer/VBoxContainer/TopBar/SettingsButton
 @onready var size_container: VBoxContainer = %SizeContainer
-@onready var back_button: Button = %BackButton
+@onready var back_button: Button = $MarginContainer/VBoxContainer/TopBar/BackButton
 
 const SIZE_OPTIONS := [5, 7, 8, 10, 12, 15]
 const SIZE_NAMES := {5: "5×5", 7: "7×7", 8: "8×8", 10: "10×10", 12: "12×12", 15: "15×15"}
@@ -19,6 +19,10 @@ var _showing_sizes := false
 
 func _get_game_id() -> String:
 	return "shikaku"
+
+
+func _get_display_name() -> String:
+	return "Shikaku"
 
 
 func _get_menu_scene_path() -> String:

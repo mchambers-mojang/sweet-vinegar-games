@@ -5,8 +5,8 @@ extends GameMenu
 @onready var continue_button: Button = %ContinueButton
 @onready var new_game_button: Button = %NewGameButton
 @onready var stats_button: Button = %StatsButton
-@onready var settings_button: Button = %SettingsButton
-@onready var back_button: Button = %BackButton
+@onready var settings_button: Button = $MarginContainer/VBoxContainer/TopBar/SettingsButton
+@onready var back_button: Button = $MarginContainer/VBoxContainer/TopBar/BackButton
 
 
 # --- GameMenu overrides ---
@@ -27,6 +27,10 @@ func _on_menu_ready() -> void:
 
 func _get_game_id() -> String:
 	return "blockudoku"
+
+
+func _get_display_name() -> String:
+	return "Blockudoku"
 
 
 func _get_menu_scene_path() -> String:

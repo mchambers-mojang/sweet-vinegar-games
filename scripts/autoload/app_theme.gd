@@ -130,6 +130,8 @@ func _ready() -> void:
 			_icons[key] = tex
 	get_tree().node_added.connect(_on_node_added)
 	get_tree().node_removed.connect(_on_node_removed)
+	# Scan buttons already in the tree (main scene loads before node_added connects)
+	call_deferred("_scan_existing_buttons")
 
 
 func _apply_theme_setting() -> void:
@@ -339,6 +341,19 @@ func apply_icon(button: Button, icon_name: String, show_text: bool = false) -> v
 
 
 # --- Reactive icon application (push model via node_added signal) ---
+
+func _scan_existing_buttons() -> void:
+	var root := get_tree().root
+	if root:
+		_scan_node_recursive(root)
+
+
+func _scan_node_recursive(node: Node) -> void:
+	if node is Button:
+		_try_apply_icon(node as Button)
+	for child in node.get_children():
+		_scan_node_recursive(child)
+
 
 func _on_node_added(node: Node) -> void:
 	if node is Button:

@@ -5,10 +5,10 @@ extends GameMenu
 @onready var continue_button: Button = %ContinueButton
 @onready var new_game_button: Button = %NewGameButton
 @onready var stats_button: Button = %StatsButton
-@onready var settings_button: Button = %SettingsButton
+@onready var settings_button: Button = $MarginContainer/VBoxContainer/TopBar/SettingsButton
 @onready var difficulty_container: VBoxContainer = %DifficultyContainer
 @onready var title_label: Label = %TitleLabel
-@onready var back_button: Button = %BackButton
+@onready var back_button: Button = $MarginContainer/VBoxContainer/TopBar/BackButton
 
 const DIFFICULTY_NAMES := ["Easy", "Medium", "Hard", "Expert", "Evil"]
 
@@ -19,6 +19,10 @@ var _showing_difficulty := false
 
 func _get_game_id() -> String:
 	return "sudoku"
+
+
+func _get_display_name() -> String:
+	return "Sudoku"
 
 
 func _get_menu_scene_path() -> String:

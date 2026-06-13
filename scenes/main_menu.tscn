@@ -6,7 +6,7 @@
 [node name="MainMenu" instance=ExtResource("1")]
 script = ExtResource("2")
 
-[node name="MarginContainer/VBoxContainer/TitleLabel" parent="." index=3]
+[node name="MarginContainer/VBoxContainer/TitleLabel" parent="."]
 unique_name_in_owner = true
 text = "Sudoku"
 

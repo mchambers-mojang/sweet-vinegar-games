@@ -6,7 +6,7 @@
 [node name="ShikakuMenu" instance=ExtResource("1")]
 script = ExtResource("2")
 
-[node name="MarginContainer/VBoxContainer/TitleLabel" parent="." index=3]
+[node name="MarginContainer/VBoxContainer/TitleLabel" parent="."]
 text = "Shikaku"
 
 [node name="SizeContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer" index=8]

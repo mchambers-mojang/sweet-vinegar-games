@@ -16,6 +16,11 @@ func _get_game_id() -> String:
 	return ""
 
 
+## Display name shown in the menu title
+func _get_display_name() -> String:
+	return ""
+
+
 ## Scene path for this menu (used as settings return target)
 func _get_menu_scene_path() -> String:
 	return ""
@@ -70,6 +75,11 @@ func _apply_game_theme() -> void:
 # --- Base lifecycle ---
 
 func _ready() -> void:
+	# Set title
+	var title_lbl := get_node_or_null("%TitleLabel") as Label
+	if title_lbl and not _get_display_name().is_empty():
+		title_lbl.text = _get_display_name()
+
 	# Wire standard buttons (null-safe)
 	var continue_btn := _get_button("continue_button")
 	var new_game_btn := _get_button("new_game_button")

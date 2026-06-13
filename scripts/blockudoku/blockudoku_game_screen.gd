@@ -292,7 +292,7 @@ func _update_board_preview(screen_pos: Vector2) -> void:
 	var local_pos := board.get_local_mouse_position()
 	# Offset upward so finger doesn't cover the placement
 	var cell_size := board._get_cell_size()
-	var offset_multiplier := GameRulesRegistry.get_rule("blockudoku", "drag_offset")  # 0=None, 1=Small, 2=Medium, 3=Large
+	var offset_multiplier: int = GameRulesRegistry.get_rule("blockudoku", "drag_offset")  # 0=None, 1=Small, 2=Medium, 3=Large
 	if offset_multiplier > 0:
 		local_pos.y -= cell_size * offset_multiplier
 	var grid_pos := board.screen_to_grid(local_pos)
@@ -321,7 +321,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 	var local_pos := board.get_local_mouse_position()
 	var cell_size := board._get_cell_size()
 	var origin := board._get_grid_origin()
-	var offset_multiplier := GameRulesRegistry.get_rule("blockudoku", "drag_offset")
+	var offset_multiplier: int = GameRulesRegistry.get_rule("blockudoku", "drag_offset")
 	if offset_multiplier > 0:
 		local_pos.y -= cell_size * offset_multiplier
 	var grid_pos := board.screen_to_grid(local_pos)
