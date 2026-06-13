@@ -14,6 +14,7 @@ extends Control
 
 const CAROM_UNLOCK_TAP_WINDOW_SEC := 0.8
 const CAROM_UNLOCK_TAP_COUNT := 7
+const CAROM_MENU_SCENE_PATH := "res://scenes/carom_menu.tscn"
 
 var _carom_unlock_taps: Array[float] = []
 
@@ -31,7 +32,10 @@ func _ready() -> void:
 	if carom_button:
 		carom_button.visible = false
 		carom_button.pressed.connect(func() -> void:
-			SceneTransition.transition_to("res://scenes/carom_menu.tscn")
+			if ResourceLoader.exists(CAROM_MENU_SCENE_PATH):
+				SceneTransition.transition_to(CAROM_MENU_SCENE_PATH)
+			else:
+				push_warning("Carom menu scene is missing: %s" % CAROM_MENU_SCENE_PATH)
 		)
 	settings_button.pressed.connect(func() -> void:
 		var SettingsScreen := load("res://scripts/settings_screen.gd")
