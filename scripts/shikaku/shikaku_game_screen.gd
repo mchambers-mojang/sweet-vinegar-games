@@ -58,7 +58,7 @@ func _ready() -> void:
 	_setup_help_button()
 	_update_button_states()
 	_apply_theme()
-	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
+	AppTheme.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
 
 	# Adjust for mobile safe area (notch, status bar)
 	var margin := get_node_or_null("MarginContainer") as MarginContainer
@@ -200,7 +200,7 @@ func _on_rectangle_placed(rect: Rect2i) -> void:
 	SoundManager.play_place()
 	HapticManager.vibrate_light()
 	# Neon shockwave on rect placement
-	if ThemeManager.is_neon:
+	if AppTheme.is_neon:
 		var cell_size := board._get_cell_size()
 		var origin := board._get_grid_origin()
 		var center := origin + Vector2(
@@ -378,7 +378,7 @@ func _handle_win() -> void:
 	if is_new_best:
 		_show_new_best_indicator()
 	# Neon win shockwave
-	if ThemeManager.is_neon:
+	if AppTheme.is_neon:
 		var cell_size := board._get_cell_size()
 		var origin := board._get_grid_origin()
 		var center := origin + Vector2(
@@ -404,7 +404,7 @@ func _show_new_best_indicator() -> void:
 		(board.grid_width / 2.0) * cell_size,
 		(board.grid_height / 2.0) * cell_size
 	)
-	var color := Color(0.0, 2.0, 1.5) if ThemeManager.is_neon else Color(0.2, 0.75, 1.0)
+	var color := Color(0.0, 2.0, 1.5) if AppTheme.is_neon else Color(0.2, 0.75, 1.0)
 	ComboLabel.create(board, center, "NEW BEST!", color)
 	HapticManager.vibrate_medium()
 
@@ -465,7 +465,7 @@ func _format_time(seconds: float) -> String:
 
 func _apply_theme() -> void:
 	var style := StyleBoxFlat.new()
-	style.bg_color = ThemeManager.get_color("background")
+	style.bg_color = AppTheme.get_color("background")
 	add_theme_stylebox_override("panel", style)
 
 

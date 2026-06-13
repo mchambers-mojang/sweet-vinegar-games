@@ -134,5 +134,5 @@ func _update_ui() -> void:
 	var total := _frames.size()
 	progress_label.text = "%d / %d" % [_current_frame, total]
 	play_button.text = ""
-	IconManager.apply_icon(play_button, "pause" if _playing else "play")
+	AppTheme.apply_icon(play_button, "pause" if _playing else "play")
 	info_label.text = "Move %d" % _current_frame

@@ -21,7 +21,7 @@ func _ready() -> void:
 	continue_button.visible = BlockudokuSaveManager.has_saved_game()
 	_add_how_to_play_button()
 	_apply_theme()
-	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
+	AppTheme.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
 
 	var margin := get_node_or_null("MarginContainer") as MarginContainer
 	if margin:
@@ -96,5 +96,5 @@ func _on_settings() -> void:
 
 func _apply_theme() -> void:
 	var style := StyleBoxFlat.new()
-	style.bg_color = ThemeManager.get_color("background")
+	style.bg_color = AppTheme.get_color("background")
 	add_theme_stylebox_override("panel", style)

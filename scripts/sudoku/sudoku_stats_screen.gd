@@ -17,7 +17,7 @@ func _ready() -> void:
 	)
 	_build_stats_ui()
 	_apply_theme()
-	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
+	AppTheme.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
 
 
 func _build_stats_ui() -> void:
@@ -123,7 +123,7 @@ func _format_time(seconds: float) -> String:
 
 func _apply_theme() -> void:
 	var style := StyleBoxFlat.new()
-	style.bg_color = ThemeManager.get_color("background")
+	style.bg_color = AppTheme.get_color("background")
 	add_theme_stylebox_override("panel", style)
 
 

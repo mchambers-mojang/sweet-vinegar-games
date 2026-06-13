@@ -1,6 +1,8 @@
 extends Node
 
-## Manages light/dark/neon theme switching and applies a global Godot Theme
+## Unified theme module. Owns color palettes, icon set, and Godot Theme resource.
+## Exposes get_color(), get_icon(), apply_icon(), and the theme_changed signal.
+## Icons are applied reactively via the node_added signal — no tree-scanning.
 
 signal theme_changed(is_dark: bool)
 
@@ -8,7 +10,7 @@ var is_dark: bool = false
 var is_neon: bool = false
 var ui_theme: Theme
 
-## Theme colors
+## Active color palette (current theme values)
 var colors := {
 	"background": Color.WHITE,
 	"cell_background": Color.WHITE,
@@ -89,12 +91,45 @@ var _neon_colors := {
 	"strike_inactive": Color(0.2, 0.15, 0.35),
 }
 
+# --- Icon state ---
+
+var _icons: Dictionary = {}
+var _icon_buttons: Array[Button] = []
+
+const ICON_PATHS := {
+	"back": "res://assets/icons/back.svg",
+	"undo": "res://assets/icons/undo.svg",
+	"redo": "res://assets/icons/redo.svg",
+	"settings": "res://assets/icons/settings.svg",
+	"play": "res://assets/icons/play.svg",
+	"pause": "res://assets/icons/pause.svg",
+	"replays": "res://assets/icons/replays.svg",
+	"replays_small": "res://assets/icons/replays_small.svg",
+}
+
+# Map from emoji text to icon name
+const TEXT_TO_ICON := {
+	"←": "back",
+	"↺": "undo",
+	"↻": "redo",
+	"⚙": "settings",
+	"▶": "play",
+	"⏸": "pause",
+}
+
 
 func _ready() -> void:
 	_light_colors = colors.duplicate()
 	ui_theme = Theme.new()
 	_apply_theme_setting()
 	SettingsManager.settings_changed.connect(_apply_theme_setting)
+
+	for key in ICON_PATHS:
+		var tex := load(ICON_PATHS[key]) as Texture2D
+		if tex:
+			_icons[key] = tex
+	get_tree().node_added.connect(_on_node_added)
+	get_tree().node_removed.connect(_on_node_removed)
 
 
 func _apply_theme_setting() -> void:
@@ -129,6 +164,7 @@ func set_theme_mode(mode: String) -> void:
 			_apply_color_set(_neon_colors)
 	_rebuild_ui_theme()
 	theme_changed.emit(is_dark)
+	_retint_icon_buttons()
 
 
 func _apply_color_set(source: Dictionary) -> void:
@@ -138,6 +174,14 @@ func _apply_color_set(source: Dictionary) -> void:
 
 func set_dark(dark: bool) -> void:
 	set_theme_mode("dark" if dark else "light")
+
+
+func get_color(key: String) -> Color:
+	return colors.get(key, Color.MAGENTA)
+
+
+func get_theme_resource() -> Theme:
+	return ui_theme
 
 
 func _rebuild_ui_theme() -> void:
@@ -263,5 +307,89 @@ func _rebuild_ui_theme() -> void:
 		get_tree().root.theme = ui_theme
 
 
-func get_color(key: String) -> Color:
-	return colors.get(key, Color.MAGENTA)
+# --- Icon API ---
+
+func get_icon(icon_name: String) -> Texture2D:
+	return _icons.get(icon_name, null)
+
+
+func apply_icon(button: Button, icon_name: String, show_text: bool = false) -> void:
+	var tex := get_icon(icon_name)
+	if tex:
+		button.icon = tex
+		button.expand_icon = true
+		button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		if not show_text:
+			button.text = ""
+			if button.custom_minimum_size.x < 48:
+				button.custom_minimum_size.x = 48
+			if button.custom_minimum_size.y < 44:
+				button.custom_minimum_size.y = 44
+		else:
+			button.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
+
+		# Tint icon to match theme
+		var color := get_color("button_text")
+		button.add_theme_color_override("icon_normal_color", color)
+		button.add_theme_color_override("icon_hover_color", color)
+		button.add_theme_color_override("icon_pressed_color", color)
+
+		if button not in _icon_buttons:
+			_icon_buttons.append(button)
+
+
+# --- Reactive icon application (push model via node_added signal) ---
+
+func _on_node_added(node: Node) -> void:
+	if node is Button:
+		_try_apply_icon(node as Button)
+
+
+func _on_node_removed(node: Node) -> void:
+	if node is Button:
+		_icon_buttons.erase(node as Button)
+
+
+func _try_apply_icon(button: Button) -> void:
+	var text := button.text.strip_edges()
+	if text in TEXT_TO_ICON:
+		apply_icon(button, TEXT_TO_ICON[text])
+	elif text == "Replays":
+		# Create icon+text as a centered child layout instead of using Button.icon
+		button.text = ""
+		button.alignment = HORIZONTAL_ALIGNMENT_CENTER
+		var hbox := HBoxContainer.new()
+		hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+		hbox.add_theme_constant_override("separation", 6)
+		hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		hbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		var tex_rect := TextureRect.new()
+		tex_rect.texture = get_icon("replays_small")
+		tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		tex_rect.custom_minimum_size = Vector2(20, 20)
+		tex_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var color := get_color("button_text")
+		tex_rect.modulate = color
+		hbox.add_child(tex_rect)
+		var lbl := Label.new()
+		lbl.text = "Replays"
+		lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		hbox.add_child(lbl)
+		button.add_child(hbox)
+		# Track for theme changes
+		button.set_meta("_icon_tex_rect", tex_rect)
+		if button not in _icon_buttons:
+			_icon_buttons.append(button)
+
+
+func _retint_icon_buttons() -> void:
+	var color := get_color("button_text")
+	for btn in _icon_buttons:
+		if is_instance_valid(btn):
+			btn.add_theme_color_override("icon_normal_color", color)
+			btn.add_theme_color_override("icon_hover_color", color)
+			btn.add_theme_color_override("icon_pressed_color", color)
+			if btn.has_meta("_icon_tex_rect"):
+				var tex_rect = btn.get_meta("_icon_tex_rect")
+				if is_instance_valid(tex_rect):
+					tex_rect.modulate = color

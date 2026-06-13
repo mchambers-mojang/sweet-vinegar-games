@@ -37,7 +37,7 @@ func _ready() -> void:
 	title_label.mouse_filter = Control.MOUSE_FILTER_STOP
 	title_label.gui_input.connect(_on_title_gui_input)
 	_apply_theme()
-	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
+	AppTheme.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
 
 	var margin := get_node_or_null("MarginContainer") as MarginContainer
 	if margin:
@@ -46,7 +46,7 @@ func _ready() -> void:
 
 func _apply_theme() -> void:
 	var style := StyleBoxFlat.new()
-	style.bg_color = ThemeManager.get_color("background")
+	style.bg_color = AppTheme.get_color("background")
 	add_theme_stylebox_override("panel", style)
 
 

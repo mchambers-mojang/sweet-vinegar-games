@@ -104,7 +104,7 @@ func _ready() -> void:
 	_setup_help_button()
 	_update_button_states()
 
-	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
+	AppTheme.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
 	_apply_theme()
 
 	# Adjust for mobile safe area (notch, status bar)
@@ -368,7 +368,7 @@ func _handle_number_first_cell_tap(index: int) -> void:
 			var revert_cell := cell
 
 			# Neon glass shatter + shockwave on error
-			if ThemeManager.is_neon:
+			if AppTheme.is_neon:
 				var error_cell_rect := board.get_cell_rect(index)
 				GlassShatter.create(board, error_cell_rect, Color(2.0, 0.0, 0.2), 10)
 				var err_center := error_cell_rect.position + error_cell_rect.size / 2.0
@@ -401,7 +401,7 @@ func _handle_number_first_cell_tap(index: int) -> void:
 		redo_stack.clear()
 
 		# Neon burst on correct placement
-		if ThemeManager.is_neon:
+		if AppTheme.is_neon:
 			var placed_cell_rect := board.get_cell_rect(index)
 			var center := placed_cell_rect.position + placed_cell_rect.size / 2.0
 			NeonBurst.create(board, center, Color(0.0, 2.0, 1.6), 10, 0.8)
@@ -481,7 +481,7 @@ func _place_or_note_number(number: int) -> void:
 			var revert_cell := cell
 
 			# Neon glass shatter + shockwave on error
-			if ThemeManager.is_neon:
+			if AppTheme.is_neon:
 				var error_cell_rect := board.get_cell_rect(index)
 				GlassShatter.create(board, error_cell_rect, Color(2.0, 0.0, 0.2), 10)
 				var err_center := error_cell_rect.position + error_cell_rect.size / 2.0
@@ -518,7 +518,7 @@ func _place_or_note_number(number: int) -> void:
 		HapticManager.vibrate_light()
 
 		# Neon burst on correct placement
-		if ThemeManager.is_neon:
+		if AppTheme.is_neon:
 			var placed_cell_rect := board.get_cell_rect(index)
 			var center := placed_cell_rect.position + placed_cell_rect.size / 2.0
 			NeonBurst.create(board, center, Color(0.0, 2.0, 1.6), 10, 0.8)
@@ -757,7 +757,7 @@ func _play_win_celebration() -> void:
 	SoundManager.play_win()
 	HapticManager.vibrate_success()
 	# Neon win shockwave from board center
-	if ThemeManager.is_neon:
+	if AppTheme.is_neon:
 		var center_rect := board.get_cell_rect(40)  # Center cell (row 4, col 4)
 		var center := center_rect.position + center_rect.size / 2.0
 		NeonRing.create(board, center, Color(0.0, 2.0, 1.5), center_rect.size.x * 8.0, 0.5, 1.2)
@@ -777,7 +777,7 @@ func _show_new_best_indicator() -> void:
 	var center_index := int(board.cells.size() / 2)
 	var center_rect := board.get_cell_rect(center_index)
 	var center := center_rect.position + center_rect.size / 2.0
-	var color := Color(0.0, 2.0, 1.5) if ThemeManager.is_neon else Color(0.2, 0.75, 1.0)
+	var color := Color(0.0, 2.0, 1.5) if AppTheme.is_neon else Color(0.2, 0.75, 1.0)
 	ComboLabel.create(board, center, "NEW BEST!", color)
 	HapticManager.vibrate_medium()
 
@@ -827,7 +827,7 @@ func _check_unit_completion(index: int) -> void:
 		for idx in flash_indices.keys():
 			board.cells[idx].flash(Color(1.0, 0.85, 0.4), 0.35)
 		# Neon shockwave from center of completed unit
-		if ThemeManager.is_neon:
+		if AppTheme.is_neon:
 			var avg_x := 0.0
 			var avg_y := 0.0
 			for idx in flash_indices.keys():
@@ -886,9 +886,9 @@ func _update_strikes_display() -> void:
 	for i in range(_strike_indicators.size()):
 		var indicator := _strike_indicators[i]
 		if i < strikes:
-			indicator.modulate = ThemeManager.get_color("strike_active")
+			indicator.modulate = AppTheme.get_color("strike_active")
 		else:
-			indicator.modulate = ThemeManager.get_color("strike_inactive")
+			indicator.modulate = AppTheme.get_color("strike_inactive")
 
 
 func _update_button_states() -> void:
@@ -910,7 +910,7 @@ func _select_number_button(number: int) -> void:
 		var btn := _number_buttons[i]
 		var num := i + 1
 		if num == _selected_number:
-			btn.add_theme_color_override("font_color", ThemeManager.get_color("cell_selected"))
+			btn.add_theme_color_override("font_color", AppTheme.get_color("cell_selected"))
 		else:
 			btn.remove_theme_color_override("font_color")
 
@@ -1023,7 +1023,7 @@ func _setup_color_buttons() -> void:
 	color_container.modulate = Color(1, 1, 1, 0)
 	color_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	var palette := NEON_CELL_COLORS if ThemeManager.is_neon else CELL_COLORS
+	var palette := NEON_CELL_COLORS if AppTheme.is_neon else CELL_COLORS
 	for i in range(palette.size()):
 		var btn := Button.new()
 		btn.custom_minimum_size = Vector2(36, 36)
@@ -1169,7 +1169,7 @@ func _setup_strike_indicators() -> void:
 	for i in 3:
 		var indicator := ColorRect.new()
 		indicator.custom_minimum_size = Vector2(12, 12)
-		indicator.color = ThemeManager.get_color("strike_inactive")
+		indicator.color = AppTheme.get_color("strike_inactive")
 		strikes_container.add_child(indicator)
 		_strike_indicators.append(indicator)
 
@@ -1233,7 +1233,7 @@ func _format_time(seconds: float) -> String:
 
 
 func _apply_theme() -> void:
-	var bg := ThemeManager.get_color("background")
+	var bg := AppTheme.get_color("background")
 	# Set background via a stylebox or just clear color
 	var style := StyleBoxFlat.new()
 	style.bg_color = bg

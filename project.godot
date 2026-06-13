@@ -22,7 +22,7 @@ AnalyticsManager="*res://scripts/autoload/analytics_manager.gd"
 StatsManager="*res://scripts/autoload/stats_manager.gd"
 AchievementManager="*res://scripts/autoload/achievement_manager.gd"
 SaveManager="*res://scripts/autoload/save_manager.gd"
-ThemeManager="*res://scripts/autoload/theme_manager.gd"
+AppTheme="*res://scripts/autoload/app_theme.gd"
 SoundManager="*res://scripts/autoload/sound_manager.gd"
 HapticManager="*res://scripts/autoload/haptic_manager.gd"
 ShikakuSaveManager="*res://scripts/autoload/shikaku_save_manager.gd"
@@ -36,7 +36,6 @@ SceneTransition="*res://scripts/autoload/scene_transition.gd"
 SafeAreaManager="*res://scripts/autoload/safe_area_manager.gd"
 DragEffect="*res://scripts/effects/drag_effect.gd"
 DebugOverlay="*res://scripts/autoload/debug_overlay.gd"
-IconManager="*res://scripts/autoload/icon_manager.gd"
 
 [debug]
 
