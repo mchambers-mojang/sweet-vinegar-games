@@ -18,7 +18,8 @@ const CAROM_UNLOCK_TOUCH_WINDOW_SEC := 0.6
 const CAROM_UNLOCK_TOUCH_TAP_COUNT := 7
 const CAROM_MENU_SCENE_PATH := "res://scenes/carom_menu.tscn"
 
-var _carom_unlock_taps: Array[float] = []
+var _carom_mouse_taps: Array[float] = []
+var _carom_touch_taps: Array[float] = []
 
 
 func _ready() -> void:
@@ -89,15 +90,16 @@ func _is_title_tap_release(event: InputEvent) -> bool:
 
 
 func _register_carom_unlock_tap(now_sec: float, is_touch: bool) -> void:
+	var taps: Array[float] = _carom_touch_taps if is_touch else _carom_mouse_taps
 	var window: float = CAROM_UNLOCK_TOUCH_WINDOW_SEC if is_touch else CAROM_UNLOCK_MOUSE_WINDOW_SEC
 	var required: int = CAROM_UNLOCK_TOUCH_TAP_COUNT if is_touch else CAROM_UNLOCK_MOUSE_TAP_COUNT
 
-	_carom_unlock_taps.append(now_sec)
-	while _carom_unlock_taps.size() > 0 and now_sec - _carom_unlock_taps[0] > window:
-		_carom_unlock_taps.remove_at(0)
-	if _carom_unlock_taps.size() < required:
+	taps.append(now_sec)
+	while taps.size() > 0 and now_sec - taps[0] > window:
+		taps.remove_at(0)
+	if taps.size() < required:
 		return
 
-	_carom_unlock_taps.clear()
+	taps.clear()
 	if carom_button:
 		carom_button.visible = true
