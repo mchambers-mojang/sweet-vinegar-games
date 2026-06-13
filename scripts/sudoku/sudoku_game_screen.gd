@@ -1,4 +1,4 @@
-extends "res://scripts/game_screen.gd"
+extends GameScreen
 
 ## Main game screen — contains the board, controls, timer, and all game logic
 
@@ -77,9 +77,66 @@ var _last_cell_pressed: int = -1
 var _selected_number: int = 0  # For number-first mode
 
 
-func _ready() -> void:
-	CrashReporter.register_state_provider(_get_crash_state)
-	CrashReporter.register_user_action("sudoku_screen_opened")
+# --- GameScreen overrides ---
+
+func _get_game_id() -> String:
+	return "sudoku"
+
+
+func _get_scene_path() -> String:
+	return "res://scenes/game.tscn"
+
+
+func _is_initialized() -> bool:
+	return not puzzle.is_empty()
+
+
+func _is_completed() -> bool:
+	return is_completed
+
+
+func _serialize_state() -> Dictionary:
+	return {
+		"puzzle": puzzle,
+		"solution": solution,
+		"current_grid": current_grid,
+		"pencil_marks": board.get_pencil_marks_dict(),
+		"cell_colors": board.get_cell_colors_dict(),
+		"difficulty": difficulty,
+		"elapsed_time": elapsed_time,
+		"strikes": strikes,
+		"error_mode": SettingsManager.error_mode,
+		"is_failed": is_failed,
+		"can_continue_after_failure": _can_continue_after_failure,
+		"hints_used": hints_used,
+		"random_seed": random_seed,
+		"replay_id": replay_id,
+	}
+
+
+func _deserialize_state(data: Dictionary) -> void:
+	resume_game(data)
+
+
+func _get_crash_state() -> Dictionary:
+	return {
+		"game": "sudoku",
+		"difficulty": difficulty,
+		"elapsed_time": elapsed_time,
+		"strikes": strikes,
+		"is_failed": is_failed,
+		"is_completed": is_completed,
+		"is_paused": is_paused,
+		"hints_used": hints_used,
+		"selected_index": board.selected_index,
+	}
+
+
+func _apply_game_theme() -> void:
+	_apply_theme()
+
+
+func _on_game_screen_ready() -> void:
 	board.cell_selected.connect(_on_cell_selected)
 	notes_button.pressed.connect(_on_notes_pressed)
 	hint_button.pressed.connect(_on_hint_pressed)
@@ -88,67 +145,53 @@ func _ready() -> void:
 	erase_button.pressed.connect(_on_erase_pressed)
 	pause_button.pressed.connect(_on_pause_pressed)
 	back_button.pressed.connect(_on_back_pressed)
-	settings_button.pressed.connect(func() -> void:
-		var SettingsScreen := load("res://scripts/settings_screen.gd")
-		SettingsScreen.return_scene = "res://scenes/game.tscn"
-		SceneTransition.transition_to("res://scenes/settings.tscn")
-	)
-
 	_setup_number_buttons()
 	_setup_color_buttons()
 	_setup_strike_indicators()
-	_setup_help_button()
 	_update_button_states()
-
-	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
-	_apply_theme()
-
-	# Adjust for mobile safe area (notch, status bar)
-	var margin := get_node_or_null("MarginContainer") as MarginContainer
-	if margin:
-		SafeAreaManager.apply(margin)
-
-	# Auto-resume from save if scene loaded directly (e.g., returning from settings)
-	_try_auto_resume.call_deferred()
-
-
-func _exit_tree() -> void:
-	CrashReporter.unregister_state_provider(_get_crash_state)
-
-
-func _try_auto_resume() -> void:
-	if not puzzle.is_empty():
-		return
-	if SaveManager.has_saved_game():
-		var data := SaveManager.load_game()
-		if not data.is_empty():
-			resume_game(data)
-
-
-func _setup_help_button() -> void:
-	var btn := Button.new()
-	btn.text = "?"
-	btn.custom_minimum_size = Vector2(36, 0)
-	btn.pressed.connect(func() -> void: HowToPlay.show_for(self, "sudoku"))
-	pause_button.get_parent().add_child(btn)
 
 
 func start_new_game(diff: int) -> void:
 	difficulty = diff
 	difficulty_label.text = DIFFICULTY_NAMES[difficulty]
+	strikes = 0
+	is_failed = false
+	is_completed = false
+	_can_continue_after_failure = false
+	is_paused = false
+	hints_used = 0
+	notes_mode = false
+	undo_stack.clear()
+	redo_stack.clear()
 	begin_session()
 
 
 func resume_game(data: Dictionary) -> void:
+	difficulty = data["difficulty"]
+	strikes = data["strikes"]
+	is_failed = data["is_failed"]
+	_can_continue_after_failure = data.get("can_continue_after_failure", false)
+	hints_used = data.get("hints_used", 0)
+	is_completed = false
+	is_paused = false
+	notes_mode = false
+	undo_stack.clear()
+	redo_stack.clear()
 	begin_session(data)
 
 
-func _get_game_id() -> String:
-	return "sudoku"
-
+# --- Session ceremony hooks ---
 
 func _should_tick_timer() -> bool:
 	return not is_completed and not is_paused
+
+
+func _get_start_crash_params() -> Dictionary:
+	return {"difficulty": difficulty}
+
+
+func _get_resume_crash_params(saved_data: Dictionary) -> Dictionary:
+	return {"difficulty": saved_data.get("difficulty", 0)}
 
 
 func _get_initial_state() -> Dictionary:
@@ -167,8 +210,6 @@ func _get_settings_snapshot() -> Dictionary:
 
 
 func _setup_game(saved_data: Dictionary) -> void:
-	undo_stack.clear()
-	redo_stack.clear()
 	if saved_data.is_empty():
 		var generator := SudokuGenerator.new()
 		var result := generator.generate(difficulty, random_seed)
@@ -178,13 +219,6 @@ func _setup_game(saved_data: Dictionary) -> void:
 		solution.assign(result["solution"])
 		current_grid = []
 		current_grid.assign(puzzle.duplicate())
-		strikes = 0
-		is_failed = false
-		is_completed = false
-		_can_continue_after_failure = false
-		is_paused = false
-		hints_used = 0
-		notes_mode = false
 		board.load_puzzle(puzzle)
 		_update_strikes_display()
 		_update_button_states()
@@ -196,19 +230,11 @@ func _setup_game(saved_data: Dictionary) -> void:
 		solution.assign(saved_data["solution"])
 		current_grid = []
 		current_grid.assign(saved_data["current_grid"])
-		difficulty = saved_data["difficulty"]
-		strikes = saved_data["strikes"]
-		is_failed = saved_data["is_failed"]
-		_can_continue_after_failure = saved_data.get("can_continue_after_failure", false)
-		hints_used = saved_data.get("hints_used", 0)
 		# Legacy fallback: old saves had no random_seed field. Derive one deterministically
 		# so replay/crash metadata is consistent. begin_session() calls ReplayManager AFTER
 		# _setup_game(), so this updated value is used by the replay session start.
 		if random_seed == 0:
 			random_seed = _derive_seed_from_puzzle(puzzle)
-		is_completed = false
-		is_paused = false
-		notes_mode = false
 		difficulty_label.text = DIFFICULTY_NAMES[difficulty]
 		board.load_state(current_grid, puzzle, saved_data.get("pencil_marks", {}), saved_data.get("cell_colors", {}))
 		_update_strikes_display()
@@ -220,28 +246,23 @@ func _setup_game(saved_data: Dictionary) -> void:
 
 
 func _increment_stats() -> void:
-	StatsManager.record_game_started(difficulty)
+	GameStatsManager.increment_counter("sudoku", "games_started")
+	GameStatsManager.increment_counter("sudoku", "started_d%d" % difficulty)
 
 
 func _get_analytics_params() -> Dictionary:
 	return {"game": "sudoku", "difficulty": difficulty}
 
 
-func _get_start_crash_params() -> Dictionary:
-	return {"difficulty": difficulty}
-
-
-func _get_resume_crash_params(saved_data: Dictionary) -> Dictionary:
-	return {"difficulty": saved_data.get("difficulty", 0)}
-
-
 func _process(delta: float) -> void:
 	super._process(delta)
-	if not is_completed and not is_paused and _cheat_active:
-		_cheat_timer += delta
-		if _cheat_timer >= CHEAT_INTERVAL:
-			_cheat_timer = 0.0
-			_cheat_place_one()
+	if not is_completed and not is_paused:
+		# Cheat auto-solve
+		if _cheat_active:
+			_cheat_timer += delta
+			if _cheat_timer >= CHEAT_INTERVAL:
+				_cheat_timer = 0.0
+				_cheat_place_one()
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -735,8 +756,8 @@ func _handle_win() -> void:
 		"strikes": strikes,
 		"hints_used": hints_used,
 	})
-	var previous_best: float = StatsManager.best_times.get(difficulty, -1.0)
-	StatsManager.record_game_completed(difficulty, elapsed_time, SettingsManager.error_mode == "strict", won)
+	var previous_best: float = _get_best_time(difficulty)
+	_record_sudoku_completion(difficulty, elapsed_time, SettingsManager.error_mode == "strict", won)
 	if won:
 		AchievementManager.track_game_won("sudoku", {
 			"difficulty": difficulty,
@@ -744,7 +765,7 @@ func _handle_win() -> void:
 			"strikes": strikes,
 		})
 	_log_game_over_analytics(won)
-	SaveManager.clear_save()
+	clear_save()
 	_play_win_celebration()
 	if previous_best < 0.0 or elapsed_time < previous_best:
 		_show_new_best_indicator()
@@ -1171,42 +1192,6 @@ func _setup_strike_indicators() -> void:
 		_strike_indicators.append(indicator)
 
 
-func _save_current_state() -> void:
-	if is_completed:
-		return
-	SaveManager.save_game({
-		"puzzle": puzzle,
-		"solution": solution,
-		"current_grid": current_grid,
-		"pencil_marks": board.get_pencil_marks_dict(),
-		"cell_colors": board.get_cell_colors_dict(),
-		"difficulty": difficulty,
-		"elapsed_time": elapsed_time,
-		"strikes": strikes,
-		"error_mode": SettingsManager.error_mode,
-		"is_failed": is_failed,
-		"can_continue_after_failure": _can_continue_after_failure,
-		"hints_used": hints_used,
-		"random_seed": random_seed,
-		"replay_id": replay_id,
-	})
-	ReplayManager.flush_active_replay()
-
-
-func _get_crash_state() -> Dictionary:
-	return {
-		"game": "sudoku",
-		"difficulty": difficulty,
-		"elapsed_time": elapsed_time,
-		"strikes": strikes,
-		"is_failed": is_failed,
-		"is_completed": is_completed,
-		"is_paused": is_paused,
-		"hints_used": hints_used,
-		"selected_index": board.selected_index,
-	}
-
-
 func _is_board_locked() -> bool:
 	# Locked after completion, or after failure until Continue is chosen.
 	return is_completed or (is_failed and not _can_continue_after_failure)
@@ -1247,3 +1232,37 @@ func _derive_seed_from_puzzle(values: Array[int]) -> int:
 	for value in values:
 		seed = int((seed * LEGACY_SEED_HASH_MULTIPLIER + int(value)) & 0x7fffffff)
 	return seed
+
+
+func _record_sudoku_completion(diff: int, time: float, was_strict: bool, won: bool) -> void:
+	GameStatsManager.record("sudoku", {
+		"type": "completion",
+		"difficulty": diff,
+		"time": time,
+		"was_strict": was_strict,
+		"won": won,
+	})
+	GameStatsManager.increment_counter("sudoku", "completed_d%d" % diff)
+	# Track best time
+	var best: float = float(GameStatsManager.get_counter("sudoku", "best_d%d" % diff))
+	if best == 0 or time < best:
+		GameStatsManager.set_counter("sudoku", "best_d%d" % diff, int(time * 1000))
+	# Streak tracking
+	if was_strict:
+		if won:
+			var streak: int = GameStatsManager.get_counter("sudoku", "current_streak") + 1
+			GameStatsManager.set_counter("sudoku", "current_streak", streak)
+			var best_streak: int = GameStatsManager.get_counter("sudoku", "best_streak")
+			if streak > best_streak:
+				GameStatsManager.set_counter("sudoku", "best_streak", streak)
+			GameStatsManager.increment_counter("sudoku", "won_d%d" % diff)
+		else:
+			GameStatsManager.set_counter("sudoku", "current_streak", 0)
+			GameStatsManager.increment_counter("sudoku", "lost_d%d" % diff)
+
+
+func _get_best_time(diff: int) -> float:
+	var best_ms: int = GameStatsManager.get_counter("sudoku", "best_d%d" % diff)
+	if best_ms == 0:
+		return -1.0
+	return float(best_ms) / 1000.0
