@@ -6,35 +6,39 @@ A neon-drenched, physics-driven arena game inspired by the 90s board game Crossf
 
 ## Core Loop
 
-1. **Collect ammo** — pickups spawn around the arena; you must move to grab them
-2. **Fire** — shoot projectiles at the puck to push it toward the opponent's goal
-3. **Ricochet** — projectiles bounce off walls, creating indirect angles and trick shots
-4. **Score** — puck enters opponent's goal zone = 1 point
-5. **Reset** — puck returns to center, play continues until score limit reached
+1. **Aim** — rotate your mounted turret within a constrained firing arc
+2. **Fire** — spend ammo from a finite clip to shoot projectiles at the puck
+3. **Reload** — manually trigger a reload that refills the clip over time, creating timing risk
+4. **Ricochet** — use arena walls and the puck's irregular contact shape for unpredictable deflections
+5. **Score** — puck enters opponent's goal zone = 1 point, then resets to center until score limit reached
 
 ## Mechanics
 
 ### Ammo System
-- Players start with a small clip (e.g., 5-8 shots)
-- Ammo pickups spawn at timed intervals in contested zones (mid-arena, corners)
-- Collecting ammo creates risk/reward — you leave your defensive position
+- Players start each round with a finite clip (target M1: 8 shots)
+- Reloading is manual and refills one round at a time over a short interval
+- Reload can be interrupted so you can fire whatever ammo has already been restored
+- Ammo pickups are out of scope for M1; future variants can add alternate ammo types or arena refills
 - Ammo types (future): standard, heavy (slow but high force), scatter, guided
 
 ### Puck Physics
-- Rigid body with realistic mass and friction
-- Ricochets off arena walls with energy loss (doesn't bounce forever)
+- Rigid body using Godot's built-in 3D physics for the prototype
+- Visual/core form reads like a ball so it rolls cleanly, but collision/contact geometry should become irregular or star-like to create unpredictable deflections
+- Ricochets off arena walls with controlled energy loss (doesn't bounce forever)
 - Multiple projectiles hitting simultaneously = big momentum transfer
 - Puck speed cap to prevent instant-goal cheese
 
-### Player
-- Can move freely within their half (or full arena — TBD based on playtesting)
-- Getting hit by a projectile = stunned for ~1.5s (Rocket League demolition style)
-- No elimination — stun is temporary tactical disadvantage
-- Movement speed balanced so you can't just camp your goal
+### Player / Turret
+- Players are stationary mounted turrets in M1 — no player movement
+- Core interaction is aiming left/right within a firing arc and choosing when to shoot or reload
+- Turrets sit just inside their own goal line, creating an immediate offense/defense tradeoff
+- Getting hit by projectiles or adding stun/elimination rules is deferred until the stationary-turret prototype proves fun
 
 ### Arena
-- Rectangular arena with walls on all sides
-- Goals at opposite ends (slot/zone that puck must enter)
+- M1 starts with a rectangular arena roughly 20×12 units with goals at opposite ends
+- Arena should be authored with future curvature/sloping in mind; a slight arc or grade can help the puck naturally drift back toward scoring spaces
+- Corners should be beveled, rounded, or otherwise shaped so the puck does not get trapped
+- Goals sit at opposite ends as slot/zone targets the puck must fully enter
 - Possible arena hazards (future): bumpers, moving walls, gravity wells
 - Multiple arena layouts for variety
 
@@ -44,12 +48,10 @@ A neon-drenched, physics-driven arena game inspired by the 90s board game Crossf
 
 ## Camera
 
-Support multiple camera modes:
-- **Top-down** — full arena visibility, best for learning and spectating
-- **Isometric** — adds depth and style, still shows full arena
-- **First-person** — aspirational, most immersive, limited awareness creates tension
+- **M1 camera**: top-down, centered to show the full arena and both turrets at all times
+- **Future options**: isometric and first-person experiments can happen later if the prototype benefits from them
 
-Players can choose preferred camera. Multiplayer may restrict to ensure fairness (e.g., first-person-only lobbies).
+Top-down is the default because stationary turrets and ricochet planning both benefit from full-board readability.
 
 ## Visual Style
 
@@ -64,13 +66,14 @@ Players can choose preferred camera. Multiplayer may restrict to ensure fairness
 ## AI (Single Player)
 
 ### Difficulty Levels
-- **Easy** — slow reaction, poor aim, doesn't collect ammo aggressively
-- **Medium** — decent aim, sometimes uses ricochets, moderate ammo management
-- **Hard** — predicts puck trajectory, uses bank shots, contests ammo pickups
-- **Brutal** — near-perfect aim, actively tries to stun player, defensive positioning
+- **Easy** — slow reaction, random-ish aim, weak reload timing
+- **Medium** — decent aim, occasional bank shots, better reload timing
+- **Hard** — predicts puck trajectory, uses bank shots, pressures during player reload windows
+- **Brutal** — near-perfect aim, stronger defensive reads, minimal wasted shots
 
 ### AI Architecture
-- State machine: Defend → Collect Ammo → Attack → Evade
+- M1 baseline: stationary opposing turret that sweeps aim, fires periodically, and reloads when depleted
+- Later state machine can expand into Defend → Attack → Reload Pressure → Trick Shot behavior
 - Difficulty scales: reaction delay, aim accuracy (spread cone), decision quality
 - AI should feel fair, not omniscient — add intentional imperfection even at high levels
 
@@ -100,25 +103,24 @@ Players can choose preferred camera. Multiplayer may restrict to ensure fairness
 ```
 carom/
 ├── scenes/
-│   ├── carom_arena.tscn      # Main 3D arena scene
-│   ├── carom_player.tscn     # Player controller
+│   ├── carom_arena.tscn      # Main 3D arena scene with goals, walls, camera
+│   ├── carom_turret.tscn     # Mounted player / AI turret
 │   ├── carom_puck.tscn       # Puck rigid body
-│   ├── carom_projectile.tscn # Ammo projectile
-│   └── carom_menu.tscn       # Game mode selection
+│   └── carom_projectile.tscn # Ammo projectile
 ├── scripts/
 │   ├── carom_game.gd         # Match state machine
-│   ├── carom_physics.gd      # Deterministic physics sim
-│   ├── carom_ai.gd           # AI controller
-│   ├── carom_player.gd       # Player input/movement
-│   └── carom_netcode.gd      # Multiplayer sync
+│   ├── carom_arena.gd        # Arena setup and goal detection
+│   ├── carom_turret.gd       # Aim, firing, reload behavior
+│   ├── carom_puck.gd         # Puck physics helpers
+│   └── carom_projectile.gd   # Projectile motion + impact logic
 ├── materials/
-│   └── neon_grid.tres        # Arena visual materials
+│   └── neon_grid.tres        # Arena visual materials (future)
 └── shaders/
     ├── neon_trail.gdshader   # Projectile/puck trails
     └── impact_ripple.gdshader # Hit effects
 ```
 
-### Physics Approach (Decision Needed)
+### Physics Approach (M1 Decision)
 
 **Option A: Custom Deterministic Sim**
 - Fixed-point math (no floating point drift)
@@ -138,23 +140,24 @@ carom/
 - Custom physics layer for the puck/projectiles only
 - Godot physics for non-gameplay elements (particles, debris)
 
-**Recommendation**: Start with Option B for prototyping (get gameplay feel right), plan migration to Option A or C for multiplayer.
+**Recommendation**: Start with Option B for prototyping (get gameplay feel right), plan migration to Option A or C for multiplayer. This is the chosen M1 path.
 
 ## Milestones
 
 ### M1: Playable Prototype (Single Player)
-- [ ] 3D arena with walls and goals
-- [ ] Player movement (keyboard + touch)
-- [ ] Shooting mechanic with limited ammo
-- [ ] Puck physics (ricochet, goal detection)
-- [ ] Ammo pickups spawning
+- [ ] 3D arena with walls, goals, and anti-trap corners
+- [ ] Stationary mounted turrets with aim-arc control (keyboard + touch)
+- [ ] Shooting mechanic with finite clip and manual slow reload
+- [ ] Puck physics using built-in 3D physics, including speed cap and naturally resolving arena flow
+- [ ] Placeholder irregular puck contact setup (sphere first, star/compound follow-up)
 - [ ] Basic scoring (first to 5)
-- [ ] Top-down camera
-- [ ] Neon visual style (basic)
+- [ ] Single-player top-down camera
+- [ ] Neon visual style (basic wireframe placeholders)
+- [ ] Basic AI turret that aims and fires periodically
 
 ### M2: AI Opponent
-- [ ] Basic AI (Easy difficulty)
-- [ ] AI state machine (defend/collect/attack)
+- [ ] Expand beyond baseline turret AI into clearer difficulty tiers
+- [ ] AI state machine (defend/attack/reload pressure)
 - [ ] Medium + Hard difficulty tuning
 - [ ] Game over / rematch flow
 
@@ -200,9 +203,10 @@ A single-player puzzle mode that uses the core Carom mechanics in a different co
 
 ## Open Questions
 
-- **Movement constraint**: Full arena freedom or restricted to your half? Playtesting needed.
-- **Ammo scarcity tuning**: How scarce is too scarce? If ammo is too rare, gameplay stalls. Too plentiful, it's just spam.
-- **Stun duration**: 1.5s feels right on paper but needs playtesting. Too long = frustrating, too short = meaningless.
+- **Reload pacing**: How vulnerable should a player feel while manually reloading? Too slow = downtime, too fast = spam.
+- **Puck irregularity**: How weird can the contact shape get before bounces feel unfair instead of exciting?
+- **Arena curvature**: Is a subtle slope enough to prevent stalls, or should curvature be more explicit in the floor shape?
+- **Corner treatment**: Which anti-trap corner shape preserves readability while keeping the puck live?
 - **First-person viability**: Can you track a fast puck in first-person? May need aim assist or puck highlighting.
 - **Cross-platform determinism**: If custom physics sim, need to ensure fixed-point math works identically on iOS/Android/PC.
 - **Arena size**: Too big = boring downtime. Too small = chaotic. Needs to scale with player count.

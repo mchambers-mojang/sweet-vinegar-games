@@ -101,7 +101,6 @@ func _on_game_screen_ready() -> void:
 	_update_button_states()
 
 
-
 func start_new_game(w: int, h: int) -> void:
 	grid_width = w
 	grid_height = h
@@ -182,12 +181,12 @@ func _get_analytics_params() -> Dictionary:
 
 func _process(delta: float) -> void:
 	super._process(delta)
-	if not is_completed and not is_paused:
-		if _cheat_active:
-			_cheat_timer += delta
-			if _cheat_timer >= CHEAT_INTERVAL:
-				_cheat_timer = 0.0
-				_cheat_place_one()
+
+	if _cheat_active:
+		_cheat_timer += delta
+		if _cheat_timer >= CHEAT_INTERVAL:
+			_cheat_timer = 0.0
+			_cheat_place_one()
 
 
 func _unhandled_key_input(event: InputEvent) -> void:

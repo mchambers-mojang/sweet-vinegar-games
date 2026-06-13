@@ -153,7 +153,6 @@ func _on_game_screen_ready() -> void:
 
 func start_new_game(diff: int) -> void:
 	difficulty = diff
-	difficulty_label.text = DIFFICULTY_NAMES[difficulty]
 	strikes = 0
 	is_failed = false
 	is_completed = false
@@ -219,6 +218,7 @@ func _setup_game(saved_data: Dictionary) -> void:
 		solution.assign(result["solution"])
 		current_grid = []
 		current_grid.assign(puzzle.duplicate())
+		difficulty_label.text = DIFFICULTY_NAMES[difficulty]
 		board.load_puzzle(puzzle)
 		_update_strikes_display()
 		_update_button_states()
@@ -230,9 +230,7 @@ func _setup_game(saved_data: Dictionary) -> void:
 		solution.assign(saved_data["solution"])
 		current_grid = []
 		current_grid.assign(saved_data["current_grid"])
-		# Legacy fallback: old saves had no random_seed field. Derive one deterministically
-		# so replay/crash metadata is consistent. begin_session() calls ReplayManager AFTER
-		# _setup_game(), so this updated value is used by the replay session start.
+		# Legacy fallback: old saves had no random_seed field.
 		if random_seed == 0:
 			random_seed = _derive_seed_from_puzzle(puzzle)
 		difficulty_label.text = DIFFICULTY_NAMES[difficulty]
@@ -256,13 +254,13 @@ func _get_analytics_params() -> Dictionary:
 
 func _process(delta: float) -> void:
 	super._process(delta)
-	if not is_completed and not is_paused:
-		# Cheat auto-solve
-		if _cheat_active:
-			_cheat_timer += delta
-			if _cheat_timer >= CHEAT_INTERVAL:
-				_cheat_timer = 0.0
-				_cheat_place_one()
+
+	# Cheat auto-solve
+	if _cheat_active:
+		_cheat_timer += delta
+		if _cheat_timer >= CHEAT_INTERVAL:
+			_cheat_timer = 0.0
+			_cheat_place_one()
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -1244,8 +1242,8 @@ func _record_sudoku_completion(diff: int, time: float, was_strict: bool, won: bo
 	})
 	GameStatsManager.increment_counter("sudoku", "completed_d%d" % diff)
 	# Track best time
-	var best_ms: float = float(GameStatsManager.get_counter("sudoku", "best_d%d" % diff))
-	if best_ms == 0 or time < best_ms / 1000.0:
+	var best: float = float(GameStatsManager.get_counter("sudoku", "best_d%d" % diff))
+	if best == 0 or time < best:
 		GameStatsManager.set_counter("sudoku", "best_d%d" % diff, int(time * 1000))
 	# Streak tracking
 	if was_strict:
@@ -1266,3 +1264,6 @@ func _get_best_time(diff: int) -> float:
 	if best_ms == 0:
 		return -1.0
 	return float(best_ms) / 1000.0
+
+
+
