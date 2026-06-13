@@ -27,9 +27,12 @@ func _build_stats_ui() -> void:
 
 	# Global stats
 	_add_header("Overall")
-	_add_stat_row("Total Games", str(ShikakuStatsManager.total_games_played))
-	_add_stat_row("Current Streak", str(ShikakuStatsManager.current_streak))
-	_add_stat_row("Best Streak", str(ShikakuStatsManager.best_streak))
+	var total_games: int = GameStatsManager.get_counter("shikaku", "games_started")
+	var current_streak: int = GameStatsManager.get_counter("shikaku", "current_streak")
+	var best_streak: int = GameStatsManager.get_counter("shikaku", "best_streak")
+	_add_stat_row("Total Games", str(total_games))
+	_add_stat_row("Current Streak", str(current_streak))
+	_add_stat_row("Best Streak", str(best_streak))
 
 	_add_separator()
 
@@ -37,24 +40,24 @@ func _build_stats_ui() -> void:
 	for s in SIZES:
 		_add_header(SIZE_NAMES[s])
 
-		var best: float = ShikakuStatsManager.best_times.get(s, -1.0)
+		var best_ms: int = GameStatsManager.get_counter("shikaku", "best_s%d" % s)
+		var best: float = float(best_ms) / 1000.0 if best_ms > 0 else -1.0
 		_add_stat_row("Best Time", _format_time(best) if best >= 0 else "--")
 
-		var avg := ShikakuStatsManager.get_average_time(s)
+		var history: Array = _get_time_history_for_size(s)
+		var avg: float = _compute_average(history)
 		_add_stat_row("Average Time", _format_time(avg) if avg >= 0 else "--")
 
-		# Time history graph
-		var history := ShikakuStatsManager.get_time_history(s)
 		if not history.is_empty():
 			_add_time_graph(history)
 
-		var started: int = ShikakuStatsManager.games_started.get(s, 0)
-		var completed: int = ShikakuStatsManager.games_completed.get(s, 0)
-		var abandoned: int = ShikakuStatsManager.games_abandoned.get(s, 0)
+		var started: int = GameStatsManager.get_counter("shikaku", "started_s%d" % s)
+		var completed: int = GameStatsManager.get_counter("shikaku", "completed_s%d" % s)
+		var abandoned: int = GameStatsManager.get_counter("shikaku", "abandoned_s%d" % s)
 		_add_stat_row("Started / Completed", "%d / %d" % [started, completed])
 		_add_stat_row("Abandoned", str(abandoned))
 
-		var rate := ShikakuStatsManager.get_completion_rate(s)
+		var rate: float = (float(completed) / float(started) * 100.0) if started > 0 else 0.0
 		_add_stat_row("Completion Rate", "%.0f%%" % rate)
 
 		_add_separator()
@@ -132,8 +135,26 @@ func _on_reset_pressed() -> void:
 	dialog.get_label().horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	dialog.popup_centered()
 	dialog.confirmed.connect(func() -> void:
-		ShikakuStatsManager.reset_all()
+		GameStatsManager.clear("shikaku")
 		_build_stats_ui()
 		dialog.queue_free()
 	)
 	dialog.canceled.connect(func() -> void: dialog.queue_free())
+
+
+func _get_time_history_for_size(s: int) -> Array:
+	var all_history: Array = GameStatsManager.get_history("shikaku")
+	var times: Array = []
+	for entry in all_history:
+		if entry is Dictionary and entry.get("grid_size") == s and entry.has("time"):
+			times.append(entry["time"])
+	return times
+
+
+func _compute_average(times: Array) -> float:
+	if times.is_empty():
+		return -1.0
+	var total := 0.0
+	for t in times:
+		total += float(t)
+	return total / float(times.size())

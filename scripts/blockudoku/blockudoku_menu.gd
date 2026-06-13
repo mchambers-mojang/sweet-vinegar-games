@@ -18,7 +18,7 @@ func _ready() -> void:
 		SceneTransition.transition_to("res://scenes/game_picker.tscn")
 	)
 
-	continue_button.visible = BlockudokuSaveManager.has_saved_game()
+	continue_button.visible = GameSaveManager.has_saved_game("blockudoku")
 	_add_how_to_play_button()
 	_apply_theme()
 	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
@@ -38,7 +38,7 @@ func _add_how_to_play_button() -> void:
 
 
 func _on_continue() -> void:
-	var data := BlockudokuSaveManager.load_game()
+	var data := GameSaveManager.load_game("blockudoku")
 	if data.is_empty():
 		return
 	SceneTransition.transition_with_callback(func() -> void:
@@ -50,7 +50,7 @@ func _on_continue() -> void:
 
 
 func _on_new_game() -> void:
-	if BlockudokuSaveManager.has_saved_game():
+	if GameSaveManager.has_saved_game("blockudoku"):
 		_confirm_abandon()
 	else:
 		_start_game()
@@ -68,7 +68,7 @@ func _confirm_abandon() -> void:
 	dialog.get_label().horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	dialog.popup_centered()
 	dialog.confirmed.connect(func() -> void:
-		BlockudokuSaveManager.clear_save()
+		GameSaveManager.clear_save("blockudoku")
 		dialog.queue_free()
 		_start_game()
 	)

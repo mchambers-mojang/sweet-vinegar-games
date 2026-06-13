@@ -76,8 +76,8 @@ func _exit_tree() -> void:
 func _try_auto_resume() -> void:
 	if not puzzle_data.is_empty():
 		return
-	if ShikakuSaveManager.has_saved_game():
-		var data := ShikakuSaveManager.load_game()
+	if GameSaveManager.has_saved_game("shikaku"):
+		var data := GameSaveManager.load_game("shikaku")
 		if not data.is_empty():
 			resume_game(data)
 
@@ -103,7 +103,8 @@ func start_new_game(w: int, h: int) -> void:
 	hints_used = 0
 	undo_stack.clear()
 	redo_stack.clear()
-	ShikakuStatsManager.record_game_started(w)
+	GameStatsManager.increment_counter("shikaku", "games_started")
+	GameStatsManager.increment_counter("shikaku", "started_s%d" % w)
 	replay_id = ReplayManager.start_session("shikaku", random_seed, {
 		"width": w,
 		"height": h,
@@ -361,7 +362,7 @@ func _handle_win() -> void:
 		"hints_used": hints_used,
 	})
 	var is_new_best := _is_new_best_time()
-	ShikakuStatsManager.record_game_completed(grid_width, elapsed_time)
+	_record_shikaku_completion(grid_width, elapsed_time)
 	AchievementManager.track_game_won("shikaku")
 	AchievementManager.track_shikaku_won(grid_width, elapsed_time)
 	AnalyticsManager.log_event("game_over", {
@@ -372,7 +373,7 @@ func _handle_win() -> void:
 		"elapsed_time": elapsed_time,
 		"hints_used": hints_used,
 	})
-	ShikakuSaveManager.clear_save()
+	GameSaveManager.clear_save("shikaku")
 	SoundManager.play_win()
 	HapticManager.vibrate_success()
 	if is_new_best:
@@ -393,8 +394,8 @@ func _handle_win() -> void:
 
 
 func _is_new_best_time() -> bool:
-	var best: float = ShikakuStatsManager.best_times.get(grid_width, -1.0)
-	return best < 0.0 or elapsed_time < best
+	var best_ms: int = GameStatsManager.get_counter("shikaku", "best_s%d" % grid_width)
+	return best_ms == 0 or elapsed_time < (float(best_ms) / 1000.0)
 
 
 func _show_new_best_indicator() -> void:
@@ -493,7 +494,7 @@ func _cheat_place_one() -> void:
 func _save_current_state() -> void:
 	if is_completed:
 		return
-	ShikakuSaveManager.save_game({
+	GameSaveManager.save_game("shikaku", {
 		"width": grid_width,
 		"height": grid_height,
 		"numbers": _serialize_numbers(puzzle_data["numbers"]),
@@ -572,3 +573,23 @@ func _create_session_seed() -> int:
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
 	return int(Time.get_ticks_usec() ^ rng.randi())
+
+
+func _record_shikaku_completion(grid_size: int, time: float) -> void:
+	GameStatsManager.record("shikaku", {
+		"type": "completion",
+		"grid_size": grid_size,
+		"time": time,
+	})
+	GameStatsManager.increment_counter("shikaku", "completed_s%d" % grid_size)
+	# Best time (stored as ms int)
+	var best_ms: int = GameStatsManager.get_counter("shikaku", "best_s%d" % grid_size)
+	var time_ms := int(time * 1000)
+	if best_ms == 0 or time_ms < best_ms:
+		GameStatsManager.set_counter("shikaku", "best_s%d" % grid_size, time_ms)
+	# Streak
+	var streak: int = GameStatsManager.get_counter("shikaku", "current_streak") + 1
+	GameStatsManager.set_counter("shikaku", "current_streak", streak)
+	var best_streak: int = GameStatsManager.get_counter("shikaku", "best_streak")
+	if streak > best_streak:
+		GameStatsManager.set_counter("shikaku", "best_streak", streak)

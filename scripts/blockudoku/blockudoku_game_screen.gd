@@ -82,8 +82,8 @@ func _try_auto_resume() -> void:
 	# available_blocks will be populated — skip auto-resume.
 	if not available_blocks.is_empty():
 		return
-	if BlockudokuSaveManager.has_saved_game():
-		var data := BlockudokuSaveManager.load_game()
+	if GameSaveManager.has_saved_game("blockudoku"):
+		var data := GameSaveManager.load_game("blockudoku")
 		if not data.is_empty():
 			resume_game(data)
 
@@ -112,7 +112,7 @@ func start_new_game() -> void:
 	_deal_new_blocks()
 	_update_score_display()
 	_update_undo_redo_buttons()
-	BlockudokuStatsManager.record_game_started()
+	GameStatsManager.increment_counter("blockudoku", "games_played")
 	replay_id = ReplayManager.start_session("blockudoku", random_seed, {
 		"board_state": board.get_state(),
 		"available_blocks": _serialize_blocks(available_blocks),
@@ -414,7 +414,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 			# Scoring: 10 per line/box cleared + combo bonus
 			var clear_score := (lines + boxes) * 18 + cleared + combo_bonus
 			score += clear_score
-			BlockudokuStatsManager.record_clears(lines + boxes)
+			GameStatsManager.increment_counter("blockudoku", "total_clears", lines + boxes)
 			AchievementManager.track_blockudoku_clear(lines + boxes)
 			AchievementManager.track_blockudoku_combo(combo_count)
 			AnalyticsManager.log_event("line_cleared", {
@@ -519,7 +519,7 @@ func _handle_game_over() -> void:
 		"board_state": board.get_state(),
 	})
 	_update_undo_redo_buttons()
-	BlockudokuStatsManager.record_game_over(score, turns)
+	_record_blockudoku_game_over(score, turns)
 	AchievementManager.track_blockudoku_game_played(score)
 	AchievementManager.track_streak_broken()
 	AnalyticsManager.log_event("game_over", {
@@ -531,7 +531,7 @@ func _handle_game_over() -> void:
 		"elapsed_time": elapsed_time,
 		"combo_count": combo_count,
 	})
-	BlockudokuSaveManager.clear_save()
+	GameSaveManager.clear_save("blockudoku")
 	HapticManager.vibrate_success()
 
 	# Shatter animation runs in background
@@ -679,7 +679,8 @@ func _show_combo_text(total_clears: int, combo: int) -> void:
 func _check_for_new_best() -> void:
 	if _new_best_shown:
 		return
-	if not BlockudokuStatsManager.record_high_score_candidate(score):
+	var high: int = GameStatsManager.get_counter("blockudoku", "high_score")
+	if score <= high:
 		return
 	_new_best_shown = true
 
@@ -802,7 +803,7 @@ func _apply_theme() -> void:
 func _save_current_state() -> void:
 	if is_game_over:
 		return
-	BlockudokuSaveManager.save_game({
+	GameSaveManager.save_game("blockudoku", {
 		"score": score,
 		"turns": turns,
 		"combo_count": combo_count,
@@ -835,3 +836,19 @@ func _get_crash_state() -> Dictionary:
 		"blocks_placed_this_set": blocks_placed_this_set,
 		"available_block_count": available_blocks.size(),
 	}
+
+
+func _record_blockudoku_game_over(final_score: int, final_turns: int) -> void:
+	GameStatsManager.record("blockudoku", {
+		"type": "game_over",
+		"score": final_score,
+		"turns": final_turns,
+	})
+	GameStatsManager.increment_counter("blockudoku", "total_score", final_score)
+	GameStatsManager.increment_counter("blockudoku", "total_turns", final_turns)
+	var high: int = GameStatsManager.get_counter("blockudoku", "high_score")
+	if final_score > high:
+		GameStatsManager.set_counter("blockudoku", "high_score", final_score)
+	var best_turns: int = GameStatsManager.get_counter("blockudoku", "best_turns")
+	if final_turns > best_turns:
+		GameStatsManager.set_counter("blockudoku", "best_turns", final_turns)

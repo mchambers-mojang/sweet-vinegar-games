@@ -123,8 +123,8 @@ func _exit_tree() -> void:
 func _try_auto_resume() -> void:
 	if not puzzle.is_empty():
 		return
-	if SaveManager.has_saved_game():
-		var data := SaveManager.load_game()
+	if GameSaveManager.has_saved_game("sudoku"):
+		var data := GameSaveManager.load_game("sudoku")
 		if not data.is_empty():
 			resume_game(data)
 
@@ -169,7 +169,8 @@ func start_new_game(diff: int) -> void:
 	_update_button_states()
 	_update_number_completion()
 
-	StatsManager.record_game_started(difficulty)
+	GameStatsManager.increment_counter("sudoku", "games_started")
+	GameStatsManager.increment_counter("sudoku", "started_d%d" % difficulty)
 	replay_id = ReplayManager.start_session("sudoku", random_seed, {
 		"difficulty": difficulty,
 		"puzzle": puzzle.duplicate(),
@@ -738,8 +739,8 @@ func _handle_win() -> void:
 		"strikes": strikes,
 		"hints_used": hints_used,
 	})
-	var previous_best: float = StatsManager.best_times.get(difficulty, -1.0)
-	StatsManager.record_game_completed(difficulty, elapsed_time, SettingsManager.error_mode == "strict", won)
+	var previous_best: float = _get_best_time(difficulty)
+	_record_sudoku_completion(difficulty, elapsed_time, SettingsManager.error_mode == "strict", won)
 	if won:
 		AchievementManager.track_game_won("sudoku", {
 			"difficulty": difficulty,
@@ -747,7 +748,7 @@ func _handle_win() -> void:
 			"strikes": strikes,
 		})
 	_log_game_over_analytics(won)
-	SaveManager.clear_save()
+	GameSaveManager.clear_save("sudoku")
 	_play_win_celebration()
 	if previous_best < 0.0 or elapsed_time < previous_best:
 		_show_new_best_indicator()
@@ -1177,7 +1178,7 @@ func _setup_strike_indicators() -> void:
 func _save_current_state() -> void:
 	if is_completed:
 		return
-	SaveManager.save_game({
+	GameSaveManager.save_game("sudoku", {
 		"puzzle": puzzle,
 		"solution": solution,
 		"current_grid": current_grid,
@@ -1256,6 +1257,40 @@ func _derive_seed_from_puzzle(values: Array[int]) -> int:
 	for value in values:
 		seed = int((seed * LEGACY_SEED_HASH_MULTIPLIER + int(value)) & 0x7fffffff)
 	return seed
+
+
+func _record_sudoku_completion(diff: int, time: float, was_strict: bool, won: bool) -> void:
+	GameStatsManager.record("sudoku", {
+		"type": "completion",
+		"difficulty": diff,
+		"time": time,
+		"was_strict": was_strict,
+		"won": won,
+	})
+	GameStatsManager.increment_counter("sudoku", "completed_d%d" % diff)
+	# Track best time
+	var best: float = float(GameStatsManager.get_counter("sudoku", "best_d%d" % diff))
+	if best == 0 or time < best:
+		GameStatsManager.set_counter("sudoku", "best_d%d" % diff, int(time * 1000))
+	# Streak tracking
+	if was_strict:
+		if won:
+			var streak: int = GameStatsManager.get_counter("sudoku", "current_streak") + 1
+			GameStatsManager.set_counter("sudoku", "current_streak", streak)
+			var best_streak: int = GameStatsManager.get_counter("sudoku", "best_streak")
+			if streak > best_streak:
+				GameStatsManager.set_counter("sudoku", "best_streak", streak)
+			GameStatsManager.increment_counter("sudoku", "won_d%d" % diff)
+		else:
+			GameStatsManager.set_counter("sudoku", "current_streak", 0)
+			GameStatsManager.increment_counter("sudoku", "lost_d%d" % diff)
+
+
+func _get_best_time(diff: int) -> float:
+	var best_ms: int = GameStatsManager.get_counter("sudoku", "best_d%d" % diff)
+	if best_ms == 0:
+		return -1.0
+	return float(best_ms) / 1000.0
 
 
 func _create_session_seed() -> int:

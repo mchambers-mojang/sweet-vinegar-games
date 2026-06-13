@@ -24,7 +24,7 @@ func _ready() -> void:
 		SceneTransition.transition_to("res://scenes/game_picker.tscn")
 	)
 
-	continue_button.visible = SaveManager.has_saved_game()
+	continue_button.visible = GameSaveManager.has_saved_game("sudoku")
 	difficulty_container.visible = false
 
 	_setup_difficulty_buttons()
@@ -47,7 +47,7 @@ func _add_how_to_play_button() -> void:
 
 
 func _on_continue() -> void:
-	var data := SaveManager.load_game()
+	var data := GameSaveManager.load_game("sudoku")
 	if data.is_empty():
 		return
 	SceneTransition.transition_with_callback(func() -> void:
@@ -64,7 +64,7 @@ func _on_new_game() -> void:
 
 
 func _on_difficulty_selected(diff: int) -> void:
-	if SaveManager.has_saved_game():
+	if GameSaveManager.has_saved_game("sudoku"):
 		_confirm_abandon_and_start(diff)
 	else:
 		_start_new_game(diff)
@@ -82,10 +82,11 @@ func _confirm_abandon_and_start(diff: int) -> void:
 	dialog.get_label().horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	dialog.popup_centered()
 	dialog.confirmed.connect(func() -> void:
-		var save_data := SaveManager.load_game()
+		var save_data := GameSaveManager.load_game("sudoku")
 		var saved_diff: int = save_data.get("difficulty", 0)
-		StatsManager.record_game_abandoned(saved_diff)
-		SaveManager.clear_save()
+		GameStatsManager.increment_counter("sudoku", "abandoned_d%d" % saved_diff)
+		GameStatsManager.set_counter("sudoku", "current_streak", 0)
+		GameSaveManager.clear_save("sudoku")
 		_start_new_game(diff)
 		dialog.queue_free()
 	)

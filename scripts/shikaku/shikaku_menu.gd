@@ -24,7 +24,7 @@ func _ready() -> void:
 		SceneTransition.transition_to("res://scenes/game_picker.tscn")
 	)
 
-	continue_button.visible = ShikakuSaveManager.has_saved_game()
+	continue_button.visible = GameSaveManager.has_saved_game("shikaku")
 	size_container.visible = false
 	_setup_size_buttons()
 	_add_how_to_play_button()
@@ -46,7 +46,7 @@ func _add_how_to_play_button() -> void:
 
 
 func _on_continue() -> void:
-	var data := ShikakuSaveManager.load_game()
+	var data := GameSaveManager.load_game("shikaku")
 	if data.is_empty():
 		return
 	SceneTransition.transition_with_callback(func() -> void:
@@ -58,7 +58,7 @@ func _on_continue() -> void:
 
 
 func _on_new_game() -> void:
-	if ShikakuSaveManager.has_saved_game():
+	if GameSaveManager.has_saved_game("shikaku"):
 		_confirm_abandon_and_show_sizes()
 	else:
 		_toggle_sizes()
@@ -84,10 +84,11 @@ func _confirm_abandon_and_show_sizes() -> void:
 	dialog.get_label().horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	dialog.popup_centered()
 	dialog.confirmed.connect(func() -> void:
-		var save_data := ShikakuSaveManager.load_game()
+		var save_data := GameSaveManager.load_game("shikaku")
 		var saved_size: int = save_data.get("width", 10)
-		ShikakuStatsManager.record_game_abandoned(saved_size)
-		ShikakuSaveManager.clear_save()
+		GameStatsManager.increment_counter("shikaku", "abandoned_s%d" % saved_size)
+		GameStatsManager.set_counter("shikaku", "current_streak", 0)
+		GameSaveManager.clear_save("shikaku")
 		dialog.queue_free()
 		_toggle_sizes()
 	)
