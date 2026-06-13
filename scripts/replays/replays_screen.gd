@@ -11,7 +11,7 @@ func _ready() -> void:
 	if margin:
 		SafeAreaManager.apply(margin)
 	back_button.pressed.connect(func() -> void:
-		SceneTransition.transition_to("res://scenes/game_picker.tscn")
+		SceneTransition.transition_to(Scenes.GAME_PICKER)
 	)
 	_build_ui()
 	_apply_theme()
@@ -132,9 +132,7 @@ func _add_replay_row(replay: Dictionary) -> void:
 		play_btn.pressed.connect(func() -> void:
 			var full_replay := ReplayManager.get_replay_by_id(replay_id)
 			ReplayManager.set_pending_playback(full_replay)
-			SceneTransition.transition_to("res://scenes/replay_viewer.tscn")
-		)
-		btn_row.add_child(play_btn)
+			SceneTransition.transition_to(Scenes.REPLAY_VIEWER)
 
 	# Share button
 	var share_btn := Button.new()
@@ -195,7 +193,7 @@ func _import_from_clipboard() -> void:
 		_show_toast("Unknown game mode: %s" % game_mode)
 		return
 	ReplayManager.set_pending_playback(replay)
-	SceneTransition.transition_to("res://scenes/replay_viewer.tscn")
+	SceneTransition.transition_to(Scenes.REPLAY_VIEWER)
 
 
 func _show_toast(message: String) -> void:

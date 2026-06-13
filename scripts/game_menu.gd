@@ -89,14 +89,14 @@ func _ready() -> void:
 
 	if back_btn:
 		back_btn.pressed.connect(func() -> void:
-			SceneTransition.transition_to("res://scenes/game_picker.tscn")
+			SceneTransition.transition_to(Scenes.GAME_PICKER)
 		)
 
 	if settings_btn:
 		settings_btn.pressed.connect(func() -> void:
 			var SettingsScreen := load("res://scripts/settings_screen.gd")
 			SettingsScreen.return_scene = _get_menu_scene_path()
-			SceneTransition.transition_to("res://scenes/settings.tscn")
+			SceneTransition.transition_to(Scenes.SETTINGS)
 		)
 
 	if stats_btn and not _get_stats_scene_path().is_empty():

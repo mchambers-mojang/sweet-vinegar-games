@@ -48,7 +48,7 @@ func _get_game_id() -> String:
 
 
 func _get_scene_path() -> String:
-	return "res://scenes/blockudoku_game.tscn"
+	return Scenes.BLOCKUDOKU_GAME
 
 
 func _is_initialized() -> bool:
@@ -611,8 +611,7 @@ func _show_game_over_dialog() -> void:
 		if action == "menu":
 			_stop_shatter()
 			dialog.queue_free()
-			SceneTransition.transition_to("res://scenes/blockudoku_menu.tscn")
-		elif action == "bookmark":
+			SceneTransition.transition_to(Scenes.BLOCKUDOKU_MENU)
 			var success := ReplayManager.bookmark_latest_replay()
 			if success:
 				dialog.dialog_text += "\n\n✓ Replay bookmarked!"
@@ -623,7 +622,7 @@ func _show_game_over_dialog() -> void:
 
 func _restart_game() -> void:
 	SceneTransition.transition_with_callback(func() -> void:
-		var game_scene: Node = load("res://scenes/blockudoku_game.tscn").instantiate()
+		var game_scene: Node = load(Scenes.BLOCKUDOKU_GAME).instantiate()
 		get_tree().root.add_child(game_scene)
 		game_scene.start_new_game()
 		queue_free()
@@ -685,7 +684,7 @@ func _on_back() -> void:
 		})
 		AchievementManager.track_streak_broken()
 		_save_current_state()
-	SceneTransition.transition_to("res://scenes/blockudoku_menu.tscn")
+	SceneTransition.transition_to(Scenes.BLOCKUDOKU_MENU)
 
 
 func _update_score_display() -> void:
