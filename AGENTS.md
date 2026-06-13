@@ -1,3 +1,7 @@
+## Branch target
+
+All work should be branched from and PR'd into `feature/carom` until it is merged to `main`. This branch contains the current architecture (GameScreen/GameMenu base classes, unified save/stats managers, split Carom controller, TurretInput interface, consolidated scene templates).
+
 ## Agent skills
 
 ### Issue tracker
