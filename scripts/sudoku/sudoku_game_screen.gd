@@ -7,7 +7,6 @@ var puzzle: Array[int] = []
 var solution: Array[int] = []
 var current_grid: Array[int] = []
 var difficulty: int = 0
-var elapsed_time: float = 0.0
 var strikes: int = 0
 var is_failed: bool = false
 var is_completed: bool = false
@@ -27,7 +26,6 @@ var redo_stack: Array[Dictionary] = []
 
 # Node references
 @onready var board: SudokuBoard = %Board
-@onready var timer_label: Label = %TimerLabel
 @onready var strikes_container: HBoxContainer = %StrikesContainer
 @onready var difficulty_label: Label = %DifficultyLabel
 @onready var notes_button: Button = %NotesButton
@@ -77,8 +75,6 @@ var _multi_selected_color: Color = Color.TRANSPARENT  # Active multi-selection c
 var _last_cell_press_time: float = 0.0
 var _last_cell_pressed: int = -1
 var _selected_number: int = 0  # For number-first mode
-var random_seed: int = 0
-var replay_id: String = ""
 
 
 # --- GameScreen overrides ---
@@ -141,14 +137,6 @@ func _apply_game_theme() -> void:
 
 
 func _on_game_screen_ready() -> void:
-	# Defensive registration: register_rules is a no-op if already registered via menu.
-	# Ensures rules are available if the game screen is entered directly (e.g. from replays).
-	GameRulesRegistry.register_rules("sudoku", {
-		"input_mode": "cell_first",
-		"error_mode": "strict",
-		"highlight_row_col_box": true,
-		"auto_remove_pencil_marks": true,
-	})
 	board.cell_selected.connect(_on_cell_selected)
 	notes_button.pressed.connect(_on_notes_pressed)
 	hint_button.pressed.connect(_on_hint_pressed)
@@ -164,22 +152,7 @@ func _on_game_screen_ready() -> void:
 
 
 func start_new_game(diff: int) -> void:
-	CrashReporter.register_user_action("sudoku_start_new_game", {"difficulty": diff})
 	difficulty = diff
-	difficulty_label.text = DIFFICULTY_NAMES[difficulty]
-	random_seed = _create_session_seed()
-
-	var generator := SudokuGenerator.new()
-	var result := generator.generate(difficulty, random_seed)
-
-	puzzle = []
-	puzzle.assign(result["puzzle"])
-	solution = []
-	solution.assign(result["solution"])
-	current_grid = []
-	current_grid.assign(puzzle.duplicate())
-
-	elapsed_time = 0.0
 	strikes = 0
 	is_failed = false
 	is_completed = false
@@ -189,89 +162,105 @@ func start_new_game(diff: int) -> void:
 	notes_mode = false
 	undo_stack.clear()
 	redo_stack.clear()
-
-	board.load_puzzle(puzzle)
-	_update_strikes_display()
-	_update_button_states()
-	_update_number_completion()
-
-	GameStatsManager.increment_counter("sudoku", "games_started")
-	GameStatsManager.increment_counter("sudoku", "started_d%d" % difficulty)
-	replay_id = ReplayManager.start_session("sudoku", random_seed, {
-		"difficulty": difficulty,
-		"puzzle": puzzle.duplicate(),
-	}, {
-		"input_mode": GameRulesRegistry.get_rule("sudoku", "input_mode"),
-		"error_mode": GameRulesRegistry.get_rule("sudoku", "error_mode"),
-		"show_timer": PlatformSettings.show_timer,
-	})
-	AchievementManager.track_game_started("sudoku")
-	AnalyticsManager.log_event("game_started", {
-		"game": "sudoku",
-		"difficulty": difficulty,
-	})
-	_save_current_state()
+	begin_session()
 
 
 func resume_game(data: Dictionary) -> void:
-	CrashReporter.register_user_action("sudoku_resume_game", {"difficulty": data.get("difficulty", 0)})
-	puzzle = []
-	puzzle.assign(data["puzzle"])
-	solution = []
-	solution.assign(data["solution"])
-	current_grid = []
-	current_grid.assign(data["current_grid"])
 	difficulty = data["difficulty"]
-	elapsed_time = data["elapsed_time"]
 	strikes = data["strikes"]
 	is_failed = data["is_failed"]
 	_can_continue_after_failure = data.get("can_continue_after_failure", false)
 	hints_used = data.get("hints_used", 0)
-	random_seed = int(data.get("random_seed", 0))
-	if random_seed == 0:
-		random_seed = _derive_seed_from_puzzle(puzzle)
-	replay_id = str(data.get("replay_id", ""))
 	is_completed = false
 	is_paused = false
 	notes_mode = false
 	undo_stack.clear()
 	redo_stack.clear()
+	begin_session(data)
 
-	difficulty_label.text = DIFFICULTY_NAMES[difficulty]
-	board.load_state(current_grid, puzzle, data.get("pencil_marks", {}), data.get("cell_colors", {}))
-	_update_strikes_display()
-	_update_button_states()
-	_update_number_completion()
-	if is_failed and _is_board_locked():
-		# Re-show the fail dialog for failed saves so players can choose Continue/Menu.
-		call_deferred("_show_fail_dialog")
-	if not ReplayManager.has_active_session():
-		replay_id = ReplayManager.start_session("sudoku", random_seed, {
-			"difficulty": difficulty,
-			"puzzle": puzzle.duplicate(),
-		}, {
-			"input_mode": GameRulesRegistry.get_rule("sudoku", "input_mode"),
-			"error_mode": GameRulesRegistry.get_rule("sudoku", "error_mode"),
-			"show_timer": PlatformSettings.show_timer,
-		})
-	AchievementManager.track_game_started("sudoku")
+
+# --- Session ceremony hooks ---
+
+func _should_tick_timer() -> bool:
+	return not is_completed and not is_paused
+
+
+func _get_start_crash_params() -> Dictionary:
+	return {"difficulty": difficulty}
+
+
+func _get_resume_crash_params(saved_data: Dictionary) -> Dictionary:
+	return {"difficulty": saved_data.get("difficulty", 0)}
+
+
+func _get_initial_state() -> Dictionary:
+	return {
+		"difficulty": difficulty,
+		"puzzle": puzzle.duplicate(),
+	}
+
+
+func _get_settings_snapshot() -> Dictionary:
+	return {
+		"input_mode": GameRulesRegistry.get_rule("sudoku", "input_mode"),
+		"error_mode": GameRulesRegistry.get_rule("sudoku", "error_mode"),
+		"show_timer": PlatformSettings.show_timer,
+	}
+
+
+func _setup_game(saved_data: Dictionary) -> void:
+	if saved_data.is_empty():
+		var generator := SudokuGenerator.new()
+		var result := generator.generate(difficulty, random_seed)
+		puzzle = []
+		puzzle.assign(result["puzzle"])
+		solution = []
+		solution.assign(result["solution"])
+		current_grid = []
+		current_grid.assign(puzzle.duplicate())
+		difficulty_label.text = DIFFICULTY_NAMES[difficulty]
+		board.load_puzzle(puzzle)
+		_update_strikes_display()
+		_update_button_states()
+		_update_number_completion()
+	else:
+		puzzle = []
+		puzzle.assign(saved_data["puzzle"])
+		solution = []
+		solution.assign(saved_data["solution"])
+		current_grid = []
+		current_grid.assign(saved_data["current_grid"])
+		# Legacy fallback: old saves had no random_seed field.
+		if random_seed == 0:
+			random_seed = _derive_seed_from_puzzle(puzzle)
+		difficulty_label.text = DIFFICULTY_NAMES[difficulty]
+		board.load_state(current_grid, puzzle, saved_data.get("pencil_marks", {}), saved_data.get("cell_colors", {}))
+		_update_strikes_display()
+		_update_button_states()
+		_update_number_completion()
+		if is_failed and _is_board_locked():
+			# Re-show the fail dialog for failed saves so players can choose Continue/Menu.
+			call_deferred("_show_fail_dialog")
+
+
+func _increment_stats() -> void:
+	GameStatsManager.increment_counter("sudoku", "games_started")
+	GameStatsManager.increment_counter("sudoku", "started_d%d" % difficulty)
+
+
+func _get_analytics_params() -> Dictionary:
+	return {"game": "sudoku", "difficulty": difficulty}
 
 
 func _process(delta: float) -> void:
-	if not is_completed and not is_paused:
-		elapsed_time += delta
-		if PlatformSettings.show_timer:
-			timer_label.text = _format_time(elapsed_time)
-			timer_label.visible = true
-		else:
-			timer_label.visible = false
+	super._process(delta)
 
-		# Cheat auto-solve
-		if _cheat_active:
-			_cheat_timer += delta
-			if _cheat_timer >= CHEAT_INTERVAL:
-				_cheat_timer = 0.0
-				_cheat_place_one()
+	# Cheat auto-solve
+	if _should_tick_timer() and _cheat_active:
+		_cheat_timer += delta
+		if _cheat_timer >= CHEAT_INTERVAL:
+			_cheat_timer = 0.0
+			_cheat_place_one()
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -1201,11 +1190,6 @@ func _setup_strike_indicators() -> void:
 		_strike_indicators.append(indicator)
 
 
-func _save_current_state() -> void:
-	save_progress()
-	ReplayManager.flush_active_replay()
-
-
 func _is_board_locked() -> bool:
 	# Locked after completion, or after failure until Continue is chosen.
 	return is_completed or (is_failed and not _can_continue_after_failure)
@@ -1220,12 +1204,6 @@ func _log_game_over_analytics(won: bool) -> void:
 		"strikes": strikes,
 		"hints_used": hints_used,
 	})
-
-
-func _format_time(seconds: float) -> String:
-	var mins := int(seconds) / 60
-	var secs := int(seconds) % 60
-	return "%d:%02d" % [mins, secs]
 
 
 func _apply_theme() -> void:
@@ -1288,7 +1266,4 @@ func _get_best_time(diff: int) -> float:
 	return float(best_ms) / 1000.0
 
 
-func _create_session_seed() -> int:
-	var rng := RandomNumberGenerator.new()
-	rng.randomize()
-	return int(Time.get_ticks_usec() ^ rng.randi())
+

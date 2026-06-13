@@ -5,9 +5,22 @@ class_name GameScreen
 ## Handles the shared lifecycle ceremony: crash reporting, settings navigation,
 ## theme, safe area, help button, session persistence, replay, and analytics.
 ## Subclasses override virtual methods to provide game-specific behavior.
+##
+## Session ceremony is centralised in begin_session(). Subclasses call
+## begin_session() (new game) or begin_session(saved_data) (resume) and
+## implement the hooks below.
 
 
-# --- Virtual methods (override in subclasses) ---
+# --- Session state (owned by base) ---
+
+var elapsed_time: float = 0.0
+var random_seed: int = 0
+var replay_id: String = ""
+
+@onready var timer_label: Label = %TimerLabel
+
+
+# --- Virtual methods (lifecycle / serialisation) ---
 
 ## Return the game_id used for saves, stats, analytics, replay.
 func _get_game_id() -> String:
@@ -61,6 +74,54 @@ func _apply_game_theme() -> void:
 	pass
 
 
+# --- Virtual methods (session ceremony hooks) ---
+
+## Return the board / puzzle state dict for the replay session header.
+## Called after _setup_game(), so game state is fully initialised.
+func _get_initial_state() -> Dictionary:
+	return {}
+
+
+## Return a snapshot of relevant settings for the replay session header.
+## Called after _setup_game(), so game state is fully initialised.
+func _get_settings_snapshot() -> Dictionary:
+	return {}
+
+
+## Perform the game-specific board initialisation for a new or resumed session.
+## Called by begin_session() after elapsed_time, random_seed, and replay_id are set.
+## saved_data is empty for a new game, or the full save dict for a resume.
+func _setup_game(_saved_data: Dictionary) -> void:
+	pass
+
+
+## Increment game-specific play-count statistics. Called only for new games.
+func _increment_stats() -> void:
+	pass
+
+
+## Return event parameters for the "game_started" analytics event.
+## Called only for new games.
+func _get_analytics_params() -> Dictionary:
+	return {}
+
+
+## Return extra metadata for the crash action registered on start_new_game.
+func _get_start_crash_params() -> Dictionary:
+	return {}
+
+
+## Return extra metadata for the crash action registered on resume_game.
+func _get_resume_crash_params(_saved_data: Dictionary) -> Dictionary:
+	return {}
+
+
+## Return true while the timer should advance and the timer label should update.
+## Override to add pause / game-over guards (e.g. return not is_completed and not is_paused).
+func _should_tick_timer() -> bool:
+	return true
+
+
 # --- Lifecycle ---
 
 func _ready() -> void:
@@ -96,6 +157,58 @@ func _exit_tree() -> void:
 	CrashReporter.unregister_state_provider(_get_crash_state)
 
 
+func _process(delta: float) -> void:
+	if _should_tick_timer():
+		elapsed_time += delta
+		if timer_label:
+			if PlatformSettings.show_timer:
+				timer_label.text = _format_time(elapsed_time)
+				timer_label.visible = true
+			else:
+				timer_label.visible = false
+
+
+# --- Session ceremony ---
+
+## Orchestrates the session-start ceremony. Subclasses call this at the end of
+## start_new_game() and resume_game() after setting their game-specific variables.
+## Pass an empty dictionary (the default) for a new game, or the full save
+## dictionary for a resume.
+func begin_session(saved_data: Dictionary = {}) -> void:
+	var is_resuming := not saved_data.is_empty()
+	var game_id := _get_game_id()
+
+	if is_resuming:
+		random_seed = int(saved_data.get("random_seed", 0))
+		elapsed_time = saved_data.get("elapsed_time", 0.0)
+		replay_id = str(saved_data.get("replay_id", ""))
+		CrashReporter.register_user_action(
+				game_id + "_resume_game",
+				_get_resume_crash_params(saved_data))
+	else:
+		random_seed = _create_session_seed()
+		elapsed_time = 0.0
+		replay_id = ""
+		CrashReporter.register_user_action(
+				game_id + "_start_new_game",
+				_get_start_crash_params())
+
+	# _setup_game() runs here so game state (board, seed derivation for legacy
+	# saves) is fully initialised before ReplayManager.start_session() below.
+	_setup_game(saved_data)
+
+	if not is_resuming or not ReplayManager.has_active_session():
+		replay_id = ReplayManager.start_session(
+				game_id, random_seed, _get_initial_state(), _get_settings_snapshot())
+
+	if not is_resuming:
+		_increment_stats()
+		AnalyticsManager.log_event("game_started", _get_analytics_params())
+
+	AchievementManager.track_game_started(game_id)
+	_save_current_state()
+
+
 # --- Save / Resume ---
 
 func save_progress() -> void:
@@ -115,6 +228,13 @@ func _try_auto_resume() -> void:
 		var data := GameSaveManager.load_game(_get_game_id())
 		if not data.is_empty():
 			_deserialize_state(data)
+
+
+## Save current game state to disk and flush the active replay.
+## Defined here so subclasses do not need to repeat the two-line body.
+func _save_current_state() -> void:
+	save_progress()
+	ReplayManager.flush_active_replay()
 
 
 # --- Navigation ---
@@ -152,3 +272,17 @@ func _setup_help_button() -> void:
 
 func _find_settings_button() -> Button:
 	return get_node_or_null("%SettingsButton") as Button
+
+
+# --- Utilities ---
+
+func _format_time(seconds: float) -> String:
+	var mins := int(seconds) / 60
+	var secs := int(seconds) % 60
+	return "%d:%02d" % [mins, secs]
+
+
+func _create_session_seed() -> int:
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	return int(Time.get_ticks_usec() ^ rng.randi())
