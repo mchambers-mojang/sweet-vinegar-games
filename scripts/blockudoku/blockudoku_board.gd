@@ -194,7 +194,7 @@ func check_and_clear() -> Dictionary:
 		_flash_saved_colors.append(cell_colors[p.y * GRID_SIZE + p.x])
 
 	# Spawn neon effects before clearing
-	if AppTheme.is_neon and SettingsManager.particle_effects_enabled:
+	if AppTheme.is_neon and PlatformSettings.particle_effects_enabled:
 		var cell_size := _get_cell_size()
 		var origin := _get_grid_origin()
 

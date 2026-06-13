@@ -74,7 +74,7 @@ func unsuppress() -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if not SettingsManager.particle_effects_enabled:
+	if not PlatformSettings.particle_effects_enabled:
 		return
 
 	var pos := Vector2.ZERO

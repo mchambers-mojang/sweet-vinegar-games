@@ -8,7 +8,7 @@ const LIFETIME := 0.5
 
 
 static func create(parent: Node, pos: Vector2, color: Color, count: int = 16, intensity: float = 1.0) -> void:
-	if not SettingsManager.particle_effects_enabled:
+	if not PlatformSettings.particle_effects_enabled:
 		return
 	var burst := NeonBurst.new()
 	burst.position = pos

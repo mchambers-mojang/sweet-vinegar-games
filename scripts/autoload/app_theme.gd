@@ -122,7 +122,7 @@ func _ready() -> void:
 	_light_colors = colors.duplicate()
 	ui_theme = Theme.new()
 	_apply_theme_setting()
-	SettingsManager.settings_changed.connect(_apply_theme_setting)
+	PlatformSettings.settings_changed.connect(_apply_theme_setting)
 
 	for key in ICON_PATHS:
 		var tex := load(ICON_PATHS[key]) as Texture2D
@@ -133,7 +133,7 @@ func _ready() -> void:
 
 
 func _apply_theme_setting() -> void:
-	match SettingsManager.dark_mode:
+	match PlatformSettings.dark_mode:
 		"system":
 			set_theme_mode("system")
 		"dark":

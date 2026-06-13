@@ -9,7 +9,7 @@ const LIFETIME := 0.8
 
 
 static func create(parent: Node, rect: Rect2, color: Color, shard_count: int = 12) -> void:
-	if not SettingsManager.particle_effects_enabled:
+	if not PlatformSettings.particle_effects_enabled:
 		return
 	var shatter := GlassShatter.new()
 	shatter.position = rect.position + rect.size / 2.0
