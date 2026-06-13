@@ -29,3 +29,10 @@ func reset_to_state(initial_state: Dictionary, visual: Control) -> void:
 ## Return an empty array to include all frame types.
 func get_visual_event_types() -> Array[String]:
 	return []
+
+
+## Fine-grained frame filter called after get_visual_event_types() passes.
+## Return false to discard a frame at collection time (e.g. notes-mode inputs).
+## Default accepts every frame that passed the type filter.
+func should_include_frame(_frame: Dictionary) -> bool:
+	return true

@@ -7,6 +7,8 @@ extends PanelContainer
 @onready var back_button: Button = %BackButton
 @onready var play_button: Button = %PlayButton
 @onready var speed_button: Button = %SpeedButton
+@onready var step_back_button: Button = %StepBackButton
+@onready var scrub_bar: HSlider = %ScrubBar
 @onready var progress_label: Label = %ProgressLabel
 @onready var info_label: Label = %InfoLabel
 @onready var adapter_container: Control = %AdapterContainer
@@ -20,6 +22,7 @@ var _playback_timer: float = 0.0
 var _playback_speed: float = 1.0
 var _visual: Control = null
 var _initial_state: Dictionary = {}
+var _scrub_updating: bool = false
 
 const SPEED_OPTIONS := [1, 2, 4]
 var _speed_index: int = 0
@@ -36,6 +39,8 @@ func _ready() -> void:
 	play_button.pressed.connect(_toggle_play)
 	speed_button.pressed.connect(_cycle_speed)
 	speed_button.text = "1x"
+	step_back_button.pressed.connect(_step_back)
+	scrub_bar.value_changed.connect(_on_scrub_bar_value_changed)
 	set_process(false)
 
 	var replay := ReplayManager.get_pending_playback()
@@ -69,13 +74,15 @@ func _load_replay(replay: Dictionary) -> void:
 	# Board _ready() has now run; initialize to the recorded initial state.
 	_adapter.reset_to_state(_initial_state, _visual)
 
-	# Collect only visually meaningful frames
+	# Collect only visually meaningful frames, applying both the type filter
+	# and the adapter's fine-grained per-frame filter.
 	var visual_types := _adapter.get_visual_event_types()
 	_frames = []
 	for frame in _replay.get("frames", []):
 		var event_type := str(frame.get("input_event", {}).get("type", ""))
 		if visual_types.is_empty() or event_type in visual_types:
-			_frames.append(frame)
+			if _adapter.should_include_frame(frame):
+				_frames.append(frame)
 
 	_current_frame = 0
 	_playing = false
@@ -102,6 +109,30 @@ func _cycle_speed() -> void:
 	speed_button.text = str(int(_playback_speed)) + "x"
 
 
+func _step_back() -> void:
+	scrub_to(_current_frame - 1)
+
+
+## Jump to an arbitrary frame index, rebuilding state from scratch when going backward.
+func scrub_to(target_frame: int) -> void:
+	if _adapter == null or _visual == null:
+		return
+	target_frame = clampi(target_frame, 0, _frames.size())
+	_playing = false
+	set_process(false)
+	_adapter.reset_to_state(_initial_state, _visual)
+	for i in range(target_frame):
+		_adapter.apply_frame(_frames[i], _visual)
+	_current_frame = target_frame
+	_update_ui()
+
+
+func _on_scrub_bar_value_changed(value: float) -> void:
+	if _scrub_updating:
+		return
+	scrub_to(int(value))
+
+
 func _process(delta: float) -> void:
 	if not _playing:
 		return
@@ -124,6 +155,11 @@ func _update_ui() -> void:
 	play_button.text = ""
 	IconManager.apply_icon(play_button, "pause" if _playing else "play")
 	info_label.text = "Move %d" % _current_frame
+	step_back_button.disabled = _current_frame <= 0
+	_scrub_updating = true
+	scrub_bar.max_value = max(total, 1)
+	scrub_bar.value = _current_frame
+	_scrub_updating = false
 
 
 func _create_adapter(game_mode: String) -> GameReplayAdapter:

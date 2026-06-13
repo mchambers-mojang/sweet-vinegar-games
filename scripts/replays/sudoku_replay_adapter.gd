@@ -22,15 +22,22 @@ func reset_to_state(initial_state: Dictionary, visual: Control) -> void:
 		board.load_puzzle(puzzle)
 
 
+func should_include_frame(frame: Dictionary) -> bool:
+	var input_event: Dictionary = frame.get("input_event", {})
+	var event_type := str(input_event.get("type", ""))
+	var payload: Dictionary = input_event.get("payload", {})
+	# Notes-mode inputs have no visual effect; reject at collection time so the
+	# frame counter and progress slider stay accurate.
+	if event_type == "number_input" and bool(payload.get("notes_mode", false)):
+		return false
+	return true
+
+
 func apply_frame(frame: Dictionary, visual: Control) -> void:
 	var board := visual as SudokuBoard
 	var input_event: Dictionary = frame.get("input_event", {})
 	var event_type := str(input_event.get("type", ""))
 	var payload: Dictionary = input_event.get("payload", {})
-
-	# Skip notes-mode inputs — they are not visually meaningful for replay
-	if event_type == "number_input" and bool(payload.get("notes_mode", false)):
-		return
 
 	var index := int(payload.get("index", -1))
 	var number := 0
