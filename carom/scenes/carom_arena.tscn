@@ -1,7 +1,9 @@
-[gd_scene load_steps=18 format=3]
+[gd_scene load_steps=20 format=3]
 
 [ext_resource type="Script" path="res://carom/scripts/carom_arena.gd" id="1"]
-[ext_resource type="Script" path="res://carom/scripts/carom_game.gd" id="2"]
+[ext_resource type="Script" path="res://carom/scripts/carom_match_controller.gd" id="2"]
+[ext_resource type="Script" path="res://carom/scripts/carom_match_setup.gd" id="3"]
+[ext_resource type="Script" path="res://carom/scripts/carom_hud.gd" id="4"]
 
 ; Floor: narrow channel 8 wide x 24 long
 [sub_resource type="BoxShape3D" id="1"]
@@ -226,10 +228,17 @@ current = true
 
 [node name="Actors" type="Node3D" parent="."]
 
-[node name="CaromGame" type="Node" parent="."]
+[node name="MatchSetup" type="Node" parent="."]
+script = ExtResource("3")
+
+[node name="MatchController" type="Node" parent="."]
 script = ExtResource("2")
 
 [node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="HUDController" type="Node" parent="HUD"]
+unique_name_in_owner = true
+script = ExtResource("4")
 
 [node name="MarginContainer" type="MarginContainer" parent="HUD"]
 anchors_preset = 15
@@ -253,6 +262,7 @@ layout_mode = 2
 theme_override_constants/separation = 18
 
 [node name="PlayerScoreLabel" type="Label" parent="HUD/MarginContainer/VBoxContainer/TopBar"]
+unique_name_in_owner = true
 text = "PLAYER 0"
 theme_override_font_sizes/font_size = 28
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
@@ -263,6 +273,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 
 [node name="AIScoreLabel" type="Label" parent="HUD/MarginContainer/VBoxContainer/TopBar"]
+unique_name_in_owner = true
 text = "AI 0"
 theme_override_font_sizes/font_size = 28
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
@@ -270,6 +281,7 @@ theme_override_constants/outline_size = 4
 horizontal_alignment = 2
 
 [node name="StatusLabel" type="Label" parent="HUD/MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
 text = "Loading Carom prototype..."
 theme_override_font_sizes/font_size = 18
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
@@ -280,6 +292,7 @@ layout_mode = 2
 theme_override_constants/separation = 18
 
 [node name="PlayerAmmoLabel" type="Label" parent="HUD/MarginContainer/VBoxContainer/AmmoBar"]
+unique_name_in_owner = true
 text = "Ammo 8/8"
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 3
@@ -289,6 +302,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 
 [node name="AIAmmoLabel" type="Label" parent="HUD/MarginContainer/VBoxContainer/AmmoBar"]
+unique_name_in_owner = true
 text = "AI Ammo 8/8"
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 3
