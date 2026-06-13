@@ -123,24 +123,16 @@ func _add_replay_row(replay: Dictionary) -> void:
 	btn_row.add_theme_constant_override("separation", 8)
 	vbox.add_child(btn_row)
 
-	# Play button
-	var replay_scene := ""
-	if game_mode == "blockudoku":
-		replay_scene = "res://scenes/blockudoku_replay.tscn"
-	elif game_mode == "sudoku":
-		replay_scene = "res://scenes/sudoku_replay.tscn"
-	elif game_mode == "shikaku":
-		replay_scene = "res://scenes/shikaku_replay.tscn"
-
-	if replay_scene != "":
+	# Play button — all supported games use the generic replay viewer
+	var can_play := game_mode in ["blockudoku", "shikaku", "sudoku"]
+	if can_play:
 		var play_btn := Button.new()
 		play_btn.text = "▶ Play"
 		play_btn.custom_minimum_size = Vector2(0, 36)
-		var scene_path := replay_scene
 		play_btn.pressed.connect(func() -> void:
 			var full_replay := ReplayManager.get_replay_by_id(replay_id)
 			ReplayManager.set_pending_playback(full_replay)
-			SceneTransition.transition_to(scene_path)
+			SceneTransition.transition_to("res://scenes/replay_viewer.tscn")
 		)
 		btn_row.add_child(play_btn)
 
@@ -199,18 +191,11 @@ func _import_from_clipboard() -> void:
 	# Determine game mode and play it
 	var header: Dictionary = replay.get("header", {})
 	var game_mode := str(header.get("game_mode", ""))
-	var replay_scene := ""
-	if game_mode == "blockudoku":
-		replay_scene = "res://scenes/blockudoku_replay.tscn"
-	elif game_mode == "sudoku":
-		replay_scene = "res://scenes/sudoku_replay.tscn"
-	elif game_mode == "shikaku":
-		replay_scene = "res://scenes/shikaku_replay.tscn"
-	if replay_scene.is_empty():
+	if game_mode not in ["blockudoku", "shikaku", "sudoku"]:
 		_show_toast("Unknown game mode: %s" % game_mode)
 		return
 	ReplayManager.set_pending_playback(replay)
-	SceneTransition.transition_to(replay_scene)
+	SceneTransition.transition_to("res://scenes/replay_viewer.tscn")
 
 
 func _show_toast(message: String) -> void:

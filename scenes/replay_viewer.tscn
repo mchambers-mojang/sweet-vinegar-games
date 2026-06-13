@@ -1,9 +1,8 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=2 format=3]
 
-[ext_resource type="Script" path="res://scripts/replays/shikaku_replay_viewer.gd" id="1"]
-[ext_resource type="Script" path="res://scripts/shikaku/shikaku_board.gd" id="2"]
+[ext_resource type="Script" path="res://scripts/replays/replay_player.gd" id="1"]
 
-[node name="ShikakuReplayViewer" type="PanelContainer"]
+[node name="ReplayViewer" type="PanelContainer"]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -41,16 +40,29 @@ unique_name_in_owner = true
 layout_mode = 2
 text = "0 / 0"
 
-[node name="ShikakuBoard" type="Control" parent="MarginContainer/VBoxContainer"]
+[node name="AdapterContainer" type="Control" parent="MarginContainer/VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
-script = ExtResource("2")
+size_flags_horizontal = 3
+
+[node name="ScrubBar" type="HSlider" parent="MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 0.0
+max_value = 1.0
+step = 1.0
 
 [node name="Controls" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2
 alignment = 1
 theme_override_constants/separation = 24
+
+[node name="StepBackButton" type="Button" parent="MarginContainer/VBoxContainer/Controls"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(60, 44)
+text = "◀"
 
 [node name="PlayButton" type="Button" parent="MarginContainer/VBoxContainer/Controls"]
 unique_name_in_owner = true
