@@ -1,6 +1,6 @@
-extends PanelContainer
+extends GameMenu
 
-## Placeholder Carom menu — launches the prototype arena scene.
+## Carom menu — launches the arena scene with selected difficulty.
 
 @onready var play_button: Button = %PlayButton
 @onready var settings_button: Button = %SettingsButton
@@ -11,32 +11,31 @@ extends PanelContainer
 static var selected_difficulty: int = 1
 
 
-func _ready() -> void:
+# --- GameMenu overrides ---
+
+func _get_game_id() -> String:
+	return "carom"
+
+
+func _get_menu_scene_path() -> String:
+	return "res://scenes/carom_menu.tscn"
+
+
+func _get_game_scene_path() -> String:
+	return "res://carom/scenes/carom_arena.tscn"
+
+
+func _has_save_support() -> bool:
+	return false
+
+
+func _on_menu_ready() -> void:
 	difficulty_button.selected = selected_difficulty
 	difficulty_button.item_selected.connect(func(idx: int) -> void:
 		selected_difficulty = idx
 	)
 	play_button.pressed.connect(func() -> void:
 		selected_difficulty = difficulty_button.selected
-		SceneTransition.transition_to("res://carom/scenes/carom_arena.tscn")
+		SceneTransition.transition_to(_get_game_scene_path())
 	)
-	settings_button.pressed.connect(func() -> void:
-		var SettingsScreen := load("res://scripts/settings_screen.gd")
-		SettingsScreen.return_scene = "res://scenes/carom_menu.tscn"
-		SceneTransition.transition_to("res://scenes/settings.tscn")
-	)
-	back_button.pressed.connect(func() -> void:
-		SceneTransition.transition_to("res://scenes/game_picker.tscn")
-	)
-	_apply_theme()
-	ThemeManager.theme_changed.connect(func(_is_dark: bool) -> void: _apply_theme())
 
-	var margin := get_node_or_null("MarginContainer") as MarginContainer
-	if margin:
-		SafeAreaManager.apply(margin)
-
-
-func _apply_theme() -> void:
-	var style := StyleBoxFlat.new()
-	style.bg_color = ThemeManager.get_color("background")
-	add_theme_stylebox_override("panel", style)
