@@ -107,6 +107,20 @@ func _apply_game_theme() -> void:
 
 
 func _on_game_screen_ready() -> void:
+	# Defensive registration: register_rules is a no-op if already registered via menu.
+	# Ensures rules are available if the game screen is entered directly (e.g. from replays).
+	GameRulesRegistry.register_rules("blockudoku", {
+		"pentominoes": true,
+		"p_pentomino": false,
+		"w_pentomino": false,
+		"y_pentomino": false,
+		"f_pentomino": false,
+		"n_pentomino": false,
+		"hexominoes": false,
+		"diagonals": false,
+		"drag_offset": 1,
+		"rotation_mode": false,
+	})
 	back_button.pressed.connect(_on_back)
 	undo_button.pressed.connect(_on_undo_pressed)
 	redo_button.pressed.connect(_on_redo_pressed)
@@ -133,8 +147,8 @@ func start_new_game() -> void:
 		"board_state": board.get_state(),
 		"available_blocks": _serialize_blocks(available_blocks),
 	}, {
-		"drag_offset": SettingsManager.blockudoku_drag_offset,
-		"show_timer": SettingsManager.show_timer,
+		"drag_offset": GameRulesRegistry.get_rule("blockudoku", "drag_offset"),
+		"show_timer": PlatformSettings.show_timer,
 	})
 	AchievementManager.track_game_started("blockudoku")
 	AnalyticsManager.log_event("game_started", {
@@ -171,8 +185,8 @@ func resume_game(data: Dictionary) -> void:
 			"board_state": board.get_state(),
 			"available_blocks": _serialize_blocks(available_blocks),
 		}, {
-			"drag_offset": SettingsManager.blockudoku_drag_offset,
-			"show_timer": SettingsManager.show_timer,
+			"drag_offset": GameRulesRegistry.get_rule("blockudoku", "drag_offset"),
+			"show_timer": PlatformSettings.show_timer,
 		})
 	_update_undo_redo_buttons()
 
@@ -180,7 +194,7 @@ func resume_game(data: Dictionary) -> void:
 func _process(delta: float) -> void:
 	if not is_game_over:
 		elapsed_time += delta
-		if SettingsManager.show_timer:
+		if PlatformSettings.show_timer:
 			timer_label.text = _format_time(elapsed_time)
 			timer_label.visible = true
 		else:
@@ -297,7 +311,7 @@ func _update_board_preview(screen_pos: Vector2) -> void:
 	var local_pos := board.get_local_mouse_position()
 	# Offset upward so finger doesn't cover the placement
 	var cell_size := board._get_cell_size()
-	var offset_multiplier := SettingsManager.blockudoku_drag_offset  # 0=None, 1=Small, 2=Medium, 3=Large
+	var offset_multiplier: int = GameRulesRegistry.get_rule("blockudoku", "drag_offset")  # 0=None, 1=Small, 2=Medium, 3=Large
 	if offset_multiplier > 0:
 		local_pos.y -= cell_size * offset_multiplier
 	var grid_pos := board.screen_to_grid(local_pos)
@@ -326,14 +340,14 @@ func _end_drag(screen_pos: Vector2) -> void:
 	var local_pos := board.get_local_mouse_position()
 	var cell_size := board._get_cell_size()
 	var origin := board._get_grid_origin()
-	var offset_multiplier := SettingsManager.blockudoku_drag_offset
+	var offset_multiplier: int = GameRulesRegistry.get_rule("blockudoku", "drag_offset")
 	if offset_multiplier > 0:
 		local_pos.y -= cell_size * offset_multiplier
 	var grid_pos := board.screen_to_grid(local_pos)
 
 	board.clear_preview()
 
-	if SettingsManager.blockudoku_rotation_mode and not _drag_moved and _drag_block_index >= 0 and _drag_block_index < available_blocks.size():
+	if GameRulesRegistry.get_rule("blockudoku", "rotation_mode") and not _drag_moved and _drag_block_index >= 0 and _drag_block_index < available_blocks.size():
 		var shape: Array = available_blocks[_drag_block_index]
 		if shape.size() > 0:
 			var rotated_shape: Array = BlockudokuShapes.rotate_clockwise(shape)
@@ -363,7 +377,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 		HapticManager.vibrate_light()
 
 		# Neon placement effects
-		if ThemeManager.is_neon:
+		if AppTheme.is_neon:
 
 			# Per-cell burst — small burst on each cell of the shape
 			for cell_offset in _drag_shape:
@@ -423,7 +437,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 				if lines + boxes >= 2:
 					_pulse_board_for_combo(combo_count)
 				# Scale shockwave with combo
-				if ThemeManager.is_neon:
+				if AppTheme.is_neon:
 					var combo_center := origin + Vector2(cell_size * 4.5, cell_size * 4.5)
 					var combo_amp := minf(0.5 + combo_count * 0.3, 2.0)
 					NeonRing.create(board, combo_center, Color(2.0, 0.3, 1.8), cell_size * (4.0 + combo_count), 0.4, combo_amp)
@@ -467,7 +481,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 				remaining_shapes.append(shape)
 		redo_stack.clear()
 		var has_valid_move := false
-		if SettingsManager.blockudoku_rotation_mode:
+		if GameRulesRegistry.get_rule("blockudoku", "rotation_mode"):
 			for shape in remaining_shapes:
 				var rotated: Array = shape
 				for _rot in 4:
@@ -508,7 +522,7 @@ var _shatter_tween: Tween = null
 
 
 func _pulse_board_for_combo(combo: int) -> void:
-	if not SettingsManager.screen_shake_enabled:
+	if not PlatformSettings.screen_shake_enabled:
 		return
 
 	if _board_pulse_tween and _board_pulse_tween.is_valid():
@@ -596,14 +610,14 @@ func _play_board_shatter() -> void:
 				)
 				var color: Color = board.cell_colors[cell_pos.y * board.GRID_SIZE + cell_pos.x]
 				if color == Color.TRANSPARENT:
-					color = ThemeManager.get_color("cell_given")
+					color = AppTheme.get_color("cell_given")
 				GlassShatter.create(board, rect, color, 6)
 				board.grid[cell_pos.y * board.GRID_SIZE + cell_pos.x] = 0
 				board.cell_colors[cell_pos.y * board.GRID_SIZE + cell_pos.x] = Color.TRANSPARENT
 			board.queue_redraw()
 		).set_delay(delay if row_idx > 0 else 0.3)
 
-	if ThemeManager.is_neon:
+	if AppTheme.is_neon:
 		_shatter_tween.tween_callback(func() -> void:
 			var board_center := origin + Vector2(cell_size * 4.5, cell_size * 4.5)
 			NeonRing.create(board, board_center, Color(2.0, 0.0, 0.3), cell_size * 8.0, 0.5, 1.5)
@@ -681,7 +695,7 @@ func _show_combo_text(total_clears: int, combo: int) -> void:
 		return
 
 	var color: Color
-	if ThemeManager.is_neon:
+	if AppTheme.is_neon:
 		color = Color(0.0, 1.5, 1.5) if combo <= 2 else Color(2.0, 0.3, 1.8)
 	else:
 		color = Color(0.2, 0.6, 1.0) if combo <= 2 else Color(0.8, 0.2, 0.8)
@@ -700,7 +714,7 @@ func _check_for_new_best() -> void:
 		return
 	_new_best_shown = true
 
-	var color := Color(0.0, 2.0, 1.5) if ThemeManager.is_neon else Color(0.2, 0.75, 1.0)
+	var color := Color(0.0, 2.0, 1.5) if AppTheme.is_neon else Color(0.2, 0.75, 1.0)
 	var cell_size := board._get_cell_size()
 	var origin := board._get_grid_origin()
 	var center := origin + Vector2(cell_size * 4.5, cell_size * 4.5)
@@ -812,7 +826,7 @@ func _format_time(seconds: float) -> String:
 
 func _apply_theme() -> void:
 	var style := StyleBoxFlat.new()
-	style.bg_color = ThemeManager.get_color("background")
+	style.bg_color = AppTheme.get_color("background")
 	add_theme_stylebox_override("panel", style)
 
 

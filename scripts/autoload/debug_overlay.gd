@@ -194,7 +194,7 @@ func _build_ui() -> void:
 
 func _update_overlay_visibility() -> void:
 	_info_label.visible = _overlay_active
-	_analytics_label.visible = _overlay_active and SettingsManager.debug_show_analytics_tail
+	_analytics_label.visible = _overlay_active and DebugFlags.debug_show_analytics_tail
 	_settings_button.visible = _overlay_active
 	_settings_panel.visible = false
 	_draw_layer.visible = _overlay_active
@@ -211,30 +211,30 @@ func _position_right_side_controls() -> void:
 
 func _refresh_overlay_text() -> void:
 	var lines: Array[String] = []
-	if SettingsManager.debug_show_fps:
+	if DebugFlags.debug_show_fps:
 		lines.append("FPS: %d" % Engine.get_frames_per_second())
-	if SettingsManager.debug_show_scene_name:
+	if DebugFlags.debug_show_scene_name:
 		lines.append("Scene: %s" % _get_current_scene_name())
-	if SettingsManager.debug_show_memory:
+	if DebugFlags.debug_show_memory:
 		var mem := Performance.get_monitor(Performance.MEMORY_STATIC) / (1024.0 * 1024.0)
 		lines.append("Memory: %.1f MB" % mem)
-	if SettingsManager.debug_show_grid_coordinates:
+	if DebugFlags.debug_show_grid_coordinates:
 		lines.append("Grid: %s" % _get_grid_coordinate_label())
 	_info_label.text = "\n".join(PackedStringArray(lines))
 	_analytics_label.position.y = _info_label.position.y + _info_label.get_combined_minimum_size().y + 10.0
 
-	if SettingsManager.debug_show_analytics_tail:
+	if DebugFlags.debug_show_analytics_tail:
 		_analytics_label.text = "Analytics events:\n%s" % "\n".join(PackedStringArray(_analytics_tail))
 
 
 func _draw_debug_overlay() -> void:
-	if SettingsManager.debug_show_touch_points:
+	if DebugFlags.debug_show_touch_points:
 		for id in _touch_points.keys():
 			var pos: Vector2 = _touch_points[id]
 			_draw_layer.draw_circle(pos, 22.0, Color(0.1, 1.0, 1.0, 0.18))
 			_draw_layer.draw_circle(pos, 8.0, Color(0.1, 1.0, 1.0, 0.95))
 
-	if SettingsManager.debug_show_safe_area:
+	if DebugFlags.debug_show_safe_area:
 		var insets := SafeAreaManager.get_insets()
 		var viewport_size := get_viewport().get_visible_rect().size
 		var left := float(insets.get("left", 0))
@@ -299,39 +299,39 @@ func _add_setting_toggle(list: VBoxContainer, title: String, key: String) -> voi
 func _get_debug_setting(key: String) -> bool:
 	match key:
 		"fps":
-			return SettingsManager.debug_show_fps
+			return DebugFlags.debug_show_fps
 		"touch":
-			return SettingsManager.debug_show_touch_points
+			return DebugFlags.debug_show_touch_points
 		"safe_area":
-			return SettingsManager.debug_show_safe_area
+			return DebugFlags.debug_show_safe_area
 		"scene":
-			return SettingsManager.debug_show_scene_name
+			return DebugFlags.debug_show_scene_name
 		"memory":
-			return SettingsManager.debug_show_memory
+			return DebugFlags.debug_show_memory
 		"analytics":
-			return SettingsManager.debug_show_analytics_tail
+			return DebugFlags.debug_show_analytics_tail
 		"grid":
-			return SettingsManager.debug_show_grid_coordinates
+			return DebugFlags.debug_show_grid_coordinates
 	return true
 
 
 func _set_debug_setting(key: String, value: bool) -> void:
 	match key:
 		"fps":
-			SettingsManager.debug_show_fps = value
+			DebugFlags.debug_show_fps = value
 		"touch":
-			SettingsManager.debug_show_touch_points = value
+			DebugFlags.debug_show_touch_points = value
 		"safe_area":
-			SettingsManager.debug_show_safe_area = value
+			DebugFlags.debug_show_safe_area = value
 		"scene":
-			SettingsManager.debug_show_scene_name = value
+			DebugFlags.debug_show_scene_name = value
 		"memory":
-			SettingsManager.debug_show_memory = value
+			DebugFlags.debug_show_memory = value
 		"analytics":
-			SettingsManager.debug_show_analytics_tail = value
+			DebugFlags.debug_show_analytics_tail = value
 		"grid":
-			SettingsManager.debug_show_grid_coordinates = value
-	SettingsManager.save_settings()
+			DebugFlags.debug_show_grid_coordinates = value
+	DebugFlags.save_settings()
 	log_analytics_event("debug_setting:%s=%s" % [key, value])
 	_update_overlay_visibility()
 	_draw_layer.queue_redraw()

@@ -74,7 +74,7 @@ func unsuppress() -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if not SettingsManager.particle_effects_enabled:
+	if not PlatformSettings.particle_effects_enabled:
 		return
 
 	var pos := Vector2.ZERO
@@ -143,7 +143,7 @@ func _on_drag(pos: Vector2) -> void:
 
 	# Add trail point
 	var trail_color: Color
-	if ThemeManager.is_neon:
+	if AppTheme.is_neon:
 		trail_color = Color(0.0, 1.2, 1.2, 0.7)
 	else:
 		trail_color = Color(0.5, 0.7, 1.0, 0.5)

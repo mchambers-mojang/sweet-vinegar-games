@@ -194,7 +194,7 @@ func check_and_clear() -> Dictionary:
 		_flash_saved_colors.append(cell_colors[p.y * GRID_SIZE + p.x])
 
 	# Spawn neon effects before clearing
-	if ThemeManager.is_neon and SettingsManager.particle_effects_enabled:
+	if AppTheme.is_neon and PlatformSettings.particle_effects_enabled:
 		var cell_size := _get_cell_size()
 		var origin := _get_grid_origin()
 
@@ -433,7 +433,7 @@ func flash_placed_cells(shape: Array, grid_col: int, grid_row: int, color: Color
 func _draw() -> void:
 	var cell_size := _get_cell_size()
 	var origin := _get_grid_origin()
-	var tm := ThemeManager
+	var tm := AppTheme
 	var bg_color := tm.get_color("cell_background")
 	var grid_px := cell_size * GRID_SIZE
 	var grid_rect := Rect2(origin, Vector2(grid_px, grid_px))

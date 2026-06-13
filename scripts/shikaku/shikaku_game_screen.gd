@@ -125,7 +125,7 @@ func start_new_game(w: int, h: int) -> void:
 		"height": h,
 		"numbers": _serialize_numbers(puzzle_data["numbers"]),
 	}, {
-		"show_timer": SettingsManager.show_timer,
+		"show_timer": PlatformSettings.show_timer,
 	})
 	AchievementManager.track_game_started("shikaku")
 	AnalyticsManager.log_event("game_started", {
@@ -169,7 +169,7 @@ func resume_game(data: Dictionary) -> void:
 			"height": grid_height,
 			"numbers": _serialize_numbers(puzzle_data["numbers"]),
 		}, {
-			"show_timer": SettingsManager.show_timer,
+			"show_timer": PlatformSettings.show_timer,
 		})
 	AchievementManager.track_game_started("shikaku")
 
@@ -177,7 +177,7 @@ func resume_game(data: Dictionary) -> void:
 func _process(delta: float) -> void:
 	if not is_completed and not is_paused:
 		elapsed_time += delta
-		if SettingsManager.show_timer:
+		if PlatformSettings.show_timer:
 			timer_label.text = _format_time(elapsed_time)
 			timer_label.visible = true
 		else:
@@ -216,7 +216,7 @@ func _on_rectangle_placed(rect: Rect2i) -> void:
 	SoundManager.play_place()
 	HapticManager.vibrate_light()
 	# Neon shockwave on rect placement
-	if ThemeManager.is_neon:
+	if AppTheme.is_neon:
 		var cell_size := board._get_cell_size()
 		var origin := board._get_grid_origin()
 		var center := origin + Vector2(
@@ -394,7 +394,7 @@ func _handle_win() -> void:
 	if is_new_best:
 		_show_new_best_indicator()
 	# Neon win shockwave
-	if ThemeManager.is_neon:
+	if AppTheme.is_neon:
 		var cell_size := board._get_cell_size()
 		var origin := board._get_grid_origin()
 		var center := origin + Vector2(
@@ -420,7 +420,7 @@ func _show_new_best_indicator() -> void:
 		(board.grid_width / 2.0) * cell_size,
 		(board.grid_height / 2.0) * cell_size
 	)
-	var color := Color(0.0, 2.0, 1.5) if ThemeManager.is_neon else Color(0.2, 0.75, 1.0)
+	var color := Color(0.0, 2.0, 1.5) if AppTheme.is_neon else Color(0.2, 0.75, 1.0)
 	ComboLabel.create(board, center, "NEW BEST!", color)
 	HapticManager.vibrate_medium()
 
@@ -481,7 +481,7 @@ func _format_time(seconds: float) -> String:
 
 func _apply_theme() -> void:
 	var style := StyleBoxFlat.new()
-	style.bg_color = ThemeManager.get_color("background")
+	style.bg_color = AppTheme.get_color("background")
 	add_theme_stylebox_override("panel", style)
 
 
