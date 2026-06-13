@@ -9,16 +9,10 @@ const COMBO_PULSE_SCALE_PER_COMBO := 0.002
 const COMBO_PULSE_MAX_SCALE := 1.04
 const COMBO_PULSE_HALF_DURATION := 0.15
 
-# Game state
-var score: int = 0
-var turns: int = 0
-var combo_count: int = 0
-var is_game_over: bool = false
-var _new_best_shown: bool = false
+# Pure game logic — all rule decisions delegated here
+var logic: BlockudokuLogic
 
-# Current set of blocks to place (each is Array of Vector2i)
-var available_blocks: Array[Array] = []
-var blocks_placed_this_set: int = 0
+var _new_best_shown: bool = false
 
 # Drag state
 var _dragging: bool = false
