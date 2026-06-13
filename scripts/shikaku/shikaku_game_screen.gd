@@ -151,7 +151,6 @@ func _setup_game(saved_data: Dictionary) -> void:
 		puzzle_data = ShikakuGenerator.generate(grid_width, grid_height, random_seed)
 		board.setup(grid_width, grid_height, puzzle_data["numbers"])
 		size_label.text = SIZE_NAMES.get(grid_width, "%dx%d" % [grid_width, grid_height])
-		_update_button_states()
 	else:
 		puzzle_data = {
 			"width": grid_width,
@@ -169,7 +168,7 @@ func _setup_game(saved_data: Dictionary) -> void:
 		if random_seed == 0:
 			random_seed = _derive_seed_from_numbers(puzzle_data["numbers"])
 		size_label.text = SIZE_NAMES.get(grid_width, "%dx%d" % [grid_width, grid_height])
-		_update_button_states()
+	_update_button_states()
 
 
 func _increment_stats() -> void:

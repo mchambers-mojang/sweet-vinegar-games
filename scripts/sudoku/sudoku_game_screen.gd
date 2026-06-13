@@ -1244,8 +1244,8 @@ func _record_sudoku_completion(diff: int, time: float, was_strict: bool, won: bo
 	})
 	GameStatsManager.increment_counter("sudoku", "completed_d%d" % diff)
 	# Track best time
-	var best: float = float(GameStatsManager.get_counter("sudoku", "best_d%d" % diff))
-	if best == 0 or time < best:
+	var best_ms: float = float(GameStatsManager.get_counter("sudoku", "best_d%d" % diff))
+	if best_ms == 0 or time < best_ms / 1000.0:
 		GameStatsManager.set_counter("sudoku", "best_d%d" % diff, int(time * 1000))
 	# Streak tracking
 	if was_strict:

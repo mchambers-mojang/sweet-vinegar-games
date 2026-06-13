@@ -125,6 +125,8 @@ func resume_game(data: Dictionary) -> void:
 	combo_count = data.get("combo_count", 0)
 	_new_best_shown = data.get("new_best_shown", false)
 	is_game_over = false
+	undo_stack.clear()
+	redo_stack.clear()
 	begin_session(data)
 
 
@@ -164,8 +166,6 @@ func _setup_game(saved_data: Dictionary) -> void:
 		_rng.seed = random_seed
 		if saved_data.has("rng_state"):
 			_rng.state = int(saved_data.get("rng_state", 0))
-		undo_stack.clear()
-		redo_stack.clear()
 		board.set_state(saved_data.get("board_state", {}))
 		available_blocks = _deserialize_blocks(saved_data.get("available_blocks", []))
 		blocks_placed_this_set = saved_data.get("blocks_placed_this_set", 0)
