@@ -1,7 +1,8 @@
 extends Node
 
-## Lightweight replay recorder with lazy-loaded replay files.
+## Replay storage layer — session recording, persistence, indexing, import/export, and crash recovery.
 ## Only metadata (header+footer) is kept in memory; frames load on demand.
+## Playback is handled by ReplayPlayer with game-specific GameReplayAdapter subclasses.
 
 const REPLAYS_DIR := "user://replays/"
 const REPLAYS_INDEX_PATH := "user://replays_index.json"
@@ -10,9 +11,6 @@ const LEGACY_REPLAYS_PATH := "user://replays.json"
 const FORMAT_VERSION := 1
 const MAX_AUTO_REPLAYS := 20
 const SECONDS_TO_MS := 1000.0
-const MIN_PLAYBACK_SPEED := 0.25
-const MAX_PLAYBACK_SPEED := 4.0
-
 # Only metadata (header + footer + id + bookmarked) — no frames in memory
 var _replay_index: Array[Dictionary] = []
 var _active_replay: Dictionary = {}
@@ -20,7 +18,6 @@ var _id_rng := RandomNumberGenerator.new()
 var _active_sequence: int = 0
 var _save_timer: float = 0.0
 var _dirty: bool = false
-var playback_speed: float = 1.0
 var _pending_playback: Dictionary = {}
 
 const SAVE_INTERVAL := 2.0
@@ -195,35 +192,6 @@ func import_replay_code(code: String) -> Dictionary:
 		return {}
 	var blob: Dictionary = parsed
 	return blob.get("replay", {})
-
-
-func simulate_replay(replay: Dictionary, apply_event: Callable) -> bool:
-	if replay.is_empty():
-		return false
-	var frames: Array = replay.get("frames", [])
-	frames.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		var a_tick := int(a.get("tick", 0))
-		var b_tick := int(b.get("tick", 0))
-		if a_tick == b_tick:
-			return int(a.get("seq", 0)) < int(b.get("seq", 0))
-		return a_tick < b_tick
-	)
-	for frame in frames:
-		apply_event.call(frame)
-	return true
-
-
-func set_playback_speed(multiplier: float) -> float:
-	playback_speed = clampf(multiplier, MIN_PLAYBACK_SPEED, MAX_PLAYBACK_SPEED)
-	return playback_speed
-
-
-func scrub_frames_to_tick(replay: Dictionary, tick_ms: int) -> Array[Dictionary]:
-	var frames: Array[Dictionary] = []
-	for frame in replay.get("frames", []):
-		if int(frame.get("tick", 0)) <= tick_ms:
-			frames.append(frame)
-	return frames
 
 
 func get_crash_recovery_payload() -> Dictionary:

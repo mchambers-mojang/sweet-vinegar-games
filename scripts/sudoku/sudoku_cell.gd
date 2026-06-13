@@ -217,7 +217,7 @@ func _on_gui_input(event: InputEvent) -> void:
 
 
 func _draw() -> void:
-	var tm := ThemeManager
+	var tm := AppTheme
 	var cell_size := size
 
 	# Background

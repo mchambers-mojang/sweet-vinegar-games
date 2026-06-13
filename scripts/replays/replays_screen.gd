@@ -15,7 +15,7 @@ func _ready() -> void:
 	)
 	_build_ui()
 	_apply_theme()
-	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
+	AppTheme.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
 
 
 func _build_ui() -> void:
@@ -66,7 +66,7 @@ func _add_section_header(title: String) -> void:
 	header.mouse_filter = Control.MOUSE_FILTER_PASS
 	header.text = title
 	header.add_theme_font_size_override("font_size", 20)
-	header.add_theme_color_override("font_color", ThemeManager.get_color("text_given"))
+	header.add_theme_color_override("font_color", AppTheme.get_color("text_given"))
 	replay_list.add_child(header)
 
 
@@ -123,24 +123,16 @@ func _add_replay_row(replay: Dictionary) -> void:
 	btn_row.add_theme_constant_override("separation", 8)
 	vbox.add_child(btn_row)
 
-	# Play button
-	var replay_scene := ""
-	if game_mode == "blockudoku":
-		replay_scene = "res://scenes/blockudoku_replay.tscn"
-	elif game_mode == "sudoku":
-		replay_scene = "res://scenes/sudoku_replay.tscn"
-	elif game_mode == "shikaku":
-		replay_scene = "res://scenes/shikaku_replay.tscn"
-
-	if replay_scene != "":
+	# Play button — all supported games use the generic replay viewer
+	var can_play := game_mode in ["blockudoku", "shikaku", "sudoku"]
+	if can_play:
 		var play_btn := Button.new()
 		play_btn.text = "▶ Play"
 		play_btn.custom_minimum_size = Vector2(0, 36)
-		var scene_path := replay_scene
 		play_btn.pressed.connect(func() -> void:
 			var full_replay := ReplayManager.get_replay_by_id(replay_id)
 			ReplayManager.set_pending_playback(full_replay)
-			SceneTransition.transition_to(scene_path)
+			SceneTransition.transition_to("res://scenes/replay_viewer.tscn")
 		)
 		btn_row.add_child(play_btn)
 
@@ -183,7 +175,7 @@ func _format_date(unix_time: int) -> String:
 
 func _apply_theme() -> void:
 	var style := StyleBoxFlat.new()
-	style.bg_color = ThemeManager.get_color("background")
+	style.bg_color = AppTheme.get_color("background")
 	add_theme_stylebox_override("panel", style)
 
 
@@ -199,18 +191,11 @@ func _import_from_clipboard() -> void:
 	# Determine game mode and play it
 	var header: Dictionary = replay.get("header", {})
 	var game_mode := str(header.get("game_mode", ""))
-	var replay_scene := ""
-	if game_mode == "blockudoku":
-		replay_scene = "res://scenes/blockudoku_replay.tscn"
-	elif game_mode == "sudoku":
-		replay_scene = "res://scenes/sudoku_replay.tscn"
-	elif game_mode == "shikaku":
-		replay_scene = "res://scenes/shikaku_replay.tscn"
-	if replay_scene.is_empty():
+	if game_mode not in ["blockudoku", "shikaku", "sudoku"]:
 		_show_toast("Unknown game mode: %s" % game_mode)
 		return
 	ReplayManager.set_pending_playback(replay)
-	SceneTransition.transition_to(replay_scene)
+	SceneTransition.transition_to("res://scenes/replay_viewer.tscn")
 
 
 func _show_toast(message: String) -> void:
@@ -218,7 +203,7 @@ func _show_toast(message: String) -> void:
 	toast.text = message
 	toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	toast.add_theme_font_size_override("font_size", 14)
-	toast.add_theme_color_override("font_color", ThemeManager.get_color("text_given"))
+	toast.add_theme_color_override("font_color", AppTheme.get_color("text_given"))
 	toast.modulate.a = 1.0
 	add_child(toast)
 	toast.anchors_preset = Control.PRESET_CENTER_BOTTOM

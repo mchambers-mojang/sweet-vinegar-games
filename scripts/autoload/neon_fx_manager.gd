@@ -33,12 +33,12 @@ func _ready() -> void:
 	_world_env = WorldEnvironment.new()
 	_world_env.environment = _environment
 	# Don't add to tree unless neon is active — saves ~20-40MB on mobile
-	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _update_glow())
+	AppTheme.theme_changed.connect(func(_d: bool) -> void: _update_glow())
 	_update_glow()
 
 
 func _update_glow() -> void:
-	if ThemeManager.is_neon:
+	if AppTheme.is_neon:
 		if not _world_env.is_inside_tree():
 			add_child(_world_env)
 	else:
@@ -48,9 +48,9 @@ func _update_glow() -> void:
 
 ## Create a screen-shake / impact effect
 func screen_shake(intensity: float = 4.0, duration: float = 0.15) -> void:
-	if not ThemeManager.is_neon:
+	if not AppTheme.is_neon:
 		return
-	if not SettingsManager.screen_shake_enabled:
+	if not PlatformSettings.screen_shake_enabled:
 		return
 	var viewport := get_viewport()
 	if not viewport:

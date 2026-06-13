@@ -1,4 +1,4 @@
-extends Control
+extends GameScreen
 
 ## Blockudoku game screen — board, score, block tray, drag-to-place
 
@@ -33,16 +33,12 @@ var _board_pulse_tween: Tween = null
 # Node references
 @onready var board: BlockudokuBoard = %BlockudokuBoard
 @onready var score_label: Label = %ScoreLabel
-@onready var timer_label: Label = %TimerLabel
 @onready var back_button: Button = %BackButton
 @onready var undo_button: Button = %UndoButton
 @onready var redo_button: Button = %RedoButton
 @onready var block_tray: HBoxContainer = %BlockTray
 @onready var settings_button: Button = %SettingsButton
 
-var elapsed_time: float = 0.0
-var random_seed: int = 0
-var replay_id: String = ""
 var _rng := RandomNumberGenerator.new()
 
 # Block tray piece display nodes
@@ -51,124 +47,139 @@ var undo_stack: Array[Dictionary] = []
 var redo_stack: Array[Dictionary] = []
 
 
-func _ready() -> void:
-	CrashReporter.register_state_provider(_get_crash_state)
-	CrashReporter.register_user_action("blockudoku_screen_opened")
+# --- GameScreen overrides ---
+
+func _get_game_id() -> String:
+	return "blockudoku"
+
+
+func _get_scene_path() -> String:
+	return "res://scenes/blockudoku_game.tscn"
+
+
+func _is_initialized() -> bool:
+	return not available_blocks.is_empty()
+
+
+func _is_completed() -> bool:
+	return is_game_over
+
+
+func _serialize_state() -> Dictionary:
+	return {
+		"score": score,
+		"turns": turns,
+		"combo_count": combo_count,
+		"new_best_shown": _new_best_shown,
+		"elapsed_time": elapsed_time,
+		"board_state": board.get_state(),
+		"available_blocks": _serialize_blocks(available_blocks),
+		"blocks_placed_this_set": blocks_placed_this_set,
+		"random_seed": random_seed,
+		"rng_state": _rng.state,
+		"replay_id": replay_id,
+	}
+
+
+func _deserialize_state(data: Dictionary) -> void:
+	resume_game(data)
+
+
+func _get_crash_state() -> Dictionary:
+	return {
+		"game": "blockudoku",
+		"score": score,
+		"turns": turns,
+		"combo_count": combo_count,
+		"elapsed_time": elapsed_time,
+		"is_game_over": is_game_over,
+		"blocks_placed_this_set": blocks_placed_this_set,
+		"available_block_count": available_blocks.size(),
+	}
+
+
+func _apply_game_theme() -> void:
+	_apply_theme()
+
+
+func _on_game_screen_ready() -> void:
 	back_button.pressed.connect(_on_back)
 	undo_button.pressed.connect(_on_undo_pressed)
 	redo_button.pressed.connect(_on_redo_pressed)
-	settings_button.pressed.connect(func() -> void:
-		var SettingsScreen := load("res://scripts/settings_screen.gd")
-		SettingsScreen.return_scene = "res://scenes/blockudoku_game.tscn"
-		SceneTransition.transition_to("res://scenes/settings.tscn")
-	)
-	_setup_help_button()
-	_apply_theme()
-	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
-	var margin := get_node_or_null("MarginContainer") as MarginContainer
-	if margin:
-		SafeAreaManager.apply(margin)
-
-	# Auto-resume from save if scene loaded directly (e.g., returning from settings)
-	_try_auto_resume.call_deferred()
-
-
-func _exit_tree() -> void:
-	CrashReporter.unregister_state_provider(_get_crash_state)
-
-
-func _try_auto_resume() -> void:
-	# If the game was already initialized by an explicit call (from the menu),
-	# available_blocks will be populated — skip auto-resume.
-	if not available_blocks.is_empty():
-		return
-	if BlockudokuSaveManager.has_saved_game():
-		var data := BlockudokuSaveManager.load_game()
-		if not data.is_empty():
-			resume_game(data)
-
-
-func _setup_help_button() -> void:
-	var btn := Button.new()
-	btn.text = "?"
-	btn.custom_minimum_size = Vector2(36, 0)
-	btn.pressed.connect(func() -> void: HowToPlay.show_for(self, "blockudoku"))
-	back_button.get_parent().add_child(btn)
 
 
 func start_new_game() -> void:
-	CrashReporter.register_user_action("blockudoku_start_new_game")
 	score = 0
 	turns = 0
 	combo_count = 0
 	_new_best_shown = false
-	elapsed_time = 0.0
 	is_game_over = false
-	random_seed = _create_session_seed()
-	_rng.seed = random_seed
 	undo_stack.clear()
 	redo_stack.clear()
-	board.reset()
-	_deal_new_blocks()
-	_update_score_display()
-	_update_undo_redo_buttons()
-	BlockudokuStatsManager.record_game_started()
-	replay_id = ReplayManager.start_session("blockudoku", random_seed, {
-		"board_state": board.get_state(),
-		"available_blocks": _serialize_blocks(available_blocks),
-	}, {
-		"drag_offset": SettingsManager.blockudoku_drag_offset,
-		"show_timer": SettingsManager.show_timer,
-	})
-	AchievementManager.track_game_started("blockudoku")
-	AnalyticsManager.log_event("game_started", {
-		"game": "blockudoku",
-	})
-	_save_current_state()
+	begin_session()
 
 
 func resume_game(data: Dictionary) -> void:
-	CrashReporter.register_user_action("blockudoku_resume_game", {"score": data.get("score", 0)})
 	score = data.get("score", 0)
 	turns = data.get("turns", 0)
 	combo_count = data.get("combo_count", 0)
 	_new_best_shown = data.get("new_best_shown", false)
-	elapsed_time = data.get("elapsed_time", 0.0)
 	is_game_over = false
-	random_seed = int(data.get("random_seed", 0))
-	_rng.seed = random_seed
-	if data.has("rng_state"):
-		_rng.state = int(data.get("rng_state", 0))
-	replay_id = str(data.get("replay_id", ""))
 	undo_stack.clear()
 	redo_stack.clear()
-	board.set_state(data.get("board_state", {}))
-
-	# Restore available blocks
-	available_blocks = _deserialize_blocks(data.get("available_blocks", []))
-
-	blocks_placed_this_set = data.get("blocks_placed_this_set", 0)
-	_build_tray()
-	_update_score_display()
-	if not ReplayManager.has_active_session():
-		replay_id = ReplayManager.start_session("blockudoku", random_seed, {
-			"board_state": board.get_state(),
-			"available_blocks": _serialize_blocks(available_blocks),
-		}, {
-			"drag_offset": SettingsManager.blockudoku_drag_offset,
-			"show_timer": SettingsManager.show_timer,
-		})
-	_update_undo_redo_buttons()
+	begin_session(data)
 
 
-func _process(delta: float) -> void:
-	if not is_game_over:
-		elapsed_time += delta
-		if SettingsManager.show_timer:
-			timer_label.text = _format_time(elapsed_time)
-			timer_label.visible = true
-		else:
-			timer_label.visible = false
+# --- Session ceremony hooks ---
+
+func _should_tick_timer() -> bool:
+	return not is_game_over
+
+
+func _get_resume_crash_params(saved_data: Dictionary) -> Dictionary:
+	return {"score": saved_data.get("score", 0)}
+
+
+func _get_initial_state() -> Dictionary:
+	return {
+		"board_state": board.get_state(),
+		"available_blocks": _serialize_blocks(available_blocks),
+	}
+
+
+func _get_settings_snapshot() -> Dictionary:
+	return {
+		"drag_offset": GameRulesRegistry.get_rule("blockudoku", "drag_offset"),
+		"show_timer": PlatformSettings.show_timer,
+	}
+
+
+func _setup_game(saved_data: Dictionary) -> void:
+	if saved_data.is_empty():
+		_rng.seed = random_seed
+		board.reset()
+		_deal_new_blocks()
+		_update_score_display()
+		_update_undo_redo_buttons()
+	else:
+		# Restore seed first, then override the full internal state if available.
+		_rng.seed = random_seed
+		if saved_data.has("rng_state"):
+			_rng.state = int(saved_data.get("rng_state", 0))
+		board.set_state(saved_data.get("board_state", {}))
+		available_blocks = _deserialize_blocks(saved_data.get("available_blocks", []))
+		blocks_placed_this_set = saved_data.get("blocks_placed_this_set", 0)
+		_build_tray()
+		_update_score_display()
+		_update_undo_redo_buttons()
+
+
+func _increment_stats() -> void:
+	GameStatsManager.increment_counter("blockudoku", "games_played")
+
+
+func _get_analytics_params() -> Dictionary:
+	return {"game": "blockudoku"}
 
 
 func _deal_new_blocks() -> void:
@@ -281,7 +292,7 @@ func _update_board_preview(screen_pos: Vector2) -> void:
 	var local_pos := board.get_local_mouse_position()
 	# Offset upward so finger doesn't cover the placement
 	var cell_size := board._get_cell_size()
-	var offset_multiplier := SettingsManager.blockudoku_drag_offset  # 0=None, 1=Small, 2=Medium, 3=Large
+	var offset_multiplier := GameRulesRegistry.get_rule("blockudoku", "drag_offset")  # 0=None, 1=Small, 2=Medium, 3=Large
 	if offset_multiplier > 0:
 		local_pos.y -= cell_size * offset_multiplier
 	var grid_pos := board.screen_to_grid(local_pos)
@@ -310,14 +321,14 @@ func _end_drag(screen_pos: Vector2) -> void:
 	var local_pos := board.get_local_mouse_position()
 	var cell_size := board._get_cell_size()
 	var origin := board._get_grid_origin()
-	var offset_multiplier := SettingsManager.blockudoku_drag_offset
+	var offset_multiplier := GameRulesRegistry.get_rule("blockudoku", "drag_offset")
 	if offset_multiplier > 0:
 		local_pos.y -= cell_size * offset_multiplier
 	var grid_pos := board.screen_to_grid(local_pos)
 
 	board.clear_preview()
 
-	if SettingsManager.blockudoku_rotation_mode and not _drag_moved and _drag_block_index >= 0 and _drag_block_index < available_blocks.size():
+	if GameRulesRegistry.get_rule("blockudoku", "rotation_mode") and not _drag_moved and _drag_block_index >= 0 and _drag_block_index < available_blocks.size():
 		var shape: Array = available_blocks[_drag_block_index]
 		if shape.size() > 0:
 			var rotated_shape: Array = BlockudokuShapes.rotate_clockwise(shape)
@@ -347,7 +358,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 		HapticManager.vibrate_light()
 
 		# Neon placement effects
-		if ThemeManager.is_neon:
+		if AppTheme.is_neon:
 
 			# Per-cell burst — small burst on each cell of the shape
 			for cell_offset in _drag_shape:
@@ -407,14 +418,14 @@ func _end_drag(screen_pos: Vector2) -> void:
 				if lines + boxes >= 2:
 					_pulse_board_for_combo(combo_count)
 				# Scale shockwave with combo
-				if ThemeManager.is_neon:
+				if AppTheme.is_neon:
 					var combo_center := origin + Vector2(cell_size * 4.5, cell_size * 4.5)
 					var combo_amp := minf(0.5 + combo_count * 0.3, 2.0)
 					NeonRing.create(board, combo_center, Color(2.0, 0.3, 1.8), cell_size * (4.0 + combo_count), 0.4, combo_amp)
 			# Scoring: 10 per line/box cleared + combo bonus
 			var clear_score := (lines + boxes) * 18 + cleared + combo_bonus
 			score += clear_score
-			BlockudokuStatsManager.record_clears(lines + boxes)
+			GameStatsManager.increment_counter("blockudoku", "total_clears", lines + boxes)
 			AchievementManager.track_blockudoku_clear(lines + boxes)
 			AchievementManager.track_blockudoku_combo(combo_count)
 			AnalyticsManager.log_event("line_cleared", {
@@ -451,7 +462,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 				remaining_shapes.append(shape)
 		redo_stack.clear()
 		var has_valid_move := false
-		if SettingsManager.blockudoku_rotation_mode:
+		if GameRulesRegistry.get_rule("blockudoku", "rotation_mode"):
 			for shape in remaining_shapes:
 				var rotated: Array = shape
 				for _rot in 4:
@@ -492,7 +503,7 @@ var _shatter_tween: Tween = null
 
 
 func _pulse_board_for_combo(combo: int) -> void:
-	if not SettingsManager.screen_shake_enabled:
+	if not PlatformSettings.screen_shake_enabled:
 		return
 
 	if _board_pulse_tween and _board_pulse_tween.is_valid():
@@ -519,7 +530,7 @@ func _handle_game_over() -> void:
 		"board_state": board.get_state(),
 	})
 	_update_undo_redo_buttons()
-	BlockudokuStatsManager.record_game_over(score, turns)
+	_record_blockudoku_game_over(score, turns)
 	AchievementManager.track_blockudoku_game_played(score)
 	AchievementManager.track_streak_broken()
 	AnalyticsManager.log_event("game_over", {
@@ -531,7 +542,7 @@ func _handle_game_over() -> void:
 		"elapsed_time": elapsed_time,
 		"combo_count": combo_count,
 	})
-	BlockudokuSaveManager.clear_save()
+	clear_save()
 	HapticManager.vibrate_success()
 
 	# Shatter animation runs in background
@@ -580,14 +591,14 @@ func _play_board_shatter() -> void:
 				)
 				var color: Color = board.cell_colors[cell_pos.y * board.GRID_SIZE + cell_pos.x]
 				if color == Color.TRANSPARENT:
-					color = ThemeManager.get_color("cell_given")
+					color = AppTheme.get_color("cell_given")
 				GlassShatter.create(board, rect, color, 6)
 				board.grid[cell_pos.y * board.GRID_SIZE + cell_pos.x] = 0
 				board.cell_colors[cell_pos.y * board.GRID_SIZE + cell_pos.x] = Color.TRANSPARENT
 			board.queue_redraw()
 		).set_delay(delay if row_idx > 0 else 0.3)
 
-	if ThemeManager.is_neon:
+	if AppTheme.is_neon:
 		_shatter_tween.tween_callback(func() -> void:
 			var board_center := origin + Vector2(cell_size * 4.5, cell_size * 4.5)
 			NeonRing.create(board, board_center, Color(2.0, 0.0, 0.3), cell_size * 8.0, 0.5, 1.5)
@@ -665,7 +676,7 @@ func _show_combo_text(total_clears: int, combo: int) -> void:
 		return
 
 	var color: Color
-	if ThemeManager.is_neon:
+	if AppTheme.is_neon:
 		color = Color(0.0, 1.5, 1.5) if combo <= 2 else Color(2.0, 0.3, 1.8)
 	else:
 		color = Color(0.2, 0.6, 1.0) if combo <= 2 else Color(0.8, 0.2, 0.8)
@@ -679,11 +690,12 @@ func _show_combo_text(total_clears: int, combo: int) -> void:
 func _check_for_new_best() -> void:
 	if _new_best_shown:
 		return
-	if not BlockudokuStatsManager.record_high_score_candidate(score):
+	var high: int = GameStatsManager.get_counter("blockudoku", "high_score")
+	if score <= high:
 		return
 	_new_best_shown = true
 
-	var color := Color(0.0, 2.0, 1.5) if ThemeManager.is_neon else Color(0.2, 0.75, 1.0)
+	var color := Color(0.0, 2.0, 1.5) if AppTheme.is_neon else Color(0.2, 0.75, 1.0)
 	var cell_size := board._get_cell_size()
 	var origin := board._get_grid_origin()
 	var center := origin + Vector2(cell_size * 4.5, cell_size * 4.5)
@@ -787,51 +799,23 @@ func _deserialize_blocks(data: Array) -> Array[Array]:
 	return blocks
 
 
-func _format_time(seconds: float) -> String:
-	var mins := int(seconds) / 60
-	var secs := int(seconds) % 60
-	return "%d:%02d" % [mins, secs]
-
-
 func _apply_theme() -> void:
 	var style := StyleBoxFlat.new()
-	style.bg_color = ThemeManager.get_color("background")
+	style.bg_color = AppTheme.get_color("background")
 	add_theme_stylebox_override("panel", style)
 
 
-func _save_current_state() -> void:
-	if is_game_over:
-		return
-	BlockudokuSaveManager.save_game({
-		"score": score,
-		"turns": turns,
-		"combo_count": combo_count,
-		"new_best_shown": _new_best_shown,
-		"elapsed_time": elapsed_time,
-		"board_state": board.get_state(),
-		"available_blocks": _serialize_blocks(available_blocks),
-		"blocks_placed_this_set": blocks_placed_this_set,
-		"random_seed": random_seed,
-		"rng_state": _rng.state,
-		"replay_id": replay_id,
+func _record_blockudoku_game_over(final_score: int, final_turns: int) -> void:
+	GameStatsManager.record("blockudoku", {
+		"type": "game_over",
+		"score": final_score,
+		"turns": final_turns,
 	})
-	ReplayManager.flush_active_replay()
-
-
-func _create_session_seed() -> int:
-	var rng := RandomNumberGenerator.new()
-	rng.randomize()
-	return int(Time.get_ticks_usec() ^ rng.randi())
-
-
-func _get_crash_state() -> Dictionary:
-	return {
-		"game": "blockudoku",
-		"score": score,
-		"turns": turns,
-		"combo_count": combo_count,
-		"elapsed_time": elapsed_time,
-		"is_game_over": is_game_over,
-		"blocks_placed_this_set": blocks_placed_this_set,
-		"available_block_count": available_blocks.size(),
-	}
+	GameStatsManager.increment_counter("blockudoku", "total_score", final_score)
+	GameStatsManager.increment_counter("blockudoku", "total_turns", final_turns)
+	var high: int = GameStatsManager.get_counter("blockudoku", "high_score")
+	if final_score > high:
+		GameStatsManager.set_counter("blockudoku", "high_score", final_score)
+	var best_turns: int = GameStatsManager.get_counter("blockudoku", "best_turns")
+	if final_turns > best_turns:
+		GameStatsManager.set_counter("blockudoku", "best_turns", final_turns)

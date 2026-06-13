@@ -19,7 +19,7 @@ const THICK_LINE := 3.0
 func _ready() -> void:
 	add_to_group("debug_grid_source")
 	_create_cells()
-	ThemeManager.theme_changed.connect(func(_d: bool) -> void: queue_redraw(); _redraw_cells())
+	AppTheme.theme_changed.connect(func(_d: bool) -> void: queue_redraw(); _redraw_cells())
 
 
 func _create_cells() -> void:
@@ -238,7 +238,7 @@ func _draw() -> void:
 	if cells.is_empty() or _col_positions.is_empty():
 		return
 
-	var tm := ThemeManager
+	var tm := AppTheme
 	var thin_color := tm.get_color("grid_line_thin")
 	var thick_color := tm.get_color("grid_line_thick")
 	var neon_mode := tm.is_neon

@@ -9,7 +9,7 @@ const LIFETIME := 0.8
 
 
 static func create(parent: Node, rect: Rect2, color: Color, shard_count: int = 12) -> void:
-	if not SettingsManager.particle_effects_enabled:
+	if not PlatformSettings.particle_effects_enabled:
 		return
 	var shatter := GlassShatter.new()
 	shatter.position = rect.position + rect.size / 2.0
@@ -48,7 +48,7 @@ func _spawn_shards(size: Vector2, color: Color, count: int) -> void:
 
 		# Neon glow color — boost for HDR bloom
 		var shard_color := color
-		if ThemeManager.is_neon:
+		if AppTheme.is_neon:
 			shard_color = Color(color.r * 1.5, color.g * 1.5, color.b * 1.5, color.a)
 
 		_shards.append({
@@ -104,7 +104,7 @@ func _draw() -> void:
 		draw_polygon(transformed, colors)
 
 		# Neon edge glow
-		if ThemeManager.is_neon:
+		if AppTheme.is_neon:
 			var edge_color := Color(color.r * 2.0, color.g * 2.0, color.b * 2.0, alpha * 0.4)
 			for i in 3:
 				draw_line(transformed[i], transformed[(i + 1) % 3], edge_color, 1.5)

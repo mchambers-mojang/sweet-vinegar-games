@@ -1,4 +1,4 @@
-extends Control
+extends GameScreen
 
 ## Main game screen — contains the board, controls, timer, and all game logic
 
@@ -7,7 +7,6 @@ var puzzle: Array[int] = []
 var solution: Array[int] = []
 var current_grid: Array[int] = []
 var difficulty: int = 0
-var elapsed_time: float = 0.0
 var strikes: int = 0
 var is_failed: bool = false
 var is_completed: bool = false
@@ -27,7 +26,6 @@ var redo_stack: Array[Dictionary] = []
 
 # Node references
 @onready var board: SudokuBoard = %Board
-@onready var timer_label: Label = %TimerLabel
 @onready var strikes_container: HBoxContainer = %StrikesContainer
 @onready var difficulty_label: Label = %DifficultyLabel
 @onready var notes_button: Button = %NotesButton
@@ -77,13 +75,68 @@ var _multi_selected_color: Color = Color.TRANSPARENT  # Active multi-selection c
 var _last_cell_press_time: float = 0.0
 var _last_cell_pressed: int = -1
 var _selected_number: int = 0  # For number-first mode
-var random_seed: int = 0
-var replay_id: String = ""
 
 
-func _ready() -> void:
-	CrashReporter.register_state_provider(_get_crash_state)
-	CrashReporter.register_user_action("sudoku_screen_opened")
+# --- GameScreen overrides ---
+
+func _get_game_id() -> String:
+	return "sudoku"
+
+
+func _get_scene_path() -> String:
+	return "res://scenes/game.tscn"
+
+
+func _is_initialized() -> bool:
+	return not puzzle.is_empty()
+
+
+func _is_completed() -> bool:
+	return is_completed
+
+
+func _serialize_state() -> Dictionary:
+	return {
+		"puzzle": puzzle,
+		"solution": solution,
+		"current_grid": current_grid,
+		"pencil_marks": board.get_pencil_marks_dict(),
+		"cell_colors": board.get_cell_colors_dict(),
+		"difficulty": difficulty,
+		"elapsed_time": elapsed_time,
+		"strikes": strikes,
+		"error_mode": GameRulesRegistry.get_rule("sudoku", "error_mode"),
+		"is_failed": is_failed,
+		"can_continue_after_failure": _can_continue_after_failure,
+		"hints_used": hints_used,
+		"random_seed": random_seed,
+		"replay_id": replay_id,
+	}
+
+
+func _deserialize_state(data: Dictionary) -> void:
+	resume_game(data)
+
+
+func _get_crash_state() -> Dictionary:
+	return {
+		"game": "sudoku",
+		"difficulty": difficulty,
+		"elapsed_time": elapsed_time,
+		"strikes": strikes,
+		"is_failed": is_failed,
+		"is_completed": is_completed,
+		"is_paused": is_paused,
+		"hints_used": hints_used,
+		"selected_index": board.selected_index,
+	}
+
+
+func _apply_game_theme() -> void:
+	_apply_theme()
+
+
+func _on_game_screen_ready() -> void:
 	board.cell_selected.connect(_on_cell_selected)
 	notes_button.pressed.connect(_on_notes_pressed)
 	hint_button.pressed.connect(_on_hint_pressed)
@@ -92,68 +145,14 @@ func _ready() -> void:
 	erase_button.pressed.connect(_on_erase_pressed)
 	pause_button.pressed.connect(_on_pause_pressed)
 	back_button.pressed.connect(_on_back_pressed)
-	settings_button.pressed.connect(func() -> void:
-		var SettingsScreen := load("res://scripts/settings_screen.gd")
-		SettingsScreen.return_scene = "res://scenes/game.tscn"
-		SceneTransition.transition_to("res://scenes/settings.tscn")
-	)
-
 	_setup_number_buttons()
 	_setup_color_buttons()
 	_setup_strike_indicators()
-	_setup_help_button()
 	_update_button_states()
-
-	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
-	_apply_theme()
-
-	# Adjust for mobile safe area (notch, status bar)
-	var margin := get_node_or_null("MarginContainer") as MarginContainer
-	if margin:
-		SafeAreaManager.apply(margin)
-
-	# Auto-resume from save if scene loaded directly (e.g., returning from settings)
-	_try_auto_resume.call_deferred()
-
-
-func _exit_tree() -> void:
-	CrashReporter.unregister_state_provider(_get_crash_state)
-
-
-func _try_auto_resume() -> void:
-	if not puzzle.is_empty():
-		return
-	if SaveManager.has_saved_game():
-		var data := SaveManager.load_game()
-		if not data.is_empty():
-			resume_game(data)
-
-
-func _setup_help_button() -> void:
-	var btn := Button.new()
-	btn.text = "?"
-	btn.custom_minimum_size = Vector2(36, 0)
-	btn.pressed.connect(func() -> void: HowToPlay.show_for(self, "sudoku"))
-	pause_button.get_parent().add_child(btn)
 
 
 func start_new_game(diff: int) -> void:
-	CrashReporter.register_user_action("sudoku_start_new_game", {"difficulty": diff})
 	difficulty = diff
-	difficulty_label.text = DIFFICULTY_NAMES[difficulty]
-	random_seed = _create_session_seed()
-
-	var generator := SudokuGenerator.new()
-	var result := generator.generate(difficulty, random_seed)
-
-	puzzle = []
-	puzzle.assign(result["puzzle"])
-	solution = []
-	solution.assign(result["solution"])
-	current_grid = []
-	current_grid.assign(puzzle.duplicate())
-
-	elapsed_time = 0.0
 	strikes = 0
 	is_failed = false
 	is_completed = false
@@ -163,88 +162,105 @@ func start_new_game(diff: int) -> void:
 	notes_mode = false
 	undo_stack.clear()
 	redo_stack.clear()
-
-	board.load_puzzle(puzzle)
-	_update_strikes_display()
-	_update_button_states()
-	_update_number_completion()
-
-	StatsManager.record_game_started(difficulty)
-	replay_id = ReplayManager.start_session("sudoku", random_seed, {
-		"difficulty": difficulty,
-		"puzzle": puzzle.duplicate(),
-	}, {
-		"input_mode": SettingsManager.input_mode,
-		"error_mode": SettingsManager.error_mode,
-		"show_timer": SettingsManager.show_timer,
-	})
-	AchievementManager.track_game_started("sudoku")
-	AnalyticsManager.log_event("game_started", {
-		"game": "sudoku",
-		"difficulty": difficulty,
-	})
-	_save_current_state()
+	begin_session()
 
 
 func resume_game(data: Dictionary) -> void:
-	CrashReporter.register_user_action("sudoku_resume_game", {"difficulty": data.get("difficulty", 0)})
-	puzzle = []
-	puzzle.assign(data["puzzle"])
-	solution = []
-	solution.assign(data["solution"])
-	current_grid = []
-	current_grid.assign(data["current_grid"])
 	difficulty = data["difficulty"]
-	elapsed_time = data["elapsed_time"]
 	strikes = data["strikes"]
 	is_failed = data["is_failed"]
 	_can_continue_after_failure = data.get("can_continue_after_failure", false)
 	hints_used = data.get("hints_used", 0)
-	random_seed = int(data.get("random_seed", 0))
-	if random_seed == 0:
-		random_seed = _derive_seed_from_puzzle(puzzle)
-	replay_id = str(data.get("replay_id", ""))
 	is_completed = false
 	is_paused = false
 	notes_mode = false
 	undo_stack.clear()
 	redo_stack.clear()
+	begin_session(data)
 
-	difficulty_label.text = DIFFICULTY_NAMES[difficulty]
-	board.load_state(current_grid, puzzle, data.get("pencil_marks", {}), data.get("cell_colors", {}))
-	_update_strikes_display()
-	_update_button_states()
-	_update_number_completion()
-	if is_failed and _is_board_locked():
-		# Re-show the fail dialog for failed saves so players can choose Continue/Menu.
-		call_deferred("_show_fail_dialog")
-	if not ReplayManager.has_active_session():
-		replay_id = ReplayManager.start_session("sudoku", random_seed, {
-			"difficulty": difficulty,
-			"puzzle": puzzle.duplicate(),
-		}, {
-			"input_mode": SettingsManager.input_mode,
-			"error_mode": SettingsManager.error_mode,
-			"show_timer": SettingsManager.show_timer,
-		})
-	AchievementManager.track_game_started("sudoku")
+
+# --- Session ceremony hooks ---
+
+func _should_tick_timer() -> bool:
+	return not is_completed and not is_paused
+
+
+func _get_start_crash_params() -> Dictionary:
+	return {"difficulty": difficulty}
+
+
+func _get_resume_crash_params(saved_data: Dictionary) -> Dictionary:
+	return {"difficulty": saved_data.get("difficulty", 0)}
+
+
+func _get_initial_state() -> Dictionary:
+	return {
+		"difficulty": difficulty,
+		"puzzle": puzzle.duplicate(),
+	}
+
+
+func _get_settings_snapshot() -> Dictionary:
+	return {
+		"input_mode": GameRulesRegistry.get_rule("sudoku", "input_mode"),
+		"error_mode": GameRulesRegistry.get_rule("sudoku", "error_mode"),
+		"show_timer": PlatformSettings.show_timer,
+	}
+
+
+func _setup_game(saved_data: Dictionary) -> void:
+	if saved_data.is_empty():
+		var generator := SudokuGenerator.new()
+		var result := generator.generate(difficulty, random_seed)
+		puzzle = []
+		puzzle.assign(result["puzzle"])
+		solution = []
+		solution.assign(result["solution"])
+		current_grid = []
+		current_grid.assign(puzzle.duplicate())
+		difficulty_label.text = DIFFICULTY_NAMES[difficulty]
+		board.load_puzzle(puzzle)
+		_update_strikes_display()
+		_update_button_states()
+		_update_number_completion()
+	else:
+		puzzle = []
+		puzzle.assign(saved_data["puzzle"])
+		solution = []
+		solution.assign(saved_data["solution"])
+		current_grid = []
+		current_grid.assign(saved_data["current_grid"])
+		# Legacy fallback: old saves had no random_seed field.
+		if random_seed == 0:
+			random_seed = _derive_seed_from_puzzle(puzzle)
+		difficulty_label.text = DIFFICULTY_NAMES[difficulty]
+		board.load_state(current_grid, puzzle, saved_data.get("pencil_marks", {}), saved_data.get("cell_colors", {}))
+		_update_strikes_display()
+		_update_button_states()
+		_update_number_completion()
+		if is_failed and _is_board_locked():
+			# Re-show the fail dialog for failed saves so players can choose Continue/Menu.
+			call_deferred("_show_fail_dialog")
+
+
+func _increment_stats() -> void:
+	GameStatsManager.increment_counter("sudoku", "games_started")
+	GameStatsManager.increment_counter("sudoku", "started_d%d" % difficulty)
+
+
+func _get_analytics_params() -> Dictionary:
+	return {"game": "sudoku", "difficulty": difficulty}
 
 
 func _process(delta: float) -> void:
-	if not is_completed and not is_paused:
-		elapsed_time += delta
-		if SettingsManager.show_timer:
-			timer_label.text = _format_time(elapsed_time)
-			timer_label.visible = true
-		else:
-			timer_label.visible = false
+	super._process(delta)
 
-		# Cheat auto-solve
-		if _cheat_active:
-			_cheat_timer += delta
-			if _cheat_timer >= CHEAT_INTERVAL:
-				_cheat_timer = 0.0
-				_cheat_place_one()
+	# Cheat auto-solve
+	if _should_tick_timer() and _cheat_active:
+		_cheat_timer += delta
+		if _cheat_timer >= CHEAT_INTERVAL:
+			_cheat_timer = 0.0
+			_cheat_place_one()
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -289,7 +305,7 @@ func _cheat_place_one() -> void:
 	cell.set_error(false)
 	cell.set_cell_color(Color.TRANSPARENT)
 	current_grid[index] = number
-	if SettingsManager.auto_remove_pencil_marks:
+	if GameRulesRegistry.get_rule("sudoku", "auto_remove_pencil_marks"):
 		_remove_pencil_marks_for_number(index, number)
 	_check_unit_completion(index)
 	_update_number_completion()
@@ -315,7 +331,7 @@ func _on_cell_selected(index: int) -> void:
 			_fill_colored_cells(cell.cell_color)
 		else:
 			# Double-click on non-colored cell: toggle row/col/box highlighting
-			board.show_row_col_box = SettingsManager.highlight_row_col_box
+			board.show_row_col_box = GameRulesRegistry.get_rule("sudoku", "highlight_row_col_box")
 			board._update_highlighting()
 		_last_cell_pressed = -1
 		return
@@ -334,7 +350,7 @@ func _on_cell_selected(index: int) -> void:
 
 	board._update_highlighting()
 
-	if SettingsManager.input_mode == "number_first":
+	if GameRulesRegistry.get_rule("sudoku", "input_mode") == "number_first":
 		_handle_number_first_cell_tap(index)
 	_update_number_completion()
 
@@ -359,7 +375,7 @@ func _handle_number_first_cell_tap(index: int) -> void:
 	else:
 		if cell.value == _selected_number:
 			return
-		if SettingsManager.error_mode == "strict" and solution[index] != _selected_number:
+		if GameRulesRegistry.get_rule("sudoku", "error_mode") == "strict" and solution[index] != _selected_number:
 			strikes += 1
 			_update_strikes_display()
 			_play_error_feedback()
@@ -368,7 +384,7 @@ func _handle_number_first_cell_tap(index: int) -> void:
 			var revert_cell := cell
 
 			# Neon glass shatter + shockwave on error
-			if ThemeManager.is_neon:
+			if AppTheme.is_neon:
 				var error_cell_rect := board.get_cell_rect(index)
 				GlassShatter.create(board, error_cell_rect, Color(2.0, 0.0, 0.2), 10)
 				var err_center := error_cell_rect.position + error_cell_rect.size / 2.0
@@ -401,12 +417,12 @@ func _handle_number_first_cell_tap(index: int) -> void:
 		redo_stack.clear()
 
 		# Neon burst on correct placement
-		if ThemeManager.is_neon:
+		if AppTheme.is_neon:
 			var placed_cell_rect := board.get_cell_rect(index)
 			var center := placed_cell_rect.position + placed_cell_rect.size / 2.0
 			NeonBurst.create(board, center, Color(0.0, 2.0, 1.6), 10, 0.8)
 
-		if SettingsManager.auto_remove_pencil_marks:
+		if GameRulesRegistry.get_rule("sudoku", "auto_remove_pencil_marks"):
 			_remove_pencil_marks_for_number(index, _selected_number)
 		_check_unit_completion(index)
 		_update_number_completion()
@@ -422,7 +438,7 @@ func _on_number_pressed(number: int) -> void:
 	ReplayManager.record_input(elapsed_time, "number_button", {
 		"number": number,
 		"notes_mode": notes_mode,
-		"input_mode": SettingsManager.input_mode,
+		"input_mode": GameRulesRegistry.get_rule("sudoku", "input_mode"),
 	})
 
 	# If multi-selection is active, apply to all selected cells
@@ -430,7 +446,7 @@ func _on_number_pressed(number: int) -> void:
 		_apply_number_to_multi_selection(number)
 		return
 
-	if SettingsManager.input_mode == "cell_first":
+	if GameRulesRegistry.get_rule("sudoku", "input_mode") == "cell_first":
 		_place_or_note_number(number)
 	else:
 		# Number-first mode: just select the number, wait for cell tap
@@ -467,11 +483,11 @@ func _place_or_note_number(number: int) -> void:
 			return  # Already placed
 
 		# Lock correctly placed cells in strict mode
-		if SettingsManager.error_mode == "strict" and cell.value != 0 and cell.value == solution[index]:
+		if GameRulesRegistry.get_rule("sudoku", "error_mode") == "strict" and cell.value != 0 and cell.value == solution[index]:
 			return
 
 		# Check if correct in strict mode
-		if SettingsManager.error_mode == "strict" and solution[index] != number:
+		if GameRulesRegistry.get_rule("sudoku", "error_mode") == "strict" and solution[index] != number:
 			strikes += 1
 			_update_strikes_display()
 			_play_error_feedback()
@@ -481,7 +497,7 @@ func _place_or_note_number(number: int) -> void:
 			var revert_cell := cell
 
 			# Neon glass shatter + shockwave on error
-			if ThemeManager.is_neon:
+			if AppTheme.is_neon:
 				var error_cell_rect := board.get_cell_rect(index)
 				GlassShatter.create(board, error_cell_rect, Color(2.0, 0.0, 0.2), 10)
 				var err_center := error_cell_rect.position + error_cell_rect.size / 2.0
@@ -518,13 +534,13 @@ func _place_or_note_number(number: int) -> void:
 		HapticManager.vibrate_light()
 
 		# Neon burst on correct placement
-		if ThemeManager.is_neon:
+		if AppTheme.is_neon:
 			var placed_cell_rect := board.get_cell_rect(index)
 			var center := placed_cell_rect.position + placed_cell_rect.size / 2.0
 			NeonBurst.create(board, center, Color(0.0, 2.0, 1.6), 10, 0.8)
 
 		# Auto-remove pencil marks if enabled
-		if SettingsManager.auto_remove_pencil_marks:
+		if GameRulesRegistry.get_rule("sudoku", "auto_remove_pencil_marks"):
 			_remove_pencil_marks_for_number(index, number)
 
 		_check_unit_completion(index)
@@ -583,7 +599,7 @@ func _on_hint_pressed() -> void:
 	redo_stack.clear()
 	hint_button.disabled = true
 
-	if SettingsManager.auto_remove_pencil_marks:
+	if GameRulesRegistry.get_rule("sudoku", "auto_remove_pencil_marks"):
 		_remove_pencil_marks_for_number(index, solution[index])
 
 	_check_unit_completion(index)
@@ -607,7 +623,7 @@ func _on_erase_pressed() -> void:
 		return
 	ReplayManager.record_input(elapsed_time, "erase_pressed", {"index": index})
 	# Don't allow erasing correctly placed cells in strict mode
-	if SettingsManager.error_mode == "strict" and cell.value != 0 and cell.value == solution[index]:
+	if GameRulesRegistry.get_rule("sudoku", "error_mode") == "strict" and cell.value != 0 and cell.value == solution[index]:
 		return
 
 	_push_undo(index)
@@ -738,8 +754,8 @@ func _handle_win() -> void:
 		"strikes": strikes,
 		"hints_used": hints_used,
 	})
-	var previous_best: float = StatsManager.best_times.get(difficulty, -1.0)
-	StatsManager.record_game_completed(difficulty, elapsed_time, SettingsManager.error_mode == "strict", won)
+	var previous_best: float = _get_best_time(difficulty)
+	_record_sudoku_completion(difficulty, elapsed_time, GameRulesRegistry.get_rule("sudoku", "error_mode") == "strict", won)
 	if won:
 		AchievementManager.track_game_won("sudoku", {
 			"difficulty": difficulty,
@@ -747,7 +763,7 @@ func _handle_win() -> void:
 			"strikes": strikes,
 		})
 	_log_game_over_analytics(won)
-	SaveManager.clear_save()
+	clear_save()
 	_play_win_celebration()
 	if previous_best < 0.0 or elapsed_time < previous_best:
 		_show_new_best_indicator()
@@ -757,7 +773,7 @@ func _play_win_celebration() -> void:
 	SoundManager.play_win()
 	HapticManager.vibrate_success()
 	# Neon win shockwave from board center
-	if ThemeManager.is_neon:
+	if AppTheme.is_neon:
 		var center_rect := board.get_cell_rect(40)  # Center cell (row 4, col 4)
 		var center := center_rect.position + center_rect.size / 2.0
 		NeonRing.create(board, center, Color(0.0, 2.0, 1.5), center_rect.size.x * 8.0, 0.5, 1.2)
@@ -777,7 +793,7 @@ func _show_new_best_indicator() -> void:
 	var center_index := int(board.cells.size() / 2)
 	var center_rect := board.get_cell_rect(center_index)
 	var center := center_rect.position + center_rect.size / 2.0
-	var color := Color(0.0, 2.0, 1.5) if ThemeManager.is_neon else Color(0.2, 0.75, 1.0)
+	var color := Color(0.0, 2.0, 1.5) if AppTheme.is_neon else Color(0.2, 0.75, 1.0)
 	ComboLabel.create(board, center, "NEW BEST!", color)
 	HapticManager.vibrate_medium()
 
@@ -827,7 +843,7 @@ func _check_unit_completion(index: int) -> void:
 		for idx in flash_indices.keys():
 			board.cells[idx].flash(Color(1.0, 0.85, 0.4), 0.35)
 		# Neon shockwave from center of completed unit
-		if ThemeManager.is_neon:
+		if AppTheme.is_neon:
 			var avg_x := 0.0
 			var avg_y := 0.0
 			for idx in flash_indices.keys():
@@ -879,23 +895,23 @@ func _update_number_completion() -> void:
 
 
 func _update_strikes_display() -> void:
-	if SettingsManager.error_mode != "strict":
+	if GameRulesRegistry.get_rule("sudoku", "error_mode") != "strict":
 		strikes_container.visible = false
 		return
 	strikes_container.visible = true
 	for i in range(_strike_indicators.size()):
 		var indicator := _strike_indicators[i]
 		if i < strikes:
-			indicator.modulate = ThemeManager.get_color("strike_active")
+			indicator.modulate = AppTheme.get_color("strike_active")
 		else:
-			indicator.modulate = ThemeManager.get_color("strike_inactive")
+			indicator.modulate = AppTheme.get_color("strike_inactive")
 
 
 func _update_button_states() -> void:
 	var board_locked := _is_board_locked()
 	undo_button.disabled = board_locked or undo_stack.is_empty()
 	redo_button.disabled = board_locked or redo_stack.is_empty()
-	erase_button.visible = SettingsManager.error_mode != "strict"
+	erase_button.visible = GameRulesRegistry.get_rule("sudoku", "error_mode") != "strict"
 	hint_button.disabled = board_locked or hints_used >= 1
 
 
@@ -910,7 +926,7 @@ func _select_number_button(number: int) -> void:
 		var btn := _number_buttons[i]
 		var num := i + 1
 		if num == _selected_number:
-			btn.add_theme_color_override("font_color", ThemeManager.get_color("cell_selected"))
+			btn.add_theme_color_override("font_color", AppTheme.get_color("cell_selected"))
 		else:
 			btn.remove_theme_color_override("font_color")
 
@@ -1023,7 +1039,7 @@ func _setup_color_buttons() -> void:
 	color_container.modulate = Color(1, 1, 1, 0)
 	color_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	var palette := NEON_CELL_COLORS if ThemeManager.is_neon else CELL_COLORS
+	var palette := NEON_CELL_COLORS if AppTheme.is_neon else CELL_COLORS
 	for i in range(palette.size()):
 		var btn := Button.new()
 		btn.custom_minimum_size = Vector2(36, 36)
@@ -1111,7 +1127,7 @@ func _apply_number_to_multi_selection(number: int) -> void:
 		else:
 			if cell.value == number:
 				continue  # Already placed
-			if SettingsManager.error_mode == "strict" and solution[cell.index] != number:
+			if GameRulesRegistry.get_rule("sudoku", "error_mode") == "strict" and solution[cell.index] != number:
 				strikes += 1
 				cell.set_value(number)
 				cell.set_error(true)
@@ -1122,7 +1138,7 @@ func _apply_number_to_multi_selection(number: int) -> void:
 				cell.set_error(false)
 				cell.set_cell_color(Color.TRANSPARENT)
 				current_grid[cell.index] = number
-				if SettingsManager.auto_remove_pencil_marks:
+				if GameRulesRegistry.get_rule("sudoku", "auto_remove_pencil_marks"):
 					_remove_pencil_marks_for_number(cell.index, number)
 
 	# Flash and revert wrong cells after a delay
@@ -1169,45 +1185,9 @@ func _setup_strike_indicators() -> void:
 	for i in 3:
 		var indicator := ColorRect.new()
 		indicator.custom_minimum_size = Vector2(12, 12)
-		indicator.color = ThemeManager.get_color("strike_inactive")
+		indicator.color = AppTheme.get_color("strike_inactive")
 		strikes_container.add_child(indicator)
 		_strike_indicators.append(indicator)
-
-
-func _save_current_state() -> void:
-	if is_completed:
-		return
-	SaveManager.save_game({
-		"puzzle": puzzle,
-		"solution": solution,
-		"current_grid": current_grid,
-		"pencil_marks": board.get_pencil_marks_dict(),
-		"cell_colors": board.get_cell_colors_dict(),
-		"difficulty": difficulty,
-		"elapsed_time": elapsed_time,
-		"strikes": strikes,
-		"error_mode": SettingsManager.error_mode,
-		"is_failed": is_failed,
-		"can_continue_after_failure": _can_continue_after_failure,
-		"hints_used": hints_used,
-		"random_seed": random_seed,
-		"replay_id": replay_id,
-	})
-	ReplayManager.flush_active_replay()
-
-
-func _get_crash_state() -> Dictionary:
-	return {
-		"game": "sudoku",
-		"difficulty": difficulty,
-		"elapsed_time": elapsed_time,
-		"strikes": strikes,
-		"is_failed": is_failed,
-		"is_completed": is_completed,
-		"is_paused": is_paused,
-		"hints_used": hints_used,
-		"selected_index": board.selected_index,
-	}
 
 
 func _is_board_locked() -> bool:
@@ -1226,14 +1206,8 @@ func _log_game_over_analytics(won: bool) -> void:
 	})
 
 
-func _format_time(seconds: float) -> String:
-	var mins := int(seconds) / 60
-	var secs := int(seconds) % 60
-	return "%d:%02d" % [mins, secs]
-
-
 func _apply_theme() -> void:
-	var bg := ThemeManager.get_color("background")
+	var bg := AppTheme.get_color("background")
 	# Set background via a stylebox or just clear color
 	var style := StyleBoxFlat.new()
 	style.bg_color = bg
@@ -1258,7 +1232,38 @@ func _derive_seed_from_puzzle(values: Array[int]) -> int:
 	return seed
 
 
-func _create_session_seed() -> int:
-	var rng := RandomNumberGenerator.new()
-	rng.randomize()
-	return int(Time.get_ticks_usec() ^ rng.randi())
+func _record_sudoku_completion(diff: int, time: float, was_strict: bool, won: bool) -> void:
+	GameStatsManager.record("sudoku", {
+		"type": "completion",
+		"difficulty": diff,
+		"time": time,
+		"was_strict": was_strict,
+		"won": won,
+	})
+	GameStatsManager.increment_counter("sudoku", "completed_d%d" % diff)
+	# Track best time
+	var best: float = float(GameStatsManager.get_counter("sudoku", "best_d%d" % diff))
+	if best == 0 or time < best:
+		GameStatsManager.set_counter("sudoku", "best_d%d" % diff, int(time * 1000))
+	# Streak tracking
+	if was_strict:
+		if won:
+			var streak: int = GameStatsManager.get_counter("sudoku", "current_streak") + 1
+			GameStatsManager.set_counter("sudoku", "current_streak", streak)
+			var best_streak: int = GameStatsManager.get_counter("sudoku", "best_streak")
+			if streak > best_streak:
+				GameStatsManager.set_counter("sudoku", "best_streak", streak)
+			GameStatsManager.increment_counter("sudoku", "won_d%d" % diff)
+		else:
+			GameStatsManager.set_counter("sudoku", "current_streak", 0)
+			GameStatsManager.increment_counter("sudoku", "lost_d%d" % diff)
+
+
+func _get_best_time(diff: int) -> float:
+	var best_ms: int = GameStatsManager.get_counter("sudoku", "best_d%d" % diff)
+	if best_ms == 0:
+		return -1.0
+	return float(best_ms) / 1000.0
+
+
+

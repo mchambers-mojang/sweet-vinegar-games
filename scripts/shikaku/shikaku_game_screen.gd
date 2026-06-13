@@ -1,4 +1,4 @@
-extends Control
+extends GameScreen
 
 ## Shikaku game screen — board, timer, controls
 
@@ -12,12 +12,9 @@ const LEGACY_SEED_HASH_Y_FACTOR := 13
 var puzzle_data: Dictionary = {}  # width, height, numbers, solution
 var grid_width: int = 10
 var grid_height: int = 10
-var elapsed_time: float = 0.0
 var is_completed: bool = false
 var is_paused: bool = false
 var hints_used: int = 0
-var random_seed: int = 0
-var replay_id: String = ""
 
 # Undo/redo
 var undo_stack: Array[Dictionary] = []
@@ -30,7 +27,6 @@ const CHEAT_INTERVAL := 0.3
 
 # Node references
 @onready var board: ShikakuBoard = %ShikakuBoard
-@onready var timer_label: Label = %TimerLabel
 @onready var size_label: Label = %SizeLabel
 @onready var undo_button: Button = %UndoButton
 @onready var redo_button: Button = %RedoButton
@@ -40,9 +36,61 @@ const CHEAT_INTERVAL := 0.3
 @onready var settings_button: Button = %SettingsButton
 
 
-func _ready() -> void:
-	CrashReporter.register_state_provider(_get_crash_state)
-	CrashReporter.register_user_action("shikaku_screen_opened")
+
+# --- GameScreen overrides ---
+
+func _get_game_id() -> String:
+	return "shikaku"
+
+
+func _get_scene_path() -> String:
+	return "res://scenes/shikaku_game.tscn"
+
+
+func _is_initialized() -> bool:
+	return not puzzle_data.is_empty()
+
+
+func _is_completed() -> bool:
+	return is_completed
+
+
+func _serialize_state() -> Dictionary:
+	return {
+		"width": grid_width,
+		"height": grid_height,
+		"numbers": _serialize_numbers(puzzle_data["numbers"]),
+		"solution": _serialize_rects(puzzle_data["solution"]),
+		"placed_rects": _serialize_rects(board.placed_rects),
+		"elapsed_time": elapsed_time,
+		"hints_used": hints_used,
+		"random_seed": random_seed,
+		"replay_id": replay_id,
+	}
+
+
+func _deserialize_state(data: Dictionary) -> void:
+	resume_game(data)
+
+
+func _get_crash_state() -> Dictionary:
+	return {
+		"game": "shikaku",
+		"width": grid_width,
+		"height": grid_height,
+		"elapsed_time": elapsed_time,
+		"is_completed": is_completed,
+		"is_paused": is_paused,
+		"hints_used": hints_used,
+		"placed_rects": board.placed_rects.size() if board else 0,
+	}
+
+
+func _apply_game_theme() -> void:
+	_apply_theme()
+
+
+func _on_game_screen_ready() -> void:
 	board.rectangle_placed.connect(_on_rectangle_placed)
 	board.rectangle_tapped.connect(_on_rectangle_tapped)
 	undo_button.pressed.connect(_on_undo)
@@ -50,128 +98,95 @@ func _ready() -> void:
 	hint_button.pressed.connect(_on_hint)
 	pause_button.pressed.connect(_on_pause)
 	back_button.pressed.connect(_on_back)
-	settings_button.pressed.connect(func() -> void:
-		var SettingsScreen := load("res://scripts/settings_screen.gd")
-		SettingsScreen.return_scene = "res://scenes/shikaku_game.tscn"
-		SceneTransition.transition_to("res://scenes/settings.tscn")
-	)
-	_setup_help_button()
 	_update_button_states()
-	_apply_theme()
-	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
-
-	# Adjust for mobile safe area (notch, status bar)
-	var margin := get_node_or_null("MarginContainer") as MarginContainer
-	if margin:
-		SafeAreaManager.apply(margin)
-
-	# Auto-resume from save if scene loaded directly (e.g., returning from settings)
-	_try_auto_resume.call_deferred()
-
-
-func _exit_tree() -> void:
-	CrashReporter.unregister_state_provider(_get_crash_state)
-
-
-func _try_auto_resume() -> void:
-	if not puzzle_data.is_empty():
-		return
-	if ShikakuSaveManager.has_saved_game():
-		var data := ShikakuSaveManager.load_game()
-		if not data.is_empty():
-			resume_game(data)
-
-
-func _setup_help_button() -> void:
-	var btn := Button.new()
-	btn.text = "?"
-	btn.custom_minimum_size = Vector2(36, 0)
-	btn.pressed.connect(func() -> void: HowToPlay.show_for(self, "shikaku"))
-	pause_button.get_parent().add_child(btn)
 
 
 func start_new_game(w: int, h: int) -> void:
-	CrashReporter.register_user_action("shikaku_start_new_game", {"width": w, "height": h})
 	grid_width = w
 	grid_height = h
-	random_seed = _create_session_seed()
-	puzzle_data = ShikakuGenerator.generate(w, h, random_seed)
-	board.setup(w, h, puzzle_data["numbers"])
-	size_label.text = SIZE_NAMES.get(w, "%dx%d" % [w, h])
-	elapsed_time = 0.0
 	is_completed = false
 	hints_used = 0
 	undo_stack.clear()
 	redo_stack.clear()
-	ShikakuStatsManager.record_game_started(w)
-	replay_id = ReplayManager.start_session("shikaku", random_seed, {
-		"width": w,
-		"height": h,
-		"numbers": _serialize_numbers(puzzle_data["numbers"]),
-	}, {
-		"show_timer": SettingsManager.show_timer,
-	})
-	AchievementManager.track_game_started("shikaku")
-	AnalyticsManager.log_event("game_started", {
-		"game": "shikaku",
-		"width": w,
-		"height": h,
-	})
-	_update_button_states()
-	_save_current_state()
+	begin_session()
 
 
 func resume_game(data: Dictionary) -> void:
-	CrashReporter.register_user_action("shikaku_resume_game", {"width": data.get("width", 10), "height": data.get("height", 10)})
 	grid_width = data.get("width", 10)
 	grid_height = data.get("height", 10)
-	puzzle_data = {
+	hints_used = data.get("hints_used", 0)
+	is_completed = false
+	begin_session(data)
+
+
+# --- Session ceremony hooks ---
+
+func _should_tick_timer() -> bool:
+	return not is_completed and not is_paused
+
+
+func _get_start_crash_params() -> Dictionary:
+	return {"width": grid_width, "height": grid_height}
+
+
+func _get_resume_crash_params(saved_data: Dictionary) -> Dictionary:
+	return {"width": saved_data.get("width", 10), "height": saved_data.get("height", 10)}
+
+
+func _get_initial_state() -> Dictionary:
+	return {
 		"width": grid_width,
 		"height": grid_height,
-		"numbers": _deserialize_numbers(data.get("numbers", {})),
-		"solution": _deserialize_rects(data.get("solution", [])),
+		"numbers": _serialize_numbers(puzzle_data["numbers"]),
 	}
-	board.setup(grid_width, grid_height, puzzle_data["numbers"])
 
-	# Restore placed rectangles
-	var saved_rects := _deserialize_rects(data.get("placed_rects", []))
-	for rect in saved_rects:
-		board.add_rect(rect)
 
-	elapsed_time = data.get("elapsed_time", 0.0)
-	hints_used = data.get("hints_used", 0)
-	random_seed = int(data.get("random_seed", 0))
-	if random_seed == 0:
-		random_seed = _derive_seed_from_numbers(puzzle_data["numbers"])
-	replay_id = str(data.get("replay_id", ""))
-	is_completed = false
-	size_label.text = SIZE_NAMES.get(grid_width, "%dx%d" % [grid_width, grid_height])
-	_update_button_states()
-	if not ReplayManager.has_active_session():
-		replay_id = ReplayManager.start_session("shikaku", random_seed, {
+func _get_settings_snapshot() -> Dictionary:
+	return {"show_timer": PlatformSettings.show_timer}
+
+
+func _setup_game(saved_data: Dictionary) -> void:
+	if saved_data.is_empty():
+		puzzle_data = ShikakuGenerator.generate(grid_width, grid_height, random_seed)
+		board.setup(grid_width, grid_height, puzzle_data["numbers"])
+		size_label.text = SIZE_NAMES.get(grid_width, "%dx%d" % [grid_width, grid_height])
+	else:
+		puzzle_data = {
 			"width": grid_width,
 			"height": grid_height,
-			"numbers": _serialize_numbers(puzzle_data["numbers"]),
-		}, {
-			"show_timer": SettingsManager.show_timer,
-		})
-	AchievementManager.track_game_started("shikaku")
+			"numbers": _deserialize_numbers(saved_data.get("numbers", {})),
+			"solution": _deserialize_rects(saved_data.get("solution", [])),
+		}
+		board.setup(grid_width, grid_height, puzzle_data["numbers"])
+		var saved_rects := _deserialize_rects(saved_data.get("placed_rects", []))
+		for rect in saved_rects:
+			board.add_rect(rect)
+		# Legacy fallback: old saves had no random_seed field. Derive one deterministically
+		# so replay/crash metadata is consistent. begin_session() calls ReplayManager AFTER
+		# _setup_game(), so this updated value is used by the replay session start.
+		if random_seed == 0:
+			random_seed = _derive_seed_from_numbers(puzzle_data["numbers"])
+		size_label.text = SIZE_NAMES.get(grid_width, "%dx%d" % [grid_width, grid_height])
+	_update_button_states()
+
+
+func _increment_stats() -> void:
+	GameStatsManager.increment_counter("shikaku", "games_started")
+	GameStatsManager.increment_counter("shikaku", "started_s%d" % grid_width)
+
+
+func _get_analytics_params() -> Dictionary:
+	return {"game": "shikaku", "width": grid_width, "height": grid_height}
 
 
 func _process(delta: float) -> void:
-	if not is_completed and not is_paused:
-		elapsed_time += delta
-		if SettingsManager.show_timer:
-			timer_label.text = _format_time(elapsed_time)
-			timer_label.visible = true
-		else:
-			timer_label.visible = false
+	super._process(delta)
 
-		if _cheat_active:
-			_cheat_timer += delta
-			if _cheat_timer >= CHEAT_INTERVAL:
-				_cheat_timer = 0.0
-				_cheat_place_one()
+	if _should_tick_timer() and _cheat_active:
+		_cheat_timer += delta
+		if _cheat_timer >= CHEAT_INTERVAL:
+			_cheat_timer = 0.0
+			_cheat_place_one()
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -200,7 +215,7 @@ func _on_rectangle_placed(rect: Rect2i) -> void:
 	SoundManager.play_place()
 	HapticManager.vibrate_light()
 	# Neon shockwave on rect placement
-	if ThemeManager.is_neon:
+	if AppTheme.is_neon:
 		var cell_size := board._get_cell_size()
 		var origin := board._get_grid_origin()
 		var center := origin + Vector2(
@@ -361,7 +376,7 @@ func _handle_win() -> void:
 		"hints_used": hints_used,
 	})
 	var is_new_best := _is_new_best_time()
-	ShikakuStatsManager.record_game_completed(grid_width, elapsed_time)
+	_record_shikaku_completion(grid_width, elapsed_time)
 	AchievementManager.track_game_won("shikaku")
 	AchievementManager.track_shikaku_won(grid_width, elapsed_time)
 	AnalyticsManager.log_event("game_over", {
@@ -372,13 +387,13 @@ func _handle_win() -> void:
 		"elapsed_time": elapsed_time,
 		"hints_used": hints_used,
 	})
-	ShikakuSaveManager.clear_save()
+	clear_save()
 	SoundManager.play_win()
 	HapticManager.vibrate_success()
 	if is_new_best:
 		_show_new_best_indicator()
 	# Neon win shockwave
-	if ThemeManager.is_neon:
+	if AppTheme.is_neon:
 		var cell_size := board._get_cell_size()
 		var origin := board._get_grid_origin()
 		var center := origin + Vector2(
@@ -393,8 +408,8 @@ func _handle_win() -> void:
 
 
 func _is_new_best_time() -> bool:
-	var best: float = ShikakuStatsManager.best_times.get(grid_width, -1.0)
-	return best < 0.0 or elapsed_time < best
+	var best_ms: int = GameStatsManager.get_counter("shikaku", "best_s%d" % grid_width)
+	return best_ms == 0 or elapsed_time < (float(best_ms) / 1000.0)
 
 
 func _show_new_best_indicator() -> void:
@@ -404,7 +419,7 @@ func _show_new_best_indicator() -> void:
 		(board.grid_width / 2.0) * cell_size,
 		(board.grid_height / 2.0) * cell_size
 	)
-	var color := Color(0.0, 2.0, 1.5) if ThemeManager.is_neon else Color(0.2, 0.75, 1.0)
+	var color := Color(0.0, 2.0, 1.5) if AppTheme.is_neon else Color(0.2, 0.75, 1.0)
 	ComboLabel.create(board, center, "NEW BEST!", color)
 	HapticManager.vibrate_medium()
 
@@ -457,15 +472,9 @@ func _update_button_states() -> void:
 	hint_button.disabled = is_completed or hints_used >= 1
 
 
-func _format_time(seconds: float) -> String:
-	var mins := int(seconds) / 60
-	var secs := int(seconds) % 60
-	return "%d:%02d" % [mins, secs]
-
-
 func _apply_theme() -> void:
 	var style := StyleBoxFlat.new()
-	style.bg_color = ThemeManager.get_color("background")
+	style.bg_color = AppTheme.get_color("background")
 	add_theme_stylebox_override("panel", style)
 
 
@@ -488,36 +497,6 @@ func _cheat_place_one() -> void:
 			_save_current_state()
 			return
 	_cheat_active = false
-
-
-func _save_current_state() -> void:
-	if is_completed:
-		return
-	ShikakuSaveManager.save_game({
-		"width": grid_width,
-		"height": grid_height,
-		"numbers": _serialize_numbers(puzzle_data["numbers"]),
-		"solution": _serialize_rects(puzzle_data["solution"]),
-		"placed_rects": _serialize_rects(board.placed_rects),
-		"elapsed_time": elapsed_time,
-		"hints_used": hints_used,
-		"random_seed": random_seed,
-		"replay_id": replay_id,
-	})
-	ReplayManager.flush_active_replay()
-
-
-func _get_crash_state() -> Dictionary:
-	return {
-		"game": "shikaku",
-		"width": grid_width,
-		"height": grid_height,
-		"elapsed_time": elapsed_time,
-		"is_completed": is_completed,
-		"is_paused": is_paused,
-		"hints_used": hints_used,
-		"placed_rectangles": board.placed_rects.size(),
-	}
 
 
 func _serialize_numbers(nums: Dictionary) -> Dictionary:
@@ -568,7 +547,21 @@ func _derive_seed_from_numbers(nums: Dictionary) -> int:
 	return seed
 
 
-func _create_session_seed() -> int:
-	var rng := RandomNumberGenerator.new()
-	rng.randomize()
-	return int(Time.get_ticks_usec() ^ rng.randi())
+func _record_shikaku_completion(grid_size: int, time: float) -> void:
+	GameStatsManager.record("shikaku", {
+		"type": "completion",
+		"grid_size": grid_size,
+		"time": time,
+	})
+	GameStatsManager.increment_counter("shikaku", "completed_s%d" % grid_size)
+	# Best time (stored as ms int)
+	var best_ms: int = GameStatsManager.get_counter("shikaku", "best_s%d" % grid_size)
+	var time_ms := int(time * 1000)
+	if best_ms == 0 or time_ms < best_ms:
+		GameStatsManager.set_counter("shikaku", "best_s%d" % grid_size, time_ms)
+	# Streak
+	var streak: int = GameStatsManager.get_counter("shikaku", "current_streak") + 1
+	GameStatsManager.set_counter("shikaku", "current_streak", streak)
+	var best_streak: int = GameStatsManager.get_counter("shikaku", "best_streak")
+	if streak > best_streak:
+		GameStatsManager.set_counter("shikaku", "best_streak", streak)

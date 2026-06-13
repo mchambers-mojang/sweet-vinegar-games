@@ -551,8 +551,8 @@ func track_game_won(mode: String, metadata: Dictionary = {}) -> void:
 
 
 func track_blockudoku_game_played(score: int) -> void:
-	var games_played: int = int(BlockudokuStatsManager.games_played)
-	var high_score: int = maxi(score, int(BlockudokuStatsManager.high_score))
+	var games_played: int = GameStatsManager.get_counter("blockudoku", "games_played")
+	var high_score: int = maxi(score, GameStatsManager.get_counter("blockudoku", "high_score"))
 	_set_progress_max("blockudoku_first_game", games_played)
 	_set_progress_max("blockudoku_10_games", games_played)
 	if high_score >= 100:
@@ -565,7 +565,7 @@ func track_blockudoku_game_played(score: int) -> void:
 
 
 func track_blockudoku_clear(clear_count: int) -> void:
-	var total_clears: int = int(BlockudokuStatsManager.total_clears)
+	var total_clears: int = GameStatsManager.get_counter("blockudoku", "total_clears")
 	if clear_count >= 3:
 		_set_progress_max("blockudoku_clear_three", 1)
 	if clear_count >= 4:
@@ -596,7 +596,7 @@ func track_blockudoku_combo(combo_count: int) -> void:
 
 
 func track_shikaku_won(size: int, time: float) -> void:
-	var shikaku_streak: int = int(ShikakuStatsManager.current_streak)
+	var shikaku_streak: int = GameStatsManager.get_counter("shikaku", "current_streak")
 	_set_progress_max("shikaku_first_win", 1)
 	_increment_progress("shikaku_10_wins", 1)
 	_set_progress_exact("shikaku_streak_5", shikaku_streak)
@@ -794,7 +794,7 @@ func _load_progress() -> void:
 
 
 func _get_total_games_played() -> int:
-	return int(StatsManager.total_games_played) + int(BlockudokuStatsManager.games_played) + int(ShikakuStatsManager.total_games_played)
+	return GameStatsManager.get_counter("sudoku", "games_started") + GameStatsManager.get_counter("blockudoku", "games_played") + GameStatsManager.get_counter("shikaku", "games_started")
 
 
 func _get_category_order(category: String) -> int:

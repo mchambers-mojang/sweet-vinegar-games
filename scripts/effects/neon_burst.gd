@@ -8,7 +8,7 @@ const LIFETIME := 0.5
 
 
 static func create(parent: Node, pos: Vector2, color: Color, count: int = 16, intensity: float = 1.0) -> void:
-	if not SettingsManager.particle_effects_enabled:
+	if not PlatformSettings.particle_effects_enabled:
 		return
 	var burst := NeonBurst.new()
 	burst.position = pos
@@ -29,7 +29,7 @@ func _spawn_particles(color: Color, count: int, intensity: float) -> void:
 
 		# HDR boost for bloom
 		var p_color := color
-		if ThemeManager.is_neon:
+		if AppTheme.is_neon:
 			p_color = Color(color.r * 2.0, color.g * 2.0, color.b * 2.0, 1.0)
 
 		_particles.append({
@@ -70,7 +70,7 @@ func _draw() -> void:
 		draw_circle(pos, size, color)
 
 		# Trail line
-		if ThemeManager.is_neon:
+		if AppTheme.is_neon:
 			var vel: Vector2 = p["vel"]
 			var trail_end := pos - vel.normalized() * size * 3.0
 			var trail_color := Color(base_color.r, base_color.g, base_color.b, alpha * 0.3)

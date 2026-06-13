@@ -19,7 +19,7 @@ func _ready() -> void:
 	_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(_overlay)
-	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _update_overlay_color())
+	AppTheme.theme_changed.connect(func(_d: bool) -> void: _update_overlay_color())
 	# Fade in after the first scene has had time to render
 	get_tree().process_frame.connect(func() -> void:
 		get_tree().process_frame.connect(_fade_in, CONNECT_ONE_SHOT)
@@ -66,7 +66,7 @@ func _fade_in() -> void:
 
 
 func _get_fade_color(alpha: float) -> Color:
-	var bg := ThemeManager.get_color("background")
+	var bg := AppTheme.get_color("background")
 	bg.a = alpha
 	return bg
 

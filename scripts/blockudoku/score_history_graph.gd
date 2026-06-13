@@ -6,7 +6,7 @@ var _average_score: float = 0.0
 
 
 func _ready() -> void:
-	ThemeManager.theme_changed.connect(func(_d: bool) -> void: queue_redraw())
+	AppTheme.theme_changed.connect(func(_d: bool) -> void: queue_redraw())
 
 
 func set_scores(scores: Array) -> void:
@@ -27,15 +27,15 @@ func _draw() -> void:
 	if chart_rect.size.x <= 1.0 or chart_rect.size.y <= 1.0:
 		return
 
-	var background_color := ThemeManager.get_color("cell_background")
-	var border_color := ThemeManager.get_color("grid_line_thin")
+	var background_color := AppTheme.get_color("cell_background")
+	var border_color := AppTheme.get_color("grid_line_thin")
 	draw_rect(chart_rect, background_color)
 	draw_rect(chart_rect, border_color, false, 1.0)
 
 	if _scores.is_empty():
 		return
 
-	var line_color := ThemeManager.get_color("text_placed")
+	var line_color := AppTheme.get_color("text_placed")
 	var best_color := Color(1.0, 0.85, 0.2, 1.0)
 	var average_color := Color(0.95, 0.4, 0.4, 1.0)
 	var max_score := maxi(_best_score, 1)
