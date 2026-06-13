@@ -280,7 +280,7 @@ func _update_drag(screen_pos: Vector2) -> void:
 func _update_board_preview(screen_pos: Vector2) -> void:
 	var local_pos := board.get_local_mouse_position()
 	# Offset upward so finger doesn't cover the placement
-	var cell_size := board._get_cell_size()
+	var cell_size := board.get_cell_screen_rect(0, 0).size.x
 	var offset_multiplier := SettingsManager.blockudoku_drag_offset  # 0=None, 1=Small, 2=Medium, 3=Large
 	if offset_multiplier > 0:
 		local_pos.y -= cell_size * offset_multiplier
@@ -308,8 +308,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 		tw.tween_property(panel, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.12)
 
 	var local_pos := board.get_local_mouse_position()
-	var cell_size := board._get_cell_size()
-	var origin := board._get_grid_origin()
+	var cell_size := board.get_cell_screen_rect(0, 0).size.x
 	var offset_multiplier := SettingsManager.blockudoku_drag_offset
 	if offset_multiplier > 0:
 		local_pos.y -= cell_size * offset_multiplier
@@ -352,18 +351,13 @@ func _end_drag(screen_pos: Vector2) -> void:
 			# Per-cell burst — small burst on each cell of the shape
 			for cell_offset in _drag_shape:
 				var co: Vector2i = cell_offset
-				var cell_center := origin + Vector2(
-					(grid_pos.x + co.x + 0.5) * cell_size,
-					(grid_pos.y + co.y + 0.5) * cell_size
-				)
+				var cell_center := board.get_cell_center(grid_pos.x + co.x, grid_pos.y + co.y)
 				NeonBurst.create(board, cell_center, block_color, 6, 0.5)
 
 			# Expanding ring from shape center
 			var bounds := BlockudokuShapes.get_bounds(_drag_shape)
-			var shape_center := origin + Vector2(
-				(grid_pos.x + bounds.x / 2.0) * cell_size,
-				(grid_pos.y + bounds.y / 2.0) * cell_size
-			)
+			var top_left := board.get_cell_screen_rect(grid_pos.x, grid_pos.y).position
+			var shape_center := top_left + Vector2(bounds.x * cell_size * 0.5, bounds.y * cell_size * 0.5)
 			NeonRing.create(board, shape_center, block_color, cell_size * 2.0, 0.25, 0.3)
 
 			# Cell flash — briefly brighten placed cells
@@ -408,7 +402,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 					_pulse_board_for_combo(combo_count)
 				# Scale shockwave with combo
 				if ThemeManager.is_neon:
-					var combo_center := origin + Vector2(cell_size * 4.5, cell_size * 4.5)
+					var combo_center := board.get_cell_center(4, 4)
 					var combo_amp := minf(0.5 + combo_count * 0.3, 2.0)
 					NeonRing.create(board, combo_center, Color(2.0, 0.3, 1.8), cell_size * (4.0 + combo_count), 0.4, combo_amp)
 			# Scoring: 10 per line/box cleared + combo bonus
@@ -542,8 +536,7 @@ func _handle_game_over() -> void:
 
 
 func _play_board_shatter() -> void:
-	var cell_size := board._get_cell_size()
-	var origin := board._get_grid_origin()
+	var cell_size := board.get_cell_screen_rect(0, 0).size.x
 
 	# Gather all filled cells
 	var filled_cells: Array[Vector2i] = []
@@ -574,10 +567,7 @@ func _play_board_shatter() -> void:
 		var delay := row_idx * 0.06
 		_shatter_tween.tween_callback(func() -> void:
 			for cell_pos in row_cells:
-				var rect := Rect2(
-					origin + Vector2(cell_pos.x * cell_size, cell_pos.y * cell_size),
-					Vector2(cell_size, cell_size)
-				)
+				var rect := board.get_cell_screen_rect(cell_pos.x, cell_pos.y)
 				var color: Color = board.cell_colors[cell_pos.y * board.GRID_SIZE + cell_pos.x]
 				if color == Color.TRANSPARENT:
 					color = ThemeManager.get_color("cell_given")
@@ -589,7 +579,7 @@ func _play_board_shatter() -> void:
 
 	if ThemeManager.is_neon:
 		_shatter_tween.tween_callback(func() -> void:
-			var board_center := origin + Vector2(cell_size * 4.5, cell_size * 4.5)
+			var board_center := board.get_cell_center(4, 4)
 			NeonRing.create(board, board_center, Color(2.0, 0.0, 0.3), cell_size * 8.0, 0.5, 1.5)
 			NeonFxManager.screen_shake(8.0, 0.3)
 		).set_delay(0.1)
@@ -670,9 +660,7 @@ func _show_combo_text(total_clears: int, combo: int) -> void:
 	else:
 		color = Color(0.2, 0.6, 1.0) if combo <= 2 else Color(0.8, 0.2, 0.8)
 
-	var cell_size := board._get_cell_size()
-	var origin := board._get_grid_origin()
-	var center := origin + Vector2(cell_size * 4.5, cell_size * 4.5)
+	var center := board.get_cell_center(4, 4)
 	ComboLabel.create(board, center, text, color)
 
 
@@ -684,9 +672,7 @@ func _check_for_new_best() -> void:
 	_new_best_shown = true
 
 	var color := Color(0.0, 2.0, 1.5) if ThemeManager.is_neon else Color(0.2, 0.75, 1.0)
-	var cell_size := board._get_cell_size()
-	var origin := board._get_grid_origin()
-	var center := origin + Vector2(cell_size * 4.5, cell_size * 4.5)
+	var center := board.get_cell_center(4, 4)
 	ComboLabel.create(board, center, "NEW BEST!", color)
 	HapticManager.vibrate_medium()
 

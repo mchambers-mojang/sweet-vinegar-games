@@ -66,6 +66,20 @@ func _get_grid_origin() -> Vector2:
 	return Vector2((size.x - grid_w) / 2.0, (size.y - grid_h) / 2.0)
 
 
+func get_cell_screen_rect(col: int, row: int) -> Rect2:
+	var cell_size := _get_cell_size()
+	var origin := _get_grid_origin()
+	return Rect2(origin + Vector2(col * cell_size, row * cell_size), Vector2(cell_size, cell_size))
+
+
+func get_cell_center(col: int, row: int) -> Vector2:
+	return get_cell_screen_rect(col, row).get_center()
+
+
+func screen_to_grid(local_pos: Vector2) -> Vector2i:
+	return _pos_to_cell(local_pos)
+
+
 func _pos_to_cell(pos: Vector2) -> Vector2i:
 	var origin := _get_grid_origin()
 	var cell_size := _get_cell_size()
