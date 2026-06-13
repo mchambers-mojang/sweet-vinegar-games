@@ -4,31 +4,31 @@ extends Node
 
 
 func vibrate_light() -> void:
-	if not SettingsManager.haptic_enabled:
+	if not PlatformSettings.haptic_enabled:
 		return
 	Input.vibrate_handheld(15)
 
 
 func vibrate_medium() -> void:
-	if not SettingsManager.haptic_enabled:
+	if not PlatformSettings.haptic_enabled:
 		return
 	Input.vibrate_handheld(30)
 
 
 func vibrate_heavy() -> void:
-	if not SettingsManager.haptic_enabled:
+	if not PlatformSettings.haptic_enabled:
 		return
 	Input.vibrate_handheld(50)
 
 
 func vibrate_error() -> void:
-	if not SettingsManager.haptic_enabled:
+	if not PlatformSettings.haptic_enabled:
 		return
 	Input.vibrate_handheld(80)
 
 
 func vibrate_success() -> void:
-	if not SettingsManager.haptic_enabled:
+	if not PlatformSettings.haptic_enabled:
 		return
 	Input.vibrate_handheld(40)
 	var t := create_tween()

@@ -104,3 +104,19 @@ func test_numbers_from_string_keys() -> void:
 	board.setup(5, 5, numbers)
 	assert_eq(board.numbers[Vector2i(2, 3)], 8)
 	assert_eq(board.numbers[Vector2i(0, 0)], 4)
+
+
+# --- Public coordinate API ---
+
+func test_get_cell_screen_rect_steps_by_cell_size() -> void:
+	var rect_00: Rect2 = board.get_cell_screen_rect(0, 0)
+	var rect_10: Rect2 = board.get_cell_screen_rect(1, 0)
+	var rect_01: Rect2 = board.get_cell_screen_rect(0, 1)
+	assert_true(absf((rect_10.position.x - rect_00.position.x) - rect_00.size.x) < 0.001)
+	assert_true(absf((rect_01.position.y - rect_00.position.y) - rect_00.size.y) < 0.001)
+
+
+func test_get_cell_center_matches_rect_center() -> void:
+	var rect: Rect2 = board.get_cell_screen_rect(2, 3)
+	var center: Vector2 = board.get_cell_center(2, 3)
+	assert_true(center.distance_to(rect.get_center()) < 0.001)

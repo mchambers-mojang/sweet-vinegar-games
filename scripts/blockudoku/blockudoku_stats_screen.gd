@@ -17,7 +17,7 @@ func _ready() -> void:
 	)
 	_build_stats_ui()
 	_apply_theme()
-	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
+	AppTheme.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
 
 
 func _build_stats_ui() -> void:
@@ -25,21 +25,32 @@ func _build_stats_ui() -> void:
 		child.queue_free()
 
 	_add_header("Blockudoku Stats")
-	var score_history: Array = BlockudokuStatsManager.get_score_history()
+	var score_history: Array = _get_score_history()
 
-	_add_stat_row("Games Played", str(BlockudokuStatsManager.games_played))
-	_add_stat_row("High Score", str(BlockudokuStatsManager.high_score))
-	_add_stat_row("Best Turns", str(BlockudokuStatsManager.best_turns) if BlockudokuStatsManager.best_turns > 0 else "--")
+	var games_played: int = GameStatsManager.get_counter("blockudoku", "games_played")
+	var high_score: int = GameStatsManager.get_counter("blockudoku", "high_score")
+	var best_turns: int = GameStatsManager.get_counter("blockudoku", "best_turns")
+	var total_score: int = GameStatsManager.get_counter("blockudoku", "total_score")
+	var total_turns: int = GameStatsManager.get_counter("blockudoku", "total_turns")
+	var total_clears: int = GameStatsManager.get_counter("blockudoku", "total_clears")
 
-	var avg_turns := BlockudokuStatsManager.get_average_turns()
+	_add_stat_row("Games Played", str(games_played))
+	_add_stat_row("High Score", str(high_score))
+	_add_stat_row("Best Turns", str(best_turns) if best_turns > 0 else "--")
+
+	var avg_turns: float = float(total_turns) / float(games_played) if games_played > 0 else 0.0
 	_add_stat_row("Average Turns", "%.1f" % avg_turns if avg_turns > 0 else "--")
 
-	_add_stat_row("Total Score", str(BlockudokuStatsManager.total_score))
-	_add_stat_row("Total Turns", str(BlockudokuStatsManager.total_turns))
-	_add_stat_row("Total Lines Cleared", str(BlockudokuStatsManager.total_clears))
+	_add_stat_row("Total Score", str(total_score))
+	_add_stat_row("Total Turns", str(total_turns))
+	_add_stat_row("Total Lines Cleared", str(total_clears))
+
 	var average_score_text := "--"
 	if not score_history.is_empty():
-		average_score_text = "%.1f" % BlockudokuStatsManager.get_average_score()
+		var score_total := 0
+		for s in score_history:
+			score_total += int(s)
+		average_score_text = "%.1f" % (float(score_total) / float(score_history.size()))
 	_add_stat_row("Average Score", average_score_text)
 
 	_add_separator()
@@ -98,7 +109,7 @@ func _add_separator() -> void:
 
 func _apply_theme() -> void:
 	var style := StyleBoxFlat.new()
-	style.bg_color = ThemeManager.get_color("background")
+	style.bg_color = AppTheme.get_color("background")
 	add_theme_stylebox_override("panel", style)
 
 
@@ -113,8 +124,17 @@ func _on_reset_pressed() -> void:
 	dialog.get_label().horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	dialog.popup_centered()
 	dialog.confirmed.connect(func() -> void:
-		BlockudokuStatsManager.reset_all()
+		GameStatsManager.clear("blockudoku")
 		_build_stats_ui()
 		dialog.queue_free()
 	)
 	dialog.canceled.connect(func() -> void: dialog.queue_free())
+
+
+func _get_score_history() -> Array:
+	var all_history: Array = GameStatsManager.get_history("blockudoku")
+	var scores: Array = []
+	for entry in all_history:
+		if entry is Dictionary and entry.has("score"):
+			scores.append(int(entry["score"]))
+	return scores
