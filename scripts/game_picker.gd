@@ -12,8 +12,10 @@ extends Control
 @onready var replays_button: Button = %ReplaysButton
 @onready var achievements_button: Button = %AchievementsButton
 
-const CAROM_UNLOCK_TAP_WINDOW_SEC := 0.8
-const CAROM_UNLOCK_TAP_COUNT := 7
+const CAROM_UNLOCK_MOUSE_WINDOW_SEC := 1.0
+const CAROM_UNLOCK_MOUSE_TAP_COUNT := 5
+const CAROM_UNLOCK_TOUCH_WINDOW_SEC := 0.6
+const CAROM_UNLOCK_TOUCH_TAP_COUNT := 7
 const CAROM_MENU_SCENE_PATH := "res://scenes/carom_menu.tscn"
 
 var _carom_unlock_taps: Array[float] = []
@@ -71,8 +73,9 @@ func _on_title_gui_input(event: InputEvent) -> void:
 	if not _is_title_tap_release(event):
 		return
 
+	var is_touch := event is InputEventScreenTouch
 	DebugOverlay.register_version_label_tap()
-	_register_carom_unlock_tap(Time.get_ticks_msec() / 1000.0)
+	_register_carom_unlock_tap(Time.get_ticks_msec() / 1000.0, is_touch)
 
 
 func _is_title_tap_release(event: InputEvent) -> bool:
@@ -85,11 +88,14 @@ func _is_title_tap_release(event: InputEvent) -> bool:
 	return false
 
 
-func _register_carom_unlock_tap(now_sec: float) -> void:
+func _register_carom_unlock_tap(now_sec: float, is_touch: bool) -> void:
+	var window: float = CAROM_UNLOCK_TOUCH_WINDOW_SEC if is_touch else CAROM_UNLOCK_MOUSE_WINDOW_SEC
+	var required: int = CAROM_UNLOCK_TOUCH_TAP_COUNT if is_touch else CAROM_UNLOCK_MOUSE_TAP_COUNT
+
 	_carom_unlock_taps.append(now_sec)
-	while _carom_unlock_taps.size() > 0 and now_sec - _carom_unlock_taps[0] > CAROM_UNLOCK_TAP_WINDOW_SEC:
+	while _carom_unlock_taps.size() > 0 and now_sec - _carom_unlock_taps[0] > window:
 		_carom_unlock_taps.remove_at(0)
-	if _carom_unlock_taps.size() < CAROM_UNLOCK_TAP_COUNT:
+	if _carom_unlock_taps.size() < required:
 		return
 
 	_carom_unlock_taps.clear()
