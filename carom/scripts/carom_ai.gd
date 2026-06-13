@@ -1,5 +1,5 @@
 class_name CaromAI
-extends RefCounted
+extends CaromTurretInput
 
 ## AI controller that drives a CaromTurret based on game state.
 ## Uses a state machine with puck awareness and difficulty-scaled behavior.
@@ -11,7 +11,6 @@ enum State {
 	TRICK_SHOT,
 }
 
-var turret: CaromTurret
 var difficulty: CaromAIDifficulty
 var puck: CaromPuck = null
 var opponent_turret: CaromTurret = null
@@ -30,9 +29,7 @@ var _midfield_z: float = 0.0
 var _own_goal_z: float = 0.0
 
 
-func _init(p_turret = null, p_difficulty = null) -> void:
-	if p_turret:
-		turret = p_turret
+func _init(p_difficulty = null) -> void:
 	if p_difficulty:
 		difficulty = p_difficulty
 	_rng.randomize()
@@ -64,15 +61,70 @@ func reset() -> void:
 	_target_aim_degrees = 0.0
 
 
-func process(delta: float) -> void:
-	if not turret or not turret.is_active:
-		return
+func process(delta: float, turret_state: Dictionary) -> Dictionary:
+	var is_active: bool = turret_state.get("is_active", true)
+	if not is_active:
+		return {}
+
+	var ammo: int = turret_state.get("ammo", 0)
+	var clip_size: int = turret_state.get("clip_size", 8)
+	var is_reloading: bool = turret_state.get("is_reloading", false)
+	var aim_offset: float = turret_state.get("aim_offset", 0.0)
+	var aim_arc: float = turret_state.get("aim_arc", 160.0)
+	var aim_speed: float = turret_state.get("aim_speed", 110.0)
+	var base_yaw: float = turret_state.get("base_yaw", 180.0)
+	var turret_position: Vector3 = turret_state.get("global_position", Vector3.ZERO)
 
 	_update_puck_tracking(delta)
-	_update_state_transitions()
-	_update_aim(delta)
-	_update_firing(delta)
-	_update_reload_decision()
+	_update_state_transitions(ammo, clip_size)
+
+	# Update aim
+	_update_aim_target(delta, aim_arc, base_yaw, turret_position)
+	var new_aim := move_toward(aim_offset, _target_aim_degrees, aim_speed * delta * difficulty.aim_tracking_speed)
+
+	# Update firing
+	var fire := false
+	var start_reload := false
+	var cancel_reload := false
+
+	_fire_timer -= delta
+	if _fire_timer <= 0.0:
+		match current_state:
+			State.ATTACK, State.DEFEND, State.TRICK_SHOT:
+				if ammo > 0:
+					fire = true
+					var interval := difficulty.base_fire_interval * difficulty.fire_interval_multiplier
+					if current_state == State.DEFEND:
+						interval *= 0.6
+					_fire_timer = interval * _rng.randf_range(0.8, 1.2)
+				else:
+					start_reload = true
+					_fire_timer = difficulty.base_fire_interval
+			State.RELOAD_PRESSURE:
+				_fire_timer = 0.3
+
+	# Reload decision
+	if is_reloading:
+		if current_state == State.DEFEND and ammo > 0:
+			if _rng.randf() < difficulty.reload_timing_quality:
+				cancel_reload = true
+	else:
+		if current_state == State.RELOAD_PRESSURE:
+			if ammo < clip_size:
+				start_reload = true
+		elif ammo <= 0:
+			start_reload = true
+		elif ammo <= difficulty.reload_threshold:
+			var safe_to_reload := current_state == State.ATTACK and not _is_puck_threatening()
+			if safe_to_reload and _rng.randf() < difficulty.reload_timing_quality:
+				start_reload = true
+
+	return {
+		"aim_target": new_aim,
+		"fire": fire,
+		"start_reload": start_reload,
+		"cancel_reload": cancel_reload,
+	}
 
 
 func _update_puck_tracking(delta: float) -> void:
@@ -89,14 +141,13 @@ func _update_puck_tracking(delta: float) -> void:
 		_reaction_timer = difficulty.reaction_delay
 
 
-func _update_state_transitions() -> void:
+func _update_state_transitions(ammo: int, clip_size: int) -> void:
 	if not puck:
 		current_state = State.ATTACK
 		return
 
 	# Roll decision quality — sometimes make suboptimal choices
 	if _rng.randf() > difficulty.decision_quality:
-		# Random state with bias toward attack
 		var roll := _rng.randf()
 		if roll < 0.6:
 			current_state = State.ATTACK
@@ -110,7 +161,6 @@ func _update_state_transitions() -> void:
 	var puck_z := puck.global_position.z
 	var puck_moving_toward_goal := false
 
-	# Determine if puck is heading toward our goal
 	if _own_goal_z > _midfield_z:
 		puck_moving_toward_goal = _puck_velocity_estimate.z > 1.0
 	else:
@@ -125,7 +175,7 @@ func _update_state_transitions() -> void:
 	# State selection
 	if puck_moving_toward_goal and puck_in_our_half:
 		current_state = State.DEFEND
-	elif turret.current_ammo <= difficulty.reload_threshold and not puck_in_our_half:
+	elif ammo <= difficulty.reload_threshold and not puck_in_our_half:
 		current_state = State.RELOAD_PRESSURE
 	elif difficulty.bank_shots_enabled and _should_try_bank_shot():
 		current_state = State.TRICK_SHOT
@@ -133,30 +183,23 @@ func _update_state_transitions() -> void:
 		current_state = State.ATTACK
 
 
-func _update_aim(delta: float) -> void:
-	_retarget_timer -= delta
+func _update_aim_target(_delta: float, aim_arc: float, base_yaw: float, turret_position: Vector3) -> void:
+	_retarget_timer -= _delta
 	if _retarget_timer > 0.0:
-		# Smoothly move toward current target
-		turret.aim_offset_degrees = move_toward(
-			turret.aim_offset_degrees,
-			_target_aim_degrees,
-			turret.aim_speed_degrees * delta * difficulty.aim_tracking_speed
-		)
 		return
 
 	# Recalculate target aim
 	match current_state:
 		State.ATTACK:
-			_target_aim_degrees = _calculate_attack_aim()
+			_target_aim_degrees = _calculate_attack_aim(base_yaw, aim_arc, turret_position)
 		State.DEFEND:
-			_target_aim_degrees = _calculate_defend_aim()
+			_target_aim_degrees = _calculate_defend_aim(base_yaw, aim_arc, turret_position)
 		State.TRICK_SHOT:
-			_target_aim_degrees = _calculate_bank_shot_aim()
+			_target_aim_degrees = _calculate_bank_shot_aim(base_yaw, aim_arc, turret_position)
 		State.RELOAD_PRESSURE:
-			# Sweep randomly while reloading
 			_target_aim_degrees = _rng.randf_range(
-				-turret.aim_arc_degrees * 0.3,
-				turret.aim_arc_degrees * 0.3
+				-aim_arc * 0.3,
+				aim_arc * 0.3
 			)
 
 	# Apply aim spread (inaccuracy)
@@ -168,92 +211,40 @@ func _update_aim(delta: float) -> void:
 	# Clamp to arc
 	_target_aim_degrees = clampf(
 		_target_aim_degrees,
-		-turret.aim_arc_degrees * 0.5,
-		turret.aim_arc_degrees * 0.5
+		-aim_arc * 0.5,
+		aim_arc * 0.5
 	)
 
 	_retarget_timer = difficulty.reaction_delay * _rng.randf_range(0.8, 1.4)
 
-	# Apply aim movement
-	turret.aim_offset_degrees = move_toward(
-		turret.aim_offset_degrees,
-		_target_aim_degrees,
-		turret.aim_speed_degrees * delta * difficulty.aim_tracking_speed
-	)
 
-
-func _update_firing(delta: float) -> void:
-	_fire_timer -= delta
-	if _fire_timer > 0.0:
-		return
-
-	match current_state:
-		State.ATTACK, State.DEFEND, State.TRICK_SHOT:
-			if turret.current_ammo > 0:
-				# In DEFEND, fire more aggressively
-				turret.try_fire()
-				var interval := difficulty.base_fire_interval * difficulty.fire_interval_multiplier
-				if current_state == State.DEFEND:
-					interval *= 0.6
-				_fire_timer = interval * _rng.randf_range(0.8, 1.2)
-			else:
-				turret.start_reload()
-				_fire_timer = difficulty.base_fire_interval
-		State.RELOAD_PRESSURE:
-			# Don't fire, focus on reloading
-			_fire_timer = 0.3
-
-
-func _update_reload_decision() -> void:
-	if turret.is_reloading:
-		# Interrupt reload to fire if puck is threatening
-		if current_state == State.DEFEND and turret.current_ammo > 0:
-			if _rng.randf() < difficulty.reload_timing_quality:
-				turret.cancel_reload()
-		return
-
-	if current_state == State.RELOAD_PRESSURE:
-		if turret.current_ammo < turret.clip_size:
-			turret.start_reload()
-	elif turret.current_ammo <= 0:
-		turret.start_reload()
-	elif turret.current_ammo <= difficulty.reload_threshold:
-		# Reload early if safe to do so
-		var safe_to_reload := current_state == State.ATTACK and not _is_puck_threatening()
-		if safe_to_reload and _rng.randf() < difficulty.reload_timing_quality:
-			turret.start_reload()
-
-
-func _calculate_attack_aim() -> float:
+func _calculate_attack_aim(base_yaw: float, aim_arc: float, turret_position: Vector3) -> float:
 	if not puck:
 		return 0.0
 
-	# Aim at puck position, offset to push toward opponent's goal
-	var to_puck := puck.global_position - turret.global_position
-	var aim_angle := _vector_to_aim_degrees(to_puck)
+	var to_puck := puck.global_position - turret_position
+	var aim_angle := _vector_to_aim_degrees(to_puck, base_yaw, aim_arc)
 	return aim_angle
 
 
-func _calculate_defend_aim() -> float:
+func _calculate_defend_aim(base_yaw: float, aim_arc: float, turret_position: Vector3) -> float:
 	if not puck:
 		return 0.0
 
 	# Predict where puck will be and aim to intercept
 	var predicted_pos := puck.global_position + _puck_velocity_estimate * difficulty.reaction_delay * 2.0
-	var to_predicted := predicted_pos - turret.global_position
-	return _vector_to_aim_degrees(to_predicted)
+	var to_predicted := predicted_pos - turret_position
+	return _vector_to_aim_degrees(to_predicted, base_yaw, aim_arc)
 
 
-func _calculate_bank_shot_aim() -> float:
+func _calculate_bank_shot_aim(base_yaw: float, aim_arc: float, turret_position: Vector3) -> float:
 	if not puck:
-		return _calculate_attack_aim()
+		return _calculate_attack_aim(base_yaw, aim_arc, turret_position)
 
 	# Simple bank shot: aim at wall reflection point
-	# Mirror puck position across nearest side wall to find bank target
 	var puck_pos := puck.global_position
-	var arena_half_width := 10.0  # Approximate half-width
+	var arena_half_width := 10.0
 
-	# Choose the wall closest to the puck's X position
 	var mirror_x: float
 	if puck_pos.x > 0:
 		mirror_x = arena_half_width * 2.0 - puck_pos.x
@@ -261,8 +252,8 @@ func _calculate_bank_shot_aim() -> float:
 		mirror_x = -arena_half_width * 2.0 - puck_pos.x
 
 	var bank_target := Vector3(mirror_x, 0.0, puck_pos.z)
-	var to_target := bank_target - turret.global_position
-	return _vector_to_aim_degrees(to_target)
+	var to_target := bank_target - turret_position
+	return _vector_to_aim_degrees(to_target, base_yaw, aim_arc)
 
 
 func _should_try_bank_shot() -> bool:
@@ -293,23 +284,18 @@ func _is_puck_threatening() -> bool:
 		return _puck_velocity_estimate.z < -0.5
 
 
-func _vector_to_aim_degrees(direction: Vector3) -> float:
+func _vector_to_aim_degrees(direction: Vector3, base_yaw: float, aim_arc: float) -> float:
 	# Convert a world-space direction vector into aim_offset_degrees
-	# relative to the turret's base yaw
 	var flat_dir := Vector2(direction.x, direction.z).normalized()
 	if flat_dir.length_squared() < 0.001:
 		return 0.0
 
-	# Angle of direction in world space (0 = +Z, clockwise)
 	var world_angle := rad_to_deg(atan2(-flat_dir.x, -flat_dir.y))
+	var offset := world_angle - base_yaw
 
-	# Offset from turret's base facing
-	var offset := world_angle - turret.base_yaw_degrees
-
-	# Normalize to [-180, 180]
 	while offset > 180.0:
 		offset -= 360.0
 	while offset < -180.0:
 		offset += 360.0
 
-	return clampf(offset, -turret.aim_arc_degrees * 0.5, turret.aim_arc_degrees * 0.5)
+	return clampf(offset, -aim_arc * 0.5, aim_arc * 0.5)

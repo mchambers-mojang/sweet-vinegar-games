@@ -97,7 +97,7 @@ func _create_turret() -> Node3D:
 func _create_ai(turret, difficulty = null):
 	if difficulty == null:
 		difficulty = AIDifficultyScript.medium()
-	var ai = AIScript.new(turret, difficulty)
+	var ai = AIScript.new(difficulty)
 	ai.configure_arena(13.0, 26.0)  # midfield=13, own_goal=26 (south end)
 	return ai
 
@@ -134,7 +134,7 @@ func test_ai_defends_when_puck_approaches_goal() -> void:
 	ai._puck_velocity_estimate = Vector3(0, 0, 5.0)
 	ai._last_puck_position = puck.global_position
 
-	ai._update_state_transitions()
+	ai._update_state_transitions(turret.current_ammo, turret.clip_size)
 	assert_eq(ai.current_state, 1,  # DEFEND
 		"AI should defend when puck is in its half and moving toward goal")
 
@@ -157,7 +157,7 @@ func test_ai_reloads_when_low_ammo_and_puck_far() -> void:
 	ai.set_puck(puck)
 	ai._puck_velocity_estimate = Vector3(0, 0, -2.0)
 
-	ai._update_state_transitions()
+	ai._update_state_transitions(turret.current_ammo, turret.clip_size)
 	assert_eq(ai.current_state, 2,  # RELOAD_PRESSURE
 		"AI should reload when low ammo and puck is far from goal")
 
@@ -179,7 +179,7 @@ func test_ai_attacks_when_puck_in_opponent_half() -> void:
 	ai.set_puck(puck)
 	ai._puck_velocity_estimate = Vector3(0, 0, -1.0)
 
-	ai._update_state_transitions()
+	ai._update_state_transitions(turret.current_ammo, turret.clip_size)
 	assert_eq(ai.current_state, 0,  # ATTACK
 		"AI should attack when puck is in opponent's half and ammo is fine")
 
@@ -192,7 +192,7 @@ func test_vector_to_aim_degrees_straight_ahead() -> void:
 	turret.base_yaw_degrees = 180.0
 	var ai = _create_ai(turret)
 
-	var aim = ai._vector_to_aim_degrees(Vector3(0, 0, 1))
+	var aim = ai._vector_to_aim_degrees(Vector3(0, 0, 1), turret.base_yaw_degrees, turret.aim_arc_degrees)
 	assert_almost_eq(aim, 0.0, 5.0, "Straight-ahead aim should be near 0 offset")
 
 
@@ -203,6 +203,6 @@ func test_vector_to_aim_degrees_clamped_to_arc() -> void:
 	turret.base_yaw_degrees = 180.0
 	var ai = _create_ai(turret)
 
-	var aim = ai._vector_to_aim_degrees(Vector3(100, 0, 0.01))
+	var aim = ai._vector_to_aim_degrees(Vector3(100, 0, 0.01), turret.base_yaw_degrees, turret.aim_arc_degrees)
 	assert_lte(absf(aim), turret.aim_arc_degrees * 0.5,
 		"Aim should be clamped within arc")

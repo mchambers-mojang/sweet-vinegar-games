@@ -1,7 +1,8 @@
 class_name CaromTurret
 extends Node3D
 
-## Mounted turret controller — handles aim, firing, manual reload, and simple AI behavior.
+## Mounted turret controller — handles aim, firing, manual reload.
+## Input is provided by a CaromTurretInput (human or AI).
 
 signal ammo_changed(current_ammo: int, max_ammo: int)
 signal reload_state_changed(is_reloading: bool)
@@ -35,7 +36,10 @@ var _reload_timer: float = 0.0
 var _fire_cooldown_timer: float = 0.0
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
-## AI controller (created when control_mode == AI)
+## Input provider (CaromHumanInput or CaromAI)
+var input: CaromTurretInput = null
+
+## AI controller reference (for debug overlay access)
 var ai_controller: CaromAI = null
 
 @onready var projectile_spawn: Marker3D = $ProjectileSpawn
@@ -46,13 +50,18 @@ func _ready() -> void:
 	current_ammo = clip_size
 	_update_rotation()
 	ammo_changed.emit(current_ammo, clip_size)
+	# Default to human input if not configured yet
+	if input == null and control_mode == ControlMode.HUMAN:
+		input = CaromHumanInput.new()
 
 
 func setup_ai(difficulty: CaromAIDifficulty, puck: CaromPuck, opponent: CaromTurret, midfield_z: float, own_goal_z: float) -> void:
-	ai_controller = CaromAI.new(self, difficulty)
-	ai_controller.configure_arena(midfield_z, own_goal_z)
-	ai_controller.set_puck(puck)
-	ai_controller.set_opponent(opponent)
+	var ai := CaromAI.new(difficulty)
+	ai.configure_arena(midfield_z, own_goal_z)
+	ai.set_puck(puck)
+	ai.set_opponent(opponent)
+	ai_controller = ai
+	input = ai
 
 
 func configure(new_side: StringName, new_control_mode: ControlMode, new_base_yaw_degrees: float, new_color: Color = Color(-1, -1, -1)) -> void:
@@ -89,10 +98,11 @@ func _process(delta: float) -> void:
 	if not is_active:
 		return
 
-	if control_mode == ControlMode.HUMAN:
-		_process_human_input(delta)
-	else:
-		_process_ai(delta)
+	# Poll input provider for commands
+	if input:
+		var state := _get_turret_state()
+		var commands := input.process(delta, state)
+		_apply_commands(commands)
 
 	_process_reload(delta)
 	_update_rotation()
@@ -101,27 +111,8 @@ func _process(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not is_active or control_mode != ControlMode.HUMAN:
 		return
-
-	if event is InputEventMouseButton:
-		var mouse_button := event as InputEventMouseButton
-		if mouse_button.button_index == MOUSE_BUTTON_LEFT and mouse_button.pressed:
-			try_fire()
-	elif event is InputEventScreenTouch:
-		var screen_touch := event as InputEventScreenTouch
-		if screen_touch.pressed:
-			try_fire()
-	elif event is InputEventScreenDrag:
-		var drag := event as InputEventScreenDrag
-		aim_offset_degrees = clampf(
-			aim_offset_degrees - drag.relative.x * touch_drag_sensitivity,
-			-aim_arc_degrees * 0.5,
-			aim_arc_degrees * 0.5
-		)
-		_update_rotation()
-	elif event is InputEventKey and event.pressed and not event.echo:
-		var key_event := event as InputEventKey
-		if key_event.keycode == KEY_R:
-			start_reload()
+	if input is CaromHumanInput:
+		(input as CaromHumanInput).handle_input_event(event, aim_arc_degrees)
 
 
 func try_fire() -> bool:
@@ -168,26 +159,35 @@ func cancel_reload() -> void:
 	reload_state_changed.emit(false)
 
 
-func _process_human_input(delta: float) -> void:
-	var horizontal_input := Input.get_action_strength("ui_right") - Input.get_action_strength("ui_left")
-	if absf(horizontal_input) > 0.0:
+func _get_turret_state() -> Dictionary:
+	return {
+		"aim_offset": aim_offset_degrees,
+		"aim_arc": aim_arc_degrees,
+		"aim_speed": aim_speed_degrees,
+		"base_yaw": base_yaw_degrees,
+		"ammo": current_ammo,
+		"clip_size": clip_size,
+		"is_reloading": is_reloading,
+		"is_active": is_active,
+		"global_position": global_position,
+	}
+
+
+func _apply_commands(commands: Dictionary) -> void:
+	if commands.is_empty():
+		return
+	if commands.has("aim_target"):
 		aim_offset_degrees = clampf(
-			aim_offset_degrees - horizontal_input * aim_speed_degrees * delta,
+			commands["aim_target"],
 			-aim_arc_degrees * 0.5,
 			aim_arc_degrees * 0.5
 		)
-
-	if Input.is_action_just_pressed("ui_accept"):
+	if commands.get("fire", false):
 		try_fire()
-
-	if InputMap.has_action("reload"):
-		if Input.is_action_just_pressed("reload"):
-			start_reload()
-
-
-func _process_ai(delta: float) -> void:
-	if ai_controller:
-		ai_controller.process(delta)
+	if commands.get("cancel_reload", false):
+		cancel_reload()
+	if commands.get("start_reload", false):
+		start_reload()
 
 
 func _process_reload(delta: float) -> void:
