@@ -163,3 +163,19 @@ func test_has_valid_placement_full_board() -> void:
 			board.grid[r * 9 + c] = 1
 	var shapes: Array = [[Vector2i(0, 0)]]
 	assert_false(board.has_valid_placement(shapes))
+
+
+# --- Public coordinate API ---
+
+func test_get_cell_screen_rect_steps_by_cell_size() -> void:
+	var rect_00: Rect2 = board.get_cell_screen_rect(0, 0)
+	var rect_10: Rect2 = board.get_cell_screen_rect(1, 0)
+	var rect_01: Rect2 = board.get_cell_screen_rect(0, 1)
+	assert_true(absf((rect_10.position.x - rect_00.position.x) - rect_00.size.x) < 0.001)
+	assert_true(absf((rect_01.position.y - rect_00.position.y) - rect_00.size.y) < 0.001)
+
+
+func test_get_cell_center_matches_rect_center() -> void:
+	var rect: Rect2 = board.get_cell_screen_rect(3, 4)
+	var center: Vector2 = board.get_cell_center(3, 4)
+	assert_true(center.distance_to(rect.get_center()) < 0.001)
