@@ -35,15 +35,15 @@ func test_is_title_tap_release_handles_mouse_and_touch() -> void:
 
 
 func test_register_carom_unlock_tap_reveals_after_7_rapid_taps() -> void:
-	for i in 7:
-		picker._register_carom_unlock_tap(float(i) * 0.1)
+	for tap_index in 7:
+		picker._register_carom_unlock_tap(float(tap_index) * 0.1)
 
 	assert_true(picker.carom_button.visible)
 	assert_eq(picker._carom_unlock_taps.size(), 0)
 
 
 func test_register_carom_unlock_tap_expires_old_taps() -> void:
-	for i in 7:
-		picker._register_carom_unlock_tap(float(i))
+	for tap_index in 7:
+		picker._register_carom_unlock_tap(float(tap_index))
 
 	assert_false(picker.carom_button.visible)
