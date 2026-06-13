@@ -94,7 +94,7 @@ func _ready() -> void:
 	back_button.pressed.connect(_on_back_pressed)
 	settings_button.pressed.connect(func() -> void:
 		var SettingsScreen := load("res://scripts/settings_screen.gd")
-		SettingsScreen.return_scene = "res://scenes/main_menu.tscn"
+		SettingsScreen.return_scene = "res://scenes/game.tscn"
 		SceneTransition.transition_to("res://scenes/settings.tscn")
 	)
 
@@ -112,11 +112,21 @@ func _ready() -> void:
 	if margin:
 		SafeAreaManager.apply(margin)
 
-	# Cosmetic drag effect is now a global autoload
+	# Auto-resume from save if scene loaded directly (e.g., returning from settings)
+	_try_auto_resume.call_deferred()
 
 
 func _exit_tree() -> void:
 	CrashReporter.unregister_state_provider(_get_crash_state)
+
+
+func _try_auto_resume() -> void:
+	if not puzzle.is_empty():
+		return
+	if SaveManager.has_saved_game():
+		var data := SaveManager.load_game()
+		if not data.is_empty():
+			resume_game(data)
 
 
 func _setup_help_button() -> void:

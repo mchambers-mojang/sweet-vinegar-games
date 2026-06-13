@@ -69,11 +69,23 @@ func _ready() -> void:
 	if margin:
 		SafeAreaManager.apply(margin)
 
-	# Cosmetic drag effect is now a global autoload
+	# Auto-resume from save if scene loaded directly (e.g., returning from settings)
+	_try_auto_resume.call_deferred()
 
 
 func _exit_tree() -> void:
 	CrashReporter.unregister_state_provider(_get_crash_state)
+
+
+func _try_auto_resume() -> void:
+	# If the game was already initialized by an explicit call (from the menu),
+	# available_blocks will be populated — skip auto-resume.
+	if not available_blocks.is_empty():
+		return
+	if BlockudokuSaveManager.has_saved_game():
+		var data := BlockudokuSaveManager.load_game()
+		if not data.is_empty():
+			resume_game(data)
 
 
 func _setup_help_button() -> void:
