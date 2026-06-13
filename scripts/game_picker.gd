@@ -24,7 +24,7 @@ func _ready() -> void:
 		SceneTransition.transition_to("res://scenes/blockudoku_menu.tscn")
 	)
 	carom_button.pressed.connect(func() -> void:
-		SceneTransition.transition_to("res://carom/scenes/carom_arena.tscn")
+		SceneTransition.transition_to("res://scenes/carom_menu.tscn")
 	)
 	settings_button.pressed.connect(func() -> void:
 		var SettingsScreen := load("res://scripts/settings_screen.gd")
