@@ -1,4 +1,4 @@
-extends Control
+extends "res://scripts/game_screen.gd"
 
 ## Blockudoku game screen — board, score, block tray, drag-to-place
 
@@ -33,16 +33,12 @@ var _board_pulse_tween: Tween = null
 # Node references
 @onready var board: BlockudokuBoard = %BlockudokuBoard
 @onready var score_label: Label = %ScoreLabel
-@onready var timer_label: Label = %TimerLabel
 @onready var back_button: Button = %BackButton
 @onready var undo_button: Button = %UndoButton
 @onready var redo_button: Button = %RedoButton
 @onready var block_tray: HBoxContainer = %BlockTray
 @onready var settings_button: Button = %SettingsButton
 
-var elapsed_time: float = 0.0
-var random_seed: int = 0
-var replay_id: String = ""
 var _rng := RandomNumberGenerator.new()
 
 # Block tray piece display nodes
@@ -97,78 +93,73 @@ func _setup_help_button() -> void:
 
 
 func start_new_game() -> void:
-	CrashReporter.register_user_action("blockudoku_start_new_game")
 	score = 0
 	turns = 0
 	combo_count = 0
 	_new_best_shown = false
-	elapsed_time = 0.0
 	is_game_over = false
-	random_seed = _create_session_seed()
-	_rng.seed = random_seed
 	undo_stack.clear()
 	redo_stack.clear()
-	board.reset()
-	_deal_new_blocks()
-	_update_score_display()
-	_update_undo_redo_buttons()
-	BlockudokuStatsManager.record_game_started()
-	replay_id = ReplayManager.start_session("blockudoku", random_seed, {
-		"board_state": board.get_state(),
-		"available_blocks": _serialize_blocks(available_blocks),
-	}, {
-		"drag_offset": SettingsManager.blockudoku_drag_offset,
-		"show_timer": SettingsManager.show_timer,
-	})
-	AchievementManager.track_game_started("blockudoku")
-	AnalyticsManager.log_event("game_started", {
-		"game": "blockudoku",
-	})
-	_save_current_state()
+	begin_session()
 
 
 func resume_game(data: Dictionary) -> void:
-	CrashReporter.register_user_action("blockudoku_resume_game", {"score": data.get("score", 0)})
 	score = data.get("score", 0)
 	turns = data.get("turns", 0)
 	combo_count = data.get("combo_count", 0)
 	_new_best_shown = data.get("new_best_shown", false)
-	elapsed_time = data.get("elapsed_time", 0.0)
 	is_game_over = false
-	random_seed = int(data.get("random_seed", 0))
+	begin_session(data)
+
+
+func _get_game_id() -> String:
+	return "blockudoku"
+
+
+func _should_tick_timer() -> bool:
+	return not is_game_over
+
+
+func _get_initial_state() -> Dictionary:
+	return {
+		"board_state": board.get_state(),
+		"available_blocks": _serialize_blocks(available_blocks),
+	}
+
+
+func _get_settings_snapshot() -> Dictionary:
+	return {
+		"drag_offset": SettingsManager.blockudoku_drag_offset,
+		"show_timer": SettingsManager.show_timer,
+	}
+
+
+func _setup_game(saved_data: Dictionary) -> void:
 	_rng.seed = random_seed
-	if data.has("rng_state"):
-		_rng.state = int(data.get("rng_state", 0))
-	replay_id = str(data.get("replay_id", ""))
-	undo_stack.clear()
-	redo_stack.clear()
-	board.set_state(data.get("board_state", {}))
-
-	# Restore available blocks
-	available_blocks = _deserialize_blocks(data.get("available_blocks", []))
-
-	blocks_placed_this_set = data.get("blocks_placed_this_set", 0)
-	_build_tray()
+	if saved_data.is_empty():
+		board.reset()
+		_deal_new_blocks()
+	else:
+		if saved_data.has("rng_state"):
+			_rng.state = int(saved_data.get("rng_state", 0))
+		board.set_state(saved_data.get("board_state", {}))
+		available_blocks = _deserialize_blocks(saved_data.get("available_blocks", []))
+		blocks_placed_this_set = saved_data.get("blocks_placed_this_set", 0)
+		_build_tray()
 	_update_score_display()
-	if not ReplayManager.has_active_session():
-		replay_id = ReplayManager.start_session("blockudoku", random_seed, {
-			"board_state": board.get_state(),
-			"available_blocks": _serialize_blocks(available_blocks),
-		}, {
-			"drag_offset": SettingsManager.blockudoku_drag_offset,
-			"show_timer": SettingsManager.show_timer,
-		})
 	_update_undo_redo_buttons()
 
 
-func _process(delta: float) -> void:
-	if not is_game_over:
-		elapsed_time += delta
-		if SettingsManager.show_timer:
-			timer_label.text = _format_time(elapsed_time)
-			timer_label.visible = true
-		else:
-			timer_label.visible = false
+func _increment_stats() -> void:
+	BlockudokuStatsManager.record_game_started()
+
+
+func _get_analytics_params() -> Dictionary:
+	return {"game": "blockudoku"}
+
+
+func _get_resume_crash_params(saved_data: Dictionary) -> Dictionary:
+	return {"score": saved_data.get("score", 0)}
 
 
 func _deal_new_blocks() -> void:
@@ -787,12 +778,6 @@ func _deserialize_blocks(data: Array) -> Array[Array]:
 	return blocks
 
 
-func _format_time(seconds: float) -> String:
-	var mins := int(seconds) / 60
-	var secs := int(seconds) % 60
-	return "%d:%02d" % [mins, secs]
-
-
 func _apply_theme() -> void:
 	var style := StyleBoxFlat.new()
 	style.bg_color = ThemeManager.get_color("background")
@@ -816,12 +801,6 @@ func _save_current_state() -> void:
 		"replay_id": replay_id,
 	})
 	ReplayManager.flush_active_replay()
-
-
-func _create_session_seed() -> int:
-	var rng := RandomNumberGenerator.new()
-	rng.randomize()
-	return int(Time.get_ticks_usec() ^ rng.randi())
 
 
 func _get_crash_state() -> Dictionary:
