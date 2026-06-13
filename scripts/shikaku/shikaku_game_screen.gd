@@ -142,7 +142,7 @@ func _get_initial_state() -> Dictionary:
 
 
 func _get_settings_snapshot() -> Dictionary:
-	return {"show_timer": SettingsManager.show_timer}
+	return {"show_timer": PlatformSettings.show_timer}
 
 
 func _setup_game(saved_data: Dictionary) -> void:

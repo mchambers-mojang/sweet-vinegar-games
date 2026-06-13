@@ -11,6 +11,20 @@ extends GameMenu
 
 # --- GameMenu overrides ---
 
+func _on_menu_ready() -> void:
+	GameRulesRegistry.register_rules("blockudoku", {
+		"pentominoes": true,
+		"p_pentomino": false,
+		"w_pentomino": false,
+		"y_pentomino": false,
+		"f_pentomino": false,
+		"n_pentomino": false,
+		"hexominoes": false,
+		"diagonals": false,
+		"drag_offset": 1,
+		"rotation_mode": false,
+	})
+
 func _get_game_id() -> String:
 	return "blockudoku"
 

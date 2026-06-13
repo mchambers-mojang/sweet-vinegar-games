@@ -20,7 +20,7 @@ func _ready() -> void:
 	)
 	_build_ui()
 	_apply_theme()
-	ThemeManager.theme_changed.connect(func(_dark: bool) -> void:
+	AppTheme.theme_changed.connect(func(_dark: bool) -> void:
 		_build_ui()
 		_apply_theme()
 	)
@@ -77,7 +77,7 @@ func _add_category_section(category: String, category_achievements: Array[Dictio
 	header.custom_minimum_size = Vector2(0, 40)
 	header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_theme_font_size_override("font_size", 20)
-	header.add_theme_color_override("font_color", ThemeManager.get_color("text_given"))
+	header.add_theme_color_override("font_color", AppTheme.get_color("text_given"))
 	header.pressed.connect(func() -> void:
 		_toggle_category(category)
 	)
@@ -184,12 +184,12 @@ func _add_achievement_row(parent: VBoxContainer, achievement: Dictionary) -> voi
 	if reward_type != "" and reward_id != "":
 		var reward: Label = Label.new()
 		reward.text = "Reward: %s (%s)" % [reward_type, reward_id]
-		reward.add_theme_color_override("font_color", ThemeManager.get_color("timer_text"))
+		reward.add_theme_color_override("font_color", AppTheme.get_color("timer_text"))
 		reward.mouse_filter = Control.MOUSE_FILTER_PASS
 		content.add_child(reward)
 
 
 func _apply_theme() -> void:
 	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = ThemeManager.get_color("background")
+	style.bg_color = AppTheme.get_color("background")
 	add_theme_stylebox_override("panel", style)

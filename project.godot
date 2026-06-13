@@ -17,10 +17,12 @@ config/icon="res://icon.svg"
 
 [autoload]
 
-SettingsManager="*res://scripts/autoload/settings_manager.gd"
+PlatformSettings="*res://scripts/autoload/platform_settings.gd"
+GameRulesRegistry="*res://scripts/autoload/game_rules_registry.gd"
+DebugFlags="*res://scripts/autoload/debug_flags.gd"
 AnalyticsManager="*res://scripts/autoload/analytics_manager.gd"
 AchievementManager="*res://scripts/autoload/achievement_manager.gd"
-ThemeManager="*res://scripts/autoload/theme_manager.gd"
+AppTheme="*res://scripts/autoload/app_theme.gd"
 SoundManager="*res://scripts/autoload/sound_manager.gd"
 HapticManager="*res://scripts/autoload/haptic_manager.gd"
 CrashReporter="*res://scripts/autoload/crash_reporter.gd"
@@ -30,7 +32,6 @@ SceneTransition="*res://scripts/autoload/scene_transition.gd"
 SafeAreaManager="*res://scripts/autoload/safe_area_manager.gd"
 DragEffect="*res://scripts/effects/drag_effect.gd"
 DebugOverlay="*res://scripts/autoload/debug_overlay.gd"
-IconManager="*res://scripts/autoload/icon_manager.gd"
 GameSaveManager="*res://scripts/autoload/game_save_manager.gd"
 GameStatsManager="*res://scripts/autoload/game_stats_manager.gd"
 

@@ -14,7 +14,7 @@ func _ready() -> void:
 	)
 	_build_settings_ui()
 	_apply_theme()
-	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
+	AppTheme.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
 
 	var margin := get_node_or_null("MarginContainer") as MarginContainer
 	if margin:
@@ -33,32 +33,32 @@ func _build_settings_ui() -> void:
 
 		# Input mode
 		_add_option_button("Input Mode", ["Cell First", "Number First"],
-			0 if SettingsManager.input_mode == "cell_first" else 1,
+			0 if GameRulesRegistry.get_rule("sudoku", "input_mode") == "cell_first" else 1,
 			func(idx: int) -> void:
-				SettingsManager.input_mode = "cell_first" if idx == 0 else "number_first"
-				SettingsManager.save_settings()
+				GameRulesRegistry.set_rule("sudoku", "input_mode", "cell_first" if idx == 0 else "number_first")
+				GameRulesRegistry.save()
 		)
 
 		# Error mode
 		_add_option_button("Error Mode", ["Strict (3 Strikes)", "Free"],
-			0 if SettingsManager.error_mode == "strict" else 1,
+			0 if GameRulesRegistry.get_rule("sudoku", "error_mode") == "strict" else 1,
 			func(idx: int) -> void:
-				SettingsManager.error_mode = "strict" if idx == 0 else "free"
-				SettingsManager.save_settings()
+				GameRulesRegistry.set_rule("sudoku", "error_mode", "strict" if idx == 0 else "free")
+				GameRulesRegistry.save()
 		)
 
 		# Highlight row/col/box
-		_add_toggle("Highlight Row/Column/Box", SettingsManager.highlight_row_col_box,
+		_add_toggle("Highlight Row/Column/Box", GameRulesRegistry.get_rule("sudoku", "highlight_row_col_box"),
 			func(value: bool) -> void:
-				SettingsManager.highlight_row_col_box = value
-				SettingsManager.save_settings()
+				GameRulesRegistry.set_rule("sudoku", "highlight_row_col_box", value)
+				GameRulesRegistry.save()
 		)
 
 		# Auto-remove pencil marks
-		_add_toggle("Auto-Remove Pencil Marks", SettingsManager.auto_remove_pencil_marks,
+		_add_toggle("Auto-Remove Pencil Marks", GameRulesRegistry.get_rule("sudoku", "auto_remove_pencil_marks"),
 			func(value: bool) -> void:
-				SettingsManager.auto_remove_pencil_marks = value
-				SettingsManager.save_settings()
+				GameRulesRegistry.set_rule("sudoku", "auto_remove_pencil_marks", value)
+				GameRulesRegistry.save()
 		)
 
 		_add_separator()
@@ -69,64 +69,64 @@ func _build_settings_ui() -> void:
 	if is_blockudoku:
 		_add_header("Blockudoku Shapes")
 
-		_add_toggle("Pentominoes (5-cell standard)", SettingsManager.blockudoku_pentominoes,
+		_add_toggle("Pentominoes (5-cell standard)", GameRulesRegistry.get_rule("blockudoku", "pentominoes"),
 			func(value: bool) -> void:
-				SettingsManager.blockudoku_pentominoes = value
-				SettingsManager.save_settings()
+				GameRulesRegistry.set_rule("blockudoku", "pentominoes", value)
+				GameRulesRegistry.save()
 		)
 
-		_add_toggle("P-Pentomino (2×2 + tail)", SettingsManager.blockudoku_p_pentomino,
+		_add_toggle("P-Pentomino (2×2 + tail)", GameRulesRegistry.get_rule("blockudoku", "p_pentomino"),
 			func(value: bool) -> void:
-				SettingsManager.blockudoku_p_pentomino = value
-				SettingsManager.save_settings()
+				GameRulesRegistry.set_rule("blockudoku", "p_pentomino", value)
+				GameRulesRegistry.save()
 		)
 
-		_add_toggle("W-Pentomino (stair-step)", SettingsManager.blockudoku_w_pentomino,
+		_add_toggle("W-Pentomino (stair-step)", GameRulesRegistry.get_rule("blockudoku", "w_pentomino"),
 			func(value: bool) -> void:
-				SettingsManager.blockudoku_w_pentomino = value
-				SettingsManager.save_settings()
+				GameRulesRegistry.set_rule("blockudoku", "w_pentomino", value)
+				GameRulesRegistry.save()
 		)
 
-		_add_toggle("Y-Pentomino (4-long + branch)", SettingsManager.blockudoku_y_pentomino,
+		_add_toggle("Y-Pentomino (4-long + branch)", GameRulesRegistry.get_rule("blockudoku", "y_pentomino"),
 			func(value: bool) -> void:
-				SettingsManager.blockudoku_y_pentomino = value
-				SettingsManager.save_settings()
+				GameRulesRegistry.set_rule("blockudoku", "y_pentomino", value)
+				GameRulesRegistry.save()
 		)
 
-		_add_toggle("F-Pentomino (asymmetric)", SettingsManager.blockudoku_f_pentomino,
+		_add_toggle("F-Pentomino (asymmetric)", GameRulesRegistry.get_rule("blockudoku", "f_pentomino"),
 			func(value: bool) -> void:
-				SettingsManager.blockudoku_f_pentomino = value
-				SettingsManager.save_settings()
+				GameRulesRegistry.set_rule("blockudoku", "f_pentomino", value)
+				GameRulesRegistry.save()
 		)
 
-		_add_toggle("N-Pentomino (zigzag)", SettingsManager.blockudoku_n_pentomino,
+		_add_toggle("N-Pentomino (zigzag)", GameRulesRegistry.get_rule("blockudoku", "n_pentomino"),
 			func(value: bool) -> void:
-				SettingsManager.blockudoku_n_pentomino = value
-				SettingsManager.save_settings()
+				GameRulesRegistry.set_rule("blockudoku", "n_pentomino", value)
+				GameRulesRegistry.save()
 		)
 
-		_add_toggle("Hexominoes (6-cell)", SettingsManager.blockudoku_hexominoes,
+		_add_toggle("Hexominoes (6-cell)", GameRulesRegistry.get_rule("blockudoku", "hexominoes"),
 			func(value: bool) -> void:
-				SettingsManager.blockudoku_hexominoes = value
-				SettingsManager.save_settings()
+				GameRulesRegistry.set_rule("blockudoku", "hexominoes", value)
+				GameRulesRegistry.save()
 		)
 
-		_add_toggle("Diagonals", SettingsManager.blockudoku_diagonals,
+		_add_toggle("Diagonals", GameRulesRegistry.get_rule("blockudoku", "diagonals"),
 			func(value: bool) -> void:
-				SettingsManager.blockudoku_diagonals = value
-				SettingsManager.save_settings()
+				GameRulesRegistry.set_rule("blockudoku", "diagonals", value)
+				GameRulesRegistry.save()
 		)
 
-		_add_option_button("Drag Offset", ["None", "Small", "Medium", "Large"], SettingsManager.blockudoku_drag_offset,
+		_add_option_button("Drag Offset", ["None", "Small", "Medium", "Large"], GameRulesRegistry.get_rule("blockudoku", "drag_offset"),
 			func(idx: int) -> void:
-				SettingsManager.blockudoku_drag_offset = idx
-				SettingsManager.save_settings()
+				GameRulesRegistry.set_rule("blockudoku", "drag_offset", idx)
+				GameRulesRegistry.save()
 		)
 
-		_add_toggle("Rotation Mode (tap to rotate)", SettingsManager.blockudoku_rotation_mode,
+		_add_toggle("Rotation Mode (tap to rotate)", GameRulesRegistry.get_rule("blockudoku", "rotation_mode"),
 			func(value: bool) -> void:
-				SettingsManager.blockudoku_rotation_mode = value
-				SettingsManager.save_settings()
+				GameRulesRegistry.set_rule("blockudoku", "rotation_mode", value)
+				GameRulesRegistry.save()
 		)
 
 		_add_separator()
@@ -136,7 +136,7 @@ func _build_settings_ui() -> void:
 
 	# Dark mode
 	var dark_idx := 0
-	match SettingsManager.dark_mode:
+	match PlatformSettings.dark_mode:
 		"system": dark_idx = 0
 		"light": dark_idx = 1
 		"dark": dark_idx = 2
@@ -144,56 +144,56 @@ func _build_settings_ui() -> void:
 	_add_option_button("Theme", ["System", "Light", "Dark", "Neon"], dark_idx,
 		func(idx: int) -> void:
 			match idx:
-				0: SettingsManager.dark_mode = "system"
-				1: SettingsManager.dark_mode = "light"
-				2: SettingsManager.dark_mode = "dark"
-				3: SettingsManager.dark_mode = "neon"
-			SettingsManager.save_settings()
+				0: PlatformSettings.dark_mode = "system"
+				1: PlatformSettings.dark_mode = "light"
+				2: PlatformSettings.dark_mode = "dark"
+				3: PlatformSettings.dark_mode = "neon"
+			PlatformSettings.save_settings()
 	)
 
 	# Timer
-	_add_toggle("Show Timer", SettingsManager.show_timer,
+	_add_toggle("Show Timer", PlatformSettings.show_timer,
 		func(value: bool) -> void:
-			SettingsManager.show_timer = value
-			SettingsManager.save_settings()
+			PlatformSettings.show_timer = value
+			PlatformSettings.save_settings()
 	)
 
 	# Sound
-	_add_toggle("Sound Effects", SettingsManager.sound_enabled,
+	_add_toggle("Sound Effects", PlatformSettings.sound_enabled,
 		func(value: bool) -> void:
-			SettingsManager.sound_enabled = value
-			SettingsManager.save_settings()
+			PlatformSettings.sound_enabled = value
+			PlatformSettings.save_settings()
 	)
 
 	# Haptic
-	_add_toggle("Haptic Feedback", SettingsManager.haptic_enabled,
+	_add_toggle("Haptic Feedback", PlatformSettings.haptic_enabled,
 		func(value: bool) -> void:
-			SettingsManager.haptic_enabled = value
-			SettingsManager.save_settings()
+			PlatformSettings.haptic_enabled = value
+			PlatformSettings.save_settings()
 	)
 
 	_add_separator()
 	_add_header("Effects")
 
 	# Screen shake
-	_add_toggle("Screen Shake", SettingsManager.screen_shake_enabled,
+	_add_toggle("Screen Shake", PlatformSettings.screen_shake_enabled,
 		func(value: bool) -> void:
-			SettingsManager.screen_shake_enabled = value
-			SettingsManager.save_settings()
+			PlatformSettings.screen_shake_enabled = value
+			PlatformSettings.save_settings()
 	)
 
 	# Shockwave distortion
-	_add_toggle("Shockwave Distortion", SettingsManager.shockwave_enabled,
+	_add_toggle("Shockwave Distortion", PlatformSettings.shockwave_enabled,
 		func(value: bool) -> void:
-			SettingsManager.shockwave_enabled = value
-			SettingsManager.save_settings()
+			PlatformSettings.shockwave_enabled = value
+			PlatformSettings.save_settings()
 	)
 
 	# Particle effects
-	_add_toggle("Particle Effects", SettingsManager.particle_effects_enabled,
+	_add_toggle("Particle Effects", PlatformSettings.particle_effects_enabled,
 		func(value: bool) -> void:
-			SettingsManager.particle_effects_enabled = value
-			SettingsManager.save_settings()
+			PlatformSettings.particle_effects_enabled = value
+			PlatformSettings.save_settings()
 	)
 
 
@@ -255,5 +255,5 @@ func _add_option_button(label_text: String, options: Array, selected: int, callb
 
 func _apply_theme() -> void:
 	var style := StyleBoxFlat.new()
-	style.bg_color = ThemeManager.get_color("background")
+	style.bg_color = AppTheme.get_color("background")
 	add_theme_stylebox_override("panel", style)

@@ -117,7 +117,7 @@ func _ready() -> void:
 
 	# Theme
 	_apply_theme_internal()
-	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_theme_internal())
+	AppTheme.theme_changed.connect(func(_d: bool) -> void: _apply_theme_internal())
 
 	# Safe area
 	var margin := get_node_or_null("MarginContainer") as MarginContainer
@@ -167,7 +167,7 @@ func _show_abandon_dialog() -> void:
 
 func _apply_theme_internal() -> void:
 	var style := StyleBoxFlat.new()
-	style.bg_color = ThemeManager.get_color("background")
+	style.bg_color = AppTheme.get_color("background")
 	add_theme_stylebox_override("panel", style)
 	_apply_game_theme()
 

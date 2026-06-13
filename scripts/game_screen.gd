@@ -139,7 +139,7 @@ func _ready() -> void:
 
 	# Theme
 	_apply_game_theme()
-	ThemeManager.theme_changed.connect(func(_d: bool) -> void: _apply_game_theme())
+	AppTheme.theme_changed.connect(func(_d: bool) -> void: _apply_game_theme())
 
 	# Safe area
 	var margin := get_node_or_null("MarginContainer") as MarginContainer
@@ -161,7 +161,7 @@ func _process(delta: float) -> void:
 	if _should_tick_timer():
 		elapsed_time += delta
 		if timer_label:
-			if SettingsManager.show_timer:
+			if PlatformSettings.show_timer:
 				timer_label.text = _format_time(elapsed_time)
 				timer_label.visible = true
 			else:
