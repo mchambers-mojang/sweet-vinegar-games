@@ -256,7 +256,7 @@ func _process(delta: float) -> void:
 	super._process(delta)
 
 	# Cheat auto-solve
-	if _cheat_active:
+	if _should_tick_timer() and _cheat_active:
 		_cheat_timer += delta
 		if _cheat_timer >= CHEAT_INTERVAL:
 			_cheat_timer = 0.0
