@@ -16,6 +16,12 @@ var _showing_difficulty := false
 
 
 func _ready() -> void:
+	GameRulesRegistry.register_rules("sudoku", {
+		"input_mode": "cell_first",
+		"error_mode": "strict",
+		"highlight_row_col_box": true,
+		"auto_remove_pencil_marks": true,
+	})
 	continue_button.pressed.connect(_on_continue)
 	new_game_button.pressed.connect(_on_new_game)
 	stats_button.pressed.connect(_on_stats)

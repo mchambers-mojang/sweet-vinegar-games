@@ -10,6 +10,18 @@ extends Control
 
 
 func _ready() -> void:
+	GameRulesRegistry.register_rules("blockudoku", {
+		"pentominoes": true,
+		"p_pentomino": false,
+		"w_pentomino": false,
+		"y_pentomino": false,
+		"f_pentomino": false,
+		"n_pentomino": false,
+		"hexominoes": false,
+		"diagonals": false,
+		"drag_offset": 1,
+		"rotation_mode": false,
+	})
 	continue_button.pressed.connect(_on_continue)
 	new_game_button.pressed.connect(_on_new_game)
 	stats_button.pressed.connect(_on_stats)

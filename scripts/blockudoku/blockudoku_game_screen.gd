@@ -52,6 +52,18 @@ var redo_stack: Array[Dictionary] = []
 
 
 func _ready() -> void:
+	GameRulesRegistry.register_rules("blockudoku", {
+		"pentominoes": true,
+		"p_pentomino": false,
+		"w_pentomino": false,
+		"y_pentomino": false,
+		"f_pentomino": false,
+		"n_pentomino": false,
+		"hexominoes": false,
+		"diagonals": false,
+		"drag_offset": 1,
+		"rotation_mode": false,
+	})
 	CrashReporter.register_state_provider(_get_crash_state)
 	CrashReporter.register_user_action("blockudoku_screen_opened")
 	back_button.pressed.connect(_on_back)
@@ -117,8 +129,8 @@ func start_new_game() -> void:
 		"board_state": board.get_state(),
 		"available_blocks": _serialize_blocks(available_blocks),
 	}, {
-		"drag_offset": SettingsManager.blockudoku_drag_offset,
-		"show_timer": SettingsManager.show_timer,
+		"drag_offset": GameRulesRegistry.get_rule("blockudoku", "drag_offset"),
+		"show_timer": PlatformSettings.show_timer,
 	})
 	AchievementManager.track_game_started("blockudoku")
 	AnalyticsManager.log_event("game_started", {
@@ -155,8 +167,8 @@ func resume_game(data: Dictionary) -> void:
 			"board_state": board.get_state(),
 			"available_blocks": _serialize_blocks(available_blocks),
 		}, {
-			"drag_offset": SettingsManager.blockudoku_drag_offset,
-			"show_timer": SettingsManager.show_timer,
+			"drag_offset": GameRulesRegistry.get_rule("blockudoku", "drag_offset"),
+			"show_timer": PlatformSettings.show_timer,
 		})
 	_update_undo_redo_buttons()
 
@@ -164,7 +176,7 @@ func resume_game(data: Dictionary) -> void:
 func _process(delta: float) -> void:
 	if not is_game_over:
 		elapsed_time += delta
-		if SettingsManager.show_timer:
+		if PlatformSettings.show_timer:
 			timer_label.text = _format_time(elapsed_time)
 			timer_label.visible = true
 		else:
@@ -281,7 +293,7 @@ func _update_board_preview(screen_pos: Vector2) -> void:
 	var local_pos := board.get_local_mouse_position()
 	# Offset upward so finger doesn't cover the placement
 	var cell_size := board._get_cell_size()
-	var offset_multiplier := SettingsManager.blockudoku_drag_offset  # 0=None, 1=Small, 2=Medium, 3=Large
+	var offset_multiplier: int = GameRulesRegistry.get_rule("blockudoku", "drag_offset")  # 0=None, 1=Small, 2=Medium, 3=Large
 	if offset_multiplier > 0:
 		local_pos.y -= cell_size * offset_multiplier
 	var grid_pos := board.screen_to_grid(local_pos)
@@ -310,14 +322,14 @@ func _end_drag(screen_pos: Vector2) -> void:
 	var local_pos := board.get_local_mouse_position()
 	var cell_size := board._get_cell_size()
 	var origin := board._get_grid_origin()
-	var offset_multiplier := SettingsManager.blockudoku_drag_offset
+	var offset_multiplier: int = GameRulesRegistry.get_rule("blockudoku", "drag_offset")
 	if offset_multiplier > 0:
 		local_pos.y -= cell_size * offset_multiplier
 	var grid_pos := board.screen_to_grid(local_pos)
 
 	board.clear_preview()
 
-	if SettingsManager.blockudoku_rotation_mode and not _drag_moved and _drag_block_index >= 0 and _drag_block_index < available_blocks.size():
+	if GameRulesRegistry.get_rule("blockudoku", "rotation_mode") and not _drag_moved and _drag_block_index >= 0 and _drag_block_index < available_blocks.size():
 		var shape: Array = available_blocks[_drag_block_index]
 		if shape.size() > 0:
 			var rotated_shape: Array = BlockudokuShapes.rotate_clockwise(shape)
@@ -451,7 +463,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 				remaining_shapes.append(shape)
 		redo_stack.clear()
 		var has_valid_move := false
-		if SettingsManager.blockudoku_rotation_mode:
+		if GameRulesRegistry.get_rule("blockudoku", "rotation_mode"):
 			for shape in remaining_shapes:
 				var rotated: Array = shape
 				for _rot in 4:
@@ -492,7 +504,7 @@ var _shatter_tween: Tween = null
 
 
 func _pulse_board_for_combo(combo: int) -> void:
-	if not SettingsManager.screen_shake_enabled:
+	if not PlatformSettings.screen_shake_enabled:
 		return
 
 	if _board_pulse_tween and _board_pulse_tween.is_valid():

@@ -50,7 +50,7 @@ func _update_glow() -> void:
 func screen_shake(intensity: float = 4.0, duration: float = 0.15) -> void:
 	if not ThemeManager.is_neon:
 		return
-	if not SettingsManager.screen_shake_enabled:
+	if not PlatformSettings.screen_shake_enabled:
 		return
 	var viewport := get_viewport()
 	if not viewport:

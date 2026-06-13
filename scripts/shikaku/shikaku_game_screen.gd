@@ -109,7 +109,7 @@ func start_new_game(w: int, h: int) -> void:
 		"height": h,
 		"numbers": _serialize_numbers(puzzle_data["numbers"]),
 	}, {
-		"show_timer": SettingsManager.show_timer,
+		"show_timer": PlatformSettings.show_timer,
 	})
 	AchievementManager.track_game_started("shikaku")
 	AnalyticsManager.log_event("game_started", {
@@ -153,7 +153,7 @@ func resume_game(data: Dictionary) -> void:
 			"height": grid_height,
 			"numbers": _serialize_numbers(puzzle_data["numbers"]),
 		}, {
-			"show_timer": SettingsManager.show_timer,
+			"show_timer": PlatformSettings.show_timer,
 		})
 	AchievementManager.track_game_started("shikaku")
 
@@ -161,7 +161,7 @@ func resume_game(data: Dictionary) -> void:
 func _process(delta: float) -> void:
 	if not is_completed and not is_paused:
 		elapsed_time += delta
-		if SettingsManager.show_timer:
+		if PlatformSettings.show_timer:
 			timer_label.text = _format_time(elapsed_time)
 			timer_label.visible = true
 		else:
