@@ -217,12 +217,9 @@ func _on_rectangle_placed(rect: Rect2i) -> void:
 	HapticManager.vibrate_light()
 	# Neon shockwave on rect placement
 	if AppTheme.is_neon:
-		var cell_size := board._get_cell_size()
-		var origin := board._get_grid_origin()
-		var center := origin + Vector2(
-			(rect.position.x + rect.size.x / 2.0) * cell_size,
-			(rect.position.y + rect.size.y / 2.0) * cell_size
-		)
+		var cell_size := board.get_cell_screen_rect(0, 0).size.x
+		var top_left := board.get_cell_screen_rect(rect.position.x, rect.position.y).position
+		var center := top_left + Vector2(rect.size.x * cell_size * 0.5, rect.size.y * cell_size * 0.5)
 		NeonRing.create(board, center, Color(0.0, 1.5, 1.5), cell_size * 2.5, 0.25, 0.3)
 	_update_button_states()
 	_check_completion()
@@ -395,11 +392,11 @@ func _handle_win() -> void:
 		_show_new_best_indicator()
 	# Neon win shockwave
 	if AppTheme.is_neon:
-		var cell_size := board._get_cell_size()
-		var origin := board._get_grid_origin()
-		var center := origin + Vector2(
-			(board.grid_width / 2.0) * cell_size,
-			(board.grid_height / 2.0) * cell_size
+		var first_cell := board.get_cell_screen_rect(0, 0)
+		var cell_size := first_cell.size.x
+		var center := first_cell.position + Vector2(
+			(board.grid_width * cell_size) * 0.5,
+			(board.grid_height * first_cell.size.y) * 0.5
 		)
 		NeonRing.create(board, center, Color(0.0, 2.0, 1.5), cell_size * 6.0, 0.5, 1.2)
 		NeonFxManager.screen_shake(6.0, 0.2)
@@ -414,11 +411,10 @@ func _is_new_best_time() -> bool:
 
 
 func _show_new_best_indicator() -> void:
-	var cell_size := board._get_cell_size()
-	var origin := board._get_grid_origin()
-	var center := origin + Vector2(
-		(board.grid_width / 2.0) * cell_size,
-		(board.grid_height / 2.0) * cell_size
+	var first_cell := board.get_cell_screen_rect(0, 0)
+	var center := first_cell.position + Vector2(
+		(board.grid_width * first_cell.size.x) * 0.5,
+		(board.grid_height * first_cell.size.y) * 0.5
 	)
 	var color := Color(0.0, 2.0, 1.5) if AppTheme.is_neon else Color(0.2, 0.75, 1.0)
 	ComboLabel.create(board, center, "NEW BEST!", color)
