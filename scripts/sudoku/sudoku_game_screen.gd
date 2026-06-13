@@ -82,6 +82,8 @@ var replay_id: String = ""
 
 
 func _ready() -> void:
+	# Defensive registration: register_rules is a no-op if already registered via menu.
+	# Ensures rules are available if the game screen is entered directly (e.g. from replays).
 	GameRulesRegistry.register_rules("sudoku", {
 		"input_mode": "cell_first",
 		"error_mode": "strict",

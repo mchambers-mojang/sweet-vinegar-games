@@ -52,6 +52,8 @@ var redo_stack: Array[Dictionary] = []
 
 
 func _ready() -> void:
+	# Defensive registration: register_rules is a no-op if already registered via menu.
+	# Ensures rules are available if the game screen is entered directly (e.g. from replays).
 	GameRulesRegistry.register_rules("blockudoku", {
 		"pentominoes": true,
 		"p_pentomino": false,
