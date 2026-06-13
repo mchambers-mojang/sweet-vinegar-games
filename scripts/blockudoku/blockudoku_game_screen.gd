@@ -257,7 +257,7 @@ func _start_drag(index: int, screen_pos: Vector2) -> void:
 		return
 	_dragging = true
 	_drag_block_index = index
-	_drag_shape = logic.available_blocks[index].duplicate()
+	_drag_shape = logic.available_blocks[index].duplicate(true)
 	_drag_screen_pos = screen_pos
 	_drag_start_screen_pos = screen_pos
 	_drag_moved = false
