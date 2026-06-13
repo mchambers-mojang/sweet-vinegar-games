@@ -19,6 +19,12 @@ enum MatchState {
 ## AI difficulty level (0=Easy, 1=Medium, 2=Hard, 3=Brutal)
 var ai_difficulty_level: int = 1
 
+## Debug: show AI state overlay
+var _debug_ai_visible: bool = false
+var _debug_label: Label = null
+
+const AI_STATE_NAMES := ["ATTACK", "DEFEND", "RELOAD_PRESSURE", "TRICK_SHOT"]
+
 var match_state: int = MatchState.SETUP
 var player_score: int = 0
 var ai_score: int = 0
@@ -47,8 +53,11 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	# No more tap-to-restart; handled by game over panel buttons
-	pass
+	# Toggle AI debug overlay with F3
+	if event is InputEventKey and event.pressed and not event.echo:
+		var key_event := event as InputEventKey
+		if key_event.keycode == KEY_F3:
+			_toggle_debug_overlay()
 
 
 func _spawn_entities() -> void:
@@ -276,3 +285,49 @@ func _on_player_reload_state_changed(_is_reloading: bool) -> void:
 func _on_ai_reload_state_changed(_is_reloading: bool) -> void:
 	if ai_turret:
 		_on_ai_ammo_changed(ai_turret.current_ammo, ai_turret.clip_size)
+
+
+# --- Debug overlay ---
+
+func _toggle_debug_overlay() -> void:
+	_debug_ai_visible = not _debug_ai_visible
+	if _debug_ai_visible:
+		if not _debug_label:
+			_debug_label = Label.new()
+			_debug_label.position = Vector2(10, 10)
+			_debug_label.add_theme_font_size_override("font_size", 14)
+			_debug_label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.8, 0.9))
+			_debug_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.7))
+			_debug_label.add_theme_constant_override("shadow_offset_x", 1)
+			_debug_label.add_theme_constant_override("shadow_offset_y", 1)
+			var hud := arena.get_node("HUD") as CanvasLayer
+			hud.add_child(_debug_label)
+		_debug_label.visible = true
+	elif _debug_label:
+		_debug_label.visible = false
+
+
+func _process(_delta: float) -> void:
+	if not _debug_ai_visible or not _debug_label:
+		return
+	if not ai_turret or not ai_turret.ai_controller:
+		_debug_label.text = "AI: no controller"
+		return
+
+	var ai = ai_turret.ai_controller
+	var state_name: String = AI_STATE_NAMES[ai.current_state] if ai.current_state < AI_STATE_NAMES.size() else "UNKNOWN"
+	var puck_pos_text := "N/A"
+	var puck_vel_text := "N/A"
+	if ai.puck:
+		puck_pos_text = "%.1f, %.1f" % [ai.puck.global_position.x, ai.puck.global_position.z]
+		puck_vel_text = "%.1f, %.1f" % [ai._puck_velocity_estimate.x, ai._puck_velocity_estimate.z]
+
+	_debug_label.text = "=== AI DEBUG (F3) ===\n" \
+		+ "State: %s\n" % state_name \
+		+ "Difficulty: %s\n" % ai.difficulty.difficulty_name \
+		+ "Aim offset: %.1f°\n" % ai_turret.aim_offset_degrees \
+		+ "Target aim: %.1f°\n" % ai._target_aim_degrees \
+		+ "Ammo: %d/%d%s\n" % [ai_turret.current_ammo, ai_turret.clip_size, " (reloading)" if ai_turret.is_reloading else ""] \
+		+ "Puck pos: %s\n" % puck_pos_text \
+		+ "Puck vel: %s\n" % puck_vel_text \
+		+ "Threatening: %s" % str(ai._is_puck_threatening())
