@@ -26,9 +26,12 @@ func _build_stats_ui() -> void:
 
 	# Global stats
 	_add_header("Overall")
-	_add_stat_row("Total Games", str(StatsManager.total_games_played))
-	_add_stat_row("Current Streak", str(StatsManager.current_streak))
-	_add_stat_row("Best Streak", str(StatsManager.best_streak))
+	var total_games: int = GameStatsManager.get_counter("sudoku", "games_started")
+	var current_streak: int = GameStatsManager.get_counter("sudoku", "current_streak")
+	var best_streak: int = GameStatsManager.get_counter("sudoku", "best_streak")
+	_add_stat_row("Total Games", str(total_games))
+	_add_stat_row("Current Streak", str(current_streak))
+	_add_stat_row("Best Streak", str(best_streak))
 
 	_add_separator()
 
@@ -36,28 +39,29 @@ func _build_stats_ui() -> void:
 	for d in range(5):
 		_add_header(DIFFICULTY_NAMES[d])
 
-		var best: float = StatsManager.best_times.get(d, -1.0)
+		var best_ms: int = GameStatsManager.get_counter("sudoku", "best_d%d" % d)
+		var best: float = float(best_ms) / 1000.0 if best_ms > 0 else -1.0
 		_add_stat_row("Best Time", _format_time(best) if best >= 0 else "--")
 
-		var avg := StatsManager.get_average_time(d)
+		# Average from history
+		var history: Array = _get_time_history_for_difficulty(d)
+		var avg: float = _compute_average(history)
 		_add_stat_row("Average Time", _format_time(avg) if avg >= 0 else "--")
 
-		# Time history graph
-		var history := StatsManager.get_time_history(d)
 		if not history.is_empty():
 			_add_time_graph(history)
 
-		var started: int = StatsManager.games_started.get(d, 0)
-		var completed: int = StatsManager.games_completed.get(d, 0)
-		var abandoned: int = StatsManager.games_abandoned.get(d, 0)
+		var started: int = GameStatsManager.get_counter("sudoku", "started_d%d" % d)
+		var completed: int = GameStatsManager.get_counter("sudoku", "completed_d%d" % d)
+		var abandoned: int = GameStatsManager.get_counter("sudoku", "abandoned_d%d" % d)
 		_add_stat_row("Started / Completed", "%d / %d" % [started, completed])
 		_add_stat_row("Abandoned", str(abandoned))
 
-		var won: int = StatsManager.games_won.get(d, 0)
-		var lost: int = StatsManager.games_lost.get(d, 0)
+		var won: int = GameStatsManager.get_counter("sudoku", "won_d%d" % d)
+		var lost: int = GameStatsManager.get_counter("sudoku", "lost_d%d" % d)
 		_add_stat_row("Strict W/L", "%d / %d" % [won, lost])
 
-		var rate := StatsManager.get_completion_rate(d)
+		var rate: float = (float(completed) / float(started) * 100.0) if started > 0 else 0.0
 		_add_stat_row("Completion Rate", "%.0f%%" % rate)
 
 		_add_separator()
@@ -135,8 +139,26 @@ func _on_reset_pressed() -> void:
 	add_child(dialog)
 	dialog.popup_centered()
 	dialog.confirmed.connect(func() -> void:
-		StatsManager.reset_all()
+		GameStatsManager.clear("sudoku")
 		_build_stats_ui()
 		dialog.queue_free()
 	)
 	dialog.canceled.connect(func() -> void: dialog.queue_free())
+
+
+func _get_time_history_for_difficulty(d: int) -> Array:
+	var all_history: Array = GameStatsManager.get_history("sudoku")
+	var times: Array = []
+	for entry in all_history:
+		if entry is Dictionary and entry.get("difficulty") == d and entry.has("time"):
+			times.append(entry["time"])
+	return times
+
+
+func _compute_average(times: Array) -> float:
+	if times.is_empty():
+		return -1.0
+	var total := 0.0
+	for t in times:
+		total += float(t)
+	return total / float(times.size())

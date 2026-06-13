@@ -6,9 +6,7 @@ var achievements: Node
 
 
 func before_each() -> void:
-	StatsManager.reset_all()
-	BlockudokuStatsManager.reset_all()
-	ShikakuStatsManager.reset_all()
+	GameStatsManager.clear_all()
 	achievements = Node.new()
 	achievements.set_script(AchievementScript)
 	add_child_autofree(achievements)
@@ -18,9 +16,7 @@ func before_each() -> void:
 func after_each() -> void:
 	if is_instance_valid(achievements):
 		achievements.reset_all_progress()
-	StatsManager.reset_all()
-	BlockudokuStatsManager.reset_all()
-	ShikakuStatsManager.reset_all()
+	GameStatsManager.clear_all()
 	var toast_layer: Node = get_tree().root.get_node_or_null("AchievementToastLayer")
 	if toast_layer:
 		toast_layer.queue_free()
@@ -39,7 +35,7 @@ func test_snapshot_includes_categories_with_general_first() -> void:
 
 
 func test_sudoku_win_tracking_unlocks_difficulty_and_time_achievements() -> void:
-	StatsManager.record_game_started(4)
+	GameStatsManager.increment_counter("sudoku", "games_started")
 	achievements.track_game_started("sudoku")
 	achievements.track_game_won("sudoku", {
 		"difficulty": 4,
@@ -56,14 +52,15 @@ func test_sudoku_win_tracking_unlocks_difficulty_and_time_achievements() -> void
 
 
 func test_blockudoku_tracking_unlocks_score_and_clear_achievements() -> void:
-	BlockudokuStatsManager.record_game_started()
+	GameStatsManager.increment_counter("blockudoku", "games_played")
 	achievements.track_game_started("blockudoku")
-	BlockudokuStatsManager.record_game_over(1200, 42)
+	GameStatsManager.increment_counter("blockudoku", "total_score", 1200)
+	GameStatsManager.set_counter("blockudoku", "high_score", 1200)
 	achievements.track_blockudoku_game_played(1200)
 
-	BlockudokuStatsManager.record_clears(4)
+	GameStatsManager.increment_counter("blockudoku", "total_clears", 4)
 	achievements.track_blockudoku_clear(4)
-	BlockudokuStatsManager.record_clears(196)
+	GameStatsManager.increment_counter("blockudoku", "total_clears", 196)
 	achievements.track_blockudoku_clear(1)
 
 	assert_true(bool(_get_achievement("blockudoku_first_game").get("unlocked", false)))
@@ -78,7 +75,8 @@ func test_blockudoku_tracking_unlocks_score_and_clear_achievements() -> void:
 
 func test_shikaku_and_general_streaks_unlock_and_reset() -> void:
 	for i in 5:
-		ShikakuStatsManager.record_game_completed(5, 45.0)
+		GameStatsManager.increment_counter("shikaku", "completed_s5")
+		GameStatsManager.set_counter("shikaku", "current_streak", i + 1)
 		achievements.track_game_won("shikaku")
 		achievements.track_shikaku_won(5, 45.0)
 

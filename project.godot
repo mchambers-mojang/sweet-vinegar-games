@@ -19,16 +19,10 @@ config/icon="res://icon.svg"
 
 SettingsManager="*res://scripts/autoload/settings_manager.gd"
 AnalyticsManager="*res://scripts/autoload/analytics_manager.gd"
-StatsManager="*res://scripts/autoload/stats_manager.gd"
 AchievementManager="*res://scripts/autoload/achievement_manager.gd"
-SaveManager="*res://scripts/autoload/save_manager.gd"
 ThemeManager="*res://scripts/autoload/theme_manager.gd"
 SoundManager="*res://scripts/autoload/sound_manager.gd"
 HapticManager="*res://scripts/autoload/haptic_manager.gd"
-ShikakuSaveManager="*res://scripts/autoload/shikaku_save_manager.gd"
-ShikakuStatsManager="*res://scripts/autoload/shikaku_stats_manager.gd"
-BlockudokuSaveManager="*res://scripts/autoload/blockudoku_save_manager.gd"
-BlockudokuStatsManager="*res://scripts/autoload/blockudoku_stats_manager.gd"
 CrashReporter="*res://scripts/autoload/crash_reporter.gd"
 ReplayManager="*res://scripts/autoload/replay_manager.gd"
 NeonFxManager="*res://scripts/autoload/neon_fx_manager.gd"
@@ -37,6 +31,8 @@ SafeAreaManager="*res://scripts/autoload/safe_area_manager.gd"
 DragEffect="*res://scripts/effects/drag_effect.gd"
 DebugOverlay="*res://scripts/autoload/debug_overlay.gd"
 IconManager="*res://scripts/autoload/icon_manager.gd"
+GameSaveManager="*res://scripts/autoload/game_save_manager.gd"
+GameStatsManager="*res://scripts/autoload/game_stats_manager.gd"
 
 [debug]
 
@@ -50,8 +46,12 @@ window/size/viewport_height=844
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 window/handheld/orientation=1
-window/ios/hide_status_bar=false
 window/ios/hide_home_indicator=false
+window/ios/hide_status_bar=false
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/gut/plugin.cfg")
 
 [input]
 
@@ -64,7 +64,3 @@ touch={
 
 renderer/rendering_method="mobile"
 textures/vram_compression/import_etc2_astc=true
-
-[editor_plugins]
-
-enabled=PackedStringArray("res://addons/gut/plugin.cfg")
