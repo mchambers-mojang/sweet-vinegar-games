@@ -276,6 +276,9 @@ func _on_palette_selected(index: int) -> void:
 
 
 func _on_new_palette() -> void:
+	if _unsaved:
+		_show_unsaved_dialog(func() -> void: _on_new_palette())
+		return
 	_show_name_dialog("New Palette", "My Palette", func(name: String) -> void:
 		var defaults: Dictionary = PlatformSettings.default_palette_colors()
 		var new_idx := PlatformSettings.add_custom_palette(
@@ -317,6 +320,9 @@ func _on_rename_palette() -> void:
 
 func _on_duplicate_palette() -> void:
 	if _editing_index < 0:
+		return
+	if _unsaved:
+		_show_unsaved_dialog(func() -> void: _on_duplicate_palette())
 		return
 	var new_idx := PlatformSettings.duplicate_custom_palette(_editing_index)
 	if new_idx >= 0:
