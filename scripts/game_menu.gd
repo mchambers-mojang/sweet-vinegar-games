@@ -67,8 +67,13 @@ func _on_menu_ready() -> void:
 	# Apply default selection on the option dropdown (if present)
 	if not config.option_button_unique_name.is_empty():
 		var opt_btn := get_node_or_null("%" + config.option_button_unique_name) as OptionButton
-		if opt_btn and opt_btn.item_count > config.option_default_index:
-			opt_btn.selected = config.option_default_index
+		if opt_btn:
+			if config.option_default_index < opt_btn.item_count:
+				opt_btn.selected = config.option_default_index
+			else:
+				push_warning("MenuConfig: option_default_index %d is out of bounds (item_count=%d) for %s" % [
+					config.option_default_index, opt_btn.item_count, config.game_id
+				])
 
 
 ## Called when starting a new game.

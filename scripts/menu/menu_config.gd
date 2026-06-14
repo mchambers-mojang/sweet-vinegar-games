@@ -37,8 +37,8 @@ extends Resource
 # --- Button wiring ---
 
 ## Unique-name of the start button in the scene tree.
-## Defaults to "NewGameButton" (the base_menu button).
-## Override to "PlayButton" for menus that use a different label.
+## Defaults to "NewGameButton" (the button in scenes/components/base_menu.tscn).
+## Set to "PlayButton" for menus that use a different label (e.g. Carom).
 @export var start_button_unique_name: String = "NewGameButton"
 
 # --- Option dropdown (difficulty / grid-size / etc.) ---
