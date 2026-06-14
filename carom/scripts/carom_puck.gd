@@ -31,7 +31,6 @@ func _ready() -> void:
 
 func _setup_emission_material() -> void:
 	_puck_material = StandardMaterial3D.new()
-	_puck_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_puck_material.albedo_color = Color(0.02, 0.08, 0.1, 1)
 	_puck_material.emission_enabled = true
 	_puck_material.emission = Color(0.8, 1.0, 1.0, 1)
