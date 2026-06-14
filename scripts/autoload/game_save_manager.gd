@@ -4,7 +4,8 @@ extends Node
 ## Stores opaque Dictionary blobs keyed by game_id.
 ## Uses a single ConfigFile with one section per game.
 
-const SAVE_PATH := "user://game_saves.cfg"
+const DEFAULT_SAVE_PATH := "user://game_saves.cfg"
+var save_path := DEFAULT_SAVE_PATH
 
 # Legacy file paths from the per-game save managers
 const _LEGACY_PATHS := {
@@ -24,26 +25,26 @@ func _ready() -> void:
 
 func has_saved_game(game_id: String) -> bool:
 	var config := ConfigFile.new()
-	if config.load(SAVE_PATH) != OK:
+	if config.load(save_path) != OK:
 		return false
 	return config.has_section(game_id)
 
 
 func save_game(game_id: String, data: Dictionary) -> void:
 	var config := ConfigFile.new()
-	config.load(SAVE_PATH)  # OK if file doesn't exist yet
+	config.load(save_path)  # OK if file doesn't exist yet
 	# Clear previous section to remove stale keys
 	if config.has_section(game_id):
 		config.erase_section(game_id)
 	for key in data.keys():
 		config.set_value(game_id, str(key), data[key])
-	config.save(SAVE_PATH)
+	config.save(save_path)
 	game_saved.emit(game_id)
 
 
 func load_game(game_id: String) -> Dictionary:
 	var config := ConfigFile.new()
-	if config.load(SAVE_PATH) != OK:
+	if config.load(save_path) != OK:
 		return {}
 	if not config.has_section(game_id):
 		return {}
@@ -56,18 +57,18 @@ func load_game(game_id: String) -> Dictionary:
 
 func clear_save(game_id: String) -> void:
 	var config := ConfigFile.new()
-	if config.load(SAVE_PATH) != OK:
+	if config.load(save_path) != OK:
 		game_cleared.emit(game_id)
 		return
 	if config.has_section(game_id):
 		config.erase_section(game_id)
-		config.save(SAVE_PATH)
+		config.save(save_path)
 	game_cleared.emit(game_id)
 
 
 func clear_all() -> void:
-	if FileAccess.file_exists(SAVE_PATH):
-		DirAccess.remove_absolute(SAVE_PATH)
+	if FileAccess.file_exists(save_path):
+		DirAccess.remove_absolute(save_path)
 
 
 ## One-time migration: read legacy per-game save files and import into unified file.
