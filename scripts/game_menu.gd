@@ -298,7 +298,12 @@ func _apply_theme_internal() -> void:
 ## Legacy: falls back to the "new_game_button" subclass property.
 func _find_start_button() -> Button:
 	if config:
-		return get_node_or_null("%" + config.start_button_unique_name) as Button
+		var btn := get_node_or_null("%" + config.start_button_unique_name) as Button
+		if btn:
+			return btn
+		btn = find_child(config.start_button_unique_name, true, false) as Button
+		if btn:
+			return btn
 	return _get_button("new_game_button")
 
 
@@ -311,7 +316,14 @@ func _find_button(property_name: String, unique_name: String = "") -> Button:
 		if val is Button:
 			return val
 	if not unique_name.is_empty():
-		return get_node_or_null("%" + unique_name) as Button
+		var btn := get_node_or_null("%" + unique_name) as Button
+		if btn:
+			return btn
+		# Fall back to recursive find_child — handles instanced sub-scenes
+		# where unique_name_in_owner is scoped to the sub-scene root.
+		btn = find_child(unique_name, true, false) as Button
+		if btn:
+			return btn
 	return null
 
 
