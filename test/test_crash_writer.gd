@@ -61,7 +61,7 @@ func test_get_latest_report_text_returns_empty_when_no_path_set() -> void:
 	writer._latest_report_text = ""
 	writer._latest_report_path = ""
 	# Force the lazy-load path to skip by giving a nonexistent path
-	writer._latest_report_path = "user://crash_logs/__nonexistent_test_file__.json"
+	writer._latest_report_path = "user://crash_logs/nonexistent_test_file.json"
 	var text := writer.get_latest_report_text()
 	assert_eq(text, "", "Should return empty string when file does not exist")
 
