@@ -138,8 +138,8 @@ func _setup_game(saved_data: Dictionary) -> void:
 
 
 func _increment_stats() -> void:
-	GameStatsManager.increment_counter("shikaku", "games_started")
-	GameStatsManager.increment_counter("shikaku", "started_s%d" % grid_width)
+	session.increment_stats_counter("shikaku", "games_started")
+	session.increment_stats_counter("shikaku", "started_s%d" % grid_width)
 
 
 func _get_analytics_params() -> Dictionary:
@@ -172,15 +172,15 @@ func _on_rectangle_placed(rect: Rect2i) -> void:
 	var result: ShikakuLogic.PlaceRectResult = logic.place_rectangle(rect.position.x, rect.position.y, rect.size.x, rect.size.y)
 	if not result.valid:
 		return
-	ReplayRecorder.record_input(elapsed_time, "rectangle_placed", {
+	session.record_input(elapsed_time, "rectangle_placed", {
 		"x": rect.position.x,
 		"y": rect.position.y,
 		"w": rect.size.x,
 		"h": rect.size.y,
 	})
 	board.add_rect(rect)
-	SoundManager.play_place()
-	HapticManager.vibrate_light()
+	session.play_sound_place()
+	session.vibrate_light()
 	# Neon shockwave on rect placement
 	if AppTheme.is_neon:
 		var cell_size := board._get_cell_size()
@@ -205,9 +205,9 @@ func _on_rectangle_tapped(index: int) -> void:
 	var result: ShikakuLogic.RemoveRectResult = logic.remove_rectangle(rect.position.x, rect.position.y, rect.size.x, rect.size.y)
 	if not result.was_present:
 		return
-	ReplayRecorder.record_input(elapsed_time, "rectangle_removed", {"index": index})
+	session.record_input(elapsed_time, "rectangle_removed", {"index": index})
 	board.remove_rect(index)
-	HapticManager.vibrate_light()
+	session.vibrate_light()
 	_update_button_states()
 	_save_current_state()
 
@@ -224,13 +224,13 @@ func _on_undo() -> void:
 		# Find and remove it
 		for i in range(board.placed_rects.size() - 1, -1, -1):
 			if board.placed_rects[i] == placed_rect:
-				ReplayRecorder.record_input(elapsed_time, "rectangle_removed", {"index": i})
+				session.record_input(elapsed_time, "rectangle_removed", {"index": i})
 				board.remove_rect(i)
 				break
 	elif result.action_type == "remove":
 		# Undo a removal = re-add the rect
 		var removed_rect: Rect2i = _rect_from_dict(result.rect)
-		ReplayRecorder.record_input(elapsed_time, "rectangle_placed", {
+		session.record_input(elapsed_time, "rectangle_placed", {
 			"x": removed_rect.position.x,
 			"y": removed_rect.position.y,
 			"w": removed_rect.size.x,
@@ -249,7 +249,7 @@ func _on_redo() -> void:
 		return
 	if result.action_type == "place":
 		var redo_rect: Rect2i = _rect_from_dict(result.rect)
-		ReplayRecorder.record_input(elapsed_time, "rectangle_placed", {
+		session.record_input(elapsed_time, "rectangle_placed", {
 			"x": redo_rect.position.x,
 			"y": redo_rect.position.y,
 			"w": redo_rect.size.x,
@@ -260,7 +260,7 @@ func _on_redo() -> void:
 		var removed_rect: Rect2i = _rect_from_dict(result.rect)
 		for i in range(board.placed_rects.size() - 1, -1, -1):
 			if board.placed_rects[i] == removed_rect:
-				ReplayRecorder.record_input(elapsed_time, "rectangle_removed", {"index": i})
+				session.record_input(elapsed_time, "rectangle_removed", {"index": i})
 				board.remove_rect(i)
 				break
 	_update_button_states()
@@ -273,17 +273,17 @@ func _on_hint() -> void:
 	var result: ShikakuLogic.HintResult = logic.use_hint()
 	if result.rect.is_empty():
 		return
-	CrashCollector.register_user_action("shikaku_hint_used")
+	session.register_user_action("shikaku_hint_used")
 	var hint_rect: Rect2i = _rect_from_dict(result.rect)
-	ReplayRecorder.record_input(elapsed_time, "rectangle_placed", {
+	session.record_input(elapsed_time, "rectangle_placed", {
 		"x": hint_rect.position.x,
 		"y": hint_rect.position.y,
 		"w": hint_rect.size.x,
 		"h": hint_rect.size.y,
 	})
 	board.add_rect(hint_rect)
-	SoundManager.play_place()
-	HapticManager.vibrate_medium()
+	session.play_sound_place()
+	session.vibrate_medium()
 	_update_button_states()
 	if result.game_won:
 		_handle_win()
@@ -294,34 +294,34 @@ func _on_pause() -> void:
 	is_paused = not is_paused
 	pause_button.text = "Resume" if is_paused else "Pause"
 	board.visible = not is_paused
-	CrashCollector.register_user_action("shikaku_pause_toggled", {"is_paused": is_paused})
+	session.register_user_action("shikaku_pause_toggled", {"is_paused": is_paused})
 
 
 func _on_back() -> void:
-	var completed := ReplayRecorder.finish_session("abandoned", board.placed_rects.size(), elapsed_time, {
+	var completed := session.finish_replay("abandoned", board.placed_rects.size(), elapsed_time, {
 		"width": grid_width,
 		"height": grid_height,
 	})
-	ReplayStorage.save_replay(completed)
-	CrashCollector.register_user_action("shikaku_back_to_menu")
+	session.save_completed_replay(completed)
+	session.register_user_action("shikaku_back_to_menu")
 	if not logic.is_completed:
-		AchievementManager.track_streak_broken()
+		session.track_streak_broken()
 	_save_current_state()
 	SceneTransition.transition_to(Scenes.SHIKAKU_MENU)
 
 
 func _handle_win() -> void:
-	var completed := ReplayRecorder.finish_session("win", board.placed_rects.size(), elapsed_time, {
+	var completed := session.finish_replay("win", board.placed_rects.size(), elapsed_time, {
 		"width": grid_width,
 		"height": grid_height,
 		"hints_used": logic.hints_used,
 	})
-	ReplayStorage.save_replay(completed)
+	session.save_completed_replay(completed)
 	var is_new_best := _is_new_best_time()
 	_record_shikaku_completion(grid_width, elapsed_time)
-	AchievementManager.track_game_won("shikaku")
-	AchievementManager.track_shikaku_won(grid_width, elapsed_time)
-	AnalyticsManager.log_event("game_over", {
+	session.track_game_won("shikaku")
+	session.track_shikaku_won(grid_width, elapsed_time)
+	session.log_event("game_over", {
 		"game": "shikaku",
 		"won": true,
 		"width": grid_width,
@@ -330,8 +330,8 @@ func _handle_win() -> void:
 		"hints_used": logic.hints_used,
 	})
 	clear_save()
-	SoundManager.play_win()
-	HapticManager.vibrate_success()
+	session.play_sound_win()
+	session.vibrate_success()
 	if is_new_best:
 		_show_new_best_indicator()
 	# Neon win shockwave
@@ -350,7 +350,7 @@ func _handle_win() -> void:
 
 
 func _is_new_best_time() -> bool:
-	var best_ms: int = GameStatsManager.get_counter("shikaku", "best_s%d" % grid_width)
+	var best_ms: int = session.get_stats_counter("shikaku", "best_s%d" % grid_width)
 	return best_ms == 0 or elapsed_time < (float(best_ms) / 1000.0)
 
 
@@ -363,7 +363,7 @@ func _show_new_best_indicator() -> void:
 	)
 	var color := Color(0.0, 2.0, 1.5) if AppTheme.is_neon else Color(0.2, 0.75, 1.0)
 	ComboLabel.create(board, center, "NEW BEST!", color)
-	HapticManager.vibrate_medium()
+	session.vibrate_medium()
 
 
 func _show_win_dialog() -> void:
@@ -389,7 +389,7 @@ func _show_win_dialog() -> void:
 			dialog.queue_free()
 			SceneTransition.transition_to(Scenes.SHIKAKU_MENU)
 		elif action == "bookmark":
-			var success := ReplayStorage.bookmark_latest_replay()
+			var success := session.bookmark_latest_replay()
 			if success:
 				dialog.dialog_text += "\n\n✓ Replay bookmarked!"
 			else:
@@ -437,7 +437,7 @@ func _cheat_place_one() -> void:
 			if not result.valid:
 				continue
 			board.add_rect(rect)
-			SoundManager.play_place()
+			session.play_sound_place()
 			if result.game_won:
 				_handle_win()
 			_save_current_state()
@@ -450,20 +450,20 @@ func _rect_from_dict(data: Dictionary) -> Rect2i:
 
 
 func _record_shikaku_completion(grid_size: int, time: float) -> void:
-	GameStatsManager.record("shikaku", {
+	session.record_stats("shikaku", {
 		"type": "completion",
 		"grid_size": grid_size,
 		"time": time,
 	})
-	GameStatsManager.increment_counter("shikaku", "completed_s%d" % grid_size)
+	session.increment_stats_counter("shikaku", "completed_s%d" % grid_size)
 	# Best time (stored as ms int)
-	var best_ms: int = GameStatsManager.get_counter("shikaku", "best_s%d" % grid_size)
+	var best_ms: int = session.get_stats_counter("shikaku", "best_s%d" % grid_size)
 	var time_ms := int(time * 1000)
 	if best_ms == 0 or time_ms < best_ms:
-		GameStatsManager.set_counter("shikaku", "best_s%d" % grid_size, time_ms)
+		session.set_stats_counter("shikaku", "best_s%d" % grid_size, time_ms)
 	# Streak
-	var streak: int = GameStatsManager.get_counter("shikaku", "current_streak") + 1
-	GameStatsManager.set_counter("shikaku", "current_streak", streak)
-	var best_streak: int = GameStatsManager.get_counter("shikaku", "best_streak")
+	var streak: int = session.get_stats_counter("shikaku", "current_streak") + 1
+	session.set_stats_counter("shikaku", "current_streak", streak)
+	var best_streak: int = session.get_stats_counter("shikaku", "best_streak")
 	if streak > best_streak:
-		GameStatsManager.set_counter("shikaku", "best_streak", streak)
+		session.set_stats_counter("shikaku", "best_streak", streak)
