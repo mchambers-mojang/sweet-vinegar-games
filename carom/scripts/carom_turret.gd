@@ -247,9 +247,9 @@ func _update_aim_projection() -> void:
 
 # --- Ammo ring (3D visual on turret base) ---
 
-const AMMO_RING_RADIUS: float = 0.6
-const AMMO_BULLET_RADIUS: float = 0.06
-const AMMO_BULLET_HEIGHT: float = 0.2
+const AMMO_RING_RADIUS: float = 0.8
+const AMMO_BULLET_RADIUS: float = 0.1
+const AMMO_BULLET_HEIGHT: float = 0.35
 
 func _create_ammo_ring() -> void:
 	_ammo_ring_node = Node3D.new()
@@ -260,7 +260,7 @@ func _create_ammo_ring() -> void:
 
 
 func _build_ammo_indicators() -> void:
-	_ammo_ring_node.global_position = global_position + Vector3(0.0, 0.15, 0.0)
+	_ammo_ring_node.global_position = global_position + Vector3(0.0, 0.25, 0.0)
 	_ammo_indicators.clear()
 
 	var arc_start := -PI * 0.4
@@ -284,7 +284,7 @@ func _build_ammo_indicators() -> void:
 		mat.albedo_color = team_color
 		mat.emission_enabled = true
 		mat.emission = team_color
-		mat.emission_energy_multiplier = 2.0
+		mat.emission_energy_multiplier = 4.0
 		mesh_inst.material_override = mat
 
 		mesh_inst.position = offset
@@ -301,13 +301,15 @@ func _update_ammo_visuals() -> void:
 		if i < current_ammo:
 			mat.albedo_color = team_color
 			mat.emission = team_color
-			mat.emission_energy_multiplier = 2.0
+			mat.emission_energy_multiplier = 4.0
 			indicator.scale = Vector3.ONE
+			indicator.visible = true
 		else:
-			mat.albedo_color = team_color * 0.2
-			mat.emission = team_color * 0.1
-			mat.emission_energy_multiplier = 0.2
-			indicator.scale = Vector3(0.6, 0.6, 0.6)
+			mat.albedo_color = Color(0.15, 0.15, 0.15)
+			mat.emission = Color.BLACK
+			mat.emission_energy_multiplier = 0.0
+			indicator.scale = Vector3(0.5, 0.5, 0.5)
+			indicator.visible = true
 
 
 func _on_ammo_changed_visual(_current: int, _max: int) -> void:

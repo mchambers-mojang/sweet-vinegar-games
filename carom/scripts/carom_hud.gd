@@ -142,8 +142,10 @@ func _create_reload_button() -> void:
 	_reload_button.reload_requested.connect(func() -> void:
 		reload_requested.emit()
 	)
-	_position_reload_button()
 	get_parent().add_child(_reload_button)
+	# Defer positioning to ensure viewport has final size
+	get_viewport().size_changed.connect(_position_reload_button)
+	call_deferred("_position_reload_button")
 
 
 func _position_reload_button() -> void:
