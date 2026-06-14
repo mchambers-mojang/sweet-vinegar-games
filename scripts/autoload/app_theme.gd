@@ -91,8 +91,6 @@ var _neon_colors := {
 	"strike_inactive": Color(0.2, 0.15, 0.35),
 }
 
-var _custom_colors: Dictionary = {}
-
 # --- Icon state ---
 
 var _icons: Dictionary = {}
@@ -171,65 +169,106 @@ func set_theme_mode(mode: String) -> void:
 		"custom":
 			is_neon = true
 			is_dark = true
-			_custom_colors = _build_custom_palette(
-				PlatformSettings.custom_palette_bg,
-				PlatformSettings.custom_palette_accent,
-				PlatformSettings.custom_palette_secondary,
-				PlatformSettings.custom_palette_error
-			)
-			_apply_color_set(_custom_colors)
+			var pal: Dictionary = PlatformSettings.get_active_custom_palette()
+			if not pal.is_empty():
+				_apply_color_set(build_custom_palette(pal["bg"], pal["accent"], pal["secondary"], pal["error"]))
+			else:
+				_apply_color_set(_neon_colors)
 	_rebuild_ui_theme()
 	theme_changed.emit(is_dark)
 	_retint_icon_buttons()
 
 
+## Derives a full 22-key color palette from 4 user-chosen base colors.
+## Intended for use with the "custom" neon-style theme mode.
+## [b]accent[/b], [b]secondary[/b], and [b]error[/b] may carry HDR values (>1.0)
+## to drive neon bloom; derived surface/cell colors are clamped to [0, 1] so they
+## display correctly on non-HDR render targets.
+static func build_custom_palette(bg: Color, accent: Color, secondary: Color, error: Color) -> Dictionary:
+	# Background variants — slight brightness offsets to keep the dark neon feel.
+	# Clamped to [0,1] because these are standard (non-HDR) surface colors.
+	var s := 0.03  # step
+	var cell_bg := Color(
+		clampf(bg.r + s, 0.0, 1.0),
+		clampf(bg.g + s, 0.0, 1.0),
+		clampf(bg.b + s * 1.5, 0.0, 1.0))
+	var cell_given := Color(
+		clampf(bg.r + s * 1.5, 0.0, 1.0),
+		clampf(bg.g + s * 1.5, 0.0, 1.0),
+		clampf(bg.b + s * 3.0, 0.0, 1.0))
+	var btn_bg := Color(
+		clampf(bg.r + s * 1.5, 0.0, 1.0),
+		clampf(bg.g + s * 0.5, 0.0, 1.0),
+		clampf(bg.b + s * 3.0, 0.0, 1.0))
+	var btn_hover := Color(
+		clampf(bg.r + s * 3.0, 0.0, 1.0),
+		clampf(bg.g + s * 1.5, 0.0, 1.0),
+		clampf(bg.b + s * 6.0, 0.0, 1.0))
+	var btn_pressed := Color(
+		clampf(bg.r + s * 0.5, 0.0, 1.0),
+		clampf(bg.g + s * 0.3, 0.0, 1.0),
+		clampf(bg.b + s, 0.0, 1.0))
+
+	# Cell tinting — bg + small fraction of the accent/secondary/error color.
+	# Accent/secondary may be HDR (>1.0), so the blended result must be clamped
+	# to [0,1] for cell backgrounds which are not bloom-rendered.
+	var t := 0.08
+	var cell_sel := Color(
+		clampf(bg.r + accent.r * t * 1.5, 0.0, 1.0),
+		clampf(bg.g + accent.g * t * 1.5, 0.0, 1.0),
+		clampf(bg.b + accent.b * t * 2.0, 0.0, 1.0))
+	var cell_same := Color(
+		clampf(bg.r + secondary.r * t, 0.0, 1.0),
+		clampf(bg.g + secondary.g * t * 0.05, 0.0, 1.0),
+		clampf(bg.b + secondary.b * t * 1.5, 0.0, 1.0))
+	var cell_hi := Color(
+		clampf(bg.r + secondary.r * t * 0.5, 0.0, 1.0),
+		clampf(bg.g + secondary.g * t * 0.3, 0.0, 1.0),
+		clampf(bg.b + secondary.b * t, 0.0, 1.0))
+	var cell_err := Color(clampf(error.r * 0.25, 0.0, 1.0), clampf(error.g * 0.05, 0.0, 1.0), clampf(error.b * 0.1, 0.0, 1.0))
+
+	# Thin grid: bg lightened with faint accent tint (clamped, not HDR)
+	var grid_thin := Color(
+		clampf(bg.r * 1.5 + accent.r * 0.05, 0.0, 1.0),
+		clampf(bg.g * 1.5 + accent.g * 0.05, 0.0, 1.0),
+		clampf(bg.b * 1.5 + accent.b * 0.05, 0.0, 1.0)
+	)
+
+	# Muted auto-derived versions at ~30% intensity
+	var a30 := Color(accent.r * 0.3, accent.g * 0.3, accent.b * 0.3)
+	var s30 := Color(secondary.r * 0.25, secondary.g * 0.25, secondary.b * 0.25)
+	var e30 := Color(error.r * 0.3, error.g * 0.3, error.b * 0.3)
+
+	return {
+		"background": bg,
+		"cell_background": cell_bg,
+		"cell_selected": cell_sel,
+		"cell_highlighted": cell_hi,
+		"cell_same_number": cell_same,
+		"cell_error": cell_err,
+		"cell_given": cell_given,
+		"grid_line_thin": grid_thin,
+		"grid_line_thick": accent,
+		"text_given": accent,
+		"text_placed": secondary,
+		"text_error": error,
+		"text_pencil": s30,
+		"button_bg": btn_bg,
+		"button_bg_hover": btn_hover,
+		"button_bg_pressed": btn_pressed,
+		"button_text": accent,
+		"button_disabled": bg,
+		"button_disabled_text": a30,
+		"label_text": accent,
+		"timer_text": secondary,
+		"strike_active": error,
+		"strike_inactive": e30,
+	}
+
+
 func _apply_color_set(source: Dictionary) -> void:
 	for key in source:
 		colors[key] = source[key]
-
-
-func _build_custom_palette(bg: Color, accent: Color, secondary: Color, error: Color) -> Dictionary:
-	var p := {}
-
-	# Background group — slight value shifts
-	p["background"] = bg
-	p["cell_background"] = Color(bg.r + 0.02, bg.g + 0.02, bg.b + 0.04)
-	p["cell_given"] = Color(bg.r + 0.04, bg.g + 0.04, bg.b + 0.08)
-	p["button_bg"] = Color(bg.r + 0.04, bg.g + 0.02, bg.b + 0.08)
-	p["button_bg_hover"] = Color(bg.r + 0.08, bg.g + 0.04, bg.b + 0.18)
-	p["button_bg_pressed"] = Color(bg.r + 0.02, bg.g + 0.0, bg.b + 0.04)
-	p["button_disabled"] = Color(bg.r + 0.04, bg.g + 0.02, bg.b + 0.04)
-
-	# Accent group — full intensity + cell tints
-	p["grid_line_thick"] = accent
-	p["text_given"] = accent
-	p["button_text"] = accent
-	p["label_text"] = accent
-	# Cell tints blend bg with a fixed dark-mode contrast offset plus an accent-hue contribution.
-	# Coefficients are calibrated so the neon defaults reproduce _neon_colors exactly.
-	p["cell_selected"] = Color(bg.r + 0.08 + accent.r * 0.053, bg.g + accent.g * 0.067, bg.b + accent.b * 0.133)
-	p["cell_same_number"] = Color(bg.r + 0.11, bg.g + 0.01, bg.b + 0.25)
-
-	# Secondary group — full intensity + cell tint
-	p["text_placed"] = secondary
-	# timer_text is a 75/67% dimmed version of secondary so neon defaults match _neon_colors.
-	p["timer_text"] = Color(secondary.r * 0.75, secondary.g * 0.667, secondary.b * 0.667)
-	p["cell_highlighted"] = Color(bg.r + 0.06, bg.g + 0.04, bg.b + 0.12)
-
-	# Error group — full intensity + cell tint
-	p["text_error"] = error
-	p["strike_active"] = error
-	# cell_error: error.r drives the red boost; the same channel also suppresses the green
-	# component so the error cell looks clean red rather than orange/brown.
-	p["cell_error"] = Color(bg.r + error.r * 0.23, maxf(0.0, bg.g - error.r * 0.02), bg.b)
-
-	# Auto-derived — dark bg-relative values; offsets match neon defaults exactly.
-	p["grid_line_thin"] = Color(bg.r + 0.11, bg.g + 0.06, bg.b + 0.25)
-	p["text_pencil"] = Color(bg.r + 0.16, bg.g + 0.11, bg.b + 0.40)
-	p["button_disabled_text"] = Color(bg.r + 0.21, bg.g + 0.16, bg.b + 0.30)
-	p["strike_inactive"] = Color(bg.r + 0.16, bg.g + 0.11, bg.b + 0.25)
-
-	return p
 
 
 func set_dark(dark: bool) -> void:

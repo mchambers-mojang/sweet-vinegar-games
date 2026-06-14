@@ -149,25 +149,16 @@ func _build_settings_ui() -> void:
 				1: PlatformSettings.dark_mode = "light"
 				2: PlatformSettings.dark_mode = "dark"
 				3: PlatformSettings.dark_mode = "neon"
-				4: PlatformSettings.dark_mode = "custom"
+				4:
+					PlatformSettings.ensure_default_palette()
+					PlatformSettings.dark_mode = "custom"
 			PlatformSettings.save_settings()
 	)
 
 	# Customize palette button
-	var customize_row := HBoxContainer.new()
-	customize_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	customize_row.mouse_filter = Control.MOUSE_FILTER_PASS
-	var customize_spacer := Control.new()
-	customize_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	customize_spacer.mouse_filter = Control.MOUSE_FILTER_PASS
-	customize_row.add_child(customize_spacer)
-	var customize_btn := Button.new()
-	customize_btn.text = "Customize..."
-	customize_btn.pressed.connect(func() -> void:
+	_add_button("Customize Palette...", func() -> void:
 		SceneTransition.transition_to(Scenes.THEME_EDITOR)
 	)
-	customize_row.add_child(customize_btn)
-	settings_list.add_child(customize_row)
 
 	# Timer
 	_add_toggle("Show Timer", PlatformSettings.show_timer,
@@ -269,6 +260,14 @@ func _add_option_button(label_text: String, options: Array, selected: int, callb
 	row.add_child(option_btn)
 
 	settings_list.add_child(row)
+
+
+func _add_button(label_text: String, callback: Callable) -> void:
+	var btn := Button.new()
+	btn.text = label_text
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.pressed.connect(callback)
+	settings_list.add_child(btn)
 
 
 func _apply_theme() -> void:
