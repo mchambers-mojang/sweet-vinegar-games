@@ -105,6 +105,10 @@ func _on_goal_scored(scoring_side: StringName, goal_puck: CaromPuck) -> void:
 		return
 
 	var goal_position: Vector3 = goal_puck.global_position
+	var goal_zone := arena.south_goal if scoring_side == &"north" else arena.north_goal
+	var scoring_color := setup.player_turret.team_color if scoring_side == &"north" else setup.ai_turret.team_color
+	if _effects:
+		_effects.play_goal_scored(goal_position, scoring_side, scoring_color, goal_puck, goal_zone)
 
 	# Only respawn the puck that scored — gameplay continues uninterrupted
 	var puck_index := setup.pucks.find(goal_puck)
@@ -124,10 +128,6 @@ func _on_goal_scored(scoring_side: StringName, goal_puck: CaromPuck) -> void:
 
 	hud.update_scores(state.player_score, state.ai_score)
 	_update_ammo_display()
-
-	# Goal celebration effects (every goal)
-	if _effects:
-		_effects.play_goal_scored(goal_position)
 
 	if result.match_over:
 		await _play_match_win_sequence(goal_position)

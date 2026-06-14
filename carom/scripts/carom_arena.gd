@@ -3,6 +3,8 @@ extends Node3D
 
 ## Carom arena root — provides spawn points and goal detection for the match controller.
 
+const CaromAmbientParticlesScene := preload("res://carom/scripts/effects/carom_ambient_particles.gd")
+
 signal goal_scored(scoring_side: StringName, puck: CaromPuck)
 
 @export var arena_width: float = 20.0
@@ -25,7 +27,7 @@ func _ready() -> void:
 
 
 func _setup_ambient_particles() -> void:
-	var ambient := CaromAmbientParticles.new()
+	var ambient := CaromAmbientParticlesScene.new()
 	ambient.name = "AmbientParticles"
 	add_child(ambient)
 	ambient.setup(arena_width, arena_depth)
