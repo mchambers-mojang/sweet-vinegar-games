@@ -32,6 +32,9 @@ extends Resource
 ## Base fire interval in seconds (before multiplier).
 @export var base_fire_interval: float = 1.0
 
+## Fraction of arena length shown for player aim projection (0 disables it).
+@export var aim_projection_distance: float = 0.35
+
 
 static func easy() -> CaromAIDifficulty:
 	var d := CaromAIDifficulty.new()
@@ -45,6 +48,7 @@ static func easy() -> CaromAIDifficulty:
 	d.aim_tracking_speed = 0.5
 	d.reload_threshold = 1
 	d.base_fire_interval = 1.2
+	d.aim_projection_distance = 0.60
 	return d
 
 
@@ -60,6 +64,7 @@ static func medium() -> CaromAIDifficulty:
 	d.aim_tracking_speed = 0.7
 	d.reload_threshold = 2
 	d.base_fire_interval = 1.0
+	d.aim_projection_distance = 0.35
 	return d
 
 
@@ -75,6 +80,7 @@ static func hard() -> CaromAIDifficulty:
 	d.aim_tracking_speed = 0.9
 	d.reload_threshold = 3
 	d.base_fire_interval = 0.8
+	d.aim_projection_distance = 0.15
 	return d
 
 
@@ -90,6 +96,7 @@ static func brutal() -> CaromAIDifficulty:
 	d.aim_tracking_speed = 1.0
 	d.reload_threshold = 4
 	d.base_fire_interval = 0.65
+	d.aim_projection_distance = 0.0
 	return d
 
 
