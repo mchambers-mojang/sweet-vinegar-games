@@ -156,6 +156,10 @@ func _should_tick_timer() -> bool:
 	return (logic == null or not logic.is_completed) and not is_paused
 
 
+func _get_difficulty() -> int:
+	return difficulty
+
+
 func _get_start_crash_params() -> Dictionary:
 	return {"difficulty": difficulty}
 
@@ -322,7 +326,9 @@ func _handle_number_first_cell_tap(index: int) -> void:
 	if cell.is_given:
 		return
 	# Place the pre-selected number into this cell
-	ReplayRecorder.record_input(elapsed_time, "number_input", {
+	GameEvents.move_made.emit("sudoku", {
+		"elapsed_time": elapsed_time,
+		"event_type": "number_input",
 		"index": index,
 		"number": _selected_number,
 		"notes_mode": notes_mode,
@@ -425,7 +431,9 @@ func _place_or_note_number(number: int) -> void:
 	var cell := board.cells[index]
 	if cell.is_given:
 		return
-	ReplayRecorder.record_input(elapsed_time, "number_input", {
+	GameEvents.move_made.emit("sudoku", {
+		"elapsed_time": elapsed_time,
+		"event_type": "number_input",
 		"index": index,
 		"number": number,
 		"notes_mode": notes_mode,
@@ -1082,6 +1090,7 @@ func _is_board_locked() -> bool:
 
 
 func _log_game_over_analytics(won: bool) -> void:
+	GameEvents.game_ended.emit("sudoku", "win" if won else "game_over", elapsed_time)
 	AnalyticsManager.log_event("game_over", {
 		"game": "sudoku",
 		"won": won,

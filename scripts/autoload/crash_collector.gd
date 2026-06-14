@@ -20,6 +20,8 @@ func _ready() -> void:
 		var file := FileAccess.open(_log_file_path, FileAccess.READ)
 		if file:
 			_last_log_size = file.get_length()
+	GameEvents.game_started.connect(_on_game_events_game_started)
+	GameEvents.game_ended.connect(_on_game_events_game_ended)
 
 
 func _process(delta: float) -> void:
@@ -193,3 +195,13 @@ func _get_app_version() -> String:
 	if project_version != "":
 		return project_version
 	return str(ProjectSettings.get_setting("application/config/name", ""))
+
+
+# --- GameEvents subscriptions ---
+
+func _on_game_events_game_started(game_id: String, _difficulty: int, rules: Dictionary) -> void:
+	register_user_action(game_id + "_game_started", rules)
+
+
+func _on_game_events_game_ended(game_id: String, outcome: String, _duration: float) -> void:
+	register_user_action(game_id + "_game_ended", {"outcome": outcome})

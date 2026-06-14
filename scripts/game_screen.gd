@@ -122,6 +122,13 @@ func _should_tick_timer() -> bool:
 	return true
 
 
+## Return the difficulty level for the game_started domain event.
+## Override in game screens with explicit difficulty (e.g. Sudoku).
+## Returns -1 for games without an explicit difficulty level.
+func _get_difficulty() -> int:
+	return -1
+
+
 # --- Lifecycle ---
 
 func _ready() -> void:
@@ -189,9 +196,6 @@ func begin_session(saved_data: Dictionary = {}) -> void:
 		random_seed = _create_session_seed()
 		elapsed_time = 0.0
 		replay_id = ""
-		CrashCollector.register_user_action(
-				game_id + "_start_new_game",
-				_get_start_crash_params())
 
 	# _setup_game() runs here so game state (board, seed derivation for legacy
 	# saves) is fully initialised before ReplayRecorder.start_session() below.
@@ -203,7 +207,7 @@ func begin_session(saved_data: Dictionary = {}) -> void:
 
 	if not is_resuming:
 		_increment_stats()
-		AnalyticsManager.log_event("game_started", _get_analytics_params())
+		GameEvents.game_started.emit(game_id, _get_difficulty(), _get_analytics_params())
 
 	AchievementManager.track_game_started(game_id)
 	_save_current_state()

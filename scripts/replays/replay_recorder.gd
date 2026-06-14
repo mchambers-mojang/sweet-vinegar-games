@@ -20,6 +20,7 @@ func _ready() -> void:
 	_id_rng.randomize()
 	_load_active_replay()
 	CrashCollector.register_replay_hook(get_crash_recovery_payload)
+	GameEvents.move_made.connect(_on_game_events_move_made)
 
 
 func _process(delta: float) -> void:
@@ -141,3 +142,16 @@ func _get_game_version() -> String:
 		return version
 	var features = ProjectSettings.get_setting("application/config/features", PackedStringArray())
 	return ",".join(features)
+
+
+# --- GameEvents subscriptions ---
+
+func _on_game_events_move_made(_game_id: String, move_data: Dictionary) -> void:
+	if _active_replay.is_empty():
+		return
+	var elapsed: float = move_data.get("elapsed_time", 0.0)
+	var event_type: String = move_data.get("event_type", "move")
+	var payload: Dictionary = move_data.duplicate()
+	payload.erase("elapsed_time")
+	payload.erase("event_type")
+	record_input(elapsed, event_type, payload)

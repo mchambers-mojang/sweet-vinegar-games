@@ -172,7 +172,9 @@ func _on_rectangle_placed(rect: Rect2i) -> void:
 	var result: ShikakuLogic.PlaceRectResult = logic.place_rectangle(rect.position.x, rect.position.y, rect.size.x, rect.size.y)
 	if not result.valid:
 		return
-	ReplayRecorder.record_input(elapsed_time, "rectangle_placed", {
+	GameEvents.move_made.emit("shikaku", {
+		"elapsed_time": elapsed_time,
+		"event_type": "rectangle_placed",
 		"x": rect.position.x,
 		"y": rect.position.y,
 		"w": rect.size.x,
@@ -311,6 +313,7 @@ func _on_back() -> void:
 
 
 func _handle_win() -> void:
+	GameEvents.game_ended.emit("shikaku", "win", elapsed_time)
 	var completed := ReplayRecorder.finish_session("win", board.placed_rects.size(), elapsed_time, {
 		"width": grid_width,
 		"height": grid_height,
