@@ -45,6 +45,9 @@ func register_turret(turret: CaromTurret) -> void:
 
 
 func _on_projectile_fired(projectile: CaromProjectile, color: Color) -> void:
+	# Muzzle flash at the barrel tip
+	CaromMuzzleFlash.spawn(projectile.global_position, color, get_tree().current_scene)
+
 	# Attach ribbon trail
 	var trail := CaromProjectileTrail.new()
 	trail.attach(projectile, color)
