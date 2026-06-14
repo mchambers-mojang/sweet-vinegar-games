@@ -24,9 +24,10 @@ func write_report(report: Dictionary) -> String:
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	if file == null:
 		return ""
-	file.store_string(JSON.stringify(report, "\t"))
+	var json := JSON.stringify(report, "\t")
+	file.store_string(json)
 	_latest_report_path = path
-	_latest_report_text = JSON.stringify(report, "\t")
+	_latest_report_text = json
 	trim_old_reports()
 	return path
 

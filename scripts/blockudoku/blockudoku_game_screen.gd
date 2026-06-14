@@ -500,6 +500,7 @@ func _handle_game_over() -> void:
 	logic.is_game_over = true
 	ReplayManager.finish_session("game_over", logic.score, elapsed_time, {
 		"turns": logic.turns,
+		"board_state": board.get_state(),
 	})
 	_update_undo_redo_buttons()
 	_record_blockudoku_game_over(logic.score, logic.turns)
