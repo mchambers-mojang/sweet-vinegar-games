@@ -36,10 +36,10 @@ func update_projection(origin_global: Vector3, direction_global: Vector3) -> voi
 		_clear_projection()
 		return
 
-	var direction := direction_global.normalized()
-	if direction.length_squared() <= 0.0:
+	if direction_global.length_squared() <= 0.0:
 		_clear_projection()
 		return
+	var direction := direction_global.normalized()
 
 	var points: Array[Vector3] = [to_local(origin_global)]
 	var space_state: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
@@ -47,7 +47,11 @@ func update_projection(origin_global: Vector3, direction_global: Vector3) -> voi
 	var remaining_distance := max_distance
 	var bounces := 0
 
-	while remaining_distance > 0.0 and bounces < max_bounces:
+	while remaining_distance > 0.0:
+		if bounces >= max_bounces:
+			points.append(to_local(current_origin + direction * remaining_distance))
+			break
+
 		var end_point := current_origin + direction * remaining_distance
 		var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(current_origin, end_point, wall_collision_mask)
 		query.collide_with_areas = false
@@ -68,15 +72,13 @@ func update_projection(origin_global: Vector3, direction_global: Vector3) -> voi
 		if remaining_distance <= 0.0:
 			break
 
-		direction = direction.bounce(hit_normal).normalized()
-		if direction.length_squared() <= 0.0:
+		var bounced_direction := direction.bounce(hit_normal)
+		if bounced_direction.length_squared() <= 0.0:
 			break
+		direction = bounced_direction.normalized()
 
 		current_origin = hit_position + direction * 0.02
 		bounces += 1
-
-	if remaining_distance > 0.0 and points.size() > 0:
-		points.append(to_local(current_origin + direction * remaining_distance))
 
 	_draw_projection(points)
 
