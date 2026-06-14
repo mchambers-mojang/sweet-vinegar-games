@@ -58,6 +58,7 @@ func transition_with_callback(callback: Callable) -> void:
 
 
 func _fade_in() -> void:
+	_auto_apply_safe_area()
 	if _tween and _tween.is_valid():
 		_tween.kill()
 	_tween = create_tween()
@@ -66,6 +67,14 @@ func _fade_in() -> void:
 		_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_transitioning = false
 	)
+
+
+## Auto-apply safe area to every scene root under the tree root.
+## Skips nodes that set the "skip_safe_area" metadata flag to true.
+## Safe to call on autoloads — they simply won't have a MarginContainer child.
+func _auto_apply_safe_area() -> void:
+	for child in get_tree().root.get_children():
+		SafeAreaManager.apply_to_scene_root(child)
 
 
 func _get_fade_color(alpha: float) -> Color:

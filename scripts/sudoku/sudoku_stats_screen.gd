@@ -9,9 +9,6 @@ const DIFFICULTY_NAMES := ["Easy", "Medium", "Hard", "Expert", "Evil"]
 
 
 func _ready() -> void:
-	var margin := get_node_or_null("MarginContainer") as MarginContainer
-	if margin:
-		SafeAreaManager.apply(margin)
 	back_button.pressed.connect(func() -> void:
 		SceneTransition.transition_to(Scenes.SUDOKU_MENU)
 	)
