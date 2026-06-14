@@ -385,7 +385,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 			board.flash_placed_cells(_drag_shape, grid_pos.x, grid_pos.y, block_color)
 
 			# Light screen shake
-			NeonFxManager.screen_shake(3.0, 0.1)
+			AppTheme.screen_shake(3.0, 0.1)
 
 		# Hide the tray panel
 		if _drag_block_index < _tray_panels.size():
@@ -576,7 +576,7 @@ func _play_board_shatter() -> void:
 		_shatter_tween.tween_callback(func() -> void:
 			var board_center := origin + Vector2(cell_size * 4.5, cell_size * 4.5)
 			NeonRing.create(board, board_center, Color(2.0, 0.0, 0.3), cell_size * 8.0, 0.5, 1.5)
-			NeonFxManager.screen_shake(8.0, 0.3)
+			AppTheme.screen_shake(8.0, 0.3)
 		).set_delay(0.1)
 
 
