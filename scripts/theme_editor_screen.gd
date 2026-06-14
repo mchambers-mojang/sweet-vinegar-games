@@ -26,7 +26,7 @@ func _ready() -> void:
 	if margin:
 		SafeAreaManager.apply(margin)
 
-	# Initialise pickers from saved custom palette
+	# Initialize pickers from saved custom palette
 	bg_picker.color = PlatformSettings.custom_palette_bg
 	accent_picker.color = PlatformSettings.custom_palette_accent
 	secondary_picker.color = PlatformSettings.custom_palette_secondary

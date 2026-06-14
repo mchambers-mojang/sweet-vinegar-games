@@ -218,7 +218,7 @@ func _build_custom_palette(bg: Color, accent: Color, secondary: Color, error: Co
 	p["strike_active"] = error
 	p["cell_error"] = Color(bg.r + error.r * 0.15, bg.g + error.g * 0.02, bg.b + error.b * 0.02)
 
-	# Auto-derived (~15–25 % intensity of parent group)
+	# Auto-derived (~15–25% intensity of parent group)
 	p["grid_line_thin"] = Color(accent.r * 0.15, accent.g * 0.15, accent.b * 0.15)
 	p["text_pencil"] = Color(secondary.r * 0.15, secondary.g * 0.15, secondary.b * 0.15)
 	p["button_disabled_text"] = Color(accent.r * 0.25, accent.g * 0.25, accent.b * 0.25)
