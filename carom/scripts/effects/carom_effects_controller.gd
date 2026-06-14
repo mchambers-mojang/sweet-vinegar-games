@@ -110,8 +110,9 @@ func play_goal_celebration(
 	if _screen_shake:
 		_screen_shake.shake(GOAL_SCREEN_SHAKE_INTENSITY)
 
-	var cleanup_timer := get_tree().create_timer(GOAL_CELEBRATION_LIFETIME)
-	cleanup_timer.timeout.connect(celebration.queue_free)
+	var cleanup_tween := celebration.create_tween()
+	cleanup_tween.tween_interval(GOAL_CELEBRATION_LIFETIME)
+	cleanup_tween.tween_callback(celebration.queue_free)
 	return celebration
 
 
@@ -204,7 +205,7 @@ func _spawn_puck_fragments(parent: Node3D, goal_puck: CaromPuck, goal_position: 
 			rng.randf_range(-8.0, 8.0)
 		)
 
-		var tween := create_tween()
+		var tween := fragment.create_tween()
 		tween.set_parallel(true)
 		tween.tween_property(mesh_instance, "scale", Vector3.ONE * 0.18, GOAL_FRAGMENT_LIFETIME)
 		tween.tween_method(
@@ -232,7 +233,7 @@ func _spawn_goal_flare(parent: Node3D, goal_zone: Area3D, scoring_side: StringNa
 	parent.add_child(flare)
 	flare.global_transform = goal_mesh.global_transform.translated_local(Vector3(0.0, 0.03, 0.0))
 
-	var tween := create_tween()
+	var tween := flare.create_tween()
 	tween.set_parallel(true)
 	tween.tween_method(Callable(self, "_set_flare_state").bind(material, color), 1.0, 0.0, 0.45)
 	tween.tween_property(flare, "scale", Vector3(1.28, 1.1, 1.28), 0.16)
