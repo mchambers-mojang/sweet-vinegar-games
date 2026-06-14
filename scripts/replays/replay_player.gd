@@ -34,7 +34,7 @@ func _ready() -> void:
 	if margin:
 		SafeAreaManager.apply(margin)
 	back_button.pressed.connect(func() -> void:
-		SceneTransition.transition_to("res://scenes/replays.tscn")
+		SceneTransition.transition_to(Scenes.REPLAYS)
 	)
 	play_button.pressed.connect(_toggle_play)
 	speed_button.pressed.connect(_cycle_speed)

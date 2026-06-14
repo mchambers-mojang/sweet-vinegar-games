@@ -3,22 +3,12 @@ extends GameScreen
 ## Shikaku game screen — board, timer, controls
 
 const SIZE_NAMES := {5: "5×5", 7: "7×7", 8: "8×8", 10: "10×10", 12: "12×12", 15: "15×15"}
-const LEGACY_SEED_HASH_INITIAL := 23
-const LEGACY_SEED_HASH_MULTIPLIER := 31
-const LEGACY_SEED_HASH_X_FACTOR := 7
-const LEGACY_SEED_HASH_Y_FACTOR := 13
 
 # Game state
-var puzzle_data: Dictionary = {}  # width, height, numbers, solution
 var grid_width: int = 10
 var grid_height: int = 10
-var is_completed: bool = false
 var is_paused: bool = false
-var hints_used: int = 0
-
-# Undo/redo
-var undo_stack: Array[Dictionary] = []
-var redo_stack: Array[Dictionary] = []
+var logic: ShikakuLogic = ShikakuLogic.new()
 
 # Cheat
 var _cheat_active: bool = false
@@ -44,29 +34,22 @@ func _get_game_id() -> String:
 
 
 func _get_scene_path() -> String:
-	return "res://scenes/shikaku_game.tscn"
+	return Scenes.SHIKAKU_GAME
 
 
 func _is_initialized() -> bool:
-	return not puzzle_data.is_empty()
+	return not logic.numbers.is_empty()
 
 
 func _is_completed() -> bool:
-	return is_completed
+	return logic.is_completed
 
 
 func _serialize_state() -> Dictionary:
-	return {
-		"width": grid_width,
-		"height": grid_height,
-		"numbers": _serialize_numbers(puzzle_data["numbers"]),
-		"solution": _serialize_rects(puzzle_data["solution"]),
-		"placed_rects": _serialize_rects(board.placed_rects),
-		"elapsed_time": elapsed_time,
-		"hints_used": hints_used,
-		"random_seed": random_seed,
-		"replay_id": replay_id,
-	}
+	var data: Dictionary = logic.serialize()
+	data["elapsed_time"] = elapsed_time
+	data["replay_id"] = replay_id
+	return data
 
 
 func _deserialize_state(data: Dictionary) -> void:
@@ -79,10 +62,10 @@ func _get_crash_state() -> Dictionary:
 		"width": grid_width,
 		"height": grid_height,
 		"elapsed_time": elapsed_time,
-		"is_completed": is_completed,
+		"is_completed": logic.is_completed,
 		"is_paused": is_paused,
-		"hints_used": hints_used,
-		"placed_rects": board.placed_rects.size() if board else 0,
+		"hints_used": logic.hints_used,
+		"placed_rects": logic.placed_rects.size(),
 	}
 
 
@@ -104,25 +87,19 @@ func _on_game_screen_ready() -> void:
 func start_new_game(w: int, h: int) -> void:
 	grid_width = w
 	grid_height = h
-	is_completed = false
-	hints_used = 0
-	undo_stack.clear()
-	redo_stack.clear()
 	begin_session()
 
 
 func resume_game(data: Dictionary) -> void:
 	grid_width = data.get("width", 10)
 	grid_height = data.get("height", 10)
-	hints_used = data.get("hints_used", 0)
-	is_completed = false
 	begin_session(data)
 
 
 # --- Session ceremony hooks ---
 
 func _should_tick_timer() -> bool:
-	return not is_completed and not is_paused
+	return not logic.is_completed and not is_paused
 
 
 func _get_start_crash_params() -> Dictionary:
@@ -137,7 +114,7 @@ func _get_initial_state() -> Dictionary:
 	return {
 		"width": grid_width,
 		"height": grid_height,
-		"numbers": _serialize_numbers(puzzle_data["numbers"]),
+		"numbers": logic.serialize().get("numbers", {}),
 	}
 
 
@@ -147,26 +124,16 @@ func _get_settings_snapshot() -> Dictionary:
 
 func _setup_game(saved_data: Dictionary) -> void:
 	if saved_data.is_empty():
-		puzzle_data = ShikakuGenerator.generate(grid_width, grid_height, random_seed)
-		board.setup(grid_width, grid_height, puzzle_data["numbers"])
-		size_label.text = SIZE_NAMES.get(grid_width, "%dx%d" % [grid_width, grid_height])
+		logic.init_new_game(grid_width, grid_height, random_seed)
 	else:
-		puzzle_data = {
-			"width": grid_width,
-			"height": grid_height,
-			"numbers": _deserialize_numbers(saved_data.get("numbers", {})),
-			"solution": _deserialize_rects(saved_data.get("solution", [])),
-		}
-		board.setup(grid_width, grid_height, puzzle_data["numbers"])
-		var saved_rects := _deserialize_rects(saved_data.get("placed_rects", []))
-		for rect in saved_rects:
-			board.add_rect(rect)
-		# Legacy fallback: old saves had no random_seed field. Derive one deterministically
-		# so replay/crash metadata is consistent. begin_session() calls ReplayRecorder AFTER
-		# _setup_game(), so this updated value is used by the replay session start.
-		if random_seed == 0:
-			random_seed = _derive_seed_from_numbers(puzzle_data["numbers"])
-		size_label.text = SIZE_NAMES.get(grid_width, "%dx%d" % [grid_width, grid_height])
+		logic.init_from_save(saved_data)
+	grid_width = logic.grid_width
+	grid_height = logic.grid_height
+	random_seed = logic.random_seed
+	board.setup(grid_width, grid_height, logic.numbers)
+	for rect in logic.placed_rects:
+		board.add_rect(rect)
+	size_label.text = SIZE_NAMES.get(grid_width, "%dx%d" % [grid_width, grid_height])
 	_update_button_states()
 
 
@@ -200,7 +167,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 
 func _on_rectangle_placed(rect: Rect2i) -> void:
-	if is_completed:
+	if logic.is_completed:
+		return
+	var result: ShikakuLogic.PlaceRectResult = logic.place_rectangle(rect.position.x, rect.position.y, rect.size.x, rect.size.y)
+	if not result.valid:
 		return
 	ReplayRecorder.record_input(elapsed_time, "rectangle_placed", {
 		"x": rect.position.x,
@@ -208,9 +178,6 @@ func _on_rectangle_placed(rect: Rect2i) -> void:
 		"w": rect.size.x,
 		"h": rect.size.y,
 	})
-	# Push current state for undo
-	undo_stack.append({"action": "place", "rect": rect})
-	redo_stack.clear()
 	board.add_rect(rect)
 	SoundManager.play_place()
 	HapticManager.vibrate_light()
@@ -224,43 +191,45 @@ func _on_rectangle_placed(rect: Rect2i) -> void:
 		)
 		NeonRing.create(board, center, Color(0.0, 1.5, 1.5), cell_size * 2.5, 0.25, 0.3)
 	_update_button_states()
-	_check_completion()
+	if result.game_won:
+		_handle_win()
 	_save_current_state()
 
 
 func _on_rectangle_tapped(index: int) -> void:
-	if is_completed:
+	if logic.is_completed:
+		return
+	if index < 0 or index >= board.placed_rects.size() or index >= logic.placed_rects.size():
+		return
+	var rect: Rect2i = board.placed_rects[index]
+	var result: ShikakuLogic.RemoveRectResult = logic.remove_rectangle(rect.position.x, rect.position.y, rect.size.x, rect.size.y)
+	if not result.was_present:
 		return
 	ReplayRecorder.record_input(elapsed_time, "rectangle_removed", {"index": index})
-	var rect := board.placed_rects[index]
-	undo_stack.append({"action": "remove", "rect": rect, "color_idx": index})
-	redo_stack.clear()
 	board.remove_rect(index)
-	SoundManager.play_erase()
 	HapticManager.vibrate_light()
 	_update_button_states()
 	_save_current_state()
 
 
 func _on_undo() -> void:
-	if is_completed:
+	if logic.is_completed:
 		return
-	if undo_stack.is_empty():
+	var result: ShikakuLogic.UndoRedoResult = logic.undo()
+	if result.action_type.is_empty():
 		return
-	var entry: Dictionary = undo_stack.pop_back()
-	if entry["action"] == "place":
+	if result.action_type == "place":
 		# Undo a placement = remove the last rect
-		var placed_rect: Rect2i = entry["rect"]
+		var placed_rect: Rect2i = _rect_from_dict(result.rect)
 		# Find and remove it
 		for i in range(board.placed_rects.size() - 1, -1, -1):
 			if board.placed_rects[i] == placed_rect:
 				ReplayRecorder.record_input(elapsed_time, "rectangle_removed", {"index": i})
 				board.remove_rect(i)
 				break
-		redo_stack.append(entry)
-	elif entry["action"] == "remove":
+	elif result.action_type == "remove":
 		# Undo a removal = re-add the rect
-		var removed_rect: Rect2i = entry["rect"]
+		var removed_rect: Rect2i = _rect_from_dict(result.rect)
 		ReplayRecorder.record_input(elapsed_time, "rectangle_placed", {
 			"x": removed_rect.position.x,
 			"y": removed_rect.position.y,
@@ -268,19 +237,18 @@ func _on_undo() -> void:
 			"h": removed_rect.size.y,
 		})
 		board.add_rect(removed_rect)
-		redo_stack.append(entry)
 	_update_button_states()
 	_save_current_state()
 
 
 func _on_redo() -> void:
-	if is_completed:
+	if logic.is_completed:
 		return
-	if redo_stack.is_empty():
+	var result: ShikakuLogic.UndoRedoResult = logic.redo()
+	if result.action_type.is_empty():
 		return
-	var entry: Dictionary = redo_stack.pop_back()
-	if entry["action"] == "place":
-		var redo_rect: Rect2i = entry["rect"]
+	if result.action_type == "place":
+		var redo_rect: Rect2i = _rect_from_dict(result.rect)
 		ReplayRecorder.record_input(elapsed_time, "rectangle_placed", {
 			"x": redo_rect.position.x,
 			"y": redo_rect.position.y,
@@ -288,55 +256,37 @@ func _on_redo() -> void:
 			"h": redo_rect.size.y,
 		})
 		board.add_rect(redo_rect)
-		undo_stack.append(entry)
-	elif entry["action"] == "remove":
-		var removed_rect: Rect2i = entry["rect"]
+	elif result.action_type == "remove":
+		var removed_rect: Rect2i = _rect_from_dict(result.rect)
 		for i in range(board.placed_rects.size() - 1, -1, -1):
 			if board.placed_rects[i] == removed_rect:
 				ReplayRecorder.record_input(elapsed_time, "rectangle_removed", {"index": i})
 				board.remove_rect(i)
 				break
-		undo_stack.append(entry)
 	_update_button_states()
 	_save_current_state()
 
 
 func _on_hint() -> void:
-	if is_completed or hints_used >= 1:
+	if logic.is_completed or logic.hints_used >= ShikakuLogic.MAX_HINTS_ALLOWED:
+		return
+	var result: ShikakuLogic.HintResult = logic.use_hint()
+	if result.rect.is_empty():
 		return
 	CrashReporter.register_user_action("shikaku_hint_used")
-	var sol: Array[Rect2i] = puzzle_data.get("solution", [] as Array[Rect2i])
-	if sol.is_empty():
-		return
-	# Find a solution rect that isn't already placed
-	var candidates: Array[Rect2i] = []
-	for rect in sol:
-		var already_placed := false
-		for pr in board.placed_rects:
-			if pr == rect:
-				already_placed = true
-				break
-		if not already_placed:
-			candidates.append(rect)
-	if candidates.is_empty():
-		return
-	candidates.shuffle()
-	var hint_rect := candidates[0]
+	var hint_rect: Rect2i = _rect_from_dict(result.rect)
 	ReplayRecorder.record_input(elapsed_time, "rectangle_placed", {
 		"x": hint_rect.position.x,
 		"y": hint_rect.position.y,
 		"w": hint_rect.size.x,
 		"h": hint_rect.size.y,
 	})
-	undo_stack.append({"action": "place", "rect": hint_rect})
-	redo_stack.clear()
 	board.add_rect(hint_rect)
-	hints_used += 1
-	hint_button.disabled = true
 	SoundManager.play_place()
 	HapticManager.vibrate_medium()
 	_update_button_states()
-	_check_completion()
+	if result.game_won:
+		_handle_win()
 	_save_current_state()
 
 
@@ -354,27 +304,17 @@ func _on_back() -> void:
 	})
 	ReplayStorage.save_replay(completed)
 	CrashReporter.register_user_action("shikaku_back_to_menu")
-	if not is_completed:
+	if not logic.is_completed:
 		AchievementManager.track_streak_broken()
 	_save_current_state()
-	SceneTransition.transition_to("res://scenes/shikaku_menu.tscn")
-
-
-func _check_completion() -> void:
-	if not board.is_fully_covered():
-		return
-	# Validate the solution
-	var player_rects: Array[Rect2i] = board.placed_rects.duplicate()
-	if ShikakuSolver.validate(grid_width, grid_height, puzzle_data["numbers"], player_rects):
-		_handle_win()
+	SceneTransition.transition_to(Scenes.SHIKAKU_MENU)
 
 
 func _handle_win() -> void:
-	is_completed = true
 	var completed := ReplayRecorder.finish_session("win", board.placed_rects.size(), elapsed_time, {
 		"width": grid_width,
 		"height": grid_height,
-		"hints_used": hints_used,
+		"hints_used": logic.hints_used,
 	})
 	ReplayStorage.save_replay(completed)
 	var is_new_best := _is_new_best_time()
@@ -387,7 +327,7 @@ func _handle_win() -> void:
 		"width": grid_width,
 		"height": grid_height,
 		"elapsed_time": elapsed_time,
-		"hints_used": hints_used,
+		"hints_used": logic.hints_used,
 	})
 	clear_save()
 	SoundManager.play_win()
@@ -430,8 +370,8 @@ func _show_win_dialog() -> void:
 	var dialog := AcceptDialog.new()
 	dialog.title = "Congratulations!"
 	dialog.dialog_text = "You solved the %s puzzle\nin %s!" % [SIZE_NAMES.get(grid_width, ""), _format_time(elapsed_time)]
-	if hints_used > 0:
-		dialog.dialog_text += "\nHints used: %d" % hints_used
+	if logic.hints_used > 0:
+		dialog.dialog_text += "\nHints used: %d" % logic.hints_used
 	dialog.ok_button_text = "Play Again"
 	dialog.add_button("Menu", true, "menu")
 	dialog.add_button("Save Replay", true, "bookmark")
@@ -447,7 +387,7 @@ func _show_win_dialog() -> void:
 	dialog.custom_action.connect(func(action: StringName) -> void:
 		if action == "menu":
 			dialog.queue_free()
-			SceneTransition.transition_to("res://scenes/shikaku_menu.tscn")
+			SceneTransition.transition_to(Scenes.SHIKAKU_MENU)
 		elif action == "bookmark":
 			var success := ReplayStorage.bookmark_latest_replay()
 			if success:
@@ -461,7 +401,7 @@ func _restart_same_game() -> void:
 	var w := grid_width
 	var h := grid_height
 	SceneTransition.transition_with_callback(func() -> void:
-		var game_scene: Node = load("res://scenes/shikaku_game.tscn").instantiate()
+		var game_scene: Node = load(Scenes.SHIKAKU_GAME).instantiate()
 		get_tree().root.add_child(game_scene)
 		game_scene.start_new_game(w, h)
 		queue_free()
@@ -469,9 +409,9 @@ func _restart_same_game() -> void:
 
 
 func _update_button_states() -> void:
-	undo_button.disabled = is_completed or undo_stack.is_empty()
-	redo_button.disabled = is_completed or redo_stack.is_empty()
-	hint_button.disabled = is_completed or hints_used >= 1
+	undo_button.disabled = logic.is_completed or logic.undo_stack.is_empty()
+	redo_button.disabled = logic.is_completed or logic.redo_stack.is_empty()
+	hint_button.disabled = logic.is_completed or logic.hints_used >= ShikakuLogic.MAX_HINTS_ALLOWED
 
 
 func _apply_theme() -> void:
@@ -481,7 +421,7 @@ func _apply_theme() -> void:
 
 
 func _cheat_place_one() -> void:
-	var sol: Array[Rect2i] = puzzle_data.get("solution", [] as Array[Rect2i])
+	var sol: Array[Rect2i] = logic.solution
 	if sol.is_empty():
 		_cheat_active = false
 		return
@@ -493,60 +433,20 @@ func _cheat_place_one() -> void:
 				found = true
 				break
 		if not found:
+			var result: ShikakuLogic.PlaceRectResult = logic.place_rectangle(rect.position.x, rect.position.y, rect.size.x, rect.size.y)
+			if not result.valid:
+				continue
 			board.add_rect(rect)
 			SoundManager.play_place()
-			_check_completion()
+			if result.game_won:
+				_handle_win()
 			_save_current_state()
 			return
 	_cheat_active = false
 
 
-func _serialize_numbers(nums: Dictionary) -> Dictionary:
-	var result := {}
-	for pos in nums.keys():
-		result["%d,%d" % [pos.x, pos.y]] = nums[pos]
-	return result
-
-
-func _deserialize_numbers(data: Dictionary) -> Dictionary:
-	var result := {}
-	for key in data.keys():
-		var parts := str(key).split(",")
-		if parts.size() == 2:
-			result[Vector2i(int(parts[0]), int(parts[1]))] = int(data[key])
-	return result
-
-
-func _serialize_rects(rects: Array[Rect2i]) -> Array[Dictionary]:
-	var result: Array[Dictionary] = []
-	for rect in rects:
-		result.append({"x": rect.position.x, "y": rect.position.y, "w": rect.size.x, "h": rect.size.y})
-	return result
-
-
-func _deserialize_rects(data) -> Array[Rect2i]:
-	var result: Array[Rect2i] = []
-	if data is Array:
-		for entry in data:
-			if entry is Dictionary:
-				result.append(Rect2i(int(entry.get("x", 0)), int(entry.get("y", 0)), int(entry.get("w", 1)), int(entry.get("h", 1))))
-	return result
-
-
-func _derive_seed_from_numbers(nums: Dictionary) -> int:
-	# Legacy fallback for saves created before explicit replay seeds existed.
-	# Multipliers keep the fold deterministic while distributing coordinate/value changes.
-	var keys: Array = nums.keys()
-	keys.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
-		if a.y == b.y:
-			return a.x < b.x
-		return a.y < b.y
-	)
-	var seed := LEGACY_SEED_HASH_INITIAL
-	for key in keys:
-		var pos: Vector2i = key
-		seed = int((seed * LEGACY_SEED_HASH_MULTIPLIER + pos.x * LEGACY_SEED_HASH_X_FACTOR + pos.y * LEGACY_SEED_HASH_Y_FACTOR + int(nums[pos])) & 0x7fffffff)
-	return seed
+func _rect_from_dict(data: Dictionary) -> Rect2i:
+	return Rect2i(int(data.get("x", 0)), int(data.get("y", 0)), int(data.get("w", 1)), int(data.get("h", 1)))
 
 
 func _record_shikaku_completion(grid_size: int, time: float) -> void:
