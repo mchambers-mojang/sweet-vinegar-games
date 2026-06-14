@@ -15,6 +15,11 @@ var state: CaromMatchState = CaromMatchState.new()
 
 var _effects: CaromEffectsController = null
 
+const MATCH_WIN_SLOWMO_SCALE: float = 0.3
+const MATCH_WIN_SLOWMO_REAL_SECONDS: float = 1.0
+const MATCH_WIN_RECOVER_REAL_SECONDS: float = 0.3
+const MATCH_WIN_TWEEN_SPEED_MULTIPLIER: float = 1.0 / MATCH_WIN_SLOWMO_SCALE
+
 
 func _ready() -> void:
 	arena.goal_scored.connect(_on_goal_scored)
@@ -33,6 +38,10 @@ func _ready() -> void:
 
 
 var _is_paused: bool = false
+
+
+func _exit_tree() -> void:
+	_reset_time_scale()
 
 
 func _notification(what: int) -> void:
@@ -95,6 +104,8 @@ func _on_goal_scored(scoring_side: StringName, goal_puck: CaromPuck) -> void:
 	if state.phase != CaromMatchState.Phase.PLAYING:
 		return
 
+	var goal_position: Vector3 = goal_puck.global_position
+
 	# Only respawn the puck that scored — gameplay continues uninterrupted
 	var puck_index := setup.pucks.find(goal_puck)
 	if puck_index >= 0:
@@ -115,6 +126,7 @@ func _on_goal_scored(scoring_side: StringName, goal_puck: CaromPuck) -> void:
 	_update_ammo_display()
 
 	if result.match_over:
+		await _play_match_win_sequence(goal_position)
 		_finish_match(result.winner)
 		return
 
@@ -124,10 +136,35 @@ func _on_goal_scored(scoring_side: StringName, goal_puck: CaromPuck) -> void:
 
 
 func _finish_match(winner: String) -> void:
+	_reset_time_scale()
 	setup.player_turret.set_active(false)
 	setup.ai_turret.set_active(false)
 	hud.update_status("")
 	hud.show_game_over(winner, state.player_score, state.ai_score, state.difficulty)
+
+
+func _play_match_win_sequence(goal_position: Vector3) -> void:
+	Engine.time_scale = MATCH_WIN_SLOWMO_SCALE
+
+	if _effects:
+		_effects.play_match_win(goal_position)
+
+	var hold_tween := create_tween()
+	hold_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	hold_tween.set_speed_scale(MATCH_WIN_TWEEN_SPEED_MULTIPLIER)
+	hold_tween.tween_interval(MATCH_WIN_SLOWMO_REAL_SECONDS)
+	await hold_tween.finished
+
+	var recover_tween := create_tween()
+	recover_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	recover_tween.set_speed_scale(MATCH_WIN_TWEEN_SPEED_MULTIPLIER)
+	recover_tween.tween_property(Engine, "time_scale", 1.0, MATCH_WIN_RECOVER_REAL_SECONDS).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	await recover_tween.finished
+
+
+func _reset_time_scale() -> void:
+	if not is_equal_approx(Engine.time_scale, 1.0):
+		Engine.time_scale = 1.0
 
 
 # --- HUD signal wiring ---
