@@ -7,6 +7,8 @@ extends MeshInstance3D
 @export var max_bounces: int = 6
 @export var line_color: Color = Color(0.16, 0.95, 1.0, 0.55)
 
+const RICOCHET_OFFSET: float = 0.02
+
 var max_distance: float = 0.0
 var _immediate_mesh: ImmediateMesh = ImmediateMesh.new()
 var _material: StandardMaterial3D = StandardMaterial3D.new()
@@ -77,7 +79,7 @@ func update_projection(origin_global: Vector3, direction_global: Vector3) -> voi
 			break
 		direction = bounced_direction.normalized()
 
-		current_origin = hit_position + direction * 0.02
+		current_origin = hit_position + direction * RICOCHET_OFFSET
 		bounces += 1
 
 	_draw_projection(points)
@@ -92,7 +94,7 @@ func _draw_projection(points: Array[Vector3]) -> void:
 	_immediate_mesh.surface_begin(Mesh.PRIMITIVE_LINE_STRIP, _material)
 	var max_index := points.size() - 1
 	for i in points.size():
-		var t := float(i) / maxf(1.0, float(max_index))
+		var t := float(i) / float(max_index)
 		var alpha := lerpf(line_color.a, 0.0, t)
 		_immediate_mesh.surface_set_color(Color(line_color.r, line_color.g, line_color.b, alpha))
 		_immediate_mesh.surface_add_vertex(points[i])

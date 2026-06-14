@@ -229,8 +229,6 @@ func _ensure_aim_projection() -> void:
 		if _aim_projection:
 			_aim_projection.name = "AimProjection"
 			add_child(_aim_projection)
-	if _aim_projection:
-		_aim_projection.set_max_distance(_aim_projection_distance)
 
 
 func _update_aim_projection() -> void:
