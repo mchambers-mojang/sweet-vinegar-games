@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="MenuConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/menu/menu_config.gd" id="1_sudoku"]
+
+[resource]
+script = ExtResource("1_sudoku")
+game_id = "sudoku"
+display_name = "Sudoku"
+help_topic = "sudoku"
+menu_scene_path = "res://scenes/main_menu.tscn"
+game_scene_path = "res://scenes/game.tscn"
+stats_scene_path = "res://scenes/stats.tscn"
+has_save_support = true
+start_button_unique_name = "NewGameButton"
+option_button_unique_name = "DifficultyButton"
+option_default_index = 1
+option_values = PackedInt32Array()
+start_game_method = "start_new_game"
+start_game_passes_option = true
+start_game_passes_option_twice = false
+start_game_meta_key = ""
+abandon_stat_save_key = "difficulty"
+abandon_stat_prefix = "abandoned_d"
+abandon_stat_default = 0
+title_color_key = "text_given"
+game_rules = {
+"input_mode": "cell_first",
+"error_mode": "strict",
+"highlight_row_col_box": true,
+"auto_remove_pencil_marks": true
+}

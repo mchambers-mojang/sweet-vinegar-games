@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="HelpContent" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/help/help_content.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+title = "Sudoku"
+body = "Fill the 9×9 grid so every row, column, and 3×3 box contains the digits 1–9 exactly once.\n\n• Tap a cell, then tap a number to place it\n• Use Notes mode to mark possible candidates\n• In Strict mode, 3 wrong answers ends the game\n• Double-tap a cell to highlight its row/column/box"

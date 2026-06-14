@@ -28,10 +28,6 @@ func _ready() -> void:
 		_build_ui()
 	)
 
-	var margin: MarginContainer = get_node_or_null("MarginContainer") as MarginContainer
-	if margin:
-		SafeAreaManager.apply(margin)
-
 
 func _build_ui() -> void:
 	for child in achievements_list.get_children():
