@@ -36,9 +36,12 @@ func _setup_emission_material() -> void:
 	_puck_material.emission = Color(0.8, 1.0, 1.0, 1)
 	_puck_material.emission_energy_multiplier = EMISSION_BASE
 	_puck_material.roughness = 0.2
+	var mesh_count: int = 0
 	for child in get_children():
 		if child is MeshInstance3D:
 			(child as MeshInstance3D).material_override = _puck_material
+			mesh_count += 1
+	print("[DEBUG-puck] Applied emission material to %d meshes" % mesh_count)
 
 
 func configure(goal_targets: Array[Vector3], reset_position: Vector3) -> void:
@@ -68,6 +71,9 @@ func _update_pulse(delta: float) -> void:
 	# Also pulse albedo brightness for more visible oscillation
 	var albedo_t := lerpf(0.02, 0.15, t)
 	_puck_material.albedo_color = Color(albedo_t, albedo_t * 4.0, albedo_t * 5.0, 1.0)
+	# Also scale the puck slightly for physical feedback
+	var scale_t := lerpf(1.0, 1.15, t)
+	scale = Vector3(scale_t, 1.0, scale_t)
 
 
 func _get_pulse_frequency() -> float:
