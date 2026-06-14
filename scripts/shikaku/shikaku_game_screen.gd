@@ -199,9 +199,9 @@ func _on_rectangle_placed(rect: Rect2i) -> void:
 func _on_rectangle_tapped(index: int) -> void:
 	if logic.is_completed:
 		return
-	if index < 0 or index >= board.placed_rects.size():
+	if index < 0 or index >= board.placed_rects.size() or index >= logic.placed_rects.size():
 		return
-	var rect := board.placed_rects[index]
+	var rect: Rect2i = board.placed_rects[index]
 	var result: ShikakuLogic.RemoveRectResult = logic.remove_rectangle(rect.position.x, rect.position.y, rect.size.x, rect.size.y)
 	if not result.was_present:
 		return
@@ -269,7 +269,7 @@ func _on_redo() -> void:
 
 
 func _on_hint() -> void:
-	if logic.is_completed or logic.hints_used >= 1:
+	if logic.is_completed or logic.hints_used >= ShikakuLogic.MAX_HINTS_ALLOWED:
 		return
 	var result: ShikakuLogic.HintResult = logic.use_hint()
 	if result.rect.is_empty():
@@ -410,7 +410,7 @@ func _restart_same_game() -> void:
 func _update_button_states() -> void:
 	undo_button.disabled = logic.is_completed or logic.undo_stack.is_empty()
 	redo_button.disabled = logic.is_completed or logic.redo_stack.is_empty()
-	hint_button.disabled = logic.is_completed or logic.hints_used >= 1
+	hint_button.disabled = logic.is_completed or logic.hints_used >= ShikakuLogic.MAX_HINTS_ALLOWED
 
 
 func _apply_theme() -> void:

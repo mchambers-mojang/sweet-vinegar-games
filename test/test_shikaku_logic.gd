@@ -119,7 +119,7 @@ func test_coverage_tracking() -> void:
 	assert_false(logic.is_fully_covered())
 
 
-func test_undo_stack_cleared_on_new_action() -> void:
+func test_redo_stack_cleared_on_new_action() -> void:
 	var puzzle := ShikakuLogic.new()
 	puzzle.init_from_save({
 		"width": 3,

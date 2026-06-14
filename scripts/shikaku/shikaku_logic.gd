@@ -5,6 +5,7 @@ const LEGACY_SEED_HASH_INITIAL := 23
 const LEGACY_SEED_HASH_MULTIPLIER := 31
 const LEGACY_SEED_HASH_X_FACTOR := 7
 const LEGACY_SEED_HASH_Y_FACTOR := 13
+const MAX_HINTS_ALLOWED := 1
 
 var grid_width: int = 0
 var grid_height: int = 0
@@ -119,7 +120,7 @@ func remove_rectangle(x: int, y: int, w: int, h: int) -> RemoveRectResult:
 
 func use_hint() -> HintResult:
 	var result: HintResult = HintResult.new()
-	if is_completed or hints_used >= 1 or solution.is_empty():
+	if is_completed or hints_used >= MAX_HINTS_ALLOWED or solution.is_empty():
 		return result
 	var candidates: Array[Rect2i] = []
 	for rect in solution:
@@ -204,6 +205,8 @@ func _is_valid_placement(rect: Rect2i) -> bool:
 	if rect.position.x < 0 or rect.position.y < 0:
 		return false
 	if rect.position.x + rect.size.x > grid_width or rect.position.y + rect.size.y > grid_height:
+		return false
+	if _has_rect(rect):
 		return false
 	for row in range(rect.position.y, rect.position.y + rect.size.y):
 		for col in range(rect.position.x, rect.position.x + rect.size.x):
@@ -312,7 +315,9 @@ func _deserialize_action_stack(data: Variant) -> Array[Dictionary]:
 
 
 func _derive_seed_from_numbers(nums: Dictionary) -> int:
-	var keys: Array = nums.keys()
+	var keys: Array[Vector2i] = []
+	for key in nums.keys():
+		keys.append(key)
 	keys.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
 		if a.y == b.y:
 			return a.x < b.x
