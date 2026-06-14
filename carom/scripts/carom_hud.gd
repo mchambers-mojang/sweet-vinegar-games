@@ -12,8 +12,6 @@ signal reload_requested
 @onready var player_score_label: Label = %PlayerScoreLabel
 @onready var ai_score_label: Label = %AIScoreLabel
 @onready var status_label: Label = %StatusLabel
-@onready var player_ammo_label: Label = %PlayerAmmoLabel
-@onready var ai_ammo_label: Label = %AIAmmoLabel
 
 var _game_over_panel: Control = null
 var _debug_label: Label = null
@@ -32,8 +30,8 @@ func _ready() -> void:
 
 
 func update_scores(player_score: int, ai_score: int) -> void:
-	player_score_label.text = "PLAYER %d" % player_score
-	ai_score_label.text = "AI %d" % ai_score
+	player_score_label.text = "%d" % player_score
+	ai_score_label.text = "%d" % ai_score
 
 
 func update_status(text: String) -> void:
@@ -41,19 +39,12 @@ func update_status(text: String) -> void:
 
 
 func update_player_ammo(current_ammo: int, max_ammo: int, is_reloading: bool) -> void:
-	player_ammo_label.text = "Ammo %d/%d%s" % [
-		current_ammo, max_ammo,
-		" • Reloading" if is_reloading else "",
-	]
 	if _reload_button:
 		_reload_button.update_ammo(current_ammo, max_ammo, is_reloading)
 
 
-func update_ai_ammo(current_ammo: int, max_ammo: int, is_reloading: bool) -> void:
-	ai_ammo_label.text = "AI Ammo %d/%d%s" % [
-		current_ammo, max_ammo,
-		" • Reloading" if is_reloading else "",
-	]
+func update_ai_ammo(_current_ammo: int, _max_ammo: int, _is_reloading: bool) -> void:
+	pass
 
 
 func show_game_over(winner: String, player_score: int, ai_score: int, current_difficulty: int) -> void:

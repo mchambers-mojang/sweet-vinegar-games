@@ -247,65 +247,47 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/margin_left = 24
-theme_override_constants/margin_top = 24
+theme_override_constants/margin_top = 40
 theme_override_constants/margin_right = 24
-theme_override_constants/margin_bottom = 24
+theme_override_constants/margin_bottom = 40
 
 [node name="VBoxContainer" type="VBoxContainer" parent="HUD/MarginContainer"]
 layout_mode = 2
-size_flags_vertical = 4
-alignment = 1
-theme_override_constants/separation = 10
+size_flags_vertical = 3
 
-[node name="TopBar" type="HBoxContainer" parent="HUD/MarginContainer/VBoxContainer"]
-layout_mode = 2
-theme_override_constants/separation = 18
-
-[node name="PlayerScoreLabel" type="Label" parent="HUD/MarginContainer/VBoxContainer/TopBar"]
+[node name="AIScoreLabel" type="Label" parent="HUD/MarginContainer/VBoxContainer"]
 unique_name_in_owner = true
-text = "PLAYER 0"
-theme_override_font_sizes/font_size = 28
+layout_mode = 2
+text = "0"
+theme_override_font_sizes/font_size = 36
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 4
+horizontal_alignment = 1
 
-[node name="Spacer" type="Control" parent="HUD/MarginContainer/VBoxContainer/TopBar"]
+[node name="Spacer" type="Control" parent="HUD/MarginContainer/VBoxContainer"]
 layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="AIScoreLabel" type="Label" parent="HUD/MarginContainer/VBoxContainer/TopBar"]
-unique_name_in_owner = true
-text = "AI 0"
-theme_override_font_sizes/font_size = 28
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/outline_size = 4
-horizontal_alignment = 2
+size_flags_vertical = 3
 
 [node name="StatusLabel" type="Label" parent="HUD/MarginContainer/VBoxContainer"]
 unique_name_in_owner = true
-text = "Loading Carom prototype..."
+layout_mode = 2
+text = ""
 theme_override_font_sizes/font_size = 16
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 3
 horizontal_alignment = 1
 autowrap_mode = 2
 
-[node name="AmmoBar" type="HBoxContainer" parent="HUD/MarginContainer/VBoxContainer"]
+[node name="Spacer2" type="Control" parent="HUD/MarginContainer/VBoxContainer"]
 layout_mode = 2
-theme_override_constants/separation = 18
+size_flags_vertical = 3
 
-[node name="PlayerAmmoLabel" type="Label" parent="HUD/MarginContainer/VBoxContainer/AmmoBar"]
+[node name="PlayerScoreLabel" type="Label" parent="HUD/MarginContainer/VBoxContainer"]
 unique_name_in_owner = true
-text = "Ammo 8/8"
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/outline_size = 3
-
-[node name="AmmoSpacer" type="Control" parent="HUD/MarginContainer/VBoxContainer/AmmoBar"]
 layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="AIAmmoLabel" type="Label" parent="HUD/MarginContainer/VBoxContainer/AmmoBar"]
-unique_name_in_owner = true
-text = "AI Ammo 8/8"
+text = "0"
+theme_override_font_sizes/font_size = 36
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/outline_size = 3
+theme_override_constants/outline_size = 4
+horizontal_alignment = 1
 horizontal_alignment = 2
