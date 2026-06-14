@@ -4,6 +4,7 @@ extends Node
 ## Wires up all visual effects for a Carom match.
 ## Add as child of CaromArena. Listens for turret fire events and projectile collisions.
 
+const CaromMuzzleFlashEffect := preload("res://carom/scripts/effects/carom_muzzle_flash.gd")
 const GOAL_BURST_PARTICLE_COUNT: int = 30
 const GOAL_BURST_LIFETIME: float = 0.5
 const GOAL_BURST_Y_OFFSET: float = 0.12
@@ -15,7 +16,16 @@ const GOAL_FRAGMENT_Y_OFFSET: float = 0.14
 const GOAL_FRAGMENT_LINEAR_DAMP: float = 2.4
 const GOAL_FLARE_EMISSION_ENERGY: float = 5.0
 const GOAL_CELEBRATION_LIFETIME: float = 1.2
-const GOAL_SCREEN_SHAKE_INTENSITY: float = 0.35
+const MATCH_WIN_ZOOM_RATIO: float = 0.8
+const MATCH_WIN_CAMERA_SHIFT_RATIO: float = 0.2
+const MATCH_WIN_ZOOM_IN_SECONDS: float = 0.3
+const MATCH_WIN_ZOOM_OUT_SECONDS: float = 0.5
+const MATCH_WIN_SHAKE_INTENSITY: float = 0.7
+const GOAL_SHAKE_INTENSITY: float = 0.4
+const GOAL_ZOOM_RATIO: float = 0.9
+const GOAL_ZOOM_IN_SECONDS: float = 0.15
+const GOAL_ZOOM_OUT_SECONDS: float = 0.3
+const MIN_TIME_SCALE_CLAMP: float = 0.001
 
 var _screen_shake: CaromScreenShake = null
 var _impact_spawner: CaromImpactSpawner = null
@@ -58,6 +68,9 @@ func register_turret(turret: CaromTurret) -> void:
 
 
 func _on_projectile_fired(projectile: CaromProjectile, color: Color) -> void:
+	# Muzzle flash at the barrel tip
+	CaromMuzzleFlashEffect.spawn(projectile.global_position, color, get_tree().current_scene)
+
 	# Attach ribbon trail
 	var trail := CaromProjectileTrail.new()
 	trail.attach(projectile, color)
@@ -67,6 +80,9 @@ func _on_projectile_fired(projectile: CaromProjectile, color: Color) -> void:
 
 	# Wire collision signal for effects
 	projectile.body_entered.connect(_on_projectile_body_entered.bind(projectile, color))
+
+	# Fire haptic
+	HapticManager.vibrate_light()
 
 	# Fire screen shake (debug only)
 	if DebugFlags.debug_fire_screen_shake and _screen_shake:
@@ -88,13 +104,98 @@ func _on_projectile_body_entered(body: Node, projectile: CaromProjectile, color:
 		var normal: Vector3 = diff.normalized()
 		var force := velocity.length() / maxf(projectile.speed, 1.0)
 		_impact_spawner.spawn_puck_impact(impact_pos, -normal, color, force)
+		HapticManager.vibrate_medium()
 	elif body is StaticBody3D:
 		var normal := -velocity.normalized() if velocity.length_squared() > 0.001 else Vector3.UP
 		_impact_spawner.spawn_wall_impact(impact_pos, normal, color)
 
 
-## Spawn the full goal-scored celebration at the goal position.
+## Play goal celebration — lighter version for every goal (shake + quick zoom).
+func play_goal_scored(
+	goal_position: Vector3,
+	scoring_side: StringName = StringName(),
+	color: Color = Color.WHITE,
+	goal_puck: CaromPuck = null,
+	goal_zone: Area3D = null
+) -> Node3D:
+	var celebration: Node3D = null
+	if _arena != null and (goal_zone != null or goal_puck != null or scoring_side != StringName()):
+		var celebration_position := goal_zone.global_position if is_instance_valid(goal_zone) else goal_position
+		celebration = _spawn_goal_celebration(celebration_position, scoring_side, color, goal_puck, goal_zone)
+
+	var camera := get_viewport().get_camera_3d()
+	if camera == null:
+		return celebration
+
+	_setup_screen_shake()
+	if _screen_shake:
+		_screen_shake.shake(GOAL_SHAKE_INTENSITY)
+
+	var start_position: Vector3 = camera.global_position
+	var target_position: Vector3 = Vector3(goal_position.x, start_position.y, goal_position.z)
+	var zoom_position: Vector3 = start_position.lerp(target_position, 0.1)
+
+	var zoom_tween := create_tween()
+	zoom_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+
+	if camera.projection == Camera3D.PROJECTION_ORTHOGONAL:
+		var start_size: float = camera.size
+		zoom_tween.tween_property(camera, "size", start_size * GOAL_ZOOM_RATIO, GOAL_ZOOM_IN_SECONDS).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		zoom_tween.parallel().tween_property(camera, "global_position", zoom_position, GOAL_ZOOM_IN_SECONDS).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		zoom_tween.tween_property(camera, "size", start_size, GOAL_ZOOM_OUT_SECONDS).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+		zoom_tween.parallel().tween_property(camera, "global_position", start_position, GOAL_ZOOM_OUT_SECONDS).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	else:
+		var start_fov: float = camera.fov
+		zoom_tween.tween_property(camera, "fov", start_fov * GOAL_ZOOM_RATIO, GOAL_ZOOM_IN_SECONDS).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		zoom_tween.parallel().tween_property(camera, "global_position", zoom_position, GOAL_ZOOM_IN_SECONDS).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		zoom_tween.tween_property(camera, "fov", start_fov, GOAL_ZOOM_OUT_SECONDS).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+		zoom_tween.parallel().tween_property(camera, "global_position", start_position, GOAL_ZOOM_OUT_SECONDS).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+
+	return celebration
+
+
 func play_goal_celebration(
+	goal_position: Vector3,
+	scoring_side: StringName,
+	color: Color,
+	goal_puck: CaromPuck = null,
+	goal_zone: Area3D = null
+) -> Node3D:
+	return _spawn_goal_celebration(goal_position, scoring_side, color, goal_puck, goal_zone)
+
+
+func play_match_win(goal_position: Vector3) -> void:
+	var camera := get_viewport().get_camera_3d()
+	if camera == null:
+		return
+
+	_setup_screen_shake()
+	if _screen_shake:
+		_screen_shake.shake(MATCH_WIN_SHAKE_INTENSITY)
+
+	var start_position: Vector3 = camera.global_position
+	var target_position: Vector3 = Vector3(goal_position.x, start_position.y, goal_position.z)
+	var zoom_position: Vector3 = start_position.lerp(target_position, MATCH_WIN_CAMERA_SHIFT_RATIO)
+
+	var zoom_tween := create_tween()
+	zoom_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	zoom_tween.set_speed_scale(1.0 / maxf(Engine.time_scale, MIN_TIME_SCALE_CLAMP))
+
+	if camera.projection == Camera3D.PROJECTION_ORTHOGONAL:
+		var start_size: float = camera.size
+		zoom_tween.tween_property(camera, "size", start_size * MATCH_WIN_ZOOM_RATIO, MATCH_WIN_ZOOM_IN_SECONDS).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		zoom_tween.parallel().tween_property(camera, "global_position", zoom_position, MATCH_WIN_ZOOM_IN_SECONDS).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		zoom_tween.tween_property(camera, "size", start_size, MATCH_WIN_ZOOM_OUT_SECONDS).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+		zoom_tween.parallel().tween_property(camera, "global_position", start_position, MATCH_WIN_ZOOM_OUT_SECONDS).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	else:
+		var start_fov: float = camera.fov
+		zoom_tween.tween_property(camera, "fov", start_fov * MATCH_WIN_ZOOM_RATIO, MATCH_WIN_ZOOM_IN_SECONDS).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		zoom_tween.parallel().tween_property(camera, "global_position", zoom_position, MATCH_WIN_ZOOM_IN_SECONDS).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		zoom_tween.tween_property(camera, "fov", start_fov, MATCH_WIN_ZOOM_OUT_SECONDS).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+		zoom_tween.parallel().tween_property(camera, "global_position", start_position, MATCH_WIN_ZOOM_OUT_SECONDS).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+
+
+func _spawn_goal_celebration(
 	goal_position: Vector3,
 	scoring_side: StringName,
 	color: Color,
@@ -111,9 +212,6 @@ func play_goal_celebration(
 	_spawn_goal_burst(celebration, goal_position, color)
 	_spawn_puck_fragments(celebration, goal_puck, goal_position, color)
 	_spawn_goal_flare(celebration, goal_zone, scoring_side, color)
-
-	if _screen_shake:
-		_screen_shake.shake(GOAL_SCREEN_SHAKE_INTENSITY)
 
 	var cleanup_tween := celebration.create_tween()
 	cleanup_tween.tween_interval(GOAL_CELEBRATION_LIFETIME)

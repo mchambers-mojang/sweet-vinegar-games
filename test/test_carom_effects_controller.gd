@@ -4,7 +4,7 @@ const ArenaScene := preload("res://carom/scenes/carom_arena.tscn")
 const PuckScene := preload("res://carom/scenes/carom_puck.tscn")
 
 
-func test_goal_celebration_spawns_burst_fragments_and_flare() -> void:
+func test_play_goal_scored_spawns_burst_fragments_and_flare() -> void:
 	var arena := ArenaScene.instantiate() as CaromArena
 	add_child_autofree(arena)
 
@@ -15,8 +15,8 @@ func test_goal_celebration_spawns_burst_fragments_and_flare() -> void:
 	arena.get_node("Actors").add_child(puck)
 	puck.global_position = arena.south_goal.global_position + Vector3(0.0, 0.0, 0.15)
 
-	var celebration := effects.play_goal_celebration(
-		arena.south_goal.global_position,
+	var celebration := effects.play_goal_scored(
+		puck.global_position,
 		&"north",
 		Color(0.2, 0.6, 1.0),
 		puck,
