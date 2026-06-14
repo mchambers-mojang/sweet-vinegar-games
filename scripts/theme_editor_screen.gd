@@ -177,6 +177,7 @@ func _add_color_row(label_text: String, default_color: Color) -> ColorPickerButt
 
 	var picker := ColorPickerButton.new()
 	picker.color = default_color
+	picker.edit_alpha = false
 	picker.custom_minimum_size = Vector2(80, 36)
 	row.add_child(picker)
 
