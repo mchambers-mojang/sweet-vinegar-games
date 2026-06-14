@@ -22,6 +22,7 @@ var reload_rate: float = 0.5
 
 ## Per-segment brightness (0.0 = spent, 1.0 = fully loaded).
 var _segment_brightness: Array[float] = []
+var _segment_tweens: Array[Tween] = []
 var _is_pressed: bool = false
 var _pulse_time: float = 0.0
 
@@ -35,9 +36,15 @@ func _ready() -> void:
 
 
 func _reset_segments() -> void:
+	# Kill all active tweens
+	for tw in _segment_tweens:
+		if tw and tw.is_valid():
+			tw.kill()
 	_segment_brightness.resize(max_ammo)
+	_segment_tweens.resize(max_ammo)
 	for i in max_ammo:
 		_segment_brightness[i] = 1.0 if i < current_ammo else 0.0
+		_segment_tweens[i] = null
 
 
 ## Called by the HUD whenever ammo state changes (mirrors the label update).
@@ -56,8 +63,11 @@ func update_ammo(new_ammo: int, new_max: int, new_is_reloading: bool, rate: floa
 			for i in range(old_ammo, min(new_ammo, max_ammo)):
 				_animate_segment_on(i)
 		elif new_ammo < old_ammo:
-			# Bullet(s) fired — dim those segments immediately.
+			# Bullet(s) fired — kill any active tween and dim immediately.
 			for i in range(new_ammo, min(old_ammo, max_ammo)):
+				if i < _segment_tweens.size() and _segment_tweens[i] and _segment_tweens[i].is_valid():
+					_segment_tweens[i].kill()
+					_segment_tweens[i] = null
 				if i < _segment_brightness.size():
 					_segment_brightness[i] = 0.0
 
@@ -70,9 +80,12 @@ func _animate_segment_on(idx: int) -> void:
 		return
 	if idx >= _segment_brightness.size():
 		return
+	# Kill existing tween for this segment
+	if idx < _segment_tweens.size() and _segment_tweens[idx] and _segment_tweens[idx].is_valid():
+		_segment_tweens[idx].kill()
 	_segment_brightness[idx] = 0.0
 	var tween := create_tween()
-	# Use a captured copy of idx so the lambda always refers to the correct segment.
+	_segment_tweens[idx] = tween
 	var captured_idx := idx
 	var on_update := func(v: float) -> void:
 		if captured_idx < _segment_brightness.size():
