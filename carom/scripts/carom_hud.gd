@@ -23,15 +23,28 @@ var _debug_visible: bool = false
 var _reload_button: CaromReloadButton = null
 var _settings_panel: CaromSettings = null
 var _gear_button: Button = null
+var _overlay_layer: Control = null
 
 const AI_STATE_NAMES := ["ATTACK", "DEFEND", "RELOAD_PRESSURE", "TRICK_SHOT"]
 
 
 func _ready() -> void:
 	CaromSettings.ensure_loaded()
+	_create_overlay_layer()
 	_create_reload_button()
 	_create_pause_button()
 	_create_gear_button()
+
+
+func _create_overlay_layer() -> void:
+	# A single full-rect Control that gets viewport size via anchors.
+	# All dynamically created HUD elements go here.
+	_overlay_layer = Control.new()
+	_overlay_layer.name = "OverlayLayer"
+	_overlay_layer.anchor_right = 1.0
+	_overlay_layer.anchor_bottom = 1.0
+	_overlay_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	get_parent().add_child(_overlay_layer)
 
 
 func update_scores(player_score: int, ai_score: int) -> void:
@@ -132,11 +145,17 @@ func show_game_over(winner: String, player_score: int, ai_score: int, current_di
 	)
 	button_row.add_child(menu_button)
 
-	# Add to parent HUD CanvasLayer and center it
-	get_parent().add_child(_game_over_panel)
-	var vp_size := get_viewport().get_visible_rect().size
-	_game_over_panel.size = _game_over_panel.custom_minimum_size
-	_game_over_panel.position = (vp_size - _game_over_panel.size) * 0.5
+	# Add to overlay and center using anchors
+	_overlay_layer.add_child(_game_over_panel)
+	var panel_size := _game_over_panel.custom_minimum_size
+	_game_over_panel.anchor_left = 0.5
+	_game_over_panel.anchor_top = 0.5
+	_game_over_panel.anchor_right = 0.5
+	_game_over_panel.anchor_bottom = 0.5
+	_game_over_panel.offset_left = -panel_size.x * 0.5
+	_game_over_panel.offset_top = -panel_size.y * 0.5
+	_game_over_panel.offset_right = panel_size.x * 0.5
+	_game_over_panel.offset_bottom = panel_size.y * 0.5
 
 
 # --- Reload button ---
@@ -146,10 +165,10 @@ func _create_reload_button() -> void:
 	_reload_button.reload_requested.connect(func() -> void:
 		reload_requested.emit()
 	)
-	# Add to tree first so _ready() sets size, then position next frame
-	get_parent().add_child(_reload_button)
-	get_tree().process_frame.connect(_position_reload_button_once, CONNECT_ONE_SHOT)
-	get_viewport().size_changed.connect(_position_reload_button)
+	_overlay_layer.add_child(_reload_button)
+	# Position using anchors — bottom-left or bottom-right
+	_position_reload_button()
+	_overlay_layer.resized.connect(_position_reload_button)
 
 
 func _position_reload_button_once() -> void:
@@ -157,21 +176,18 @@ func _position_reload_button_once() -> void:
 
 
 func _position_reload_button() -> void:
-	if not _reload_button:
+	if not _reload_button or not _overlay_layer:
 		return
-	var btn_size := _reload_button.custom_minimum_size
+	var btn_size := Vector2(120.0, 120.0)
+	_reload_button.size = btn_size
 	var margin := Vector2(16.0, 24.0)
-	var vp_size := Vector2(get_viewport().size)
-	if vp_size.x <= 0.0:
-		vp_size = get_viewport().get_visible_rect().size
-	if vp_size.x <= 0.0:
-		push_warning("[CaromHUD] Cannot position reload button — viewport size is zero")
+	var container_size := _overlay_layer.size
+	if container_size.x <= 0.0:
 		return
 	if CaromSettings.reload_button_side == CaromSettings.ReloadButtonSide.LEFT:
-		_reload_button.position = Vector2(margin.x, vp_size.y - btn_size.y - margin.y)
+		_reload_button.position = Vector2(margin.x, container_size.y - btn_size.y - margin.y)
 	else:
-		_reload_button.position = Vector2(vp_size.x - btn_size.x - margin.x, vp_size.y - btn_size.y - margin.y)
-	print("[CaromHUD] Reload button pos=%s size=%s viewport=%s" % [_reload_button.position, _reload_button.size, vp_size])
+		_reload_button.position = Vector2(container_size.x - btn_size.x - margin.x, container_size.y - btn_size.y - margin.y)
 
 
 # --- Settings gear button ---
@@ -183,22 +199,18 @@ func _create_gear_button() -> void:
 	_gear_button.size = Vector2(44, 44)
 	_gear_button.add_theme_font_size_override("font_size", 22)
 	_gear_button.pressed.connect(_toggle_settings_panel)
-	get_parent().add_child(_gear_button)
-	get_tree().process_frame.connect(_position_gear_button_once, CONNECT_ONE_SHOT)
-	get_viewport().size_changed.connect(_position_gear_button)
-
-
-func _position_gear_button_once() -> void:
+	_overlay_layer.add_child(_gear_button)
 	_position_gear_button()
+	_overlay_layer.resized.connect(_position_gear_button)
 
 
 func _position_gear_button() -> void:
-	if not _gear_button:
+	if not _gear_button or not _overlay_layer:
 		return
-	var vp_size := Vector2(get_viewport().size)
-	if vp_size.x <= 0.0:
-		vp_size = get_viewport().get_visible_rect().size
-	_gear_button.position = Vector2(vp_size.x - 52.0, 8.0)
+	var container_size := _overlay_layer.size
+	if container_size.x <= 0.0:
+		return
+	_gear_button.position = Vector2(container_size.x - 52.0, 8.0)
 
 
 func _toggle_settings_panel() -> void:
@@ -208,8 +220,7 @@ func _toggle_settings_panel() -> void:
 		return
 
 	_settings_panel = CaromSettings.new()
-	var vp_size := get_viewport().get_visible_rect().size
-	_settings_panel.position = (vp_size - Vector2(300.0, 240.0)) * 0.5
+	_settings_panel.position = (_overlay_layer.size - Vector2(300.0, 240.0)) * 0.5
 	_settings_panel.setting_changed.connect(func() -> void:
 		_position_reload_button()
 	)
@@ -217,7 +228,7 @@ func _toggle_settings_panel() -> void:
 		_settings_panel = null
 		_position_reload_button()
 	)
-	get_parent().add_child(_settings_panel)
+	_overlay_layer.add_child(_settings_panel)
 
 
 # --- Pause button + overlay ---
@@ -232,7 +243,7 @@ func _create_pause_button() -> void:
 	_pause_button.pressed.connect(func() -> void:
 		pause_requested.emit()
 	)
-	get_parent().add_child(_pause_button)
+	_overlay_layer.add_child(_pause_button)
 
 
 func show_pause_overlay() -> void:
@@ -240,17 +251,26 @@ func show_pause_overlay() -> void:
 		return
 
 	_pause_overlay = Control.new()
-	_pause_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_pause_overlay.anchor_right = 1.0
+	_pause_overlay.anchor_bottom = 1.0
 	_pause_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 
 	var dimmer := ColorRect.new()
-	dimmer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dimmer.anchor_right = 1.0
+	dimmer.anchor_bottom = 1.0
 	dimmer.color = Color(0.0, 0.0, 0.0, 0.6)
 	dimmer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_pause_overlay.add_child(dimmer)
 
 	var vbox := VBoxContainer.new()
-	vbox.set_anchors_preset(Control.PRESET_CENTER)
+	vbox.anchor_left = 0.5
+	vbox.anchor_top = 0.5
+	vbox.anchor_right = 0.5
+	vbox.anchor_bottom = 0.5
+	vbox.offset_left = -80.0
+	vbox.offset_top = -80.0
+	vbox.offset_right = 80.0
+	vbox.offset_bottom = 80.0
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	vbox.add_theme_constant_override("separation", 20)
 	_pause_overlay.add_child(vbox)
@@ -279,7 +299,7 @@ func show_pause_overlay() -> void:
 	)
 	vbox.add_child(menu_btn)
 
-	get_parent().add_child(_pause_overlay)
+	_overlay_layer.add_child(_pause_overlay)
 
 
 func hide_pause_overlay() -> void:
@@ -306,7 +326,7 @@ func toggle_debug_overlay() -> void:
 			_debug_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.7))
 			_debug_label.add_theme_constant_override("shadow_offset_x", 1)
 			_debug_label.add_theme_constant_override("shadow_offset_y", 1)
-			get_parent().add_child(_debug_label)
+			_overlay_layer.add_child(_debug_label)
 		_debug_label.visible = true
 	elif _debug_label:
 		_debug_label.visible = false
