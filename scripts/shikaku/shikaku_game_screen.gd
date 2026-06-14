@@ -274,7 +274,7 @@ func _on_hint() -> void:
 	var result: ShikakuLogic.HintResult = logic.use_hint()
 	if result.rect.is_empty():
 		return
-	CrashReporter.register_user_action("shikaku_hint_used")
+	CrashCollector.register_user_action("shikaku_hint_used")
 	var hint_rect: Rect2i = _rect_from_dict(result.rect)
 	ReplayManager.record_input(elapsed_time, "rectangle_placed", {
 		"x": hint_rect.position.x,
@@ -295,7 +295,7 @@ func _on_pause() -> void:
 	is_paused = not is_paused
 	pause_button.text = "Resume" if is_paused else "Pause"
 	board.visible = not is_paused
-	CrashReporter.register_user_action("shikaku_pause_toggled", {"is_paused": is_paused})
+	CrashCollector.register_user_action("shikaku_pause_toggled", {"is_paused": is_paused})
 
 
 func _on_back() -> void:
@@ -303,7 +303,7 @@ func _on_back() -> void:
 		"width": grid_width,
 		"height": grid_height,
 	})
-	CrashReporter.register_user_action("shikaku_back_to_menu")
+	CrashCollector.register_user_action("shikaku_back_to_menu")
 	if not logic.is_completed:
 		AchievementManager.track_streak_broken()
 	_save_current_state()
