@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="HelpContent" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/help/help_content.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+title = "Blockudoku"
+body = "Place blocks on the 9×9 grid to fill complete rows, columns, or 3×3 boxes — filled lines are cleared for points.\n\n• Drag blocks from the tray onto the grid\n• Clear multiple lines at once for bonus points\n• Build combos by clearing on consecutive turns\n• Game ends when no remaining block fits"
