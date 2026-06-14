@@ -1,6 +1,8 @@
 extends Node
 
-## Unified theme module. Owns color palettes, icon set, and Godot Theme resource.
+## Unified theme module. Owns the Godot Theme resource and icon set.
+## Palette data model (color derivation, persistence, CRUD) is delegated to
+## ThemePalette, which is owned here and exposed as `palette`.
 ## Exposes get_color(), get_icon(), apply_icon(), and the theme_changed signal.
 ## Icons are applied reactively via the node_added signal — no tree-scanning.
 
@@ -10,86 +12,14 @@ var is_dark: bool = false
 var is_neon: bool = false
 var ui_theme: Theme
 
-## Active color palette (current theme values)
-var colors := {
-	"background": Color.WHITE,
-	"cell_background": Color.WHITE,
-	"cell_selected": Color(0.85, 0.92, 1.0),
-	"cell_highlighted": Color(0.92, 0.95, 1.0),
-	"cell_same_number": Color(0.80, 0.88, 1.0),
-	"cell_error": Color(1.0, 0.85, 0.85),
-	"cell_given": Color(0.96, 0.96, 0.96),
-	"grid_line_thin": Color(0.75, 0.75, 0.75),
-	"grid_line_thick": Color(0.2, 0.2, 0.2),
-	"text_given": Color(0.1, 0.1, 0.1),
-	"text_placed": Color(0.2, 0.4, 0.8),
-	"text_error": Color(0.9, 0.2, 0.2),
-	"text_pencil": Color(0.5, 0.5, 0.5),
-	"button_bg": Color(0.92, 0.92, 0.92),
-	"button_bg_hover": Color(0.85, 0.88, 0.95),
-	"button_bg_pressed": Color(0.78, 0.82, 0.92),
-	"button_text": Color(0.15, 0.15, 0.15),
-	"button_disabled": Color(0.75, 0.75, 0.75),
-	"button_disabled_text": Color(0.55, 0.55, 0.55),
-	"label_text": Color(0.1, 0.1, 0.1),
-	"timer_text": Color(0.4, 0.4, 0.4),
-	"strike_active": Color(0.9, 0.2, 0.2),
-	"strike_inactive": Color(0.8, 0.8, 0.8),
-}
+## ThemePalette instance — single owner of palette truth.
+## ThemeEditorScreen and other callers may read this to use the ThemePalette API.
+var palette: ThemePalette
 
-var _dark_colors := {
-	"background": Color(0.1, 0.1, 0.12),
-	"cell_background": Color(0.15, 0.15, 0.18),
-	"cell_selected": Color(0.2, 0.28, 0.4),
-	"cell_highlighted": Color(0.18, 0.2, 0.28),
-	"cell_same_number": Color(0.22, 0.3, 0.45),
-	"cell_error": Color(0.4, 0.15, 0.15),
-	"cell_given": Color(0.18, 0.18, 0.22),
-	"grid_line_thin": Color(0.35, 0.35, 0.4),
-	"grid_line_thick": Color(0.7, 0.7, 0.75),
-	"text_given": Color(0.9, 0.9, 0.9),
-	"text_placed": Color(0.5, 0.7, 1.0),
-	"text_error": Color(1.0, 0.4, 0.4),
-	"text_pencil": Color(0.6, 0.6, 0.65),
-	"button_bg": Color(0.22, 0.22, 0.27),
-	"button_bg_hover": Color(0.28, 0.28, 0.35),
-	"button_bg_pressed": Color(0.18, 0.18, 0.22),
-	"button_text": Color(0.88, 0.88, 0.92),
-	"button_disabled": Color(0.2, 0.2, 0.24),
-	"button_disabled_text": Color(0.45, 0.45, 0.5),
-	"label_text": Color(0.88, 0.88, 0.92),
-	"timer_text": Color(0.6, 0.6, 0.65),
-	"strike_active": Color(1.0, 0.4, 0.4),
-	"strike_inactive": Color(0.35, 0.35, 0.4),
-}
-
-var _light_colors: Dictionary
-
-var _neon_colors := {
-	"background": Color(0.04, 0.04, 0.1),
-	"cell_background": Color(0.06, 0.06, 0.14),
-	"cell_selected": Color(0.12, 0.14, 0.3),
-	"cell_highlighted": Color(0.1, 0.08, 0.22),
-	"cell_same_number": Color(0.15, 0.05, 0.35),
-	"cell_error": Color(0.5, 0.0, 0.1),
-	"cell_given": Color(0.08, 0.08, 0.18),
-	"grid_line_thin": Color(0.15, 0.1, 0.35),
-	"grid_line_thick": Color(0.0, 1.5, 1.5),       # HDR cyan — will bloom
-	"text_given": Color(0.0, 2.0, 1.6),             # HDR cyan text — blooms
-	"text_placed": Color(2.0, 0.3, 1.8),            # HDR hot pink — blooms
-	"text_error": Color(2.0, 0.0, 0.2),             # HDR red — blooms
-	"text_pencil": Color(0.2, 0.15, 0.5),
-	"button_bg": Color(0.08, 0.06, 0.18),
-	"button_bg_hover": Color(0.12, 0.08, 0.28),
-	"button_bg_pressed": Color(0.06, 0.04, 0.14),
-	"button_text": Color(0.0, 1.5, 1.5),            # HDR cyan buttons
-	"button_disabled": Color(0.08, 0.06, 0.14),
-	"button_disabled_text": Color(0.25, 0.2, 0.4),
-	"label_text": Color(0.0, 1.5, 1.5),             # HDR cyan labels
-	"timer_text": Color(1.5, 0.2, 1.2),             # HDR magenta
-	"strike_active": Color(2.0, 0.0, 0.2),
-	"strike_inactive": Color(0.2, 0.15, 0.35),
-}
+## Mirror of palette._colors (same Dictionary reference).
+## Kept here so _rebuild_ui_theme() and callers that use AppTheme.colors directly
+## continue to work without modification.
+var colors: Dictionary
 
 # --- Icon state ---
 
@@ -119,7 +49,11 @@ const TEXT_TO_ICON := {
 
 
 func _ready() -> void:
-	_light_colors = colors.duplicate()
+	palette = ThemePalette.new()
+	palette.load()
+	# colors is a live reference to palette._colors; _rebuild_ui_theme() uses it directly.
+	colors = palette._colors
+	palette.palette_changed.connect(_on_palette_changed)
 	ui_theme = Theme.new()
 	_apply_theme_setting()
 	PlatformSettings.settings_changed.connect(_apply_theme_setting)
@@ -135,140 +69,21 @@ func _ready() -> void:
 
 
 func _apply_theme_setting() -> void:
-	match PlatformSettings.dark_mode:
-		"system":
-			set_theme_mode("system")
-		"dark":
-			set_theme_mode("dark")
-		"light":
-			set_theme_mode("light")
-		"neon":
-			set_theme_mode("neon")
-		"custom":
-			set_theme_mode("custom")
+	palette.set_mode(PlatformSettings.dark_mode)
 
 
-func set_theme_mode(mode: String) -> void:
-	match mode:
-		"system":
-			is_neon = false
-			is_dark = DisplayServer.is_dark_mode() if DisplayServer.has_method("is_dark_mode") else false
-			_apply_color_set(_dark_colors if is_dark else _light_colors)
-		"dark":
-			is_neon = false
-			is_dark = true
-			_apply_color_set(_dark_colors)
-		"light":
-			is_neon = false
-			is_dark = false
-			_apply_color_set(_light_colors)
-		"neon":
-			is_neon = true
-			is_dark = true
-			_apply_color_set(_neon_colors)
-		"custom":
-			is_neon = true
-			is_dark = true
-			var pal: Dictionary = PlatformSettings.get_active_custom_palette()
-			if not pal.is_empty():
-				_apply_color_set(build_custom_palette(pal["bg"], pal["accent"], pal["secondary"], pal["error"]))
-			else:
-				_apply_color_set(_neon_colors)
+func _on_palette_changed() -> void:
+	is_dark = palette.is_dark
+	is_neon = palette.is_neon
 	_rebuild_ui_theme()
 	theme_changed.emit(is_dark)
 	_retint_icon_buttons()
 
 
-## Derives a full 22-key color palette from 4 user-chosen base colors.
-## Intended for use with the "custom" neon-style theme mode.
-## [b]accent[/b], [b]secondary[/b], and [b]error[/b] may carry HDR values (>1.0)
-## to drive neon bloom; derived surface/cell colors are clamped to [0, 1] so they
-## display correctly on non-HDR render targets.
-static func build_custom_palette(bg: Color, accent: Color, secondary: Color, error: Color) -> Dictionary:
-	# Background variants — slight brightness offsets to keep the dark neon feel.
-	# Clamped to [0,1] because these are standard (non-HDR) surface colors.
-	var s := 0.03  # step
-	var cell_bg := Color(
-		clampf(bg.r + s, 0.0, 1.0),
-		clampf(bg.g + s, 0.0, 1.0),
-		clampf(bg.b + s * 1.5, 0.0, 1.0))
-	var cell_given := Color(
-		clampf(bg.r + s * 1.5, 0.0, 1.0),
-		clampf(bg.g + s * 1.5, 0.0, 1.0),
-		clampf(bg.b + s * 3.0, 0.0, 1.0))
-	var btn_bg := Color(
-		clampf(bg.r + s * 1.5, 0.0, 1.0),
-		clampf(bg.g + s * 0.5, 0.0, 1.0),
-		clampf(bg.b + s * 3.0, 0.0, 1.0))
-	var btn_hover := Color(
-		clampf(bg.r + s * 3.0, 0.0, 1.0),
-		clampf(bg.g + s * 1.5, 0.0, 1.0),
-		clampf(bg.b + s * 6.0, 0.0, 1.0))
-	var btn_pressed := Color(
-		clampf(bg.r + s * 0.5, 0.0, 1.0),
-		clampf(bg.g + s * 0.3, 0.0, 1.0),
-		clampf(bg.b + s, 0.0, 1.0))
-
-	# Cell tinting — bg + small fraction of the accent/secondary/error color.
-	# Accent/secondary may be HDR (>1.0), so the blended result must be clamped
-	# to [0,1] for cell backgrounds which are not bloom-rendered.
-	var t := 0.08
-	var cell_sel := Color(
-		clampf(bg.r + accent.r * t * 1.5, 0.0, 1.0),
-		clampf(bg.g + accent.g * t * 1.5, 0.0, 1.0),
-		clampf(bg.b + accent.b * t * 2.0, 0.0, 1.0))
-	var cell_same := Color(
-		clampf(bg.r + secondary.r * t, 0.0, 1.0),
-		clampf(bg.g + secondary.g * t * 0.05, 0.0, 1.0),
-		clampf(bg.b + secondary.b * t * 1.5, 0.0, 1.0))
-	var cell_hi := Color(
-		clampf(bg.r + secondary.r * t * 0.5, 0.0, 1.0),
-		clampf(bg.g + secondary.g * t * 0.3, 0.0, 1.0),
-		clampf(bg.b + secondary.b * t, 0.0, 1.0))
-	var cell_err := Color(clampf(error.r * 0.25, 0.0, 1.0), clampf(error.g * 0.05, 0.0, 1.0), clampf(error.b * 0.1, 0.0, 1.0))
-
-	# Thin grid: bg lightened with faint accent tint (clamped, not HDR)
-	var grid_thin := Color(
-		clampf(bg.r * 1.5 + accent.r * 0.05, 0.0, 1.0),
-		clampf(bg.g * 1.5 + accent.g * 0.05, 0.0, 1.0),
-		clampf(bg.b * 1.5 + accent.b * 0.05, 0.0, 1.0)
-	)
-
-	# Muted auto-derived versions at ~30% intensity
-	var a30 := Color(accent.r * 0.3, accent.g * 0.3, accent.b * 0.3)
-	var s30 := Color(secondary.r * 0.25, secondary.g * 0.25, secondary.b * 0.25)
-	var e30 := Color(error.r * 0.3, error.g * 0.3, error.b * 0.3)
-
-	return {
-		"background": bg,
-		"cell_background": cell_bg,
-		"cell_selected": cell_sel,
-		"cell_highlighted": cell_hi,
-		"cell_same_number": cell_same,
-		"cell_error": cell_err,
-		"cell_given": cell_given,
-		"grid_line_thin": grid_thin,
-		"grid_line_thick": accent,
-		"text_given": accent,
-		"text_placed": secondary,
-		"text_error": error,
-		"text_pencil": s30,
-		"button_bg": btn_bg,
-		"button_bg_hover": btn_hover,
-		"button_bg_pressed": btn_pressed,
-		"button_text": accent,
-		"button_disabled": bg,
-		"button_disabled_text": a30,
-		"label_text": accent,
-		"timer_text": secondary,
-		"strike_active": error,
-		"strike_inactive": e30,
-	}
-
-
-func _apply_color_set(source: Dictionary) -> void:
-	for key in source:
-		colors[key] = source[key]
+## Switch to the given named mode. Delegates to ThemePalette.set_mode() which
+## updates colors and emits palette_changed (handled by _on_palette_changed).
+func set_theme_mode(mode: String) -> void:
+	palette.set_mode(mode)
 
 
 func set_dark(dark: bool) -> void:
@@ -276,7 +91,7 @@ func set_dark(dark: bool) -> void:
 
 
 func get_color(key: String) -> Color:
-	return colors.get(key, Color.MAGENTA)
+	return palette.get_color(key)
 
 
 func get_theme_resource() -> Theme:

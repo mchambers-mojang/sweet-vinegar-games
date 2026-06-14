@@ -45,7 +45,7 @@ func _exit_tree() -> void:
 func _get_crash_state() -> Dictionary:
 	var pal_name := ""
 	if _editing_index >= 0:
-		var pal: Dictionary = PlatformSettings.get_custom_palette(_editing_index)
+		var pal: Dictionary = AppTheme.palette.get_custom_palette(_editing_index)
 		if not pal.is_empty():
 			pal_name = str(pal.get("name", ""))
 	return {
@@ -53,8 +53,8 @@ func _get_crash_state() -> Dictionary:
 		"editing_palette_index": _editing_index,
 		"editing_palette_name": pal_name,
 		"unsaved_changes": _unsaved,
-		"total_palettes": PlatformSettings.custom_palettes.size(),
-		"active_palette_index": PlatformSettings.active_custom_palette_index,
+		"total_palettes": AppTheme.palette.custom_palettes.size(),
+		"active_palette_index": AppTheme.palette.active_custom_palette_index,
 	}
 
 
@@ -193,21 +193,15 @@ func _add_color_row(label_text: String, default_color: Color) -> ColorPickerButt
 # ---------------------------------------------------------------------------
 
 func _ensure_default_palette() -> void:
-	if PlatformSettings.custom_palettes.size() > 0:
-		return
-	var defaults: Dictionary = PlatformSettings.default_palette_colors()
-	PlatformSettings.add_custom_palette(
-		"My Palette",
-		defaults["bg"], defaults["accent"], defaults["secondary"], defaults["error"]
-	)
-	PlatformSettings.save_settings()
+	if AppTheme.palette.ensure_default_palette():
+		AppTheme.palette.save()
 
 
 func _reload_palette_list() -> void:
 	if not _palette_option:
 		return
 	_palette_option.clear()
-	var palettes := PlatformSettings.custom_palettes
+	var palettes := AppTheme.palette.custom_palettes
 	for p in palettes:
 		_palette_option.add_item(str(p.get("name", "Palette")))
 
@@ -220,7 +214,7 @@ func _reload_palette_list() -> void:
 
 	if has_palettes:
 		# Select the active palette, or default to first
-		var active := PlatformSettings.active_custom_palette_index
+		var active := AppTheme.palette.active_custom_palette_index
 		var idx := clampi(active if active >= 0 else 0, 0, palettes.size() - 1)
 		_palette_option.selected = idx
 		_editing_index = idx
@@ -233,7 +227,7 @@ func _reload_palette_list() -> void:
 
 
 func _load_palette_into_pickers(index: int) -> void:
-	var pal: Dictionary = PlatformSettings.get_custom_palette(index)
+	var pal: Dictionary = AppTheme.palette.get_custom_palette(index)
 	if pal.is_empty():
 		return
 	_bg_picker.color = Color(pal["bg"], 1.0)
@@ -244,7 +238,7 @@ func _load_palette_into_pickers(index: int) -> void:
 
 
 func _load_default_colors_into_pickers() -> void:
-	var defaults: Dictionary = PlatformSettings.default_palette_colors()
+	var defaults: Dictionary = ThemePalette.default_palette_colors()
 	_bg_picker.color = Color(defaults["bg"], 1.0)
 	_accent_picker.color = Color(defaults["accent"], 1.0)
 	_secondary_picker.color = Color(defaults["secondary"], 1.0)
@@ -255,11 +249,11 @@ func _load_default_colors_into_pickers() -> void:
 func _update_preview() -> void:
 	if not _preview_board or not _bg_picker:
 		return
-	var palette := AppTheme.build_custom_palette(
+	var pal := ThemePalette.build_custom(
 		_bg_picker.color, _accent_picker.color,
 		_secondary_picker.color, _error_picker.color
 	)
-	_preview_board.set_palette(palette)
+	_preview_board.set_palette(pal)
 
 
 # ---------------------------------------------------------------------------
@@ -295,12 +289,12 @@ func _on_new_palette() -> void:
 		_show_unsaved_dialog(func() -> void: _on_new_palette())
 		return
 	_show_name_dialog("New Palette", "My Palette", func(name: String) -> void:
-		var defaults: Dictionary = PlatformSettings.default_palette_colors()
-		var new_idx := PlatformSettings.add_custom_palette(
+		var defaults: Dictionary = ThemePalette.default_palette_colors()
+		var new_idx := AppTheme.palette.add_custom_palette(
 			name,
 			defaults["bg"], defaults["accent"], defaults["secondary"], defaults["error"]
 		)
-		PlatformSettings.save_settings()
+		AppTheme.palette.save()
 		_reload_palette_list()
 		_palette_option.selected = new_idx
 		_editing_index = new_idx
@@ -312,19 +306,19 @@ func _on_new_palette() -> void:
 func _on_rename_palette() -> void:
 	if _editing_index < 0:
 		return
-	var current_pal: Dictionary = PlatformSettings.get_custom_palette(_editing_index)
+	var current_pal: Dictionary = AppTheme.palette.get_custom_palette(_editing_index)
 	if current_pal.is_empty():
 		return
 	var current_name: String = str(current_pal.get("name", "Palette"))
 	_show_name_dialog("Rename Palette", current_name, func(name: String) -> void:
-		var pal: Dictionary = PlatformSettings.get_custom_palette(_editing_index)
+		var pal: Dictionary = AppTheme.palette.get_custom_palette(_editing_index)
 		if pal.is_empty():
 			return
-		PlatformSettings.update_custom_palette(
+		AppTheme.palette.update_custom_palette(
 			_editing_index, name,
 			pal["bg"], pal["accent"], pal["secondary"], pal["error"]
 		)
-		PlatformSettings.save_settings()
+		AppTheme.palette.save()
 		var was_editing := _editing_index
 		_reload_palette_list()
 		_palette_option.selected = was_editing
@@ -339,9 +333,9 @@ func _on_duplicate_palette() -> void:
 	if _unsaved:
 		_show_unsaved_dialog(func() -> void: _on_duplicate_palette())
 		return
-	var new_idx := PlatformSettings.duplicate_custom_palette(_editing_index)
+	var new_idx := AppTheme.palette.duplicate_custom_palette(_editing_index)
 	if new_idx >= 0:
-		PlatformSettings.save_settings()
+		AppTheme.palette.save()
 		_reload_palette_list()
 		_palette_option.selected = new_idx
 		_editing_index = new_idx
@@ -356,13 +350,11 @@ func _on_delete_palette() -> void:
 	dialog.title = "Delete Palette"
 	dialog.dialog_text = "Delete this palette? This cannot be undone."
 	dialog.confirmed.connect(func() -> void:
-		var was_active := PlatformSettings.active_custom_palette_index == _editing_index
-		PlatformSettings.remove_custom_palette(_editing_index)
+		var was_active := AppTheme.palette.active_custom_palette_index == _editing_index
+		AppTheme.palette.remove_custom_palette(_editing_index)
 		if was_active:
-			PlatformSettings.dark_mode = "neon"
-		PlatformSettings.save_settings()
-		if was_active:
-			AppTheme.set_theme_mode("neon")
+			AppTheme.palette.set_mode("neon")
+		AppTheme.palette.save()
 		_reload_palette_list()
 		dialog.queue_free()
 	)
@@ -386,32 +378,30 @@ func _on_apply_and_save() -> void:
 	if _editing_index < 0:
 		# No palette exists yet — create one with current picker colors
 		_show_name_dialog("Save Palette", "My Palette", func(name: String) -> void:
-			var new_idx := PlatformSettings.add_custom_palette(
+			var new_idx := AppTheme.palette.add_custom_palette(
 				name,
 				_bg_picker.color, _accent_picker.color,
 				_secondary_picker.color, _error_picker.color
 			)
-			PlatformSettings.active_custom_palette_index = new_idx
-			PlatformSettings.dark_mode = "custom"
-			PlatformSettings.save_settings()
-			AppTheme.set_theme_mode("custom")
+			AppTheme.palette.active_custom_palette_index = new_idx
+			AppTheme.palette.set_mode("custom")
+			AppTheme.palette.save()
 			_reload_palette_list()
 		)
 		return
 
 	# Save current pickers into the selected palette
-	var existing_pal: Dictionary = PlatformSettings.get_custom_palette(_editing_index)
+	var existing_pal: Dictionary = AppTheme.palette.get_custom_palette(_editing_index)
 	var existing_name: String = str(existing_pal.get("name", "Palette")) if not existing_pal.is_empty() else "Palette"
-	PlatformSettings.update_custom_palette(
+	AppTheme.palette.update_custom_palette(
 		_editing_index,
 		existing_name,
 		_bg_picker.color, _accent_picker.color,
 		_secondary_picker.color, _error_picker.color
 	)
-	PlatformSettings.active_custom_palette_index = _editing_index
-	PlatformSettings.dark_mode = "custom"
-	PlatformSettings.save_settings()
-	AppTheme.set_theme_mode("custom")
+	AppTheme.palette.active_custom_palette_index = _editing_index
+	AppTheme.palette.set_mode("custom")
+	AppTheme.palette.save()
 	_unsaved = false
 
 
