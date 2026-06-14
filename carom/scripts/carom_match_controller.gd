@@ -22,7 +22,9 @@ func _ready() -> void:
 	hud.menu_requested.connect(_on_menu)
 	hud.difficulty_changed.connect(_on_difficulty_changed)
 
-	state.difficulty = CaromMenu.selected_difficulty
+	state.difficulty = arena.get_meta("carom_difficulty", 1) as int
+	if arena.has_meta("carom_difficulty"):
+		arena.remove_meta("carom_difficulty")
 
 	call_deferred("_init_match")
 
@@ -161,4 +163,3 @@ func _on_menu() -> void:
 
 func _on_difficulty_changed(level: int) -> void:
 	state.difficulty = level
-	CaromMenu.selected_difficulty = level
