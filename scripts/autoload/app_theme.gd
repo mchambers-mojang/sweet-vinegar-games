@@ -55,7 +55,10 @@ func _ready() -> void:
 	colors = palette._colors
 	palette.palette_changed.connect(_on_palette_changed)
 	ui_theme = Theme.new()
-	_apply_theme_setting()
+	# Unconditional initial build: call set_mode() directly so palette_changed
+	# fires regardless of whether palette._mode already equals dark_mode.
+	# _apply_theme_setting() guards against re-entry for subsequent calls only.
+	palette.set_mode(PlatformSettings.dark_mode)
 	PlatformSettings.settings_changed.connect(_apply_theme_setting)
 
 	for key in ICON_PATHS:
