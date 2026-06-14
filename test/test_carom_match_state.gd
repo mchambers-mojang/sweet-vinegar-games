@@ -81,11 +81,11 @@ func test_goal_scored_increments_ai_score() -> void:
 	assert_false(result.match_over)
 
 
-func test_goal_scored_sets_phase_to_goal_scored() -> void:
+func test_goal_scored_stays_in_playing_phase() -> void:
 	var s := _make_state()
 	s.on_round_ready()
 	s.on_goal_scored("player")
-	assert_eq(s.phase, CaromMatchState.Phase.GOAL_SCORED)
+	assert_eq(s.phase, CaromMatchState.Phase.PLAYING)
 
 
 # --- Match end ---
@@ -146,13 +146,11 @@ func test_phase_transition_setup_to_playing() -> void:
 	assert_eq(s.phase, CaromMatchState.Phase.PLAYING)
 
 
-func test_phase_transition_playing_to_goal_scored_to_playing() -> void:
+func test_phase_stays_playing_after_goal() -> void:
 	var s := _make_state()
 	s.on_round_ready()
 	assert_eq(s.phase, CaromMatchState.Phase.PLAYING)
 	s.on_goal_scored("ai")
-	assert_eq(s.phase, CaromMatchState.Phase.GOAL_SCORED)
-	s.on_round_ready()
 	assert_eq(s.phase, CaromMatchState.Phase.PLAYING)
 
 
