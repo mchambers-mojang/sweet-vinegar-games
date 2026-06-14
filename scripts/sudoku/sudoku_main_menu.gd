@@ -7,3 +7,7 @@ extends GameMenu
 
 func _init() -> void:
 	config = preload("res://assets/menu/sudoku_menu.tres")
+
+
+func _get_save_adapter() -> GameSaveAdapter:
+	return SudokuSaveAdapter.new()
