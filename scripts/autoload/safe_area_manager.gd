@@ -63,3 +63,19 @@ func apply(container: MarginContainer) -> void:
 	container.add_theme_constant_override("margin_bottom", insets["bottom"])
 	container.add_theme_constant_override("margin_left", insets["left"])
 	container.add_theme_constant_override("margin_right", insets["right"])
+
+
+## Auto-apply safe area to a scene root node.
+## Looks for a direct MarginContainer child and calls apply().
+## Skipped if the scene root has meta "skip_safe_area" set to true.
+## Returns true if safe area was applied.
+func apply_to_scene_root(scene_root: Node) -> bool:
+	if scene_root == null:
+		return false
+	if scene_root.has_meta("skip_safe_area") and scene_root.get_meta("skip_safe_area"):
+		return false
+	var margin := scene_root.get_node_or_null("MarginContainer") as MarginContainer
+	if margin:
+		apply(margin)
+		return true
+	return false

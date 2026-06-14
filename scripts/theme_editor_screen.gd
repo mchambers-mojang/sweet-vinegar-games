@@ -33,10 +33,6 @@ func _ready() -> void:
 	AppTheme.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
 	CrashCollector.register_state_provider(_get_crash_state)
 
-	var margin := get_node_or_null("MarginContainer") as MarginContainer
-	if margin:
-		SafeAreaManager.apply(margin)
-
 
 func _exit_tree() -> void:
 	CrashCollector.unregister_state_provider(_get_crash_state)
