@@ -262,7 +262,7 @@ func _cheat_place_one() -> void:
 	if not result.placed:
 		return
 	var cell := board.cells[index]
-	cell.set_value(result.number, false)
+	cell.set_value(result.number)
 	cell.set_error(false)
 	cell.set_cell_color(Color.TRANSPARENT)
 	for item in result.pencil_marks_removed:
@@ -372,7 +372,7 @@ func _handle_number_first_cell_tap(index: int) -> void:
 			board._update_highlighting()
 			return
 		if result.placed:
-			cell.set_value(result.number, false)
+			cell.set_value(result.number)
 			cell.set_error(false)
 			cell.set_cell_color(Color.TRANSPARENT)
 
@@ -479,7 +479,7 @@ func _place_or_note_number(number: int) -> void:
 			return
 
 		if result.placed:
-			cell.set_value(result.number, false)
+			cell.set_value(result.number)
 			cell.set_error(false)
 			cell.set_cell_color(Color.TRANSPARENT)
 			SoundManager.play_place()
@@ -540,7 +540,7 @@ func _on_hint_pressed() -> void:
 
 	var result := logic.use_hint(index)
 	var cell := board.cells[index]
-	cell.set_value(result.number, false)
+	cell.set_value(result.number)
 	cell.set_error(false)
 	hint_button.disabled = true
 
@@ -1031,7 +1031,7 @@ func _apply_number_to_multi_selection(number: int) -> void:
 					_log_game_over_analytics(false)
 					_show_fail_dialog()
 			elif result.placed:
-				cell.set_value(result.number, false)
+				cell.set_value(result.number)
 				cell.set_error(false)
 				cell.set_cell_color(Color.TRANSPARENT)
 				for item in result.pencil_marks_removed:

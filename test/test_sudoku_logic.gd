@@ -99,7 +99,7 @@ func test_place_incorrect_number_strict() -> void:
 
 
 # ---------------------------------------------------------------------------
-# 4. Third strike (4th wrong) causes game_failed
+# 4. Fourth strike (4th wrong answer) causes game_failed
 # ---------------------------------------------------------------------------
 
 func test_place_number_game_over() -> void:

@@ -439,7 +439,7 @@ func _init_pencil_marks() -> void:
 	pencil_marks.clear()
 	pencil_marks.resize(GRID_CELLS)
 	for i in GRID_CELLS:
-		pencil_marks[i] = [] as Array[int]
+		pencil_marks[i] = []
 
 
 func _init_colors() -> void:
