@@ -29,7 +29,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		# Ctrl+Shift+C: copy latest crash report for easy sharing
 		elif key.keycode == KEY_C and key.ctrl_pressed and key.shift_pressed:
-			if CrashReporter.copy_latest_report_to_clipboard():
+			if CrashWriter.copy_latest_report_to_clipboard():
 				print("Copied latest crash report to clipboard")
 			else:
 				print("No crash report found to copy")

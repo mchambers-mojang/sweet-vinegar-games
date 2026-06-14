@@ -496,11 +496,10 @@ func _pulse_board_for_combo(combo: int) -> void:
 	pulse_down.set_ease(Tween.EASE_IN)
 
 func _handle_game_over() -> void:
-	CrashReporter.register_user_action("blockudoku_game_over", {"score": logic.score, "turns": logic.turns})
+	CrashCollector.register_user_action("blockudoku_game_over", {"score": logic.score, "turns": logic.turns})
 	logic.is_game_over = true
 	ReplayManager.finish_session("game_over", logic.score, elapsed_time, {
 		"turns": logic.turns,
-		"board_state": board.get_state(),
 	})
 	_update_undo_redo_buttons()
 	_record_blockudoku_game_over(logic.score, logic.turns)
@@ -677,7 +676,7 @@ func _check_for_new_best() -> void:
 
 
 func _on_back() -> void:
-	CrashReporter.register_user_action("blockudoku_back_to_menu")
+	CrashCollector.register_user_action("blockudoku_back_to_menu")
 	if not logic.is_game_over:
 		ReplayManager.finish_session("abandoned", logic.score, elapsed_time, {
 			"turns": logic.turns,

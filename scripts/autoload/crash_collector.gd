@@ -1,25 +1,20 @@
 extends Node
 
-## Lightweight crash/error reporting with local rolling logs.
+## Collects crash/error state from providers and triggers report writing.
+## Depends on CrashWriter autoload for file I/O.
 
-const LOG_DIR := "user://crash_logs"
-const MAX_LOG_FILES := 15
 const MAX_ACTIONS := 20
 const ERROR_CHECK_INTERVAL := 1.0  # Check for new errors every second
 
 var _recent_actions: Array[Dictionary] = []
 var _state_providers: Array[Callable] = []
 var _replay_hooks: Array[Callable] = []
-var _latest_report_path: String = ""
-var _latest_report_text: String = ""
 var _log_file_path: String = ""
 var _last_log_size: int = 0
 var _error_check_timer: float = 0.0
 
 
 func _ready() -> void:
-	_ensure_log_dir()
-	_trim_old_logs()
 	_log_file_path = _find_godot_log_path()
 	if _log_file_path != "":
 		var file := FileAccess.open(_log_file_path, FileAccess.READ)
@@ -119,11 +114,20 @@ func capture_error(message: String, stack_trace: String = "", extra: Dictionary 
 
 
 func capture_crash(kind: String, message: String, extra: Dictionary = {}) -> String:
+	var report := _assemble_report({
+		"kind": kind,
+		"message": message,
+		"extra": extra,
+	})
+	return CrashWriter.write_report(report)
+
+
+func _assemble_report(error_info: Dictionary) -> Dictionary:
 	var screen_size := DisplayServer.screen_get_size()
 	var report := {
 		"timestamp": Time.get_datetime_string_from_system(true, true),
-		"kind": kind,
-		"message": message,
+		"kind": error_info.get("kind", ""),
+		"message": error_info.get("message", ""),
 		"godot_version": Engine.get_version_info(),
 		"app_version": _get_app_version(),
 		"device": {
@@ -143,60 +147,14 @@ func capture_crash(kind: String, message: String, extra: Dictionary = {}) -> Str
 		},
 		"user_actions": _recent_actions.duplicate(true),
 		"game_state": _collect_state(),
-		"extra": extra,
+		"extra": error_info.get("extra", {}),
 	}
 
 	var replay_payload := _collect_replay_payload()
 	if not replay_payload.is_empty():
 		report["replay"] = replay_payload
 
-	var file_path := _write_report(report)
-	if file_path != "":
-		_latest_report_path = file_path
-		_latest_report_text = JSON.stringify(report, "\t")
-	_trim_old_logs()
-	return file_path
-
-
-func get_recent_reports(limit: int = 10) -> Array[Dictionary]:
-	var reports: Array[Dictionary] = []
-	for path in _get_recent_report_paths(limit):
-		var file := FileAccess.open(path, FileAccess.READ)
-		if file == null:
-			continue
-		var parsed = JSON.parse_string(file.get_as_text())
-		if parsed is Dictionary:
-			var report := parsed as Dictionary
-			report["path"] = path
-			reports.append(report)
-	return reports
-
-
-func get_latest_report_path() -> String:
-	return _latest_report_path
-
-
-func get_latest_report_text() -> String:
-	if _latest_report_text != "":
-		return _latest_report_text
-	if _latest_report_path == "":
-		var recent := _get_recent_report_paths(1)
-		if recent.is_empty():
-			return ""
-		_latest_report_path = recent[0]
-	var file := FileAccess.open(_latest_report_path, FileAccess.READ)
-	if file == null:
-		return ""
-	_latest_report_text = file.get_as_text()
-	return _latest_report_text
-
-
-func copy_latest_report_to_clipboard() -> bool:
-	var text := get_latest_report_text()
-	if text == "":
-		return false
-	DisplayServer.clipboard_set(text)
-	return true
+	return report
 
 
 func _collect_state() -> Dictionary:
@@ -235,50 +193,3 @@ func _get_app_version() -> String:
 	if project_version != "":
 		return project_version
 	return str(ProjectSettings.get_setting("application/config/name", ""))
-
-
-func _write_report(report: Dictionary) -> String:
-	_ensure_log_dir()
-	var unix := int(Time.get_unix_time_from_system())
-	var stamp := Time.get_datetime_string_from_system(false, true).replace(":", "-")
-	var file_name := "crash_%s_%d.json" % [stamp, unix]
-	var path := LOG_DIR.path_join(file_name)
-	var file := FileAccess.open(path, FileAccess.WRITE)
-	if file == null:
-		return ""
-	file.store_string(JSON.stringify(report, "\t"))
-	return path
-
-
-func _ensure_log_dir() -> void:
-	DirAccess.make_dir_recursive_absolute(LOG_DIR)
-
-
-func _get_recent_report_paths(limit: int = MAX_LOG_FILES) -> Array[String]:
-	var paths: Array[String] = []
-	var dir := DirAccess.open(LOG_DIR)
-	if dir == null:
-		return paths
-	dir.list_dir_begin()
-	while true:
-		var name := dir.get_next()
-		if name == "":
-			break
-		if dir.current_is_dir():
-			continue
-		if name.ends_with(".json"):
-			paths.append(LOG_DIR.path_join(name))
-	dir.list_dir_end()
-	paths.sort()
-	paths.reverse()
-	if limit >= 0 and paths.size() > limit:
-		paths.resize(limit)
-	return paths
-
-
-func _trim_old_logs() -> void:
-	var paths := _get_recent_report_paths(-1)
-	if paths.size() <= MAX_LOG_FILES:
-		return
-	for i in range(MAX_LOG_FILES, paths.size()):
-		DirAccess.remove_absolute(paths[i])

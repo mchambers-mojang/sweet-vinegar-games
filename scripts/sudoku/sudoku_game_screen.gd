@@ -564,7 +564,7 @@ func _on_notes_pressed() -> void:
 func _on_hint_pressed() -> void:
 	if _is_board_locked() or hints_used >= 1:
 		return
-	CrashReporter.register_user_action("sudoku_hint_used", {"selected_index": board.selected_index})
+	CrashCollector.register_user_action("sudoku_hint_used", {"selected_index": board.selected_index})
 
 	var index: int = -1
 
@@ -642,7 +642,7 @@ func _on_pause_pressed() -> void:
 	pause_button.text = "Resume" if is_paused else "Pause"
 	# Hide board when paused
 	board.visible = not is_paused
-	CrashReporter.register_user_action("sudoku_pause_toggled", {"is_paused": is_paused})
+	CrashCollector.register_user_action("sudoku_pause_toggled", {"is_paused": is_paused})
 
 
 func _on_back_pressed() -> void:
@@ -650,7 +650,7 @@ func _on_back_pressed() -> void:
 		"difficulty": difficulty,
 		"strikes": strikes,
 	})
-	CrashReporter.register_user_action("sudoku_back_to_menu")
+	CrashCollector.register_user_action("sudoku_back_to_menu")
 	if not is_completed:
 		AchievementManager.track_streak_broken()
 	_save_current_state()
@@ -662,7 +662,7 @@ func _on_undo_pressed() -> void:
 		return
 	if undo_stack.is_empty():
 		return
-	CrashReporter.register_user_action("sudoku_undo")
+	CrashCollector.register_user_action("sudoku_undo")
 	var state: Dictionary = undo_stack.pop_back()
 	var index: int = state["index"]
 	var cell := board.cells[index]
@@ -684,7 +684,7 @@ func _on_redo_pressed() -> void:
 		return
 	if redo_stack.is_empty():
 		return
-	CrashReporter.register_user_action("sudoku_redo")
+	CrashCollector.register_user_action("sudoku_redo")
 	var state: Dictionary = redo_stack.pop_back()
 	var index: int = state["index"]
 	var cell := board.cells[index]

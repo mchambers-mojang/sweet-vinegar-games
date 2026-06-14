@@ -304,7 +304,7 @@ func _on_redo() -> void:
 func _on_hint() -> void:
 	if is_completed or hints_used >= 1:
 		return
-	CrashReporter.register_user_action("shikaku_hint_used")
+	CrashCollector.register_user_action("shikaku_hint_used")
 	var sol: Array[Rect2i] = puzzle_data.get("solution", [] as Array[Rect2i])
 	if sol.is_empty():
 		return
@@ -344,7 +344,7 @@ func _on_pause() -> void:
 	is_paused = not is_paused
 	pause_button.text = "Resume" if is_paused else "Pause"
 	board.visible = not is_paused
-	CrashReporter.register_user_action("shikaku_pause_toggled", {"is_paused": is_paused})
+	CrashCollector.register_user_action("shikaku_pause_toggled", {"is_paused": is_paused})
 
 
 func _on_back() -> void:
@@ -352,7 +352,7 @@ func _on_back() -> void:
 		"width": grid_width,
 		"height": grid_height,
 	})
-	CrashReporter.register_user_action("shikaku_back_to_menu")
+	CrashCollector.register_user_action("shikaku_back_to_menu")
 	if not is_completed:
 		AchievementManager.track_streak_broken()
 	_save_current_state()

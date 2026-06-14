@@ -53,7 +53,7 @@ func _is_completed() -> bool:
 	return false
 
 
-## Return crash state dictionary for CrashReporter.
+## Return crash state dictionary for CrashCollector.
 func _get_crash_state() -> Dictionary:
 	return {"game": _get_game_id()}
 
@@ -126,8 +126,8 @@ func _should_tick_timer() -> bool:
 
 func _ready() -> void:
 	# Crash reporting
-	CrashReporter.register_state_provider(_get_crash_state)
-	CrashReporter.register_user_action("%s_screen_opened" % _get_game_id())
+	CrashCollector.register_state_provider(_get_crash_state)
+	CrashCollector.register_user_action("%s_screen_opened" % _get_game_id())
 
 	# Settings button
 	var settings_btn := _find_settings_button()
@@ -154,7 +154,7 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
-	CrashReporter.unregister_state_provider(_get_crash_state)
+	CrashCollector.unregister_state_provider(_get_crash_state)
 
 
 func _process(delta: float) -> void:
@@ -182,14 +182,14 @@ func begin_session(saved_data: Dictionary = {}) -> void:
 		random_seed = int(saved_data.get("random_seed", 0))
 		elapsed_time = saved_data.get("elapsed_time", 0.0)
 		replay_id = str(saved_data.get("replay_id", ""))
-		CrashReporter.register_user_action(
+		CrashCollector.register_user_action(
 				game_id + "_resume_game",
 				_get_resume_crash_params(saved_data))
 	else:
 		random_seed = _create_session_seed()
 		elapsed_time = 0.0
 		replay_id = ""
-		CrashReporter.register_user_action(
+		CrashCollector.register_user_action(
 				game_id + "_start_new_game",
 				_get_start_crash_params())
 
