@@ -81,8 +81,6 @@ func _get_pulse_frequency() -> float:
 
 	if fraction >= 0.6:
 		return PULSE_FREQ_FAR
-	elif fraction <= 0.0:
-		return PULSE_FREQ_NEAR
 	elif fraction <= 0.3:
 		# Near zone: lerp 3.0 Hz → 1.5 Hz as puck moves away from goal
 		return lerpf(PULSE_FREQ_NEAR, PULSE_FREQ_MID, fraction / 0.3)
@@ -92,7 +90,7 @@ func _get_pulse_frequency() -> float:
 
 
 func _get_nearest_goal_distance() -> float:
-	var nearest: float = 1e20
+	var nearest: float = INF
 	for goal in _goal_targets:
 		var d := Vector2(goal.x - global_position.x, goal.z - global_position.z).length()
 		if d < nearest:
