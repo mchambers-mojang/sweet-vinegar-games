@@ -59,6 +59,8 @@ func reset_to_center(reset_position: Vector3 = Vector3.ZERO) -> void:
 
 func _process(delta: float) -> void:
 	_update_pulse(delta)
+	if Engine.get_frames_drawn() % 120 == 0:
+		print("[DEBUG-process] _process running on puck, frame=%d" % Engine.get_frames_drawn())
 
 
 func _update_pulse(delta: float) -> void:
@@ -111,6 +113,9 @@ func _get_arena_length() -> float:
 
 
 func _physics_process(_delta: float) -> void:
+	# Pulse in physics_process as fallback (in case _process is not running)
+	_update_pulse(_delta)
+	
 	# Safety bounds check
 	if abs(global_position.x) > 8.0 or global_position.z < -2.0 or global_position.z > 28.0 or abs(global_position.y) > 3.0:
 		push_warning("Puck escaped bounds at %s — resetting" % str(global_position))
