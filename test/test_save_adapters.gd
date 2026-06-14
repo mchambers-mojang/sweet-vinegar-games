@@ -36,15 +36,16 @@ func test_load_returns_correct_data_with_versioned_save() -> void:
 # ---------------------------------------------------------------------------
 
 func test_migration_callable_invoked_for_v0_save() -> void:
-	var was_called: bool = false
+	# Arrays are reference types — safe to mutate inside a lambda
+	var tracker: Array = [false]
 	save_mgr.register_migrator("mig_test", func(data: Dictionary, _v: int) -> Dictionary:
-		was_called = true
+		tracker[0] = true
 		return data
 	)
 	# Write a legacy (v0) save directly — no VERSION_KEY present
 	_write_v0_save("mig_test", {"key": "val"})
 	save_mgr.load_game("mig_test")
-	assert_true(was_called, "Migration callable must be invoked for a v0 save")
+	assert_true(tracker[0], "Migration callable must be invoked for a v0 save")
 
 
 func test_migration_can_transform_data() -> void:
@@ -63,15 +64,16 @@ func test_migration_can_transform_data() -> void:
 
 
 func test_migration_not_called_for_current_version_save() -> void:
-	var call_count: int = 0
+	# Arrays are reference types — safe to mutate inside a lambda
+	var counter: Array = [0]
 	save_mgr.register_migrator("mig_skip", func(data: Dictionary, _v: int) -> Dictionary:
-		call_count += 1
+		counter[0] += 1
 		return data
 	)
 	# Save via normal API — this stamps SAVE_VERSION
 	save_mgr.save_game("mig_skip", {"k": 1})
 	save_mgr.load_game("mig_skip")
-	assert_eq(call_count, 0, "Migration must not be called for a current-version save")
+	assert_eq(counter[0], 0, "Migration must not be called for a current-version save")
 
 
 # ---------------------------------------------------------------------------
@@ -222,6 +224,31 @@ func test_shikaku_adapter_get_grid_width() -> void:
 func test_shikaku_adapter_get_grid_width_default_when_no_save() -> void:
 	var adapter := ShikakuSaveAdapter.new()
 	assert_eq(adapter.get_grid_width(), 10)
+
+
+# ---------------------------------------------------------------------------
+# GameSaveAdapter — restore_if_resumable (avoids double load)
+# ---------------------------------------------------------------------------
+
+func test_restore_if_resumable_returns_data_when_valid() -> void:
+	var adapter := ShikakuSaveAdapter.new()
+	adapter.save({"width": 10, "height": 10, "is_completed": false})
+	var data: Dictionary = adapter.restore_if_resumable()
+	assert_false(data.is_empty(), "restore_if_resumable must return data for a valid save")
+	assert_eq(data["width"], 10)
+
+
+func test_restore_if_resumable_returns_empty_when_no_save() -> void:
+	var adapter := ShikakuSaveAdapter.new()
+	var data: Dictionary = adapter.restore_if_resumable()
+	assert_eq(data, {}, "restore_if_resumable must return {} when there is no save")
+
+
+func test_restore_if_resumable_returns_empty_when_not_resumable() -> void:
+	var adapter := ShikakuSaveAdapter.new()
+	adapter.save({"width": 10, "height": 10, "is_completed": true})
+	var data: Dictionary = adapter.restore_if_resumable()
+	assert_eq(data, {}, "restore_if_resumable must return {} when can_resume() is false")
 
 
 # ---------------------------------------------------------------------------

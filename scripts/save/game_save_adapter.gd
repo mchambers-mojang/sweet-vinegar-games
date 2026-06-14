@@ -53,7 +53,19 @@ func clear() -> void:
 
 ## Override to inspect the raw save data and decide whether the game is
 ## resumable.  Default: any non-empty save is resumable.
-## Called only when has_save() is true, so data is guaranteed non-empty
-## at the GameSaveManager level.
+## Note: data may be empty even when has_save() was true if the save file
+## was corrupted and could not be parsed by GameSaveManager.
 func _can_resume_from(_data: Dictionary) -> bool:
 	return true
+
+
+## Load and validate in a single step.  Returns the save data when the save
+## exists and passes validation, or {} otherwise.  Use this in auto-resume
+## paths to avoid reading the save file twice (once to validate, once to load).
+func restore_if_resumable() -> Dictionary:
+	if not has_save():
+		return {}
+	var data := GameSaveManager.load_game(_get_game_id())
+	if not _can_resume_from(data):
+		return {}
+	return data

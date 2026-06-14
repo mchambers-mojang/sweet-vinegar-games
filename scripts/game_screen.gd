@@ -244,8 +244,9 @@ func _try_auto_resume() -> void:
 	if _is_initialized():
 		return
 	if _save_adapter:
-		if _save_adapter.can_resume():
-			_deserialize_state(_save_adapter.restore())
+		var data := _save_adapter.restore_if_resumable()
+		if not data.is_empty():
+			_deserialize_state(data)
 	elif GameSaveManager.has_saved_game(_get_game_id()):
 		var data := GameSaveManager.load_game(_get_game_id())
 		if not data.is_empty():
