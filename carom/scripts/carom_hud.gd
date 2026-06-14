@@ -1,11 +1,13 @@
 class_name CaromHUD
 extends Node
 
-## HUD controller — score labels, ammo display, status text, game-over panel, debug overlay.
+## HUD controller — score labels, ammo display, status text, game-over panel,
+## on-screen reload button, Carom settings panel, and debug overlay.
 
 signal rematch_requested
 signal menu_requested
 signal difficulty_changed(level: int)
+signal reload_requested
 
 @onready var player_score_label: Label = %PlayerScoreLabel
 @onready var ai_score_label: Label = %AIScoreLabel
@@ -16,8 +18,17 @@ signal difficulty_changed(level: int)
 var _game_over_panel: Control = null
 var _debug_label: Label = null
 var _debug_visible: bool = false
+var _reload_button: CaromReloadButton = null
+var _settings_panel: CaromSettings = null
+var _gear_button: Button = null
 
 const AI_STATE_NAMES := ["ATTACK", "DEFEND", "RELOAD_PRESSURE", "TRICK_SHOT"]
+
+
+func _ready() -> void:
+	CaromSettings.ensure_loaded()
+	_create_reload_button()
+	_create_gear_button()
 
 
 func update_scores(player_score: int, ai_score: int) -> void:
@@ -34,6 +45,8 @@ func update_player_ammo(current_ammo: int, max_ammo: int, is_reloading: bool) ->
 		current_ammo, max_ammo,
 		" • Reloading" if is_reloading else "",
 	]
+	if _reload_button:
+		_reload_button.update_ammo(current_ammo, max_ammo, is_reloading)
 
 
 func update_ai_ammo(current_ammo: int, max_ammo: int, is_reloading: bool) -> void:
@@ -122,6 +135,58 @@ func show_game_over(winner: String, player_score: int, ai_score: int, current_di
 
 	# Add to parent HUD CanvasLayer
 	get_parent().add_child(_game_over_panel)
+
+
+# --- Reload button ---
+
+func _create_reload_button() -> void:
+	_reload_button = CaromReloadButton.new()
+	_reload_button.reload_requested.connect(func() -> void:
+		reload_requested.emit()
+	)
+	_position_reload_button()
+	get_parent().add_child(_reload_button)
+
+
+func _position_reload_button() -> void:
+	if not _reload_button:
+		return
+	var btn_size := _reload_button.custom_minimum_size
+	var margin := Vector2(16.0, 24.0)
+	var vp_size := get_viewport().get_visible_rect().size
+	if CaromSettings.reload_button_side == CaromSettings.ReloadButtonSide.LEFT:
+		_reload_button.position = Vector2(margin.x, vp_size.y - btn_size.y - margin.y)
+	else:
+		_reload_button.position = Vector2(vp_size.x - btn_size.x - margin.x, vp_size.y - btn_size.y - margin.y)
+
+
+# --- Settings gear button ---
+
+func _create_gear_button() -> void:
+	_gear_button = Button.new()
+	_gear_button.text = "⚙"
+	_gear_button.custom_minimum_size = Vector2(44, 44)
+	var vp_size := get_viewport().get_visible_rect().size
+	_gear_button.position = Vector2(vp_size.x - 52.0, 8.0)
+	_gear_button.add_theme_font_size_override("font_size", 22)
+	_gear_button.pressed.connect(_toggle_settings_panel)
+	get_parent().add_child(_gear_button)
+
+
+func _toggle_settings_panel() -> void:
+	if _settings_panel and is_instance_valid(_settings_panel):
+		_settings_panel.queue_free()
+		_settings_panel = null
+		return
+
+	_settings_panel = CaromSettings.new()
+	var vp_size := get_viewport().get_visible_rect().size
+	_settings_panel.position = (vp_size - Vector2(300.0, 240.0)) * 0.5
+	_settings_panel.closed.connect(func() -> void:
+		_settings_panel = null
+		_position_reload_button()
+	)
+	get_parent().add_child(_settings_panel)
 
 
 # --- Debug overlay ---
