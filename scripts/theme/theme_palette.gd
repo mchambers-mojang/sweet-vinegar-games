@@ -52,7 +52,7 @@ var custom_palettes: Array = []
 var active_custom_palette_index: int = -1
 
 # ---------------------------------------------------------------------------
-# Built-in colour sets (private)
+# Built-in color sets (private)
 # ---------------------------------------------------------------------------
 
 var _light_colors: Dictionary
@@ -155,18 +155,14 @@ func get_color(key: String) -> Color:
 
 
 ## Persist custom palette arrays to settings.cfg.
-## Also syncs PlatformSettings.dark_mode and calls PlatformSettings.save_settings()
-## so the current mode is persisted and the rest of the app stays consistent.
+## Only writes the [custom_palettes] section; mode persistence is handled by
+## AppTheme._on_palette_changed() to keep ThemePalette free of PlatformSettings coupling.
 func save() -> void:
 	var config := ConfigFile.new()
 	config.load(SAVE_PATH)
 	config.set_value("custom_palettes", "active_index", active_custom_palette_index)
 	config.set_value("custom_palettes", "list", JSON.stringify(custom_palettes))
 	config.save(SAVE_PATH)
-	# Keep PlatformSettings.dark_mode in sync and flush the full settings file
-	# so the mode survives restarts without requiring a separate settings save.
-	PlatformSettings.dark_mode = _mode
-	PlatformSettings.save_settings()
 
 
 ## Load custom palette arrays from settings.cfg.

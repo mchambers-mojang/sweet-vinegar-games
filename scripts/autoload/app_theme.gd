@@ -69,6 +69,10 @@ func _ready() -> void:
 
 
 func _apply_theme_setting() -> void:
+	# Guard: if PlatformSettings.dark_mode already matches the active palette mode
+	# (e.g. after _on_palette_changed just synced it), skip the redundant rebuild.
+	if PlatformSettings.dark_mode == palette._mode:
+		return
 	palette.set_mode(PlatformSettings.dark_mode)
 
 
@@ -78,6 +82,11 @@ func _on_palette_changed() -> void:
 	_rebuild_ui_theme()
 	theme_changed.emit(is_dark)
 	_retint_icon_buttons()
+	# Sync PlatformSettings.dark_mode and persist it when the mode changed.
+	# The guard in _apply_theme_setting() prevents a settings_changed re-entry loop.
+	if PlatformSettings.dark_mode != palette._mode:
+		PlatformSettings.dark_mode = palette._mode
+		PlatformSettings.save_settings()
 
 
 ## Switch to the given named mode. Delegates to ThemePalette.set_mode() which
