@@ -333,9 +333,9 @@ func _pulse_ammo_ring() -> void:
 		var mat := indicator.material_override as StandardMaterial3D
 		if mat == null:
 			continue
-		# Emission spike: 4.0 -> 12.0 over 0.05 s, then ease back to 4.0 over 0.3 s
-		_pulse_tween.tween_property(mat, "emission_energy_multiplier", 12.0, 0.05)
-		_pulse_tween.tween_property(mat, "emission_energy_multiplier", 4.0, 0.3).set_delay(0.05)
-		# Scale bounce: 1.0 -> 1.3 -> 1.0 over 0.2 s
-		_pulse_tween.tween_property(indicator, "scale", Vector3(1.3, 1.3, 1.3), 0.08)
-		_pulse_tween.tween_property(indicator, "scale", Vector3.ONE, 0.12).set_delay(0.08)
+		# Emission spike: 4.0 -> 20.0 over 0.05s, then ease back to 4.0 over 0.4s
+		_pulse_tween.tween_property(mat, "emission_energy_multiplier", 20.0, 0.05)
+		_pulse_tween.tween_property(mat, "emission_energy_multiplier", 4.0, 0.4).set_delay(0.05)
+		# Scale bounce: 1.0 -> 1.6 -> 1.0 over 0.3s
+		_pulse_tween.tween_property(indicator, "scale", Vector3(1.6, 1.6, 1.6), 0.1)
+		_pulse_tween.tween_property(indicator, "scale", Vector3.ONE, 0.2).set_delay(0.1)

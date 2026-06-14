@@ -15,9 +15,9 @@ var state: CaromMatchState = CaromMatchState.new()
 
 var _effects: CaromEffectsController = null
 
-const MATCH_WIN_SLOWMO_SCALE: float = 0.3
-const MATCH_WIN_SLOWMO_REAL_SECONDS: float = 1.0
-const MATCH_WIN_RECOVER_REAL_SECONDS: float = 0.3
+const MATCH_WIN_SLOWMO_SCALE: float = 0.15
+const MATCH_WIN_SLOWMO_REAL_SECONDS: float = 1.5
+const MATCH_WIN_RECOVER_REAL_SECONDS: float = 0.5
 const MATCH_WIN_TWEEN_SPEED_MULTIPLIER: float = 1.0 / MATCH_WIN_SLOWMO_SCALE
 
 
