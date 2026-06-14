@@ -319,7 +319,7 @@ func _cheat_place_one() -> void:
 func _on_cell_selected(index: int) -> void:
 	if _is_board_locked():
 		return
-	ReplayManager.record_input(elapsed_time, "cell_selected", {"index": index})
+	ReplayRecorder.record_input(elapsed_time, "cell_selected", {"index": index})
 
 	var now := Time.get_ticks_msec() / 1000.0
 	var cell := board.cells[index]
@@ -362,7 +362,7 @@ func _handle_number_first_cell_tap(index: int) -> void:
 	if cell.is_given:
 		return
 	# Place the pre-selected number into this cell
-	ReplayManager.record_input(elapsed_time, "number_input", {
+	ReplayRecorder.record_input(elapsed_time, "number_input", {
 		"index": index,
 		"number": _selected_number,
 		"notes_mode": notes_mode,
@@ -435,7 +435,7 @@ func _handle_number_first_cell_tap(index: int) -> void:
 func _on_number_pressed(number: int) -> void:
 	if _is_board_locked():
 		return
-	ReplayManager.record_input(elapsed_time, "number_button", {
+	ReplayRecorder.record_input(elapsed_time, "number_button", {
 		"number": number,
 		"notes_mode": notes_mode,
 		"input_mode": GameRulesRegistry.get_rule("sudoku", "input_mode"),
@@ -465,7 +465,7 @@ func _place_or_note_number(number: int) -> void:
 	var cell := board.cells[index]
 	if cell.is_given:
 		return
-	ReplayManager.record_input(elapsed_time, "number_input", {
+	ReplayRecorder.record_input(elapsed_time, "number_input", {
 		"index": index,
 		"number": number,
 		"notes_mode": notes_mode,
@@ -588,7 +588,7 @@ func _on_hint_pressed() -> void:
 
 	var cell := board.cells[index]
 	board.selected_index = index
-	ReplayManager.record_input(elapsed_time, "hint_pressed", {"index": index, "value": solution[index]})
+	ReplayRecorder.record_input(elapsed_time, "hint_pressed", {"index": index, "value": solution[index]})
 
 	_push_undo(index)
 	cell.set_value(solution[index])
@@ -621,7 +621,7 @@ func _on_erase_pressed() -> void:
 	var cell := board.cells[index]
 	if cell.is_given:
 		return
-	ReplayManager.record_input(elapsed_time, "erase_pressed", {"index": index})
+	ReplayRecorder.record_input(elapsed_time, "erase_pressed", {"index": index})
 	# Don't allow erasing correctly placed cells in strict mode
 	if GameRulesRegistry.get_rule("sudoku", "error_mode") == "strict" and cell.value != 0 and cell.value == solution[index]:
 		return
@@ -646,10 +646,11 @@ func _on_pause_pressed() -> void:
 
 
 func _on_back_pressed() -> void:
-	ReplayManager.finish_session("abandoned", _count_filled_cells(), elapsed_time, {
+	var completed := ReplayRecorder.finish_session("abandoned", _count_filled_cells(), elapsed_time, {
 		"difficulty": difficulty,
 		"strikes": strikes,
 	})
+	ReplayStorage.save_replay(completed)
 	CrashReporter.register_user_action("sudoku_back_to_menu")
 	if not is_completed:
 		AchievementManager.track_streak_broken()
@@ -749,11 +750,12 @@ func _check_win() -> bool:
 func _handle_win() -> void:
 	is_completed = true
 	var won := not is_failed
-	ReplayManager.finish_session("win" if won else "completed_after_failure", _count_filled_cells(), elapsed_time, {
+	var completed := ReplayRecorder.finish_session("win" if won else "completed_after_failure", _count_filled_cells(), elapsed_time, {
 		"difficulty": difficulty,
 		"strikes": strikes,
 		"hints_used": hints_used,
 	})
+	ReplayStorage.save_replay(completed)
 	var previous_best: float = _get_best_time(difficulty)
 	_record_sudoku_completion(difficulty, elapsed_time, GameRulesRegistry.get_rule("sudoku", "error_mode") == "strict", won)
 	if won:
@@ -953,10 +955,11 @@ func _show_fail_dialog() -> void:
 	add_child(dialog)
 	dialog.popup_centered()
 	dialog.confirmed.connect(func() -> void:
-		ReplayManager.finish_session("failed", _count_filled_cells(), elapsed_time, {
+		var completed := ReplayRecorder.finish_session("failed", _count_filled_cells(), elapsed_time, {
 			"difficulty": difficulty,
 			"strikes": strikes,
 		})
+		ReplayStorage.save_replay(completed)
 		dialog.queue_free()
 		_restart_same_game()
 	)
@@ -967,10 +970,11 @@ func _show_fail_dialog() -> void:
 			_save_current_state()
 			dialog.queue_free()
 		elif action == "menu":
-			ReplayManager.finish_session("failed", _count_filled_cells(), elapsed_time, {
+			var completed := ReplayRecorder.finish_session("failed", _count_filled_cells(), elapsed_time, {
 				"difficulty": difficulty,
 				"strikes": strikes,
 			})
+			ReplayStorage.save_replay(completed)
 			dialog.queue_free()
 			SceneTransition.transition_to("res://scenes/main_menu.tscn")
 	)
@@ -998,7 +1002,7 @@ func _show_win_dialog() -> void:
 			dialog.queue_free()
 			SceneTransition.transition_to("res://scenes/main_menu.tscn")
 		elif action == "bookmark":
-			var success := ReplayManager.bookmark_latest_replay()
+			var success := ReplayStorage.bookmark_latest_replay()
 			if success:
 				dialog.dialog_text += "\n\n✓ Replay bookmarked!"
 			else:
@@ -1068,7 +1072,7 @@ func _setup_color_buttons() -> void:
 func _on_color_pressed(color: Color) -> void:
 	if _is_board_locked():
 		return
-	ReplayManager.record_input(elapsed_time, "color_pressed", {
+	ReplayRecorder.record_input(elapsed_time, "color_pressed", {
 		"color": color.to_html(),
 		"selected_index": board.selected_index,
 	})

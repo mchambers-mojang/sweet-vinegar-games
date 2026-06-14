@@ -194,11 +194,11 @@ func begin_session(saved_data: Dictionary = {}) -> void:
 				_get_start_crash_params())
 
 	# _setup_game() runs here so game state (board, seed derivation for legacy
-	# saves) is fully initialised before ReplayManager.start_session() below.
+	# saves) is fully initialised before ReplayRecorder.start_session() below.
 	_setup_game(saved_data)
 
-	if not is_resuming or not ReplayManager.has_active_session():
-		replay_id = ReplayManager.start_session(
+	if not is_resuming or not ReplayRecorder.has_active_session():
+		replay_id = ReplayRecorder.start_session(
 				game_id, random_seed, _get_initial_state(), _get_settings_snapshot())
 
 	if not is_resuming:
@@ -234,7 +234,7 @@ func _try_auto_resume() -> void:
 ## Defined here so subclasses do not need to repeat the two-line body.
 func _save_current_state() -> void:
 	save_progress()
-	ReplayManager.flush_active_replay()
+	ReplayRecorder.flush_active_replay()
 
 
 # --- Navigation ---
