@@ -16,6 +16,7 @@ const PULSE_FREQ_MID: float = 2.0
 const PULSE_FREQ_NEAR: float = 4.0
 
 var _player_goal: Vector3 = Vector3.ZERO
+var _goal_targets: Array[Vector3] = []
 var _arena_length: float = 30.0
 var _reset_position: Vector3 = Vector3.ZERO
 var _puck_material: StandardMaterial3D = null
@@ -58,6 +59,7 @@ func _setup_emission_material() -> void:
 func configure(goal_targets: Array[Vector3], reset_position: Vector3) -> void:
 	# Player turret is at the bottom (south spawn, Z=2) defending the SouthGoal (Z=-0.4).
 	# Puck entering SouthGoal = opponent scores on player. That's the danger zone.
+	_goal_targets = goal_targets.duplicate()
 	if goal_targets.size() >= 2:
 		_player_goal = goal_targets[0]  # [south_goal, north_goal] — south is player's danger zone
 		_arena_length = goal_targets[0].distance_to(goal_targets[1])
