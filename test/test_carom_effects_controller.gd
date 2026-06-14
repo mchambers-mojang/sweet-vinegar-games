@@ -36,3 +36,13 @@ func test_goal_celebration_spawns_burst_fragments_and_flare() -> void:
 	var goal_mesh := arena.south_goal.get_node("MeshInstance3D") as MeshInstance3D
 	assert_true(flare.material_override is StandardMaterial3D)
 	assert_ne(flare.material_override, goal_mesh.material_override)
+
+	var burst := celebration.get_node("Burst") as GPUParticles3D
+	var burst_material := burst.process_material as ParticleProcessMaterial
+	assert_eq(burst_material.gravity, Vector3.ZERO)
+
+	for fragment_node in fragments.get_children():
+		var fragment := fragment_node as RigidBody3D
+		assert_eq(fragment.gravity_scale, 0.0)
+		assert_almost_eq(fragment.linear_velocity.y, 0.0, 0.001)
+		assert_almost_eq(fragment.global_position.y, puck.global_position.y + 0.14, 0.001)

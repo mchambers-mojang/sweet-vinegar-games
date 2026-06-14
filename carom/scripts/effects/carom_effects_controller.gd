@@ -121,7 +121,6 @@ func play_goal_celebration(
 func _spawn_goal_burst(parent: Node3D, goal_position: Vector3, color: Color) -> void:
 	var particles := GPUParticles3D.new()
 	particles.name = "Burst"
-	particles.emitting = true
 	particles.one_shot = true
 	particles.explosiveness = 1.0
 	particles.amount = GOAL_BURST_PARTICLE_COUNT
@@ -132,7 +131,7 @@ func _spawn_goal_burst(parent: Node3D, goal_position: Vector3, color: Color) -> 
 	process_material.spread = 180.0
 	process_material.initial_velocity_min = 4.5
 	process_material.initial_velocity_max = 8.5
-	process_material.gravity = Vector3(0.0, -1.0, 0.0)
+	process_material.gravity = Vector3.ZERO
 	process_material.damping_min = 1.5
 	process_material.damping_max = 3.0
 	process_material.scale_min = 0.03
@@ -148,6 +147,7 @@ func _spawn_goal_burst(parent: Node3D, goal_position: Vector3, color: Color) -> 
 
 	parent.add_child(particles)
 	particles.global_position = goal_position + Vector3(0.0, 0.12, 0.0)
+	particles.emitting = true
 
 
 func _spawn_puck_fragments(parent: Node3D, goal_puck: CaromPuck, goal_position: Vector3, color: Color) -> void:
@@ -166,8 +166,8 @@ func _spawn_puck_fragments(parent: Node3D, goal_puck: CaromPuck, goal_position: 
 		var fragment := RigidBody3D.new()
 		fragment.name = "Fragment%d" % i
 		fragment.mass = 0.05
-		fragment.gravity_scale = 0.8
-		fragment.linear_damp = 0.2
+		fragment.gravity_scale = 0.0
+		fragment.linear_damp = 2.4
 		fragment.angular_damp = 0.1
 		fragment.collision_layer = 0
 		fragment.collision_mask = 0
@@ -192,7 +192,7 @@ func _spawn_puck_fragments(parent: Node3D, goal_puck: CaromPuck, goal_position: 
 
 		fragments_root.add_child(fragment)
 		var angle := rng.randf_range(0.0, TAU)
-		var direction := Vector3(cos(angle), rng.randf_range(0.15, 0.65), sin(angle)).normalized()
+		var direction := Vector3(cos(angle), 0.0, sin(angle))
 		fragment.global_position = origin + direction * rng.randf_range(0.04, 0.16)
 		fragment.rotation = Vector3(
 			rng.randf_range(-0.6, 0.6),
