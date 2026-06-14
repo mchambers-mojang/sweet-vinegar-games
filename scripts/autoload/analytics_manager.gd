@@ -13,6 +13,8 @@ var _sinks: Array[Object] = []
 func _ready() -> void:
 	_load_events()
 	_start_session()
+	GameEvents.game_started.connect(_on_game_events_game_started)
+	GameEvents.score_changed.connect(_on_game_events_score_changed)
 
 
 func register_sink(sink: Object) -> void:
@@ -117,3 +119,17 @@ func _load_events() -> void:
 	for entry in loaded_events:
 		if typeof(entry) == TYPE_DICTIONARY:
 			_events.append(entry)
+
+
+# --- GameEvents subscriptions ---
+
+func _on_game_events_game_started(game_id: String, _difficulty: int, rules: Dictionary) -> void:
+	log_event("game_started", rules)
+
+
+func _on_game_events_score_changed(game_id: String, old_score: int, new_score: int) -> void:
+	log_event("score_changed", {
+		"game": game_id,
+		"old_score": old_score,
+		"new_score": new_score,
+	})

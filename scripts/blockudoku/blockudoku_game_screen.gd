@@ -347,10 +347,13 @@ func _end_drag(screen_pos: Vector2) -> void:
 	var before_state := _capture_move_state()
 
 	# Attempt placement via the logic module (validates + mutates logic board_grid)
+	var old_score := logic.score
 	var place_result := logic.try_place(_drag_block_index, grid_pos)
 
 	if place_result.valid:
-		session.record_input(elapsed_time, "piece_placed", {
+		GameEvents.move_made.emit("blockudoku", {
+			"elapsed_time": elapsed_time,
+			"event_type": "piece_placed",
 			"tray_index": _drag_block_index,
 			"grid_x": grid_pos.x,
 			"grid_y": grid_pos.y,
@@ -398,6 +401,8 @@ func _end_drag(screen_pos: Vector2) -> void:
 			"x": grid_pos.x,
 			"y": grid_pos.y,
 		})
+		if logic.score != old_score:
+			GameEvents.score_changed.emit("blockudoku", old_score, logic.score)
 
 		# Visual clear animation (board.check_and_clear handles its own neon fx)
 		board.check_and_clear()
@@ -496,7 +501,7 @@ func _pulse_board_for_combo(combo: int) -> void:
 	pulse_down.set_ease(Tween.EASE_IN)
 
 func _handle_game_over() -> void:
-	session.user_action("blockudoku_game_over", {"score": logic.score, "turns": logic.turns})
+	GameEvents.game_ended.emit("blockudoku", "game_over", elapsed_time)
 	logic.is_game_over = true
 	var completed: Dictionary = session.finish_replay("game_over", logic.score, elapsed_time, {
 		"turns": logic.turns,

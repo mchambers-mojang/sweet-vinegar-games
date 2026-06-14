@@ -21,6 +21,7 @@ var _counters_cache: Dictionary = {}
 func _ready() -> void:
 	_load_all()
 	_migrate_legacy_stats()
+	GameEvents.game_ended.connect(_on_game_events_game_ended)
 
 
 ## Record a stat entry for a game. The entry is an opaque Dictionary.
@@ -259,3 +260,11 @@ func _migrate_shikaku_stats() -> void:
 				record("shikaku", {"size": s, "time": float(time_val), "completed": true})
 
 	DirAccess.remove_absolute(_LEGACY_STATS_PATH_SHIKAKU)
+
+
+# --- GameEvents subscriptions ---
+
+func _on_game_events_game_ended(game_id: String, outcome: String, _duration: float) -> void:
+	increment_counter(game_id, "total_sessions_ended")
+	increment_counter(game_id, "sessions_ended_" + outcome)
+
