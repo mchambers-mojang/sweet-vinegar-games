@@ -3,13 +3,34 @@ extends GutTest
 ## Tests for the GameSaveAdapter contract, per-game adapters, and the deepened
 ## GameSaveManager (version tracking, migration, corruption recovery).
 
+const _TEST_SAVES_PATH := "user://test_save_adapters_mgr.cfg"
+const _TEST_ADAPTER_PATH := "user://test_save_adapters_gsa.cfg"
+
 var save_mgr: Node
+var _original_gsm_path: String
+
+
+func after_all() -> void:
+	if FileAccess.file_exists(_TEST_SAVES_PATH):
+		DirAccess.remove_absolute(_TEST_SAVES_PATH)
+	if FileAccess.file_exists(_TEST_ADAPTER_PATH):
+		DirAccess.remove_absolute(_TEST_ADAPTER_PATH)
 
 
 func before_each() -> void:
 	save_mgr = load("res://scripts/autoload/game_save_manager.gd").new()
+	save_mgr.save_path = _TEST_SAVES_PATH
 	add_child_autofree(save_mgr)
 	save_mgr.clear_all()
+	# Redirect the autoload singleton to an isolated test file so adapter
+	# tests never touch the real user save data.
+	_original_gsm_path = GameSaveManager.save_path
+	GameSaveManager.save_path = _TEST_ADAPTER_PATH
+	GameSaveManager.clear_all()
+
+
+func after_each() -> void:
+	GameSaveManager.save_path = _original_gsm_path
 
 
 # ---------------------------------------------------------------------------
@@ -82,7 +103,7 @@ func test_migration_not_called_for_current_version_save() -> void:
 
 func test_corrupted_file_returns_empty_dict() -> void:
 	# Write a corrupt (non-ConfigFile) payload to the save path
-	var f := FileAccess.open(GameSaveManager.SAVE_PATH, FileAccess.WRITE)
+	var f := FileAccess.open(save_mgr.save_path, FileAccess.WRITE)
 	if f:
 		f.store_string("THIS IS NOT A VALID CONFIG FILE !!!")
 		f.close()
@@ -91,7 +112,7 @@ func test_corrupted_file_returns_empty_dict() -> void:
 
 
 func test_has_saved_game_false_for_corrupted_file() -> void:
-	var f := FileAccess.open(GameSaveManager.SAVE_PATH, FileAccess.WRITE)
+	var f := FileAccess.open(save_mgr.save_path, FileAccess.WRITE)
 	if f:
 		f.store_string("GARBAGE")
 		f.close()
@@ -266,10 +287,10 @@ func _make_array(n: int, value: int) -> Array:
 ## Write a save directly without a version stamp (simulates a legacy v0 save).
 func _write_v0_save(game_id: String, data: Dictionary) -> void:
 	var config := ConfigFile.new()
-	config.load(GameSaveManager.SAVE_PATH)
+	config.load(save_mgr.save_path)
 	if config.has_section(game_id):
 		config.erase_section(game_id)
 	for key in data.keys():
 		config.set_value(game_id, str(key), data[key])
 	# Deliberately do NOT write VERSION_KEY — this simulates a legacy save
-	config.save(GameSaveManager.SAVE_PATH)
+	config.save(save_mgr.save_path)

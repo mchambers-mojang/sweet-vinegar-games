@@ -11,7 +11,8 @@ extends Node
 ## Migration: per-game callables can be registered via register_migrator()
 ## (typically called from a GameSaveAdapter._init()).
 
-const SAVE_PATH := "user://game_saves.cfg"
+const DEFAULT_SAVE_PATH := "user://game_saves.cfg"
+var save_path := DEFAULT_SAVE_PATH
 
 ## Current save-format version.  Bump this whenever a schema migration is needed.
 const SAVE_VERSION := 1
@@ -49,7 +50,7 @@ func register_migrator(game_id: String, callable: Callable) -> void:
 
 func has_saved_game(game_id: String) -> bool:
 	var config := ConfigFile.new()
-	var err := config.load(SAVE_PATH)
+	var err := config.load(save_path)
 	if err != OK:
 		if err != ERR_FILE_NOT_FOUND:
 			push_warning("GameSaveManager: could not read save file (error %d)" % err)
@@ -61,7 +62,7 @@ func has_saved_game(game_id: String) -> bool:
 ## that load_game() can detect stale saves and apply migrations.
 func save_game(game_id: String, data: Dictionary) -> void:
 	var config := ConfigFile.new()
-	config.load(SAVE_PATH)  # OK if file doesn't exist yet
+	config.load(save_path)  # OK if file doesn't exist yet
 	# Clear previous section to remove stale keys
 	if config.has_section(game_id):
 		config.erase_section(game_id)
@@ -69,7 +70,7 @@ func save_game(game_id: String, data: Dictionary) -> void:
 	config.set_value(game_id, VERSION_KEY, SAVE_VERSION)
 	for key in data.keys():
 		config.set_value(game_id, str(key), data[key])
-	config.save(SAVE_PATH)
+	config.save(save_path)
 	game_saved.emit(game_id)
 
 
@@ -80,7 +81,7 @@ func save_game(game_id: String, data: Dictionary) -> void:
 ## SAVE_VERSION, the callable is invoked to upgrade the data in-memory.
 func load_game(game_id: String) -> Dictionary:
 	var config := ConfigFile.new()
-	var err := config.load(SAVE_PATH)
+	var err := config.load(save_path)
 	if err != OK:
 		if err != ERR_FILE_NOT_FOUND:
 			push_warning("GameSaveManager: could not read save file (error %d) — treating as no save" % err)
@@ -102,18 +103,18 @@ func load_game(game_id: String) -> Dictionary:
 
 func clear_save(game_id: String) -> void:
 	var config := ConfigFile.new()
-	if config.load(SAVE_PATH) != OK:
+	if config.load(save_path) != OK:
 		game_cleared.emit(game_id)
 		return
 	if config.has_section(game_id):
 		config.erase_section(game_id)
-		config.save(SAVE_PATH)
+		config.save(save_path)
 	game_cleared.emit(game_id)
 
 
 func clear_all() -> void:
-	if FileAccess.file_exists(SAVE_PATH):
-		DirAccess.remove_absolute(SAVE_PATH)
+	if FileAccess.file_exists(save_path):
+		DirAccess.remove_absolute(save_path)
 
 
 ## One-time migration: read legacy per-game save files and import into unified file.
