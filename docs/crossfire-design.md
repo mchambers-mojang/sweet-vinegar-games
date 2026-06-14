@@ -145,21 +145,21 @@ carom/
 ## Milestones
 
 ### M1: Playable Prototype (Single Player)
-- [ ] 3D arena with walls, goals, and anti-trap corners
-- [ ] Stationary mounted turrets with aim-arc control (keyboard + touch)
-- [ ] Shooting mechanic with finite clip and manual slow reload
-- [ ] Puck physics using built-in 3D physics, including speed cap and naturally resolving arena flow
-- [ ] Placeholder irregular puck contact setup (sphere first, star/compound follow-up)
-- [ ] Basic scoring (first to 5)
-- [ ] Single-player top-down camera
-- [ ] Neon visual style (basic wireframe placeholders)
-- [ ] Basic AI turret that aims and fires periodically
+- [x] 3D arena with walls, goals, and anti-trap corners
+- [x] Stationary mounted turrets with aim-arc control (keyboard + touch)
+- [x] Shooting mechanic with finite clip and manual slow reload
+- [x] Puck physics using built-in 3D physics, including speed cap and naturally resolving arena flow
+- [x] Placeholder irregular puck contact setup (sphere first, star/compound follow-up)
+- [x] Basic scoring (first to 5)
+- [x] Single-player top-down camera
+- [x] Neon visual style (basic wireframe placeholders)
+- [x] Basic AI turret that aims and fires periodically
 
 ### M2: AI Opponent
-- [ ] Expand beyond baseline turret AI into clearer difficulty tiers
-- [ ] AI state machine (defend/attack/reload pressure)
-- [ ] Medium + Hard difficulty tuning
-- [ ] Game over / rematch flow
+- [x] Expand beyond baseline turret AI into clearer difficulty tiers
+- [x] AI state machine (defend/attack/reload pressure)
+- [x] Medium + Hard difficulty tuning
+- [x] Game over / rematch flow
 
 ### M3: Polish & Feel
 - [ ] Particle effects (trails, impacts, goal explosions)
