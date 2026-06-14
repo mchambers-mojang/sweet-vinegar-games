@@ -105,6 +105,12 @@ func _on_goal_scored(scoring_side: StringName, goal_puck: CaromPuck) -> void:
 	var scorer := "player" if scoring_side == &"north" else "ai"
 	var result := state.on_goal_scored(scorer)
 
+	# Haptic feedback for goals
+	if scorer == "player":
+		HapticManager.vibrate_success()
+	else:
+		HapticManager.vibrate_error()
+
 	hud.update_scores(state.player_score, state.ai_score)
 	_update_ammo_display()
 

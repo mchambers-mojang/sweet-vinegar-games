@@ -219,6 +219,8 @@ func _process_reload(delta: float) -> void:
 		current_ammo += 1
 		ammo_changed.emit(current_ammo, clip_size)
 		if current_ammo >= clip_size:
+			if control_mode == ControlMode.HUMAN:
+				HapticManager.vibrate_medium()
 			cancel_reload()
 			break
 
