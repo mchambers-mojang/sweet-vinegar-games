@@ -11,7 +11,7 @@ extends CaromTurretInput
 ## Multiple simultaneous drags are summed (opposing drags cancel out).
 
 ## Touch movement below this threshold is treated as a tap (fire trigger).
-const TAP_THRESHOLD_PX: float = 10.0
+const TAP_THRESHOLD_PIXELS: float = 10.0
 ## Drag-to-degrees sensitivity (pixels → degrees of aim offset per frame).
 const TOUCH_DRAG_SENSITIVITY: float = 0.12
 
@@ -110,7 +110,7 @@ func handle_input_event(event: InputEvent, _aim_arc: float) -> void:
 			if _active_touches.has(touch.index):
 				var data: Dictionary = _active_touches[touch.index]
 				# Tap: total movement below threshold → fire.
-				if data["total_movement"] < TAP_THRESHOLD_PX:
+				if data["total_movement"] < TAP_THRESHOLD_PIXELS:
 					_fire_requested = true
 				_active_touches.erase(touch.index)
 
@@ -120,7 +120,7 @@ func handle_input_event(event: InputEvent, _aim_arc: float) -> void:
 			var data: Dictionary = _active_touches[drag.index]
 			data["current_pos"] = drag.position
 			data["total_movement"] += drag.relative.length()
-			if data["total_movement"] >= TAP_THRESHOLD_PX:
+			if data["total_movement"] >= TAP_THRESHOLD_PIXELS:
 				data["is_drag"] = true
 			_active_touches[drag.index] = data
 		# In Drag mode accumulate horizontal delta (all fingers summed).

@@ -182,6 +182,9 @@ func _toggle_settings_panel() -> void:
 	_settings_panel = CaromSettings.new()
 	var vp_size := get_viewport().get_visible_rect().size
 	_settings_panel.position = (vp_size - Vector2(300.0, 240.0)) * 0.5
+	_settings_panel.setting_changed.connect(func() -> void:
+		_position_reload_button()
+	)
 	_settings_panel.closed.connect(func() -> void:
 		_settings_panel = null
 		_position_reload_button()

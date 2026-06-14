@@ -25,6 +25,9 @@ static var reload_button_side: int = ReloadButtonSide.RIGHT
 static var _loaded: bool = false
 
 signal closed
+## Emitted when any setting value changes (e.g. reload button side).
+## HUD listens to this to reposition the reload button immediately.
+signal setting_changed
 
 
 # --- Static helpers ---
@@ -100,11 +103,16 @@ func _build_ui() -> void:
 	aim_picker.add_item("Hold Zones")
 	if CaromSettings.is_gyroscope_supported():
 		aim_picker.add_item("Gyroscope")
-	# Clamp in case Gyroscope mode was saved but device doesn't support it.
-	aim_picker.selected = mini(CaromSettings.aim_mode, aim_picker.item_count - 1)
+	else:
+		# If Gyroscope was saved but this device has no gyro, reset to Drag.
+		if CaromSettings.aim_mode == CaromSettings.AimMode.GYROSCOPE:
+			CaromSettings.aim_mode = CaromSettings.AimMode.DRAG
+			CaromSettings.save()
+	aim_picker.selected = CaromSettings.aim_mode
 	aim_picker.item_selected.connect(func(idx: int) -> void:
 		CaromSettings.aim_mode = idx
 		CaromSettings.save()
+		setting_changed.emit()
 	)
 	aim_row.add_child(aim_picker)
 
@@ -125,6 +133,7 @@ func _build_ui() -> void:
 	side_picker.item_selected.connect(func(idx: int) -> void:
 		CaromSettings.reload_button_side = idx
 		CaromSettings.save()
+		setting_changed.emit()
 	)
 	side_row.add_child(side_picker)
 

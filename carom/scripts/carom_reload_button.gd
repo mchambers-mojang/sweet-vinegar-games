@@ -71,14 +71,13 @@ func _animate_segment_on(idx: int) -> void:
 		return
 	_segment_brightness[idx] = 0.0
 	var tween := create_tween()
-	tween.tween_method(
-		func(v: float) -> void:
-			if idx < _segment_brightness.size():
-				_segment_brightness[idx] = v
-			queue_redraw(),
-		0.0, 1.0,
-		reload_rate * 0.75
-	)
+	# Use a captured copy of idx so the lambda always refers to the correct segment.
+	var captured_idx := idx
+	var on_update := func(v: float) -> void:
+		if captured_idx < _segment_brightness.size():
+			_segment_brightness[captured_idx] = v
+		queue_redraw()
+	tween.tween_method(on_update, 0.0, 1.0, reload_rate * 0.75)
 
 
 func _process(delta: float) -> void:
