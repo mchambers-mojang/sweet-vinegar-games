@@ -125,6 +125,10 @@ func _on_goal_scored(scoring_side: StringName, goal_puck: CaromPuck) -> void:
 	hud.update_scores(state.player_score, state.ai_score)
 	_update_ammo_display()
 
+	# Goal celebration effects (every goal)
+	if _effects:
+		_effects.play_goal_scored(goal_position)
+
 	if result.match_over:
 		await _play_match_win_sequence(goal_position)
 		_finish_match(result.winner)

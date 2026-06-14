@@ -58,7 +58,6 @@ func spawn_puck_impact(pos: Vector3, normal: Vector3, color: Color, _force: floa
 
 
 func _spawn_sparks(pos: Vector3, direction: Vector3, color: Color, count: int, speed: float, spread: float) -> void:
-	print("[DEBUG-fx01] Spawning %d sparks at %s" % [count, str(pos)])
 	var particles := GPUParticles3D.new()
 	particles.one_shot = true
 	particles.explosiveness = 1.0

@@ -13,6 +13,10 @@ const MATCH_WIN_CAMERA_SHIFT_RATIO: float = 0.2
 const MATCH_WIN_ZOOM_IN_SECONDS: float = 0.3
 const MATCH_WIN_ZOOM_OUT_SECONDS: float = 0.5
 const MATCH_WIN_SHAKE_INTENSITY: float = 0.7
+const GOAL_SHAKE_INTENSITY: float = 0.4
+const GOAL_ZOOM_RATIO: float = 0.9
+const GOAL_ZOOM_IN_SECONDS: float = 0.15
+const GOAL_ZOOM_OUT_SECONDS: float = 0.3
 const MIN_TIME_SCALE_CLAMP: float = 0.001
 
 
@@ -81,7 +85,6 @@ func _on_projectile_body_entered(body: Node, projectile: CaromProjectile, color:
 	var velocity := projectile.linear_velocity
 
 	if body is CaromPuck:
-		print("[DEBUG-fx02] Puck hit at %s" % str(impact_pos))
 		var puck_pos: Vector3 = (body as CaromPuck).global_position
 		var diff: Vector3 = puck_pos - impact_pos
 		if diff.length_squared() < 0.0001:
@@ -90,9 +93,39 @@ func _on_projectile_body_entered(body: Node, projectile: CaromProjectile, color:
 		_impact_spawner.spawn_puck_impact(impact_pos, -normal, color)
 		HapticManager.vibrate_medium()
 	elif body is StaticBody3D:
-		print("[DEBUG-fx02] Wall hit at %s" % str(impact_pos))
 		var normal := -velocity.normalized() if velocity.length_squared() > 0.001 else Vector3.UP
 		_impact_spawner.spawn_wall_impact(impact_pos, normal, color)
+
+
+## Play goal celebration — lighter version for every goal (shake + quick zoom).
+func play_goal_scored(goal_position: Vector3) -> void:
+	var camera := get_viewport().get_camera_3d()
+	if camera == null:
+		return
+
+	_setup_screen_shake()
+	if _screen_shake:
+		_screen_shake.shake(GOAL_SHAKE_INTENSITY)
+
+	var start_position: Vector3 = camera.global_position
+	var target_position: Vector3 = Vector3(goal_position.x, start_position.y, goal_position.z)
+	var zoom_position: Vector3 = start_position.lerp(target_position, 0.1)
+
+	var zoom_tween := create_tween()
+	zoom_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+
+	if camera.projection == Camera3D.PROJECTION_ORTHOGONAL:
+		var start_size: float = camera.size
+		zoom_tween.tween_property(camera, "size", start_size * GOAL_ZOOM_RATIO, GOAL_ZOOM_IN_SECONDS).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		zoom_tween.parallel().tween_property(camera, "global_position", zoom_position, GOAL_ZOOM_IN_SECONDS).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		zoom_tween.tween_property(camera, "size", start_size, GOAL_ZOOM_OUT_SECONDS).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+		zoom_tween.parallel().tween_property(camera, "global_position", start_position, GOAL_ZOOM_OUT_SECONDS).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	else:
+		var start_fov: float = camera.fov
+		zoom_tween.tween_property(camera, "fov", start_fov * GOAL_ZOOM_RATIO, GOAL_ZOOM_IN_SECONDS).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		zoom_tween.parallel().tween_property(camera, "global_position", zoom_position, GOAL_ZOOM_IN_SECONDS).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		zoom_tween.tween_property(camera, "fov", start_fov, GOAL_ZOOM_OUT_SECONDS).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+		zoom_tween.parallel().tween_property(camera, "global_position", start_position, GOAL_ZOOM_OUT_SECONDS).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
 
 
 func play_match_win(goal_position: Vector3) -> void:
