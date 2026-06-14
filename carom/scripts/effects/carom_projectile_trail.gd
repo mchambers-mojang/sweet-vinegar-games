@@ -4,9 +4,9 @@ extends MeshInstance3D
 ## 3D ribbon trail that follows a projectile.
 ## On projectile destruction, orphans itself and fades out over FADE_DURATION.
 
-const MAX_POINTS: int = 24
+const MAX_POINTS: int = 16
 const MIN_SEGMENT_DISTANCE: float = 0.15
-const TRAIL_WIDTH: float = 0.12
+const TRAIL_WIDTH: float = 0.05
 const FADE_DURATION: float = 0.3
 
 var _points: Array[Vector3] = []
