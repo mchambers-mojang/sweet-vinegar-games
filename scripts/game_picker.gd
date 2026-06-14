@@ -16,7 +16,6 @@ const CAROM_UNLOCK_MOUSE_WINDOW_SEC := 1.0
 const CAROM_UNLOCK_MOUSE_TAP_COUNT := 5
 const CAROM_UNLOCK_TOUCH_WINDOW_SEC := 0.6
 const CAROM_UNLOCK_TOUCH_TAP_COUNT := 7
-const CAROM_MENU_SCENE_PATH := "res://scenes/carom_menu.tscn"
 
 var _carom_mouse_taps: Array[float] = []
 var _carom_touch_taps: Array[float] = []
@@ -24,32 +23,32 @@ var _carom_touch_taps: Array[float] = []
 
 func _ready() -> void:
 	sudoku_button.pressed.connect(func() -> void:
-		SceneTransition.transition_to("res://scenes/main_menu.tscn")
+		SceneTransition.transition_to(Scenes.SUDOKU_MENU)
 	)
 	shikaku_button.pressed.connect(func() -> void:
-		SceneTransition.transition_to("res://scenes/shikaku_menu.tscn")
+		SceneTransition.transition_to(Scenes.SHIKAKU_MENU)
 	)
 	blockudoku_button.pressed.connect(func() -> void:
-		SceneTransition.transition_to("res://scenes/blockudoku_menu.tscn")
+		SceneTransition.transition_to(Scenes.BLOCKUDOKU_MENU)
 	)
 	if carom_button:
 		carom_button.visible = false
 		carom_button.pressed.connect(func() -> void:
-			if ResourceLoader.exists(CAROM_MENU_SCENE_PATH):
-				SceneTransition.transition_to(CAROM_MENU_SCENE_PATH)
+			if ResourceLoader.exists(Scenes.CAROM_MENU):
+				SceneTransition.transition_to(Scenes.CAROM_MENU)
 			else:
-				push_warning("Carom menu scene is missing: %s" % CAROM_MENU_SCENE_PATH)
+				push_warning("Carom menu scene is missing: %s" % Scenes.CAROM_MENU)
 		)
 	settings_button.pressed.connect(func() -> void:
 		var SettingsScreen := load("res://scripts/settings_screen.gd")
-		SettingsScreen.return_scene = "res://scenes/game_picker.tscn"
-		SceneTransition.transition_to("res://scenes/settings.tscn")
+		SettingsScreen.return_scene = Scenes.GAME_PICKER
+		SceneTransition.transition_to(Scenes.SETTINGS)
 	)
 	achievements_button.pressed.connect(func() -> void:
-		SceneTransition.transition_to("res://scenes/achievements.tscn")
+		SceneTransition.transition_to(Scenes.ACHIEVEMENTS)
 	)
 	replays_button.pressed.connect(func() -> void:
-		SceneTransition.transition_to("res://scenes/replays.tscn")
+		SceneTransition.transition_to(Scenes.REPLAYS)
 	)
 	# Hidden debug trigger: 7 rapid taps on the title area
 	title_label.mouse_filter = Control.MOUSE_FILTER_STOP

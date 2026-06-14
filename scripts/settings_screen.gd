@@ -2,7 +2,7 @@ extends Control
 
 ## Settings screen
 
-static var return_scene: String = "res://scenes/main_menu.tscn"
+static var return_scene: String = Scenes.SUDOKU_MENU
 
 @onready var back_button: Button = %BackButton
 @onready var settings_list: VBoxContainer = %SettingsList
@@ -25,7 +25,7 @@ func _build_settings_ui() -> void:
 	for child in settings_list.get_children():
 		child.queue_free()
 
-	var is_sudoku := return_scene in ["res://scenes/main_menu.tscn", "res://scenes/game.tscn"]
+	var is_sudoku := return_scene in [Scenes.SUDOKU_MENU, Scenes.SUDOKU_GAME]
 
 	# --- Sudoku-specific settings ---
 	if is_sudoku:
@@ -63,7 +63,7 @@ func _build_settings_ui() -> void:
 
 		_add_separator()
 
-	var is_blockudoku := return_scene in ["res://scenes/blockudoku_menu.tscn", "res://scenes/blockudoku_game.tscn"]
+	var is_blockudoku := return_scene in [Scenes.BLOCKUDOKU_MENU, Scenes.BLOCKUDOKU_GAME]
 
 	# --- Blockudoku-specific settings ---
 	if is_blockudoku:

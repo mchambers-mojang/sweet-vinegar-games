@@ -26,15 +26,15 @@ func _get_display_name() -> String:
 
 
 func _get_menu_scene_path() -> String:
-	return "res://scenes/main_menu.tscn"
+	return Scenes.SUDOKU_MENU
 
 
 func _get_game_scene_path() -> String:
-	return "res://scenes/game.tscn"
+	return Scenes.SUDOKU_GAME
 
 
 func _get_stats_scene_path() -> String:
-	return "res://scenes/stats.tscn"
+	return Scenes.SUDOKU_STATS
 
 
 func _get_help_topic() -> String:

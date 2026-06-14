@@ -1,22 +1,12 @@
 class_name CaromMatchController
 extends Node
 
-## Match state machine — coordinates setup, scoring, round flow, and HUD.
-
-enum MatchState {
-	SETUP,
-	PLAYING,
-	GOAL_SCORED,
-	GAME_OVER,
-}
+## Match adapter — bridges CaromMatchState to the scene tree (turrets, pucks, HUD).
 
 @export var score_limit: int = 5
 @export var round_reset_delay: float = 1.2
 
-var match_state: int = MatchState.SETUP
-var player_score: int = 0
-var ai_score: int = 0
-var ai_difficulty_level: int = 1
+var state: CaromMatchState = CaromMatchState.new()
 
 @onready var arena: CaromArena = get_parent() as CaromArena
 @onready var actors: Node3D = arena.get_node("Actors") as Node3D
@@ -30,10 +20,9 @@ func _ready() -> void:
 	hud.menu_requested.connect(_on_menu)
 	hud.difficulty_changed.connect(_on_difficulty_changed)
 
-	# Read difficulty from menu selection
-	var CaromMenu := load("res://carom/scripts/carom_menu.gd")
-	if CaromMenu:
-		ai_difficulty_level = CaromMenu.selected_difficulty
+	state.difficulty = arena.get_meta("carom_difficulty", 1) as int
+	if arena.has_meta("carom_difficulty"):
+		arena.remove_meta("carom_difficulty")
 
 	call_deferred("_init_match")
 
@@ -51,20 +40,19 @@ func _process(_delta: float) -> void:
 
 
 func _init_match() -> void:
-	setup.spawn_entities(arena, actors, ai_difficulty_level)
+	setup.spawn_entities(arena, actors, state.difficulty)
 	_wire_hud_signals()
 	_start_match()
 
 
 func _start_match() -> void:
-	player_score = 0
-	ai_score = 0
-	hud.update_scores(player_score, ai_score)
+	state.init_match(state.difficulty, score_limit)
+	hud.update_scores(state.player_score, state.ai_score)
 	_begin_round()
 
 
 func _begin_round() -> void:
-	match_state = MatchState.PLAYING
+	state.on_round_ready()
 	arena.reset_goal_lock()
 
 	var spawn_positions := arena.get_puck_spawn_positions()
@@ -78,16 +66,15 @@ func _begin_round() -> void:
 	setup.player_turret.set_active(true)
 	setup.ai_turret.set_active(true)
 
-	var diff_name := CaromAIDifficulty.get_preset(ai_difficulty_level).difficulty_name
+	var diff_name := CaromAIDifficulty.get_preset(state.difficulty).difficulty_name
 	hud.update_status("First to %d • %s AI • Enter/click to fire • R to reload" % [score_limit, diff_name])
 	_update_ammo_display()
 
 
 func _on_goal_scored(scoring_side: StringName, _goal_puck: CaromPuck) -> void:
-	if match_state != MatchState.PLAYING:
+	if state.phase != CaromMatchState.Phase.PLAYING:
 		return
 
-	match_state = MatchState.GOAL_SCORED
 	setup.player_turret.set_active(false)
 	setup.ai_turret.set_active(false)
 
@@ -98,18 +85,18 @@ func _on_goal_scored(scoring_side: StringName, _goal_puck: CaromPuck) -> void:
 			var reset_pos := spawn_positions[i] if i < spawn_positions.size() else arena.get_puck_spawn_position()
 			setup.pucks[i].reset_to_center(reset_pos)
 
-	if scoring_side == &"north":
-		player_score += 1
+	var scorer := "player" if scoring_side == &"north" else "ai"
+	var result := state.on_goal_scored(scorer)
+
+	if result.scorer == "player":
 		hud.update_status("Player scores!")
 	else:
-		ai_score += 1
 		hud.update_status("AI scores!")
-
-	hud.update_scores(player_score, ai_score)
+	hud.update_scores(state.player_score, state.ai_score)
 	_update_ammo_display()
 
-	if player_score >= score_limit or ai_score >= score_limit:
-		_finish_match()
+	if result.match_over:
+		_finish_match(result.winner)
 		return
 
 	call_deferred("_queue_round_restart")
@@ -117,15 +104,13 @@ func _on_goal_scored(scoring_side: StringName, _goal_puck: CaromPuck) -> void:
 
 func _queue_round_restart() -> void:
 	await get_tree().create_timer(round_reset_delay).timeout
-	if match_state == MatchState.GOAL_SCORED:
+	if state.phase == CaromMatchState.Phase.GOAL_SCORED:
 		_begin_round()
 
 
-func _finish_match() -> void:
-	match_state = MatchState.GAME_OVER
-	var winner := "Player" if player_score > ai_score else "AI"
+func _finish_match(winner: String) -> void:
 	hud.update_status("")
-	hud.show_game_over(winner, player_score, ai_score, ai_difficulty_level)
+	hud.show_game_over(winner, state.player_score, state.ai_score, state.difficulty)
 
 
 # --- HUD signal wiring ---
@@ -165,17 +150,14 @@ func _on_ai_reload_state_changed(_is_reloading: bool) -> void:
 # --- Game-over panel callbacks ---
 
 func _on_rematch() -> void:
-	setup.spawn_entities(arena, actors, ai_difficulty_level)
+	setup.spawn_entities(arena, actors, state.difficulty)
 	_wire_hud_signals()
 	_start_match()
 
 
 func _on_menu() -> void:
-	SceneTransition.transition_to("res://scenes/carom_menu.tscn")
+	SceneTransition.transition_to(Scenes.CAROM_MENU)
 
 
 func _on_difficulty_changed(level: int) -> void:
-	ai_difficulty_level = level
-	var CaromMenu := load("res://carom/scripts/carom_menu.gd")
-	if CaromMenu:
-		CaromMenu.selected_difficulty = level
+	state.difficulty = level
