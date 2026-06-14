@@ -181,6 +181,10 @@ func ensure_default_palette() -> bool:
 
 
 func _snapshot() -> Dictionary:
+	var active_palette_name := ""
+	var active := get_active_custom_palette()
+	if not active.is_empty():
+		active_palette_name = str(active.get("name", ""))
 	return {
 		"dark_mode": dark_mode,
 		"show_timer": show_timer,
@@ -189,4 +193,6 @@ func _snapshot() -> Dictionary:
 		"screen_shake_enabled": screen_shake_enabled,
 		"shockwave_enabled": shockwave_enabled,
 		"particle_effects_enabled": particle_effects_enabled,
+		"active_custom_palette_index": active_custom_palette_index,
+		"active_custom_palette_name": active_palette_name,
 	}

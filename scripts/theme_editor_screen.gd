@@ -30,10 +30,31 @@ func _ready() -> void:
 	_reload_palette_list()
 	_apply_theme()
 	AppTheme.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
+	CrashCollector.register_state_provider(_get_crash_state)
 
 	var margin := get_node_or_null("MarginContainer") as MarginContainer
 	if margin:
 		SafeAreaManager.apply(margin)
+
+
+func _exit_tree() -> void:
+	CrashCollector.unregister_state_provider(_get_crash_state)
+
+
+func _get_crash_state() -> Dictionary:
+	var pal_name := ""
+	if _editing_index >= 0:
+		var pal: Dictionary = PlatformSettings.get_custom_palette(_editing_index)
+		if not pal.is_empty():
+			pal_name = str(pal.get("name", ""))
+	return {
+		"screen": "theme_editor",
+		"editing_palette_index": _editing_index,
+		"editing_palette_name": pal_name,
+		"unsaved_changes": _unsaved,
+		"total_palettes": PlatformSettings.custom_palettes.size(),
+		"active_palette_index": PlatformSettings.active_custom_palette_index,
+	}
 
 
 # ---------------------------------------------------------------------------
@@ -231,10 +252,24 @@ func _update_preview() -> void:
 # ---------------------------------------------------------------------------
 
 func _on_back() -> void:
+	if _unsaved:
+		_show_unsaved_dialog(func() -> void: SceneTransition.transition_to(Scenes.SETTINGS))
+		return
 	SceneTransition.transition_to(Scenes.SETTINGS)
 
 
 func _on_palette_selected(index: int) -> void:
+	if _unsaved and index != _editing_index:
+		_show_unsaved_dialog(func() -> void:
+			_editing_index = index
+			_load_palette_into_pickers(index)
+			_update_preview()
+		)
+		# Revert the OptionButton visual back to the current editing index
+		# (the dialog callback will update it if the user confirms)
+		if _editing_index >= 0:
+			_palette_option.selected = _editing_index
+		return
 	_editing_index = index
 	_load_palette_into_pickers(index)
 	_update_preview()
@@ -362,6 +397,21 @@ func _on_apply_and_save() -> void:
 # ---------------------------------------------------------------------------
 # Name input dialog
 # ---------------------------------------------------------------------------
+
+func _show_unsaved_dialog(on_discard: Callable) -> void:
+	var dialog := ConfirmationDialog.new()
+	dialog.title = "Unsaved Changes"
+	dialog.dialog_text = "You have unsaved changes. Discard them?"
+	dialog.ok_button_text = "Discard"
+	dialog.confirmed.connect(func() -> void:
+		_unsaved = false
+		on_discard.call()
+		dialog.queue_free()
+	)
+	dialog.canceled.connect(func() -> void: dialog.queue_free())
+	add_child(dialog)
+	dialog.popup_centered()
+
 
 func _show_name_dialog(title: String, initial: String, on_confirmed: Callable) -> void:
 	var dialog := AcceptDialog.new()

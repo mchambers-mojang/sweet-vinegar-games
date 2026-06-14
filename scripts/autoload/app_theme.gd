@@ -182,19 +182,46 @@ func set_theme_mode(mode: String) -> void:
 ## Derives a full 22-key color palette from 4 user-chosen base colors.
 ## Intended for use with the "custom" neon-style theme mode.
 static func build_custom_palette(bg: Color, accent: Color, secondary: Color, error: Color) -> Dictionary:
-	# Background variants — slight brightness offsets to keep the dark neon feel
+	# Background variants — slight brightness offsets to keep the dark neon feel.
+	# Clamped to [0,1] because these are standard (non-HDR) surface colors.
 	var s := 0.03  # step
-	var cell_bg := Color(bg.r + s, bg.g + s, bg.b + s * 1.5)
-	var cell_given := Color(bg.r + s * 1.5, bg.g + s * 1.5, bg.b + s * 3.0)
-	var btn_bg := Color(bg.r + s * 1.5, bg.g + s * 0.5, bg.b + s * 3.0)
-	var btn_hover := Color(bg.r + s * 3.0, bg.g + s * 1.5, bg.b + s * 6.0)
-	var btn_pressed := Color(bg.r + s * 0.5, bg.g + s * 0.3, bg.b + s)
+	var cell_bg := Color(
+		clampf(bg.r + s, 0.0, 1.0),
+		clampf(bg.g + s, 0.0, 1.0),
+		clampf(bg.b + s * 1.5, 0.0, 1.0))
+	var cell_given := Color(
+		clampf(bg.r + s * 1.5, 0.0, 1.0),
+		clampf(bg.g + s * 1.5, 0.0, 1.0),
+		clampf(bg.b + s * 3.0, 0.0, 1.0))
+	var btn_bg := Color(
+		clampf(bg.r + s * 1.5, 0.0, 1.0),
+		clampf(bg.g + s * 0.5, 0.0, 1.0),
+		clampf(bg.b + s * 3.0, 0.0, 1.0))
+	var btn_hover := Color(
+		clampf(bg.r + s * 3.0, 0.0, 1.0),
+		clampf(bg.g + s * 1.5, 0.0, 1.0),
+		clampf(bg.b + s * 6.0, 0.0, 1.0))
+	var btn_pressed := Color(
+		clampf(bg.r + s * 0.5, 0.0, 1.0),
+		clampf(bg.g + s * 0.3, 0.0, 1.0),
+		clampf(bg.b + s, 0.0, 1.0))
 
-	# Cell tinting — bg + small fraction of the accent/secondary/error color
+	# Cell tinting — bg + small fraction of the accent/secondary/error color.
+	# Accent/secondary may be HDR (>1.0), so the blended result must be clamped
+	# to [0,1] for cell backgrounds which are not bloom-rendered.
 	var t := 0.08
-	var cell_sel := Color(bg.r + accent.r * t * 1.5, bg.g + accent.g * t * 1.5, bg.b + accent.b * t * 2.0)
-	var cell_same := Color(bg.r + secondary.r * t, bg.g + secondary.g * t * 0.05, bg.b + secondary.b * t * 1.5)
-	var cell_hi := Color(bg.r + secondary.r * t * 0.5, bg.g + secondary.g * t * 0.3, bg.b + secondary.b * t)
+	var cell_sel := Color(
+		clampf(bg.r + accent.r * t * 1.5, 0.0, 1.0),
+		clampf(bg.g + accent.g * t * 1.5, 0.0, 1.0),
+		clampf(bg.b + accent.b * t * 2.0, 0.0, 1.0))
+	var cell_same := Color(
+		clampf(bg.r + secondary.r * t, 0.0, 1.0),
+		clampf(bg.g + secondary.g * t * 0.05, 0.0, 1.0),
+		clampf(bg.b + secondary.b * t * 1.5, 0.0, 1.0))
+	var cell_hi := Color(
+		clampf(bg.r + secondary.r * t * 0.5, 0.0, 1.0),
+		clampf(bg.g + secondary.g * t * 0.3, 0.0, 1.0),
+		clampf(bg.b + secondary.b * t, 0.0, 1.0))
 	var cell_err := Color(clampf(error.r * 0.25, 0.0, 1.0), clampf(error.g * 0.05, 0.0, 1.0), clampf(error.b * 0.1, 0.0, 1.0))
 
 	# Thin grid: bg lightened with faint accent tint (clamped, not HDR)
