@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="HelpContent" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/help/help_content.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+title = "Shikaku"
+body = "Divide the grid into rectangles so each rectangle contains exactly one number, and that number equals the rectangle's area.\n\n• Drag to draw a rectangle\n• Tap an existing rectangle to remove it\n• Every cell must be covered by exactly one rectangle\n• Use Hint if you get stuck"

@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="HelpContent" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/help/help_content.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+title = "Carom"
+body = "Aim your mounted turret and ricochet projectiles into the opponent's goal.\n\n• Left/Right arrow keys to aim your turret\n• Enter or click to fire\n• R to reload (bullets load slowly over time)\n• On mobile: drag to aim (Drag mode), or use Hold Zones / Gyroscope — change aim mode in ⚙ Settings\n• On mobile: tap screen to fire; tap reload button (bottom corner) to reload\n• Ammo returns when projectiles reach a goal area\n• Puck has irregular contact points — momentum is unpredictable"
