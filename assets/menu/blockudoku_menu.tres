@@ -1,0 +1,37 @@
+[gd_resource type="Resource" script_class="MenuConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/menu/menu_config.gd" id="1_blockudoku"]
+
+[resource]
+script = ExtResource("1_blockudoku")
+game_id = "blockudoku"
+display_name = "Blockudoku"
+help_topic = "blockudoku"
+menu_scene_path = "res://scenes/blockudoku_menu.tscn"
+game_scene_path = "res://scenes/blockudoku_game.tscn"
+stats_scene_path = "res://scenes/blockudoku_stats.tscn"
+has_save_support = true
+start_button_unique_name = "NewGameButton"
+option_button_unique_name = ""
+option_default_index = 0
+option_values = PackedInt32Array()
+start_game_method = "start_new_game"
+start_game_passes_option = false
+start_game_passes_option_twice = false
+start_game_meta_key = ""
+abandon_stat_save_key = ""
+abandon_stat_prefix = ""
+abandon_stat_default = 0
+title_color_key = ""
+game_rules = {
+"pentominoes": true,
+"p_pentomino": false,
+"w_pentomino": false,
+"y_pentomino": false,
+"f_pentomino": false,
+"n_pentomino": false,
+"hexominoes": false,
+"diagonals": false,
+"drag_offset": 1,
+"rotation_mode": false
+}

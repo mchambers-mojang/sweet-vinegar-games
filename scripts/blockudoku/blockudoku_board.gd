@@ -255,7 +255,7 @@ func check_and_clear() -> Dictionary:
 		NeonRing.create(self, clear_center, Color(0.0, 2.0, 1.5), cell_size * 5.0, 0.4)
 
 		# Screen shake
-		NeonFxManager.screen_shake(6.0, 0.2)
+		AppTheme.screen_shake(6.0, 0.2)
 
 	# Clear grid state immediately so game-over checks see the updated board
 	for p in _flash_cells:

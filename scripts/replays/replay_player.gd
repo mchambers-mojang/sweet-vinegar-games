@@ -30,9 +30,6 @@ const FRAME_INTERVAL := 0.6
 
 
 func _ready() -> void:
-	var margin := get_node_or_null("MarginContainer") as MarginContainer
-	if margin:
-		SafeAreaManager.apply(margin)
 	back_button.pressed.connect(func() -> void:
 		SceneTransition.transition_to(Scenes.REPLAYS)
 	)

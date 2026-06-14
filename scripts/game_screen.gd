@@ -9,6 +9,16 @@ class_name GameScreen
 ## Session ceremony is centralised in begin_session(). Subclasses call
 ## begin_session() (new game) or begin_session(saved_data) (resume) and
 ## implement the hooks below.
+##
+## All platform-service autoload calls (replay, crash, analytics, stats, save,
+## sound, haptics) go through `session` (a SessionController) rather than
+## directly to the autoloads. This keeps game screens to UI + input only and
+## makes the lifecycle testable without a scene tree.
+
+
+# --- Session orchestration ---
+
+var session: SessionController = null
 
 
 # --- Session state (owned by base) ---
@@ -16,6 +26,10 @@ class_name GameScreen
 var elapsed_time: float = 0.0
 var random_seed: int = 0
 var replay_id: String = ""
+
+# Cached save adapter — set in _ready() via _get_save_adapter().
+# null for games that have not yet migrated to the adapter contract.
+var _save_adapter: GameSaveAdapter = null
 
 @onready var timer_label: Label = %TimerLabel
 
@@ -61,6 +75,12 @@ func _get_crash_state() -> Dictionary:
 ## Return the help topic string for HowToPlay.
 func _get_help_topic() -> String:
 	return _get_game_id()
+
+
+## Return a GameSaveAdapter for this game, or null to fall back to direct
+## GameSaveManager calls.  Override in concrete game screens.
+func _get_save_adapter() -> GameSaveAdapter:
+	return null
 
 
 ## Called after the base lifecycle setup is complete.
@@ -132,9 +152,13 @@ func _get_difficulty() -> int:
 # --- Lifecycle ---
 
 func _ready() -> void:
+	# Cache the save adapter (null for games not yet using the adapter contract)
+	_save_adapter = _get_save_adapter()
+	session = SessionController.new()
+
 	# Crash reporting
-	CrashCollector.register_state_provider(_get_crash_state)
-	CrashCollector.register_user_action("%s_screen_opened" % _get_game_id())
+	session.register_crash_state(_get_crash_state)
+	session.register_user_action("%s_screen_opened" % _get_game_id())
 
 	# Settings button
 	var settings_btn := _find_settings_button()
@@ -148,11 +172,6 @@ func _ready() -> void:
 	_apply_game_theme()
 	AppTheme.theme_changed.connect(func(_d: bool) -> void: _apply_game_theme())
 
-	# Safe area
-	var margin := get_node_or_null("MarginContainer") as MarginContainer
-	if margin:
-		SafeAreaManager.apply(margin)
-
 	# Let subclass do its own setup
 	_on_game_screen_ready()
 
@@ -161,7 +180,7 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
-	CrashCollector.unregister_state_provider(_get_crash_state)
+	session.unregister_crash_state(_get_crash_state)
 
 
 func _process(delta: float) -> void:
@@ -189,30 +208,30 @@ func begin_session(saved_data: Dictionary = {}) -> void:
 		random_seed = int(saved_data.get("random_seed", 0))
 		elapsed_time = saved_data.get("elapsed_time", 0.0)
 		replay_id = str(saved_data.get("replay_id", ""))
-		CrashCollector.register_user_action(
+		session.register_user_action(
 				game_id + "_resume_game",
 				_get_resume_crash_params(saved_data))
 	else:
 		random_seed = _create_session_seed()
 		elapsed_time = 0.0
 		replay_id = ""
-		CrashCollector.register_user_action(
+		session.register_user_action(
 				game_id + "_start_new_game",
 				_get_start_crash_params())
 
 	# _setup_game() runs here so game state (board, seed derivation for legacy
-	# saves) is fully initialised before ReplayRecorder.start_session() below.
+	# saves) is fully initialised before session.start_replay() below.
 	_setup_game(saved_data)
 
-	if not is_resuming or not ReplayRecorder.has_active_session():
-		replay_id = ReplayRecorder.start_session(
+	if not is_resuming or not session.has_active_replay():
+		replay_id = session.start_replay(
 				game_id, random_seed, _get_initial_state(), _get_settings_snapshot())
 
 	if not is_resuming:
 		_increment_stats()
 		GameEvents.game_started.emit(game_id, _get_difficulty(), _get_analytics_params())
 
-	AchievementManager.track_game_started(game_id)
+	session.track_game_started(game_id)
 	_save_current_state()
 
 
@@ -221,18 +240,28 @@ func begin_session(saved_data: Dictionary = {}) -> void:
 func save_progress() -> void:
 	if _is_completed():
 		return
-	GameSaveManager.save_game(_get_game_id(), _serialize_state())
+	if _save_adapter:
+		_save_adapter.save(_serialize_state())
+	else:
+		session.save_progress(_get_game_id(), _serialize_state())
 
 
 func clear_save() -> void:
-	GameSaveManager.clear_save(_get_game_id())
+	if _save_adapter:
+		_save_adapter.clear()
+	else:
+		session.clear_save(_get_game_id())
 
 
 func _try_auto_resume() -> void:
 	if _is_initialized():
 		return
-	if GameSaveManager.has_saved_game(_get_game_id()):
-		var data := GameSaveManager.load_game(_get_game_id())
+	if _save_adapter:
+		var data := _save_adapter.restore_if_resumable()
+		if not data.is_empty():
+			_deserialize_state(data)
+	elif session.has_saved_game(_get_game_id()):
+		var data := session.load_game(_get_game_id())
 		if not data.is_empty():
 			_deserialize_state(data)
 
@@ -241,7 +270,7 @@ func _try_auto_resume() -> void:
 ## Defined here so subclasses do not need to repeat the two-line body.
 func _save_current_state() -> void:
 	save_progress()
-	ReplayRecorder.flush_active_replay()
+	session.flush_replay()
 
 
 # --- Navigation ---

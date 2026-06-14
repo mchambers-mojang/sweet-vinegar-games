@@ -10,6 +10,10 @@ var is_dark: bool = false
 var is_neon: bool = false
 var ui_theme: Theme
 
+var _glow_layer: CanvasLayer
+var _world_env: WorldEnvironment
+var _environment: Environment
+
 ## Active color palette (current theme values)
 var colors := {
 	"background": Color.WHITE,
@@ -132,6 +136,7 @@ func _ready() -> void:
 	get_tree().node_removed.connect(_on_node_removed)
 	# Scan buttons already in the tree (main scene loads before node_added connects)
 	call_deferred("_scan_existing_buttons")
+	_setup_glow()
 
 
 func _apply_theme_setting() -> void:
@@ -177,6 +182,7 @@ func set_theme_mode(mode: String) -> void:
 	_rebuild_ui_theme()
 	theme_changed.emit(is_dark)
 	_retint_icon_buttons()
+	_update_glow()
 
 
 ## Derives a full 22-key color palette from 4 user-chosen base colors.
@@ -269,6 +275,69 @@ static func build_custom_palette(bg: Color, accent: Color, secondary: Color, err
 func _apply_color_set(source: Dictionary) -> void:
 	for key in source:
 		colors[key] = source[key]
+
+
+func _setup_glow() -> void:
+	_glow_layer = CanvasLayer.new()
+	_glow_layer.layer = -1
+	add_child(_glow_layer)
+
+	_environment = Environment.new()
+	_environment.background_mode = Environment.BG_CANVAS
+	_environment.tonemap_mode = Environment.TONE_MAPPER_ACES
+
+	# Glow settings for synthwave neon bloom
+	_environment.glow_enabled = true
+	_environment.glow_intensity = 0.7
+	_environment.glow_strength = 1.05
+	_environment.glow_bloom = 0.25
+	_environment.glow_blend_mode = Environment.GLOW_BLEND_MODE_ADDITIVE
+	_environment.glow_hdr_threshold = 0.8
+	_environment.glow_hdr_scale = 2.0
+	# Multi-level glow for soft, wide bloom
+	_environment.set_glow_level(0, true)   # Fine detail
+	_environment.set_glow_level(1, true)   # Medium spread
+	_environment.set_glow_level(2, true)   # Wide glow
+	_environment.set_glow_level(3, false)
+	_environment.set_glow_level(4, false)
+	_environment.set_glow_level(5, false)
+	_environment.set_glow_level(6, false)
+
+	_world_env = WorldEnvironment.new()
+	_world_env.environment = _environment
+	# Don't add to tree unless neon is active — saves ~20-40MB on mobile
+	_update_glow()
+
+
+func _update_glow() -> void:
+	if _glow_layer == null:
+		return
+	if is_neon:
+		if not _world_env.is_inside_tree():
+			_glow_layer.add_child(_world_env)
+	else:
+		if _world_env.is_inside_tree():
+			_glow_layer.remove_child(_world_env)
+
+
+## Create a screen-shake / impact effect
+func screen_shake(intensity: float = 4.0, duration: float = 0.15) -> void:
+	if not is_neon:
+		return
+	if not PlatformSettings.screen_shake_enabled:
+		return
+	var viewport := get_viewport()
+	if not viewport:
+		return
+	var original := viewport.canvas_transform
+	var tween := create_tween()
+	tween.tween_method(func(t: float) -> void:
+		var shake := Vector2(randf_range(-intensity, intensity), randf_range(-intensity, intensity)) * (1.0 - t)
+		viewport.canvas_transform = Transform2D(0, shake) * original
+	, 0.0, 1.0, duration)
+	tween.tween_callback(func() -> void:
+		viewport.canvas_transform = original
+	)
 
 
 func set_dark(dark: bool) -> void:
