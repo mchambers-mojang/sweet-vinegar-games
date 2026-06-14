@@ -68,7 +68,7 @@ func _begin_round() -> void:
 	setup.ai_turret.set_active(true)
 
 	var diff_name := CaromAIDifficulty.get_preset(state.difficulty).difficulty_name
-	hud.update_status("First to %d" % score_limit)
+	hud.update_status("")
 	_update_ammo_display()
 
 
@@ -86,10 +86,6 @@ func _on_goal_scored(scoring_side: StringName, goal_puck: CaromPuck) -> void:
 	var scorer := "player" if scoring_side == &"north" else "ai"
 	var result := state.on_goal_scored(scorer)
 
-	if result.scorer == "player":
-		hud.update_status("Player scores!")
-	else:
-		hud.update_status("AI scores!")
 	hud.update_scores(state.player_score, state.ai_score)
 	_update_ammo_display()
 
