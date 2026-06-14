@@ -188,21 +188,8 @@ mesh = SubResource("6")
 material_override = SubResource("12")
 
 ; --- Goal zones (wide openings at each short end, behind the play area) ---
-[node name="SouthGoal" type="Area3D" parent="."]
-position = Vector3(0, 0.6, -0.4)
-collision_layer = 0
-collision_mask = 12
-monitoring = true
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="SouthGoal"]
-shape = SubResource("7")
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="SouthGoal"]
-mesh = SubResource("8")
-material_override = SubResource("13")
-
 [node name="NorthGoal" type="Area3D" parent="."]
-position = Vector3(0, 0.6, 24.4)
+position = Vector3(0, 0.6, -0.4)
 collision_layer = 0
 collision_mask = 12
 monitoring = true
@@ -214,13 +201,26 @@ shape = SubResource("7")
 mesh = SubResource("8")
 material_override = SubResource("13")
 
+[node name="SouthGoal" type="Area3D" parent="."]
+position = Vector3(0, 0.6, 24.4)
+collision_layer = 0
+collision_mask = 12
+monitoring = true
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="SouthGoal"]
+shape = SubResource("7")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="SouthGoal"]
+mesh = SubResource("8")
+material_override = SubResource("13")
+
 ; --- Spawn markers ---
 [node name="SpawnMarkers" type="Node3D" parent="."]
 
-[node name="SouthTurretSpawn" type="Marker3D" parent="SpawnMarkers"]
+[node name="NorthTurretSpawn" type="Marker3D" parent="SpawnMarkers"]
 position = Vector3(0, 0, 2)
 
-[node name="NorthTurretSpawn" type="Marker3D" parent="SpawnMarkers"]
+[node name="SouthTurretSpawn" type="Marker3D" parent="SpawnMarkers"]
 position = Vector3(0, 0, 22)
 
 [node name="PuckSpawn" type="Marker3D" parent="SpawnMarkers"]
