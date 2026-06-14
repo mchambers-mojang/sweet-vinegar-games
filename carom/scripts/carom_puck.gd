@@ -56,10 +56,10 @@ func _setup_emission_material() -> void:
 
 
 func configure(goal_targets: Array[Vector3], reset_position: Vector3) -> void:
-	# Player turret is at north position — puck entering north goal means
-	# the opponent (south) scores on the player. Pulse warns of that danger.
+	# Player turret is at the bottom (south spawn, Z=2) defending the SouthGoal (Z=-0.4).
+	# Puck entering SouthGoal = opponent scores on player. That's the danger zone.
 	if goal_targets.size() >= 2:
-		_player_goal = goal_targets[1]  # [south_goal, north_goal] — north is player's goal zone
+		_player_goal = goal_targets[0]  # [south_goal, north_goal] — south is player's danger zone
 		_arena_length = goal_targets[0].distance_to(goal_targets[1])
 	elif goal_targets.size() == 1:
 		_player_goal = goal_targets[0]
