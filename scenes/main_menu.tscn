@@ -10,8 +10,25 @@ script = ExtResource("2")
 unique_name_in_owner = true
 text = "Sudoku"
 
-[node name="DifficultyContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer" index=8]
-unique_name_in_owner = true
+[node name="DifficultyRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer" index=6]
 layout_mode = 2
 alignment = 1
-theme_override_constants/separation = 8
+
+[node name="DifficultyLabel" type="Label" parent="MarginContainer/VBoxContainer/DifficultyRow"]
+layout_mode = 2
+text = "Difficulty: "
+
+[node name="DifficultyButton" type="OptionButton" parent="MarginContainer/VBoxContainer/DifficultyRow"]
+unique_name_in_owner = true
+layout_mode = 2
+item_count = 5
+popup/item_0/text = "Easy"
+popup/item_1/text = "Medium"
+popup/item_1/id = 1
+popup/item_2/text = "Hard"
+popup/item_2/id = 2
+popup/item_3/text = "Expert"
+popup/item_3/id = 3
+popup/item_4/text = "Evil"
+popup/item_4/id = 4
+selected = 1

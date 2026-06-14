@@ -1,7 +1,7 @@
 extends CanvasLayer
 
 const MAX_ANALYTICS_EVENTS := 8
-const VERSION_TAP_WINDOW_SEC := 0.8
+const VERSION_TAP_WINDOW_SEC := 1.0
 
 var _enabled: bool = false
 var _overlay_active: bool = false
@@ -45,7 +45,7 @@ func register_version_label_tap() -> void:
 	_version_taps.append(now)
 	while _version_taps.size() > 0 and now - _version_taps[0] > VERSION_TAP_WINDOW_SEC:
 		_version_taps.remove_at(0)
-	if _version_taps.size() >= 7:
+	if _version_taps.size() >= 5:
 		_version_taps.clear()
 		_toggle_overlay("version_tap")
 

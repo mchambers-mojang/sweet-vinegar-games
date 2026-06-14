@@ -6,13 +6,11 @@ extends GameMenu
 @onready var new_game_button: Button = %NewGameButton
 @onready var stats_button: Button = %StatsButton
 @onready var settings_button: Button = $MarginContainer/VBoxContainer/TopBar/SettingsButton
-@onready var difficulty_container: VBoxContainer = %DifficultyContainer
+@onready var difficulty_button: OptionButton = %DifficultyButton
 @onready var title_label: Label = %TitleLabel
 @onready var back_button: Button = $MarginContainer/VBoxContainer/TopBar/BackButton
 
 const DIFFICULTY_NAMES := ["Easy", "Medium", "Hard", "Expert", "Evil"]
-
-var _showing_difficulty := false
 
 
 # --- GameMenu overrides ---
@@ -49,8 +47,7 @@ func _on_menu_ready() -> void:
 		"highlight_row_col_box": true,
 		"auto_remove_pencil_marks": true,
 	})
-	difficulty_container.visible = false
-	_setup_difficulty_buttons()
+	difficulty_button.selected = 1
 
 
 func _apply_game_theme() -> void:
@@ -58,9 +55,8 @@ func _apply_game_theme() -> void:
 
 
 func _start_game() -> void:
-	# After abandon, show difficulty selector
-	_showing_difficulty = true
-	difficulty_container.visible = true
+	var diff := difficulty_button.selected
+	_start_new_game_with_difficulty(diff)
 
 
 func _resume_game(data: Dictionary) -> void:
@@ -79,40 +75,7 @@ func _on_abandon_confirmed() -> void:
 	GameStatsManager.set_counter("sudoku", "current_streak", 0)
 
 
-# --- Sudoku-specific: difficulty selector ---
-
-func _on_new_game_pressed() -> void:
-	# Override base: toggle difficulty list, only abandon-confirm if save exists
-	_showing_difficulty = not _showing_difficulty
-	difficulty_container.visible = _showing_difficulty
-
-
-func _on_difficulty_selected(diff: int) -> void:
-	if GameSaveManager.has_saved_game("sudoku"):
-		_confirm_abandon_and_start(diff)
-	else:
-		_start_new_game_with_difficulty(diff)
-
-
-func _confirm_abandon_and_start(diff: int) -> void:
-	var dialog := ConfirmationDialog.new()
-	dialog.title = "Abandon Game?"
-	dialog.dialog_text = "Starting a new game will abandon\nyour current game and end\nyour streak."
-	dialog.ok_button_text = "Start New"
-	dialog.cancel_button_text = "Cancel"
-	dialog.min_size = Vector2i(300, 0)
-	dialog.size = Vector2i(300, 0)
-	add_child(dialog)
-	dialog.get_label().horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	dialog.popup_centered()
-	dialog.confirmed.connect(func() -> void:
-		_on_abandon_confirmed()
-		GameSaveManager.clear_save("sudoku")
-		dialog.queue_free()
-		_start_new_game_with_difficulty(diff)
-	)
-	dialog.canceled.connect(func() -> void: dialog.queue_free())
-
+# --- Sudoku-specific ---
 
 func _start_new_game_with_difficulty(diff: int) -> void:
 	SceneTransition.transition_with_callback(func() -> void:
@@ -121,17 +84,3 @@ func _start_new_game_with_difficulty(diff: int) -> void:
 		game_scene.start_new_game(diff)
 		queue_free()
 	)
-
-
-func _setup_difficulty_buttons() -> void:
-	for child in difficulty_container.get_children():
-		child.queue_free()
-
-	for i in range(DIFFICULTY_NAMES.size()):
-		var btn := Button.new()
-		btn.text = DIFFICULTY_NAMES[i]
-		btn.custom_minimum_size = Vector2(200, 44)
-		var diff := i
-		btn.pressed.connect(func() -> void: _on_difficulty_selected(diff))
-		difficulty_container.add_child(btn)
-
