@@ -20,6 +20,8 @@ func _ready() -> void:
 	hud.menu_requested.connect(_on_menu)
 	hud.difficulty_changed.connect(_on_difficulty_changed)
 	hud.reload_requested.connect(_on_reload_requested)
+	hud.pause_requested.connect(_on_pause)
+	hud.resume_requested.connect(_on_resume)
 
 	state.difficulty = arena.get_meta("carom_difficulty", 1) as int
 	if arena.has_meta("carom_difficulty"):
@@ -28,11 +30,25 @@ func _ready() -> void:
 	call_deferred("_init_match")
 
 
+var _is_paused: bool = false
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		if not _is_paused and state.phase == CaromMatchState.Phase.PLAYING:
+			_on_pause()
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		var key_event := event as InputEventKey
 		if key_event.keycode == KEY_F3:
 			hud.toggle_debug_overlay()
+		elif key_event.keycode == KEY_ESCAPE:
+			if _is_paused:
+				_on_resume()
+			elif state.phase == CaromMatchState.Phase.PLAYING:
+				_on_pause()
 
 
 func _process(_delta: float) -> void:
@@ -99,6 +115,8 @@ func _on_goal_scored(scoring_side: StringName, goal_puck: CaromPuck) -> void:
 
 
 func _finish_match(winner: String) -> void:
+	setup.player_turret.set_active(false)
+	setup.ai_turret.set_active(false)
 	hud.update_status("")
 	hud.show_game_over(winner, state.player_score, state.ai_score, state.difficulty)
 
@@ -146,6 +164,7 @@ func _on_rematch() -> void:
 
 
 func _on_menu() -> void:
+	get_tree().paused = false
 	SceneTransition.transition_to(Scenes.CAROM_MENU)
 
 
@@ -156,3 +175,21 @@ func _on_difficulty_changed(level: int) -> void:
 func _on_reload_requested() -> void:
 	if setup.player_turret and setup.player_turret.is_active:
 		setup.player_turret.start_reload()
+
+
+func _on_pause() -> void:
+	if _is_paused:
+		return
+	_is_paused = true
+	get_tree().paused = true
+	hud.show_pause_overlay()
+	hud.set_pause_button_visible(false)
+
+
+func _on_resume() -> void:
+	if not _is_paused:
+		return
+	_is_paused = false
+	hud.hide_pause_overlay()
+	hud.set_pause_button_visible(true)
+	get_tree().paused = false

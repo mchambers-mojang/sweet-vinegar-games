@@ -8,12 +8,16 @@ signal rematch_requested
 signal menu_requested
 signal difficulty_changed(level: int)
 signal reload_requested
+signal pause_requested
+signal resume_requested
 
 @onready var player_score_label: Label = %PlayerScoreLabel
 @onready var ai_score_label: Label = %AIScoreLabel
 @onready var status_label: Label = %StatusLabel
 
 var _game_over_panel: Control = null
+var _pause_overlay: Control = null
+var _pause_button: Button = null
 var _debug_label: Label = null
 var _debug_visible: bool = false
 var _reload_button: CaromReloadButton = null
@@ -26,6 +30,7 @@ const AI_STATE_NAMES := ["ATTACK", "DEFEND", "RELOAD_PRESSURE", "TRICK_SHOT"]
 func _ready() -> void:
 	CaromSettings.ensure_loaded()
 	_create_reload_button()
+	_create_pause_button()
 	_create_gear_button()
 
 
@@ -224,6 +229,99 @@ func _toggle_settings_panel() -> void:
 		_position_reload_button()
 	)
 	get_parent().add_child(_settings_panel)
+
+
+# --- Pause button + overlay ---
+
+func _create_pause_button() -> void:
+	_pause_button = Button.new()
+	_pause_button.text = "⏸"
+	_pause_button.custom_minimum_size = Vector2(44, 44)
+	_pause_button.add_theme_font_size_override("font_size", 20)
+	_pause_button.pressed.connect(func() -> void:
+		pause_requested.emit()
+	)
+
+	var anchor := Control.new()
+	anchor.name = "PauseButtonAnchor"
+	anchor.set_anchors_preset(Control.PRESET_FULL_RECT)
+	anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	get_parent().add_child(anchor)
+	anchor.add_child(_pause_button)
+
+	call_deferred("_position_pause_button")
+	anchor.resized.connect(_position_pause_button)
+
+
+func _position_pause_button() -> void:
+	if not _pause_button:
+		return
+	var parent_control := _pause_button.get_parent() as Control
+	var container_size: Vector2
+	if parent_control and parent_control.size.x > 0.0:
+		container_size = parent_control.size
+	else:
+		container_size = get_viewport().get_visible_rect().size
+	# Top-left corner
+	_pause_button.position = Vector2(8.0, 8.0)
+
+
+func show_pause_overlay() -> void:
+	if _pause_overlay:
+		return
+
+	_pause_overlay = Control.new()
+	_pause_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_pause_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+
+	var dimmer := ColorRect.new()
+	dimmer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dimmer.color = Color(0.0, 0.0, 0.0, 0.6)
+	dimmer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_pause_overlay.add_child(dimmer)
+
+	var vbox := VBoxContainer.new()
+	vbox.set_anchors_preset(Control.PRESET_CENTER)
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 20)
+	_pause_overlay.add_child(vbox)
+
+	var paused_label := Label.new()
+	paused_label.text = "PAUSED"
+	paused_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	paused_label.add_theme_font_size_override("font_size", 32)
+	paused_label.add_theme_color_override("font_color", Color(0.9, 0.95, 1.0))
+	vbox.add_child(paused_label)
+
+	var resume_btn := Button.new()
+	resume_btn.text = "Resume"
+	resume_btn.custom_minimum_size = Vector2(140, 48)
+	resume_btn.pressed.connect(func() -> void:
+		resume_requested.emit()
+	)
+	vbox.add_child(resume_btn)
+
+	var menu_btn := Button.new()
+	menu_btn.text = "Quit to Menu"
+	menu_btn.custom_minimum_size = Vector2(140, 48)
+	menu_btn.pressed.connect(func() -> void:
+		hide_pause_overlay()
+		menu_requested.emit()
+	)
+	vbox.add_child(menu_btn)
+
+	get_parent().add_child(_pause_overlay)
+
+
+func hide_pause_overlay() -> void:
+	if _pause_overlay:
+		_pause_overlay.queue_free()
+		_pause_overlay = null
+
+
+func set_pause_button_visible(visible: bool) -> void:
+	if _pause_button:
+		_pause_button.visible = visible
 
 
 # --- Debug overlay ---

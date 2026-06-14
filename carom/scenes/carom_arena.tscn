@@ -232,9 +232,11 @@ current = true
 script = ExtResource("3")
 
 [node name="MatchController" type="Node" parent="."]
+process_mode = 3
 script = ExtResource("2")
 
 [node name="HUD" type="CanvasLayer" parent="."]
+process_mode = 3
 
 [node name="HUDController" type="Node" parent="HUD"]
 unique_name_in_owner = true
