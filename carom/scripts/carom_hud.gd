@@ -14,6 +14,7 @@ signal resume_requested
 @onready var player_score_label: Label = %PlayerScoreLabel
 @onready var ai_score_label: Label = %AIScoreLabel
 @onready var status_label: Label = %StatusLabel
+@onready var _overlay_layer: Control = %OverlayLayer
 
 var _game_over_panel: Control = null
 var _pause_overlay: Control = null
@@ -23,36 +24,15 @@ var _debug_visible: bool = false
 var _reload_button: CaromReloadButton = null
 var _settings_panel: CaromSettings = null
 var _gear_button: Button = null
-var _overlay_layer: Control = null
 
 const AI_STATE_NAMES := ["ATTACK", "DEFEND", "RELOAD_PRESSURE", "TRICK_SHOT"]
 
 
 func _ready() -> void:
 	CaromSettings.ensure_loaded()
-	_create_overlay_layer()
 	_create_reload_button()
 	_create_pause_button()
 	_create_gear_button()
-
-
-func _create_overlay_layer() -> void:
-	# A single full-rect Control that gets viewport size via anchors.
-	# All dynamically created HUD elements go here.
-	_overlay_layer = Control.new()
-	_overlay_layer.name = "OverlayLayer"
-	_overlay_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	get_parent().add_child(_overlay_layer)
-	# Must set preset AFTER adding to tree so anchors resolve against viewport
-	_overlay_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	# Debug: print size after one frame
-	get_tree().process_frame.connect(func() -> void:
-		print("[CaromHUD] OverlayLayer size=%s, reload_btn size=%s pos=%s" % [
-			_overlay_layer.size,
-			_reload_button.size if _reload_button else "null",
-			_reload_button.position if _reload_button else "null",
-		])
-	, CONNECT_ONE_SHOT)
 
 
 func update_scores(player_score: int, ai_score: int) -> void:
@@ -174,28 +154,39 @@ func _create_reload_button() -> void:
 		reload_requested.emit()
 	)
 	_overlay_layer.add_child(_reload_button)
-	# Position after overlay gets its size (next frame)
-	_overlay_layer.resized.connect(_position_reload_button)
-	get_tree().process_frame.connect(_position_reload_button, CONNECT_ONE_SHOT)
-
-
-func _position_reload_button_once() -> void:
-	_position_reload_button()
+	# Use anchors for positioning — bottom-left or bottom-right
+	_reload_button.anchor_top = 1.0
+	_reload_button.anchor_bottom = 1.0
+	if CaromSettings.reload_button_side == CaromSettings.ReloadButtonSide.LEFT:
+		_reload_button.anchor_left = 0.0
+		_reload_button.anchor_right = 0.0
+		_reload_button.offset_left = 16.0
+		_reload_button.offset_top = -210.0
+		_reload_button.offset_right = 116.0
+		_reload_button.offset_bottom = -110.0
+	else:
+		_reload_button.anchor_left = 1.0
+		_reload_button.anchor_right = 1.0
+		_reload_button.offset_left = -116.0
+		_reload_button.offset_top = -210.0
+		_reload_button.offset_right = -16.0
+		_reload_button.offset_bottom = -110.0
 
 
 func _position_reload_button() -> void:
-	if not _reload_button or not _overlay_layer:
+	if not _reload_button:
 		return
-	var btn_size := Vector2(120.0, 120.0)
-	_reload_button.size = btn_size
-	var margin := Vector2(16.0, 24.0)
-	var container_size := _overlay_layer.size
-	if container_size.x <= 0.0:
-		return
+	# Re-apply anchors based on current setting
 	if CaromSettings.reload_button_side == CaromSettings.ReloadButtonSide.LEFT:
-		_reload_button.position = Vector2(margin.x, container_size.y - btn_size.y - margin.y)
+		_reload_button.anchor_left = 0.0
+		_reload_button.anchor_right = 0.0
+		_reload_button.offset_left = 16.0
+		_reload_button.offset_right = 116.0
 	else:
-		_reload_button.position = Vector2(container_size.x - btn_size.x - margin.x, container_size.y - btn_size.y - margin.y)
+		_reload_button.anchor_left = 1.0
+		_reload_button.anchor_right = 1.0
+		_reload_button.offset_left = -116.0
+		_reload_button.offset_right = -16.0
 
 
 # --- Settings gear button ---
@@ -204,21 +195,18 @@ func _create_gear_button() -> void:
 	_gear_button = Button.new()
 	_gear_button.text = "⚙"
 	_gear_button.custom_minimum_size = Vector2(44, 44)
-	_gear_button.size = Vector2(44, 44)
 	_gear_button.add_theme_font_size_override("font_size", 22)
 	_gear_button.pressed.connect(_toggle_settings_panel)
 	_overlay_layer.add_child(_gear_button)
-	_overlay_layer.resized.connect(_position_gear_button)
-	get_tree().process_frame.connect(_position_gear_button, CONNECT_ONE_SHOT)
-
-
-func _position_gear_button() -> void:
-	if not _gear_button or not _overlay_layer:
-		return
-	var container_size := _overlay_layer.size
-	if container_size.x <= 0.0:
-		return
-	_gear_button.position = Vector2(container_size.x - 52.0, 8.0)
+	# Top-right corner via anchors
+	_gear_button.anchor_left = 1.0
+	_gear_button.anchor_right = 1.0
+	_gear_button.anchor_top = 0.0
+	_gear_button.anchor_bottom = 0.0
+	_gear_button.offset_left = -52.0
+	_gear_button.offset_top = 8.0
+	_gear_button.offset_right = -8.0
+	_gear_button.offset_bottom = 52.0
 
 
 func _toggle_settings_panel() -> void:
@@ -228,7 +216,15 @@ func _toggle_settings_panel() -> void:
 		return
 
 	_settings_panel = CaromSettings.new()
-	_settings_panel.position = (_overlay_layer.size - Vector2(300.0, 240.0)) * 0.5
+	# Center using anchors
+	_settings_panel.anchor_left = 0.5
+	_settings_panel.anchor_top = 0.5
+	_settings_panel.anchor_right = 0.5
+	_settings_panel.anchor_bottom = 0.5
+	_settings_panel.offset_left = -150.0
+	_settings_panel.offset_top = -120.0
+	_settings_panel.offset_right = 150.0
+	_settings_panel.offset_bottom = 120.0
 	_settings_panel.setting_changed.connect(func() -> void:
 		_position_reload_button()
 	)

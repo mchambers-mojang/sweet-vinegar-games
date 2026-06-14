@@ -9,9 +9,9 @@ extends Control
 
 signal reload_requested
 
-const BUTTON_RADIUS: float = 38.0
-const RING_RADIUS: float = 52.0
-const RING_THICKNESS: float = 8.0
+const BUTTON_RADIUS: float = 32.0
+const RING_RADIUS: float = 42.0
+const RING_THICKNESS: float = 7.0
 ## Fraction of the per-segment arc used as a gap between segments.
 const GAP_FRACTION: float = 0.15
 
@@ -27,7 +27,7 @@ var _pulse_time: float = 0.0
 
 
 func _ready() -> void:
-	custom_minimum_size = Vector2(120, 120)
+	custom_minimum_size = Vector2(100, 100)
 	size = custom_minimum_size
 	pivot_offset = custom_minimum_size * 0.5
 	mouse_filter = Control.MOUSE_FILTER_STOP
