@@ -19,12 +19,12 @@ func test_particle_count_in_range() -> void:
 
 
 func test_speed_min_in_range() -> void:
-	assert_between(CaromAmbientParticles.SPEED_MIN, 0.1, 0.5,
+	assert_between(CaromAmbientParticles.SPEED_MIN, 0.2, 0.5,
 		"Speed min must be in the 0.2–0.5 range per spec")
 
 
 func test_speed_max_in_range() -> void:
-	assert_between(CaromAmbientParticles.SPEED_MAX, 0.2, 0.6,
+	assert_between(CaromAmbientParticles.SPEED_MAX, 0.2, 0.5,
 		"Speed max must be in the 0.2–0.5 range per spec")
 
 
