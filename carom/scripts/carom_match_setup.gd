@@ -35,15 +35,15 @@ func spawn_entities(arena: CaromArena, actors_parent: Node3D, ai_difficulty_leve
 	player_turret.name = "PlayerTurret"
 	ai_turret.name = "AITurret"
 
-	player_turret.global_position = arena.get_turret_spawn_position(&"north")
-	ai_turret.global_position = arena.get_turret_spawn_position(&"south")
+	player_turret.global_position = arena.get_turret_spawn_position(&"south")
+	ai_turret.global_position = arena.get_turret_spawn_position(&"north")
 
-	player_turret.configure(&"north", CaromTurret.ControlMode.HUMAN, 0.0, Color(0.2, 0.6, 1.0))
-	ai_turret.configure(&"south", CaromTurret.ControlMode.AI, 180.0, Color(1.0, 0.25, 0.2))
+	player_turret.configure(&"south", CaromTurret.ControlMode.HUMAN, 180.0, Color(0.2, 0.6, 1.0))
+	ai_turret.configure(&"north", CaromTurret.ControlMode.AI, 0.0, Color(1.0, 0.25, 0.2))
 
 	# Set up AI controller
 	var midfield_z := arena.get_puck_spawn_position().z
-	var ai_goal_z := arena.get_turret_spawn_position(&"south").z
+	var ai_goal_z := arena.get_turret_spawn_position(&"north").z
 	var ai_difficulty := CaromAIDifficulty.get_preset(ai_difficulty_level)
 	ai_turret.setup_ai(ai_difficulty, pucks[0], player_turret, midfield_z, ai_goal_z)
 

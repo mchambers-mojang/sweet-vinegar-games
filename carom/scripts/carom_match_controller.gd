@@ -106,7 +106,7 @@ func _on_goal_scored(scoring_side: StringName, goal_puck: CaromPuck) -> void:
 
 	var goal_position: Vector3 = goal_puck.global_position
 	var goal_zone := arena.south_goal if scoring_side == &"north" else arena.north_goal
-	var scoring_color := setup.player_turret.team_color if scoring_side == &"north" else setup.ai_turret.team_color
+	var scoring_color := setup.player_turret.team_color if scoring_side == &"south" else setup.ai_turret.team_color
 	if _effects:
 		_effects.play_goal_scored(goal_position, scoring_side, scoring_color, goal_puck, goal_zone)
 
@@ -117,7 +117,7 @@ func _on_goal_scored(scoring_side: StringName, goal_puck: CaromPuck) -> void:
 		var reset_pos := spawn_positions[puck_index] if puck_index < spawn_positions.size() else arena.get_puck_spawn_position()
 		goal_puck.reset_to_center(reset_pos)
 
-	var scorer := "player" if scoring_side == &"north" else "ai"
+	var scorer := "player" if scoring_side == &"south" else "ai"
 	var result := state.on_goal_scored(scorer)
 
 	# Haptic feedback for goals
