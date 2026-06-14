@@ -192,7 +192,7 @@ func _spawn_puck_fragments(parent: Node3D, goal_puck: CaromPuck, goal_position: 
 
 		fragments_root.add_child(fragment)
 		var angle := rng.randf_range(0.0, TAU)
-		var direction := Vector3(cos(angle), 0.0, sin(angle))
+		var direction := Vector3(cos(angle), 0.0, sin(angle)).normalized()
 		fragment.global_position = origin + direction * rng.randf_range(0.04, 0.16)
 		fragment.rotation = Vector3(
 			rng.randf_range(-0.6, 0.6),
