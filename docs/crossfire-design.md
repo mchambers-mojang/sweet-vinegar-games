@@ -165,9 +165,10 @@ carom/
 - [ ] Particle effects (trails, impacts, goal explosions)
 - [ ] Screen shake and camera effects
 - [ ] Sound design (shots, ricochets, goals, ambient)
-- [ ] Stun mechanic with visual feedback
 - [ ] Multiple camera angles (top-down, isometric)
 - [ ] First-person camera experiment
+
+> **Note:** Stun mechanic is deferred beyond M3. It doesn't apply to the current stationary-turret design — it only becomes relevant if turrets gain mobility or the game moves to a first-person perspective.
 
 ### M4: Multiplayer Foundation
 - [ ] Deterministic physics migration (Option A or C)
