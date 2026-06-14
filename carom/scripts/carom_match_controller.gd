@@ -68,7 +68,7 @@ func _begin_round() -> void:
 	setup.ai_turret.set_active(true)
 
 	var diff_name := CaromAIDifficulty.get_preset(state.difficulty).difficulty_name
-	hud.update_status("First to %d • %s AI • Enter/click to fire • R to reload" % [score_limit, diff_name])
+	hud.update_status("First to %d • %s AI" % [score_limit, diff_name])
 	_update_ammo_display()
 
 

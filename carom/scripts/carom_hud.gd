@@ -61,14 +61,17 @@ func show_game_over(winner: String, player_score: int, ai_score: int, current_di
 		_game_over_panel.queue_free()
 
 	_game_over_panel = PanelContainer.new()
-	_game_over_panel.set_anchors_preset(Control.PRESET_CENTER)
-	_game_over_panel.custom_minimum_size = Vector2(320, 260)
+	_game_over_panel.custom_minimum_size = Vector2(280, 240)
 
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.08, 0.08, 0.12, 0.95)
 	style.border_color = Color(0.2, 0.8, 1.0, 0.8)
 	style.set_border_width_all(2)
 	style.set_corner_radius_all(8)
+	style.content_margin_left = 20.0
+	style.content_margin_right = 20.0
+	style.content_margin_top = 16.0
+	style.content_margin_bottom = 16.0
 	_game_over_panel.add_theme_stylebox_override("panel", style)
 
 	var vbox := VBoxContainer.new()
@@ -133,14 +136,18 @@ func show_game_over(winner: String, player_score: int, ai_score: int, current_di
 	)
 	button_row.add_child(menu_button)
 
-	# Add to parent HUD CanvasLayer
+	# Add to parent HUD CanvasLayer and center it
 	get_parent().add_child(_game_over_panel)
+	var vp_size := get_viewport().get_visible_rect().size
+	_game_over_panel.size = _game_over_panel.custom_minimum_size
+	_game_over_panel.position = (vp_size - _game_over_panel.size) * 0.5
 
 
 # --- Reload button ---
 
 func _create_reload_button() -> void:
 	_reload_button = CaromReloadButton.new()
+	_reload_button.size = _reload_button.custom_minimum_size
 	_reload_button.reload_requested.connect(func() -> void:
 		reload_requested.emit()
 	)
