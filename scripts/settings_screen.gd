@@ -141,14 +141,23 @@ func _build_settings_ui() -> void:
 		"light": dark_idx = 1
 		"dark": dark_idx = 2
 		"neon": dark_idx = 3
-	_add_option_button("Theme", ["System", "Light", "Dark", "Neon"], dark_idx,
+		"custom": dark_idx = 4
+	_add_option_button("Theme", ["System", "Light", "Dark", "Neon", "Custom"], dark_idx,
 		func(idx: int) -> void:
 			match idx:
 				0: PlatformSettings.dark_mode = "system"
 				1: PlatformSettings.dark_mode = "light"
 				2: PlatformSettings.dark_mode = "dark"
 				3: PlatformSettings.dark_mode = "neon"
+				4:
+					PlatformSettings.ensure_default_palette()
+					PlatformSettings.dark_mode = "custom"
 			PlatformSettings.save_settings()
+	)
+
+	# Customize palette button
+	_add_button("Customize Palette...", func() -> void:
+		SceneTransition.transition_to(Scenes.THEME_EDITOR)
 	)
 
 	# Timer
@@ -251,6 +260,14 @@ func _add_option_button(label_text: String, options: Array, selected: int, callb
 	row.add_child(option_btn)
 
 	settings_list.add_child(row)
+
+
+func _add_button(label_text: String, callback: Callable) -> void:
+	var btn := Button.new()
+	btn.text = label_text
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.pressed.connect(callback)
+	settings_list.add_child(btn)
 
 
 func _apply_theme() -> void:

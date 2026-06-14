@@ -3,6 +3,7 @@ class_name Scenes
 # Main navigation
 const GAME_PICKER := "res://scenes/game_picker.tscn"
 const SETTINGS := "res://scenes/settings.tscn"
+const THEME_EDITOR := "res://scenes/theme_editor.tscn"
 const ACHIEVEMENTS := "res://scenes/achievements.tscn"
 const REPLAYS := "res://scenes/replays.tscn"
 const REPLAY_VIEWER := "res://scenes/replay_viewer.tscn"
