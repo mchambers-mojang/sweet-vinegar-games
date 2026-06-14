@@ -107,3 +107,21 @@ func test_get_pending_clears_after_read() -> void:
 	storage.get_pending_playback()
 	var second: Dictionary = storage.get_pending_playback()
 	assert_true(second.is_empty())
+
+
+func test_crash_recovery_payload_empty_when_no_replays() -> void:
+	var payload: Dictionary = storage.get_crash_recovery_payload()
+	assert_true(payload.has("latest_completed_replay"))
+	assert_true(payload.has("replay_code"))
+	assert_true(payload["latest_completed_replay"].is_empty())
+	assert_true(payload["replay_code"].is_empty())
+
+
+func test_crash_recovery_payload_has_latest() -> void:
+	storage.save_replay(_make_replay("cr1", "shikaku"))
+	storage.save_replay(_make_replay("cr2", "sudoku"))
+	var payload: Dictionary = storage.get_crash_recovery_payload()
+	var latest: Dictionary = payload["latest_completed_replay"]
+	assert_eq(latest["id"], "cr2")
+	var code: String = payload["replay_code"]
+	assert_true(code.begins_with("SVG1_"))
