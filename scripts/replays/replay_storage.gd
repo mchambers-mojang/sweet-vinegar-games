@@ -2,7 +2,7 @@ extends Node
 
 ## File I/O layer for replays — persistence, indexing, import/export, pending playback,
 ## and legacy migration. Registers its own crash hook to supply latest_completed_replay
-## and replay_code to CrashReporter; ReplayRecorder supplies active_replay separately.
+## and replay_code to CrashCollector; ReplayRecorder supplies active_replay separately.
 
 const REPLAYS_DIR := "user://replays/"
 const REPLAYS_INDEX_PATH := "user://replays_index.json"
@@ -19,7 +19,7 @@ func _ready() -> void:
 	_ensure_replays_dir()
 	_migrate_legacy_replays()
 	_load_index()
-	CrashReporter.register_replay_hook(get_crash_recovery_payload)
+	CrashCollector.register_replay_hook(get_crash_recovery_payload)
 
 
 func get_crash_recovery_payload() -> Dictionary:

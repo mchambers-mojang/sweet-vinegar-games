@@ -9,8 +9,27 @@ script = ExtResource("2")
 [node name="MarginContainer/VBoxContainer/TitleLabel" parent="."]
 text = "Shikaku"
 
-[node name="SizeContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer" index=8]
-unique_name_in_owner = true
+[node name="SizeRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer" index=6]
 layout_mode = 2
 alignment = 1
-theme_override_constants/separation = 8
+
+[node name="SizeLabel" type="Label" parent="MarginContainer/VBoxContainer/SizeRow"]
+layout_mode = 2
+text = "Grid size: "
+
+[node name="SizeButton" type="OptionButton" parent="MarginContainer/VBoxContainer/SizeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+item_count = 6
+popup/item_0/text = "5×5"
+popup/item_1/text = "7×7"
+popup/item_1/id = 1
+popup/item_2/text = "8×8"
+popup/item_2/id = 2
+popup/item_3/text = "10×10"
+popup/item_3/id = 3
+popup/item_4/text = "12×12"
+popup/item_4/id = 4
+popup/item_5/text = "15×15"
+popup/item_5/id = 5
+selected = 3

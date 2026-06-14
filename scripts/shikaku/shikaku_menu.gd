@@ -6,13 +6,10 @@ extends GameMenu
 @onready var new_game_button: Button = %NewGameButton
 @onready var stats_button: Button = %StatsButton
 @onready var settings_button: Button = $MarginContainer/VBoxContainer/TopBar/SettingsButton
-@onready var size_container: VBoxContainer = %SizeContainer
+@onready var size_button: OptionButton = %SizeButton
 @onready var back_button: Button = $MarginContainer/VBoxContainer/TopBar/BackButton
 
 const SIZE_OPTIONS := [5, 7, 8, 10, 12, 15]
-const SIZE_NAMES := {5: "5×5", 7: "7×7", 8: "8×8", 10: "10×10", 12: "12×12", 15: "15×15"}
-
-var _showing_sizes := false
 
 
 # --- GameMenu overrides ---
@@ -42,13 +39,12 @@ func _get_help_topic() -> String:
 
 
 func _on_menu_ready() -> void:
-	size_container.visible = false
-	_setup_size_buttons()
+	size_button.selected = 3  # Default to 10×10
 
 
 func _start_game() -> void:
-	# After abandon, show size selector instead of starting immediately
-	_toggle_sizes()
+	var grid_size: int = SIZE_OPTIONS[size_button.selected]
+	_start_new_game_with_size(grid_size)
 
 
 func _resume_game(data: Dictionary) -> void:
@@ -67,41 +63,12 @@ func _on_abandon_confirmed() -> void:
 	GameStatsManager.set_counter("shikaku", "current_streak", 0)
 
 
-# --- Shikaku-specific: size selector ---
+# --- Shikaku-specific ---
 
-func _on_new_game_pressed() -> void:
-	# Override base: toggle size selector instead of immediate start
-	if GameSaveManager.has_saved_game("shikaku"):
-		if _showing_sizes:
-			_toggle_sizes()
-			return
-		_show_abandon_dialog()
-	else:
-		_toggle_sizes()
-
-
-func _toggle_sizes() -> void:
-	_showing_sizes = not _showing_sizes
-	size_container.visible = _showing_sizes
-
-
-func _on_size_selected(grid_size: int) -> void:
+func _start_new_game_with_size(grid_size: int) -> void:
 	SceneTransition.transition_with_callback(func() -> void:
 		var game_scene: Node = load(_get_game_scene_path()).instantiate()
 		get_tree().root.add_child(game_scene)
 		game_scene.start_new_game(grid_size, grid_size)
 		queue_free()
 	)
-
-
-func _setup_size_buttons() -> void:
-	for child in size_container.get_children():
-		child.queue_free()
-	for s in SIZE_OPTIONS:
-		var btn := Button.new()
-		btn.text = SIZE_NAMES[s]
-		btn.custom_minimum_size = Vector2(200, 44)
-		var grid_size: int = s
-		btn.pressed.connect(func() -> void: _on_size_selected(grid_size))
-		size_container.add_child(btn)
-

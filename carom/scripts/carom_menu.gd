@@ -26,6 +26,14 @@ func _get_game_scene_path() -> String:
 	return Scenes.CAROM_ARENA
 
 
+func _get_display_name() -> String:
+	return "Carom"
+
+
+func _get_help_topic() -> String:
+	return "carom"
+
+
 func _has_save_support() -> bool:
 	return false
 

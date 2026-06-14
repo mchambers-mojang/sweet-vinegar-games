@@ -153,6 +153,8 @@ After executing an action:
 4. Show results of the action just taken (e.g., "✅ Merged #56, closed #51")
 5. Wait for next command
 
+**Always fetch fresh state.** Any time the user asks for a status update, checks on a PR, or requests the dashboard — always re-run the `gh pr list` and `gh issue list` commands to get current data. Never rely on cached or previously-fetched state. PR mergeable status, review decisions, and commit history change frequently and silently; stale data leads to wrong actions.
+
 Exit when the user says "done", "exit", "quit", or invokes a different skill.
 
 ## Edge cases

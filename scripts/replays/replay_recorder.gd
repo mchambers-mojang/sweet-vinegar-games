@@ -19,7 +19,7 @@ var _dirty: bool = false
 func _ready() -> void:
 	_id_rng.randomize()
 	_load_active_replay()
-	CrashReporter.register_replay_hook(get_crash_recovery_payload)
+	CrashCollector.register_replay_hook(get_crash_recovery_payload)
 
 
 func _process(delta: float) -> void:

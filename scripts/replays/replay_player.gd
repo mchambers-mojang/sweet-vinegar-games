@@ -70,6 +70,7 @@ func _load_replay(replay: Dictionary) -> void:
 	_visual.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_visual.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	adapter_container.add_child(_visual)
+	_visual.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 	# Board _ready() has now run; initialize to the recorded initial state.
 	_adapter.reset_to_state(_initial_state, _visual)
