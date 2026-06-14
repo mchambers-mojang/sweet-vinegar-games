@@ -13,7 +13,7 @@ func _ready() -> void:
 	if margin:
 		SafeAreaManager.apply(margin)
 	back_button.pressed.connect(func() -> void:
-		SceneTransition.transition_to("res://scenes/main_menu.tscn")
+		SceneTransition.transition_to(Scenes.SUDOKU_MENU)
 	)
 	_build_stats_ui()
 	_apply_theme()

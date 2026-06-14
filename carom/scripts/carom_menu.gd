@@ -19,11 +19,11 @@ func _get_game_id() -> String:
 
 
 func _get_menu_scene_path() -> String:
-	return "res://scenes/carom_menu.tscn"
+	return Scenes.CAROM_MENU
 
 
 func _get_game_scene_path() -> String:
-	return "res://carom/scenes/carom_arena.tscn"
+	return Scenes.CAROM_ARENA
 
 
 func _has_save_support() -> bool:

@@ -3,8 +3,6 @@ extends Node
 
 ## Match adapter — bridges CaromMatchState to the scene tree (turrets, pucks, HUD).
 
-const MENU_SCENE := "res://scenes/carom_menu.tscn"
-
 @export var score_limit: int = 5
 @export var round_reset_delay: float = 1.2
 
@@ -158,7 +156,7 @@ func _on_rematch() -> void:
 
 
 func _on_menu() -> void:
-	SceneTransition.transition_to(MENU_SCENE)
+	SceneTransition.transition_to(Scenes.CAROM_MENU)
 
 
 func _on_difficulty_changed(level: int) -> void:
