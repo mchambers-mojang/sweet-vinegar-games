@@ -1,3 +1,4 @@
+class_name CaromMenu
 extends GameMenu
 
 ## Carom menu — launches the arena scene with selected difficulty.
