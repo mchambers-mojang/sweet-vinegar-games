@@ -29,6 +29,8 @@ gravity_scale = 0.0
 linear_damp = 0.0
 angular_damp = 0.0
 continuous_cd = true
+contact_monitor = true
+max_contacts_reported = 4
 script = ExtResource("1")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
