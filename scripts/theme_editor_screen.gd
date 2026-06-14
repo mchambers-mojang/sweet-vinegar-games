@@ -27,6 +27,7 @@ var _unsaved: bool = false     # Whether the current pickers differ from saved
 func _ready() -> void:
 	back_button.pressed.connect(_on_back)
 	_build_ui()
+	_ensure_default_palette()
 	_reload_palette_list()
 	_apply_theme()
 	AppTheme.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
@@ -188,6 +189,17 @@ func _add_color_row(label_text: String, default_color: Color) -> ColorPickerButt
 # ---------------------------------------------------------------------------
 # Palette list management
 # ---------------------------------------------------------------------------
+
+func _ensure_default_palette() -> void:
+	if PlatformSettings.custom_palettes.size() > 0:
+		return
+	var defaults: Dictionary = PlatformSettings.default_palette_colors()
+	PlatformSettings.add_custom_palette(
+		"My Palette",
+		defaults["bg"], defaults["accent"], defaults["secondary"], defaults["error"]
+	)
+	PlatformSettings.save_settings()
+
 
 func _reload_palette_list() -> void:
 	if not _palette_option:
