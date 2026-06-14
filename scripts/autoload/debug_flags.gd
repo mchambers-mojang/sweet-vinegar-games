@@ -13,6 +13,7 @@ var debug_show_scene_name: bool = true
 var debug_show_memory: bool = true
 var debug_show_analytics_tail: bool = true
 var debug_show_grid_coordinates: bool = true
+var debug_fire_screen_shake: bool = false
 
 
 func _ready() -> void:
@@ -46,6 +47,7 @@ func save_settings() -> void:
 	config.set_value("debug", "show_memory", debug_show_memory)
 	config.set_value("debug", "show_analytics_tail", debug_show_analytics_tail)
 	config.set_value("debug", "show_grid_coordinates", debug_show_grid_coordinates)
+	config.set_value("debug", "fire_screen_shake", debug_fire_screen_shake)
 	config.save(SAVE_PATH)
 	settings_changed.emit()
 
@@ -61,3 +63,4 @@ func load_settings() -> void:
 	debug_show_memory = config.get_value("debug", "show_memory", debug_show_memory)
 	debug_show_analytics_tail = config.get_value("debug", "show_analytics_tail", debug_show_analytics_tail)
 	debug_show_grid_coordinates = config.get_value("debug", "show_grid_coordinates", debug_show_grid_coordinates)
+	debug_fire_screen_shake = config.get_value("debug", "fire_screen_shake", debug_fire_screen_shake)

@@ -13,6 +13,8 @@ var state: CaromMatchState = CaromMatchState.new()
 @onready var setup: CaromMatchSetup = arena.get_node("MatchSetup") as CaromMatchSetup
 @onready var hud: CaromHUD = arena.get_node("HUD/HUDController") as CaromHUD
 
+var _effects: CaromEffectsController = null
+
 
 func _ready() -> void:
 	arena.goal_scored.connect(_on_goal_scored)
@@ -59,6 +61,7 @@ func _process(_delta: float) -> void:
 func _init_match() -> void:
 	setup.spawn_entities(arena, actors, state.difficulty)
 	_wire_hud_signals()
+	_setup_effects()
 	_start_match()
 
 
@@ -160,12 +163,22 @@ func _on_ai_reload_state_changed(_is_reloading: bool) -> void:
 func _on_rematch() -> void:
 	setup.spawn_entities(arena, actors, state.difficulty)
 	_wire_hud_signals()
+	_setup_effects()
 	_start_match()
 
 
 func _on_menu() -> void:
 	get_tree().paused = false
 	SceneTransition.transition_to(Scenes.CAROM_MENU)
+
+
+func _setup_effects() -> void:
+	if _effects == null:
+		_effects = CaromEffectsController.new()
+		_effects.name = "EffectsController"
+		arena.add_child(_effects)
+	_effects.register_turret(setup.player_turret)
+	_effects.register_turret(setup.ai_turret)
 
 
 func _on_difficulty_changed(level: int) -> void:
