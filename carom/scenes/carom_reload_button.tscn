@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://carom/scripts/carom_reload_button.gd" id="1"]
+
+[node name="CaromReloadButton" type="Control"]
+script = ExtResource("1")
+custom_minimum_size = Vector2(120, 120)
+mouse_filter = 0

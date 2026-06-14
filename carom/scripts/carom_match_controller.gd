@@ -4,7 +4,7 @@ extends Node
 ## Match adapter — bridges CaromMatchState to the scene tree (turrets, pucks, HUD).
 
 @export var score_limit: int = 5
-@export var round_reset_delay: float = 1.2
+
 
 var state: CaromMatchState = CaromMatchState.new()
 
@@ -19,6 +19,7 @@ func _ready() -> void:
 	hud.rematch_requested.connect(_on_rematch)
 	hud.menu_requested.connect(_on_menu)
 	hud.difficulty_changed.connect(_on_difficulty_changed)
+	hud.reload_requested.connect(_on_reload_requested)
 
 	state.difficulty = arena.get_meta("carom_difficulty", 1) as int
 	if arena.has_meta("carom_difficulty"):
@@ -71,19 +72,16 @@ func _begin_round() -> void:
 	_update_ammo_display()
 
 
-func _on_goal_scored(scoring_side: StringName, _goal_puck: CaromPuck) -> void:
+func _on_goal_scored(scoring_side: StringName, goal_puck: CaromPuck) -> void:
 	if state.phase != CaromMatchState.Phase.PLAYING:
 		return
 
-	setup.player_turret.set_active(false)
-	setup.ai_turret.set_active(false)
-
-	# Reset all pucks
-	var spawn_positions := arena.get_puck_spawn_positions()
-	for i in setup.pucks.size():
-		if is_instance_valid(setup.pucks[i]):
-			var reset_pos := spawn_positions[i] if i < spawn_positions.size() else arena.get_puck_spawn_position()
-			setup.pucks[i].reset_to_center(reset_pos)
+	# Only respawn the puck that scored — gameplay continues uninterrupted
+	var puck_index := setup.pucks.find(goal_puck)
+	if puck_index >= 0:
+		var spawn_positions := arena.get_puck_spawn_positions()
+		var reset_pos := spawn_positions[puck_index] if puck_index < spawn_positions.size() else arena.get_puck_spawn_position()
+		goal_puck.reset_to_center(reset_pos)
 
 	var scorer := "player" if scoring_side == &"north" else "ai"
 	var result := state.on_goal_scored(scorer)
@@ -99,13 +97,9 @@ func _on_goal_scored(scoring_side: StringName, _goal_puck: CaromPuck) -> void:
 		_finish_match(result.winner)
 		return
 
-	call_deferred("_queue_round_restart")
+	# Unlock goals so the next puck entry can score
+	arena.reset_goal_lock()
 
-
-func _queue_round_restart() -> void:
-	await get_tree().create_timer(round_reset_delay).timeout
-	if state.phase == CaromMatchState.Phase.GOAL_SCORED:
-		_begin_round()
 
 
 func _finish_match(winner: String) -> void:
@@ -161,3 +155,8 @@ func _on_menu() -> void:
 
 func _on_difficulty_changed(level: int) -> void:
 	state.difficulty = level
+
+
+func _on_reload_requested() -> void:
+	if setup.player_turret and setup.player_turret.is_active:
+		setup.player_turret.start_reload()

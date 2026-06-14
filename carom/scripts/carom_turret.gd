@@ -26,6 +26,8 @@ enum ControlMode {
 
 @export var team_color: Color = Color(0.16, 0.95, 1.0, 1.0)
 
+const AIM_PROJECTION_SCRIPT := preload("res://carom/scripts/carom_aim_projection.gd")
+
 var side: StringName = &"south"
 var current_ammo: int = 0
 var is_reloading: bool = false
@@ -35,6 +37,8 @@ var aim_offset_degrees: float = 0.0
 var _reload_timer: float = 0.0
 var _fire_cooldown_timer: float = 0.0
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
+var _aim_projection: CaromAimProjection = null
+var _aim_projection_distance: float = 0.0
 
 ## Input provider (CaromHumanInput or CaromAI)
 var input: CaromTurretInput = null
@@ -50,6 +54,7 @@ func _ready() -> void:
 	current_ammo = clip_size
 	_update_rotation()
 	ammo_changed.emit(current_ammo, clip_size)
+	_ensure_aim_projection()
 	# Default to human input if not configured yet
 	if input == null and control_mode == ControlMode.HUMAN:
 		input = CaromHumanInput.new()
@@ -106,6 +111,7 @@ func _process(delta: float) -> void:
 
 	_process_reload(delta)
 	_update_rotation()
+	_update_aim_projection()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -113,6 +119,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if input is CaromHumanInput:
 		(input as CaromHumanInput).handle_input_event(event, aim_arc_degrees)
+
+func set_aim_projection_distance(distance: float) -> void:
+	_aim_projection_distance = maxf(0.0, distance)
+	_ensure_aim_projection()
+	if _aim_projection:
+		_aim_projection.set_max_distance(_aim_projection_distance)
 
 
 func try_fire() -> bool:
@@ -209,3 +221,21 @@ func _process_reload(delta: float) -> void:
 
 func _update_rotation() -> void:
 	rotation_degrees = Vector3(0.0, base_yaw_degrees + aim_offset_degrees, 0.0)
+
+
+func _ensure_aim_projection() -> void:
+	if _aim_projection == null:
+		_aim_projection = AIM_PROJECTION_SCRIPT.new() as CaromAimProjection
+		if _aim_projection:
+			_aim_projection.name = "AimProjection"
+			add_child(_aim_projection)
+
+
+func _update_aim_projection() -> void:
+	if _aim_projection == null:
+		return
+	if _aim_projection_distance <= 0.0:
+		_aim_projection.visible = false
+		return
+	var direction := -projectile_spawn.global_transform.basis.z.normalized()
+	_aim_projection.update_projection(projectile_spawn.global_position, direction)
