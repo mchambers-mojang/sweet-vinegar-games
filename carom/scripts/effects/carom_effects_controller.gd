@@ -68,13 +68,14 @@ func _on_projectile_body_entered(body: Node, projectile: CaromProjectile, color:
 	var velocity := projectile.linear_velocity
 
 	if body is CaromPuck:
+		print("[DEBUG-fx02] Puck hit at %s" % str(impact_pos))
 		var puck_pos: Vector3 = (body as CaromPuck).global_position
 		var diff: Vector3 = puck_pos - impact_pos
 		if diff.length_squared() < 0.0001:
 			diff = velocity.normalized()
 		var normal: Vector3 = diff.normalized()
-		var force := velocity.length() / maxf(projectile.speed, 1.0)
-		_impact_spawner.spawn_puck_impact(impact_pos, -normal, color, force)
+		_impact_spawner.spawn_puck_impact(impact_pos, -normal, color)
 	elif body is StaticBody3D:
+		print("[DEBUG-fx02] Wall hit at %s" % str(impact_pos))
 		var normal := -velocity.normalized() if velocity.length_squared() > 0.001 else Vector3.UP
 		_impact_spawner.spawn_wall_impact(impact_pos, normal, color)
