@@ -180,6 +180,17 @@ func _add_color_row(label_text: String, default_color: Color) -> ColorPickerButt
 	picker.color = Color(default_color.r, default_color.g, default_color.b, 1.0)
 	picker.edit_alpha = false
 	picker.custom_minimum_size = Vector2(80, 36)
+	# Force opaque popup — root theme inheritance doesn't reach picker popups on mobile
+	picker.pressed.connect(func() -> void:
+		var popup := picker.get_popup()
+		if popup and not popup.has_meta("styled"):
+			var style := StyleBoxFlat.new()
+			style.bg_color = Color(0.12, 0.12, 0.14, 1.0)
+			style.set_corner_radius_all(6)
+			style.set_content_margin_all(8)
+			popup.add_theme_stylebox_override("panel", style)
+			popup.set_meta("styled", true)
+	)
 	row.add_child(picker)
 
 	editor_content.add_child(row)
