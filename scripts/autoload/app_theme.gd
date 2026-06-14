@@ -380,6 +380,16 @@ func _rebuild_ui_theme() -> void:
 		popup_panel.set_border_width_all(1)
 	ui_theme.set_stylebox("panel", "PopupMenu", popup_panel)
 
+	# PopupPanel (used by ColorPickerButton)
+	var popup_panel_style := StyleBoxFlat.new()
+	popup_panel_style.bg_color = colors["button_bg"]
+	popup_panel_style.set_corner_radius_all(6)
+	popup_panel_style.set_content_margin_all(8)
+	if is_neon:
+		popup_panel_style.border_color = Color(0.0, 0.8, 0.8, 0.6)
+		popup_panel_style.set_border_width_all(1)
+	ui_theme.set_stylebox("panel", "PopupPanel", popup_panel_style)
+
 	var popup_hover := StyleBoxFlat.new()
 	popup_hover.bg_color = colors["button_bg_hover"]
 	popup_hover.set_corner_radius_all(4)
