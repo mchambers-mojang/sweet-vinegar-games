@@ -68,9 +68,10 @@ func _update_pulse(delta: float) -> void:
 	_pulse_time = fmod(_pulse_time + delta * freq * TAU, TAU)
 	var t := (sin(_pulse_time) + 1.0) * 0.5
 	_puck_material.emission_energy_multiplier = lerpf(EMISSION_BASE, EMISSION_PEAK, t)
-	# Also pulse albedo brightness for more visible oscillation
-	var albedo_t := lerpf(0.02, 0.15, t)
-	_puck_material.albedo_color = Color(albedo_t, albedo_t * 4.0, albedo_t * 5.0, 1.0)
+	# Pulse between dark blue and bright white — impossible to miss
+	_puck_material.albedo_color = Color(t, t, t, 1.0)
+	if Engine.get_frames_drawn() % 60 == 0:
+		print("[DEBUG-pulse] freq=%.1f t=%.2f emission=%.1f" % [freq, t, _puck_material.emission_energy_multiplier])
 
 
 func _get_pulse_frequency() -> float:
