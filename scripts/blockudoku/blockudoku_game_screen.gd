@@ -634,7 +634,17 @@ func _restart_game() -> void:
 func _show_combo_text(total_clears: int, combo: int) -> void:
 	var text := ""
 	# Multi-clear in a single move
-	if total_clears >= 3:
+	if total_clears >= 8:
+		text = "OCTAKILL!!"
+	elif total_clears == 7:
+		text = "GODLIKE!"
+	elif total_clears == 6:
+		text = "LEGENDARY!"
+	elif total_clears == 5:
+		text = "UNSTOPPABLE!"
+	elif total_clears == 4:
+		text = "Quad!"
+	elif total_clears == 3:
 		text = "Triple!"
 	elif total_clears == 2:
 		text = "Double!"
