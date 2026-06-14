@@ -196,6 +196,9 @@ func begin_session(saved_data: Dictionary = {}) -> void:
 		random_seed = _create_session_seed()
 		elapsed_time = 0.0
 		replay_id = ""
+		CrashCollector.register_user_action(
+				game_id + "_start_new_game",
+				_get_start_crash_params())
 
 	# _setup_game() runs here so game state (board, seed derivation for legacy
 	# saves) is fully initialised before ReplayRecorder.start_session() below.
