@@ -42,6 +42,7 @@ var _aim_projection: CaromAimProjection = null
 var _aim_projection_distance: float = 0.0
 var _ammo_indicators: Array[MeshInstance3D] = []
 var _ammo_ring_node: Node3D = null
+var _pulse_tween: Tween = null
 
 ## Input provider (CaromHumanInput or CaromAI)
 var input: CaromTurretInput = null
@@ -323,14 +324,16 @@ func _on_ammo_changed_visual(_current: int, _max: int) -> void:
 func _pulse_ammo_ring() -> void:
 	if _ammo_indicators.is_empty():
 		return
-	var tween := create_tween().set_parallel(true)
+	if _pulse_tween and _pulse_tween.is_valid():
+		_pulse_tween.kill()
+	_pulse_tween = create_tween().set_parallel(true)
 	for indicator: MeshInstance3D in _ammo_indicators:
 		var mat := indicator.material_override as StandardMaterial3D
 		if mat == null:
 			continue
 		# Emission spike: 4.0 -> 12.0 over 0.05 s, then ease back to 4.0 over 0.3 s
-		tween.tween_property(mat, "emission_energy_multiplier", 12.0, 0.05)
-		tween.tween_property(mat, "emission_energy_multiplier", 4.0, 0.3).set_delay(0.05)
+		_pulse_tween.tween_property(mat, "emission_energy_multiplier", 12.0, 0.05)
+		_pulse_tween.tween_property(mat, "emission_energy_multiplier", 4.0, 0.3).set_delay(0.05)
 		# Scale bounce: 1.0 -> 1.3 -> 1.0 over 0.2 s
-		tween.tween_property(indicator, "scale", Vector3(1.3, 1.3, 1.3), 0.08)
-		tween.tween_property(indicator, "scale", Vector3.ONE, 0.12).set_delay(0.08)
+		_pulse_tween.tween_property(indicator, "scale", Vector3(1.3, 1.3, 1.3), 0.08)
+		_pulse_tween.tween_property(indicator, "scale", Vector3.ONE, 0.12).set_delay(0.08)
