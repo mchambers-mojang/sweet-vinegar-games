@@ -1,3 +1,4 @@
+class_name CaromMenu
 extends GameMenu
 
 ## Carom menu — launches the arena scene with selected difficulty.
@@ -7,8 +8,8 @@ extends GameMenu
 @onready var back_button: Button = %BackButton
 @onready var difficulty_button: OptionButton = %DifficultyButton
 
-## Shared state so the arena scene can read the chosen difficulty.
-static var selected_difficulty: int = 1
+## Last selected difficulty tier (persists display state across menu visits).
+var _selected_difficulty: int = 1
 
 
 # --- GameMenu overrides ---
@@ -30,12 +31,17 @@ func _has_save_support() -> bool:
 
 
 func _on_menu_ready() -> void:
-	difficulty_button.selected = selected_difficulty
+	difficulty_button.selected = _selected_difficulty
 	difficulty_button.item_selected.connect(func(idx: int) -> void:
-		selected_difficulty = idx
+		_selected_difficulty = idx
 	)
 	play_button.pressed.connect(func() -> void:
-		selected_difficulty = difficulty_button.selected
-		SceneTransition.transition_to(_get_game_scene_path())
+		var difficulty := difficulty_button.selected
+		SceneTransition.transition_with_callback(func() -> void:
+			var arena: Node = load(_get_game_scene_path()).instantiate()
+			arena.set_meta("carom_difficulty", difficulty)
+			get_tree().root.add_child(arena)
+			queue_free()
+		)
 	)
 
