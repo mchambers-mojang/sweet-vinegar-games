@@ -1,14 +1,32 @@
 extends GutTest
 
 const AchievementScript := preload("res://scripts/autoload/achievement_manager.gd")
+const _TEST_ACHIEVEMENTS_PATH := "user://test_achievements.cfg"
+const _TEST_GAME_STATS_PATH := "user://test_game_stats.cfg"
 
 var achievements: Node
+var _original_stats_path: String
+
+
+func before_all() -> void:
+	_original_stats_path = GameStatsManager.save_path
+	GameStatsManager.save_path = _TEST_GAME_STATS_PATH
+
+
+func after_all() -> void:
+	GameStatsManager.save_path = _original_stats_path
+	GameStatsManager._load_all()
+	if FileAccess.file_exists(_TEST_ACHIEVEMENTS_PATH):
+		DirAccess.remove_absolute(_TEST_ACHIEVEMENTS_PATH)
+	if FileAccess.file_exists(_TEST_GAME_STATS_PATH):
+		DirAccess.remove_absolute(_TEST_GAME_STATS_PATH)
 
 
 func before_each() -> void:
 	GameStatsManager.clear_all()
 	achievements = Node.new()
 	achievements.set_script(AchievementScript)
+	achievements.save_path = _TEST_ACHIEVEMENTS_PATH
 	add_child_autofree(achievements)
 	achievements.reset_all_progress()
 

@@ -34,6 +34,8 @@ func transition_to(scene_path: String) -> void:
 
 
 ## Fade out, run a callback (for manual instantiate patterns), fade in.
+## After the callback runs, the last non-autoload child of root is set as
+## current_scene so that future change_scene_to_file calls free it properly.
 func transition_with_callback(callback: Callable) -> void:
 	if _transitioning:
 		return
@@ -47,6 +49,7 @@ func transition_with_callback(callback: Callable) -> void:
 	_tween.tween_property(_overlay, "color:a", 1.0, FADE_DURATION)
 	_tween.tween_callback(func() -> void:
 		callback.call()
+		_update_current_scene()
 		# Wait two frames so the new scene fully initialises and renders behind the overlay
 		get_tree().process_frame.connect(func() -> void:
 			get_tree().process_frame.connect(_fade_in, CONNECT_ONE_SHOT)
@@ -74,3 +77,17 @@ func _get_fade_color(alpha: float) -> Color:
 func _update_overlay_color() -> void:
 	var a := _overlay.color.a
 	_overlay.color = _get_fade_color(a)
+
+
+## Set the last non-autoload child of root as current_scene so
+## change_scene_to_file properly frees it on the next transition.
+func _update_current_scene() -> void:
+	var root := get_tree().root
+	for i in range(root.get_child_count() - 1, -1, -1):
+		var child := root.get_child(i)
+		if child is CanvasLayer:
+			continue
+		if child == self:
+			continue
+		get_tree().current_scene = child
+		return
