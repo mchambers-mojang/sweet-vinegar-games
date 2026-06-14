@@ -177,7 +177,7 @@ func _add_color_row(label_text: String, default_color: Color) -> ColorPickerButt
 	row.add_child(label)
 
 	var picker := ColorPickerButton.new()
-	picker.color = default_color
+	picker.color = Color(default_color.r, default_color.g, default_color.b, 1.0)
 	picker.edit_alpha = false
 	picker.custom_minimum_size = Vector2(80, 36)
 	row.add_child(picker)
@@ -234,19 +234,19 @@ func _load_palette_into_pickers(index: int) -> void:
 	var pal: Dictionary = PlatformSettings.get_custom_palette(index)
 	if pal.is_empty():
 		return
-	_bg_picker.color = pal["bg"]
-	_accent_picker.color = pal["accent"]
-	_secondary_picker.color = pal["secondary"]
-	_error_picker.color = pal["error"]
+	_bg_picker.color = Color(pal["bg"], 1.0)
+	_accent_picker.color = Color(pal["accent"], 1.0)
+	_secondary_picker.color = Color(pal["secondary"], 1.0)
+	_error_picker.color = Color(pal["error"], 1.0)
 	_unsaved = false
 
 
 func _load_default_colors_into_pickers() -> void:
 	var defaults: Dictionary = PlatformSettings.default_palette_colors()
-	_bg_picker.color = defaults["bg"]
-	_accent_picker.color = defaults["accent"]
-	_secondary_picker.color = defaults["secondary"]
-	_error_picker.color = defaults["error"]
+	_bg_picker.color = Color(defaults["bg"], 1.0)
+	_accent_picker.color = Color(defaults["accent"], 1.0)
+	_secondary_picker.color = Color(defaults["secondary"], 1.0)
+	_error_picker.color = Color(defaults["error"], 1.0)
 	_unsaved = false
 
 
