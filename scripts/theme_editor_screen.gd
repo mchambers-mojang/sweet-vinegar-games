@@ -180,6 +180,15 @@ func _add_color_row(label_text: String, default_color: Color) -> ColorPickerButt
 	picker.color = Color(default_color.r, default_color.g, default_color.b, 1.0)
 	picker.edit_alpha = false
 	picker.custom_minimum_size = Vector2(80, 36)
+	picker.picker_created.connect(func() -> void:
+		var popup := picker.get_popup()
+		if popup:
+			var panel_style := StyleBoxFlat.new()
+			panel_style.bg_color = Color(0.15, 0.15, 0.15, 1.0)
+			panel_style.set_corner_radius_all(4)
+			panel_style.set_content_margin_all(8)
+			popup.add_theme_stylebox_override("panel", panel_style)
+	)
 	row.add_child(picker)
 
 	editor_content.add_child(row)
