@@ -80,6 +80,16 @@ custom_minimum_size = Vector2(80, 40)
 color = Color(0.04, 0.04, 0.1, 1)
 edit_alpha = false
 
+[node name="BgGlowSlider" type="HSlider" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentList/BgRow"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(100, 0)
+size_flags_horizontal = 0
+min_value = 1.0
+max_value = 3.0
+step = 0.05
+value = 1.0
+
 [node name="AccentRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentList"]
 layout_mode = 2
 
@@ -92,8 +102,18 @@ text = "Accent"
 unique_name_in_owner = true
 layout_mode = 2
 custom_minimum_size = Vector2(80, 40)
-color = Color(0, 1.5, 1.5, 1)
+color = Color(0, 1, 1, 1)
 edit_alpha = false
+
+[node name="AccentGlowSlider" type="HSlider" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentList/AccentRow"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(100, 0)
+size_flags_horizontal = 0
+min_value = 1.0
+max_value = 3.0
+step = 0.05
+value = 1.5
 
 [node name="SecondaryRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentList"]
 layout_mode = 2
@@ -107,8 +127,18 @@ text = "Secondary"
 unique_name_in_owner = true
 layout_mode = 2
 custom_minimum_size = Vector2(80, 40)
-color = Color(2, 0.3, 1.8, 1)
+color = Color(1, 0.15, 0.9, 1)
 edit_alpha = false
+
+[node name="SecondaryGlowSlider" type="HSlider" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentList/SecondaryRow"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(100, 0)
+size_flags_horizontal = 0
+min_value = 1.0
+max_value = 3.0
+step = 0.05
+value = 2.0
 
 [node name="ErrorRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentList"]
 layout_mode = 2
@@ -122,8 +152,18 @@ text = "Error"
 unique_name_in_owner = true
 layout_mode = 2
 custom_minimum_size = Vector2(80, 40)
-color = Color(2, 0, 0.2, 1)
+color = Color(1, 0, 0.1, 1)
 edit_alpha = false
+
+[node name="ErrorGlowSlider" type="HSlider" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentList/ErrorRow"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(100, 0)
+size_flags_horizontal = 0
+min_value = 1.0
+max_value = 3.0
+step = 0.05
+value = 2.0
 
 [node name="ResetButton" type="Button" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentList"]
 unique_name_in_owner = true

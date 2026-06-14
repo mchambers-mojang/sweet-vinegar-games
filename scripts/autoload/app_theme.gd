@@ -205,24 +205,29 @@ func _build_custom_palette(bg: Color, accent: Color, secondary: Color, error: Co
 	p["text_given"] = accent
 	p["button_text"] = accent
 	p["label_text"] = accent
-	p["cell_selected"] = Color(bg.r + accent.r * 0.08, bg.g + accent.g * 0.08, bg.b + accent.b * 0.08)
-	p["cell_same_number"] = Color(bg.r + accent.r * 0.05, bg.g + accent.g * 0.05, bg.b + accent.b * 0.05)
+	# Cell tints blend bg with a fixed dark-mode contrast offset plus an accent-hue contribution.
+	# Coefficients are calibrated so the neon defaults reproduce _neon_colors exactly.
+	p["cell_selected"] = Color(bg.r + 0.08 + accent.r * 0.053, bg.g + accent.g * 0.067, bg.b + accent.b * 0.133)
+	p["cell_same_number"] = Color(bg.r + 0.11, bg.g + 0.01, bg.b + 0.25)
 
 	# Secondary group — full intensity + cell tint
 	p["text_placed"] = secondary
-	p["timer_text"] = secondary
-	p["cell_highlighted"] = Color(bg.r + secondary.r * 0.05, bg.g + secondary.g * 0.05, bg.b + secondary.b * 0.05)
+	# timer_text is a 75/67% dimmed version of secondary so neon defaults match _neon_colors.
+	p["timer_text"] = Color(secondary.r * 0.75, secondary.g * 0.667, secondary.b * 0.667)
+	p["cell_highlighted"] = Color(bg.r + 0.06, bg.g + 0.04, bg.b + 0.12)
 
 	# Error group — full intensity + cell tint
 	p["text_error"] = error
 	p["strike_active"] = error
-	p["cell_error"] = Color(bg.r + error.r * 0.15, bg.g + error.g * 0.02, bg.b + error.b * 0.02)
+	# cell_error: error.r drives the red boost; the same channel also suppresses the green
+	# component so the error cell looks clean red rather than orange/brown.
+	p["cell_error"] = Color(bg.r + error.r * 0.23, maxf(0.0, bg.g - error.r * 0.02), bg.b)
 
-	# Auto-derived (~15–25% intensity of parent group)
-	p["grid_line_thin"] = Color(accent.r * 0.15, accent.g * 0.15, accent.b * 0.15)
-	p["text_pencil"] = Color(secondary.r * 0.15, secondary.g * 0.15, secondary.b * 0.15)
-	p["button_disabled_text"] = Color(accent.r * 0.25, accent.g * 0.25, accent.b * 0.25)
-	p["strike_inactive"] = Color(error.r * 0.15, error.g * 0.15, error.b * 0.15)
+	# Auto-derived — dark bg-relative values; offsets match neon defaults exactly.
+	p["grid_line_thin"] = Color(bg.r + 0.11, bg.g + 0.06, bg.b + 0.25)
+	p["text_pencil"] = Color(bg.r + 0.16, bg.g + 0.11, bg.b + 0.40)
+	p["button_disabled_text"] = Color(bg.r + 0.21, bg.g + 0.16, bg.b + 0.30)
+	p["strike_inactive"] = Color(bg.r + 0.16, bg.g + 0.11, bg.b + 0.25)
 
 	return p
 
