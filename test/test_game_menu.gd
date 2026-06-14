@@ -310,7 +310,7 @@ func test_carom_config_tres_is_valid() -> void:
 	assert_eq(cfg.game_id, "carom")
 	assert_eq(cfg.display_name, "Carom")
 	assert_false(cfg.has_save_support)
-	assert_eq(cfg.start_button_unique_name, "PlayButton")
+	assert_eq(cfg.start_button_unique_name, "NewGameButton")
 	assert_eq(cfg.option_button_unique_name, "DifficultyButton")
 	assert_eq(cfg.option_default_index, 1)
 	assert_eq(cfg.start_game_meta_key, "carom_difficulty")
