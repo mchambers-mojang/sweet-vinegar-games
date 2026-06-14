@@ -47,6 +47,10 @@ func spawn_entities(arena: CaromArena, actors_parent: Node3D, ai_difficulty_leve
 	var ai_difficulty := CaromAIDifficulty.get_preset(ai_difficulty_level)
 	ai_turret.setup_ai(ai_difficulty, pucks[0], player_turret, midfield_z, ai_goal_z)
 
+	var arena_length := absf(arena.north_goal.global_position.z - arena.south_goal.global_position.z)
+	player_turret.set_aim_projection_distance(arena_length * ai_difficulty.aim_projection_distance)
+	ai_turret.set_aim_projection_distance(0.0)
+
 
 func _cleanup() -> void:
 	if player_turret:
