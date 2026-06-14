@@ -45,4 +45,8 @@ func test_goal_celebration_spawns_burst_fragments_and_flare() -> void:
 		var fragment := fragment_node as RigidBody3D
 		assert_eq(fragment.gravity_scale, 0.0)
 		assert_almost_eq(fragment.linear_velocity.y, 0.0, 0.001)
-		assert_almost_eq(fragment.global_position.y, puck.global_position.y + 0.14, 0.001)
+		assert_almost_eq(
+			fragment.global_position.y,
+			puck.global_position.y + CaromEffectsController.GOAL_FRAGMENT_Y_OFFSET,
+			0.001
+		)

@@ -6,10 +6,13 @@ extends Node
 
 const GOAL_BURST_PARTICLE_COUNT: int = 30
 const GOAL_BURST_LIFETIME: float = 0.5
+const GOAL_BURST_Y_OFFSET: float = 0.12
 const GOAL_FRAGMENT_MIN_COUNT: int = 5
 const GOAL_FRAGMENT_MAX_COUNT: int = 8
 const GOAL_FRAGMENT_LIFETIME: float = 1.0
 const GOAL_FRAGMENT_EMISSION_ENERGY: float = 3.5
+const GOAL_FRAGMENT_Y_OFFSET: float = 0.14
+const GOAL_FRAGMENT_LINEAR_DAMP: float = 2.4
 const GOAL_FLARE_EMISSION_ENERGY: float = 5.0
 const GOAL_CELEBRATION_LIFETIME: float = 1.2
 const GOAL_SCREEN_SHAKE_INTENSITY: float = 0.35
@@ -146,7 +149,7 @@ func _spawn_goal_burst(parent: Node3D, goal_position: Vector3, color: Color) -> 
 	particles.material_override = _make_emissive_material(color, 4.0, 0.95)
 
 	parent.add_child(particles)
-	particles.global_position = goal_position + Vector3(0.0, 0.12, 0.0)
+	particles.global_position = goal_position + Vector3(0.0, GOAL_BURST_Y_OFFSET, 0.0)
 	particles.emitting = true
 
 
@@ -155,9 +158,9 @@ func _spawn_puck_fragments(parent: Node3D, goal_puck: CaromPuck, goal_position: 
 	fragments_root.name = "Fragments"
 	parent.add_child(fragments_root)
 
-	var origin := goal_position + Vector3(0.0, 0.14, 0.0)
+	var origin := goal_position + Vector3(0.0, GOAL_FRAGMENT_Y_OFFSET, 0.0)
 	if is_instance_valid(goal_puck) and goal_puck.is_inside_tree():
-		origin = goal_puck.global_position + Vector3(0.0, 0.14, 0.0)
+		origin = goal_puck.global_position + Vector3(0.0, GOAL_FRAGMENT_Y_OFFSET, 0.0)
 
 	var rng := RandomNumberGenerator.new()
 	var fragment_count := rng.randi_range(GOAL_FRAGMENT_MIN_COUNT, GOAL_FRAGMENT_MAX_COUNT)
@@ -167,7 +170,7 @@ func _spawn_puck_fragments(parent: Node3D, goal_puck: CaromPuck, goal_position: 
 		fragment.name = "Fragment%d" % i
 		fragment.mass = 0.05
 		fragment.gravity_scale = 0.0
-		fragment.linear_damp = 2.4
+		fragment.linear_damp = GOAL_FRAGMENT_LINEAR_DAMP
 		fragment.angular_damp = 0.1
 		fragment.collision_layer = 0
 		fragment.collision_mask = 0
