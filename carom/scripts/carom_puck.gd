@@ -71,9 +71,6 @@ func _update_pulse(delta: float) -> void:
 	# Also pulse albedo brightness for more visible oscillation
 	var albedo_t := lerpf(0.02, 0.15, t)
 	_puck_material.albedo_color = Color(albedo_t, albedo_t * 4.0, albedo_t * 5.0, 1.0)
-	# Also scale the puck slightly for physical feedback
-	var scale_t := lerpf(1.0, 1.15, t)
-	scale = Vector3(scale_t, 1.0, scale_t)
 
 
 func _get_pulse_frequency() -> float:
