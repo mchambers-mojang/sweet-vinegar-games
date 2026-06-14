@@ -1,8 +1,23 @@
 extends GutTest
 
 const AchievementScript := preload("res://scripts/autoload/achievement_manager.gd")
+const _ACHIEVEMENTS_PATH := "user://achievements.cfg"
+const _GAME_STATS_PATH := "user://game_stats.cfg"
+const _ACHIEVEMENTS_BACKUP := "user://achievements.cfg.bak"
+const _GAME_STATS_BACKUP := "user://game_stats.cfg.bak"
 
 var achievements: Node
+
+
+func before_all() -> void:
+	_backup_file(_ACHIEVEMENTS_PATH, _ACHIEVEMENTS_BACKUP)
+	_backup_file(_GAME_STATS_PATH, _GAME_STATS_BACKUP)
+
+
+func after_all() -> void:
+	_restore_file(_ACHIEVEMENTS_PATH, _ACHIEVEMENTS_BACKUP)
+	_restore_file(_GAME_STATS_PATH, _GAME_STATS_BACKUP)
+	GameStatsManager._load_all()
 
 
 func before_each() -> void:
@@ -20,6 +35,27 @@ func after_each() -> void:
 	var toast_layer: Node = get_tree().root.get_node_or_null("AchievementToastLayer")
 	if toast_layer:
 		toast_layer.queue_free()
+
+
+func _backup_file(path: String, backup_path: String) -> void:
+	if FileAccess.file_exists(path):
+		var content := FileAccess.get_file_as_bytes(path)
+		var f := FileAccess.open(backup_path, FileAccess.WRITE)
+		if f:
+			f.store_buffer(content)
+			f.close()
+
+
+func _restore_file(path: String, backup_path: String) -> void:
+	if FileAccess.file_exists(backup_path):
+		var content := FileAccess.get_file_as_bytes(backup_path)
+		var f := FileAccess.open(path, FileAccess.WRITE)
+		if f:
+			f.store_buffer(content)
+			f.close()
+		DirAccess.remove_absolute(backup_path)
+	elif FileAccess.file_exists(path):
+		DirAccess.remove_absolute(path)
 
 
 func test_snapshot_includes_categories_with_general_first() -> void:

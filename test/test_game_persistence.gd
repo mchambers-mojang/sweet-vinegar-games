@@ -2,9 +2,24 @@ extends GutTest
 
 ## Tests for the unified GameSaveManager and GameStatsManager
 
+const _SAVES_PATH := "user://game_saves.cfg"
+const _STATS_PATH := "user://game_stats.cfg"
+const _SAVES_BACKUP := "user://game_saves.cfg.bak"
+const _STATS_BACKUP := "user://game_stats.cfg.bak"
 
 var save_mgr: Node
 var stats_mgr: Node
+
+
+func before_all() -> void:
+	_backup_file(_SAVES_PATH, _SAVES_BACKUP)
+	_backup_file(_STATS_PATH, _STATS_BACKUP)
+
+
+func after_all() -> void:
+	_restore_file(_SAVES_PATH, _SAVES_BACKUP)
+	_restore_file(_STATS_PATH, _STATS_BACKUP)
+	GameStatsManager._load_all()
 
 
 func before_each() -> void:
@@ -15,6 +30,27 @@ func before_each() -> void:
 	# Clean slate for each test
 	save_mgr.clear_all()
 	stats_mgr.clear_all()
+
+
+func _backup_file(path: String, backup_path: String) -> void:
+	if FileAccess.file_exists(path):
+		var content := FileAccess.get_file_as_bytes(path)
+		var f := FileAccess.open(backup_path, FileAccess.WRITE)
+		if f:
+			f.store_buffer(content)
+			f.close()
+
+
+func _restore_file(path: String, backup_path: String) -> void:
+	if FileAccess.file_exists(backup_path):
+		var content := FileAccess.get_file_as_bytes(backup_path)
+		var f := FileAccess.open(path, FileAccess.WRITE)
+		if f:
+			f.store_buffer(content)
+			f.close()
+		DirAccess.remove_absolute(backup_path)
+	elif FileAccess.file_exists(path):
+		DirAccess.remove_absolute(path)
 
 
 # --- GameSaveManager Tests ---
