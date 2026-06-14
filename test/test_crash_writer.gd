@@ -27,14 +27,14 @@ func _make_report(kind: String = "test_error") -> Dictionary:
 # --- write_report ---
 
 func test_write_creates_file() -> void:
-	var path := writer.write_report(_make_report())
+	var path: String = writer.write_report(_make_report())
 	assert_true(path != "", "write_report should return a non-empty path")
 	assert_true(FileAccess.file_exists(path), "Crash report file should exist on disk")
 
 
 func test_report_content_valid_json() -> void:
 	var report := _make_report("json_test")
-	var path := writer.write_report(report)
+	var path: String = writer.write_report(report)
 	var file := FileAccess.open(path, FileAccess.READ)
 	assert_not_null(file, "File should be readable")
 	var parsed = JSON.parse_string(file.get_as_text())
@@ -42,14 +42,14 @@ func test_report_content_valid_json() -> void:
 
 
 func test_write_updates_latest_path() -> void:
-	var path := writer.write_report(_make_report())
+	var path: String = writer.write_report(_make_report())
 	assert_eq(writer.get_latest_report_path(), path)
 
 
 func test_write_updates_latest_text() -> void:
 	var report := _make_report("text_test")
 	writer.write_report(report)
-	var text := writer.get_latest_report_text()
+	var text: String = writer.get_latest_report_text()
 	assert_true(text.contains("text_test"), "Latest report text should contain the written kind")
 
 
@@ -62,16 +62,16 @@ func test_get_latest_report_text_returns_empty_when_no_path_set() -> void:
 	writer._latest_report_path = ""
 	# Force the lazy-load path to skip by giving a nonexistent path
 	writer._latest_report_path = "user://crash_logs/nonexistent_test_file.json"
-	var text := writer.get_latest_report_text()
+	var text: String = writer.get_latest_report_text()
 	assert_eq(text, "", "Should return empty string when file does not exist")
 
 
 func test_get_latest_report_text_reads_from_disk_when_path_set() -> void:
 	# Write via another instance to simulate a report written in a prior session
-	var path := writer.write_report(_make_report("disk_read_test"))
+	var path: String = writer.write_report(_make_report("disk_read_test"))
 	# Reset the in-memory cache but keep the path
 	writer._latest_report_text = ""
-	var text := writer.get_latest_report_text()
+	var text: String = writer.get_latest_report_text()
 	assert_true(text.contains("disk_read_test"), "Should read report content from disk")
 
 
@@ -115,11 +115,13 @@ func test_trim_respects_limit() -> void:
 # --- copy_latest_report_to_clipboard ---
 
 func test_clipboard_copy_returns_false_when_empty() -> void:
-	var result := writer.copy_latest_report_to_clipboard()
+	# Point to a nonexistent path so the disk fallback returns empty
+	writer._latest_report_path = "user://crash_logs/nonexistent_test_file.json"
+	var result: bool = writer.copy_latest_report_to_clipboard()
 	assert_false(result, "Should return false when no report is available")
 
 
 func test_clipboard_copy_returns_true_after_write() -> void:
 	writer.write_report(_make_report("clipboard_test"))
-	var result := writer.copy_latest_report_to_clipboard()
+	var result: bool = writer.copy_latest_report_to_clipboard()
 	assert_true(result, "Should return true after a report has been written")

@@ -23,13 +23,13 @@ func before_each() -> void:
 # --- State providers ---
 
 func test_register_state_provider_called_on_capture() -> void:
-	var called := false
+	var tracker := {"called": false}
 	var provider := func() -> Dictionary:
-		called = true
+		tracker["called"] = true
 		return {"test_key": "test_value"}
 	collector.register_state_provider(provider)
 	collector.capture_error("test error")
-	assert_true(called, "State provider should be called during capture")
+	assert_true(tracker["called"], "State provider should be called during capture")
 
 
 func test_state_provider_value_included_in_report() -> void:

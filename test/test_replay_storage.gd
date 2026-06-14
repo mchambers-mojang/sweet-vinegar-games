@@ -43,7 +43,7 @@ func _make_replay(id: String, game_mode: String, timestamp: int = 0) -> Dictiona
 
 func test_save_and_retrieve_replay() -> void:
 	var replay := _make_replay("abc123", "shikaku")
-	var saved_id := storage.save_replay(replay)
+	var saved_id: String = storage.save_replay(replay)
 	assert_eq(saved_id, "abc123")
 	var retrieved: Dictionary = storage.get_replay_by_id("abc123")
 	assert_false(retrieved.is_empty())
@@ -66,7 +66,7 @@ func test_recent_replays_ordered() -> void:
 func test_delete_removes_replay() -> void:
 	storage.save_replay(_make_replay("del1", "sudoku"))
 	assert_false(storage.get_replay_by_id("del1").is_empty())
-	var ok := storage.delete_replay("del1")
+	var ok: bool = storage.delete_replay("del1")
 	assert_true(ok)
 	assert_true(storage.get_replay_by_id("del1").is_empty())
 
@@ -74,7 +74,7 @@ func test_delete_removes_replay() -> void:
 func test_export_import_roundtrip() -> void:
 	var replay := _make_replay("export1", "blockudoku")
 	storage.save_replay(replay)
-	var code := storage.export_replay_code("export1")
+	var code: String = storage.export_replay_code("export1")
 	assert_true(code.begins_with("SVG1_"))
 	var imported: Dictionary = storage.import_replay_code(code)
 	assert_false(imported.is_empty())
