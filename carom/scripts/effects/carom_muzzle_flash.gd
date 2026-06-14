@@ -25,5 +25,6 @@ func _begin(color: Color) -> void:
 	add_child(light)
 
 	var tween := create_tween()
+	tween.bind_node(self)
 	tween.tween_property(light, "light_energy", 0.0, FLASH_DURATION)
 	tween.tween_callback(queue_free)
