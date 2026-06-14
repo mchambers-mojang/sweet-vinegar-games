@@ -41,10 +41,18 @@ func _create_overlay_layer() -> void:
 	# All dynamically created HUD elements go here.
 	_overlay_layer = Control.new()
 	_overlay_layer.name = "OverlayLayer"
-	_overlay_layer.anchor_right = 1.0
-	_overlay_layer.anchor_bottom = 1.0
 	_overlay_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	get_parent().add_child(_overlay_layer)
+	# Must set preset AFTER adding to tree so anchors resolve against viewport
+	_overlay_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# Debug: print size after one frame
+	get_tree().process_frame.connect(func() -> void:
+		print("[CaromHUD] OverlayLayer size=%s, reload_btn size=%s pos=%s" % [
+			_overlay_layer.size,
+			_reload_button.size if _reload_button else "null",
+			_reload_button.position if _reload_button else "null",
+		])
+	, CONNECT_ONE_SHOT)
 
 
 func update_scores(player_score: int, ai_score: int) -> void:
@@ -166,9 +174,9 @@ func _create_reload_button() -> void:
 		reload_requested.emit()
 	)
 	_overlay_layer.add_child(_reload_button)
-	# Position using anchors — bottom-left or bottom-right
-	_position_reload_button()
+	# Position after overlay gets its size (next frame)
 	_overlay_layer.resized.connect(_position_reload_button)
+	get_tree().process_frame.connect(_position_reload_button, CONNECT_ONE_SHOT)
 
 
 func _position_reload_button_once() -> void:
@@ -200,8 +208,8 @@ func _create_gear_button() -> void:
 	_gear_button.add_theme_font_size_override("font_size", 22)
 	_gear_button.pressed.connect(_toggle_settings_panel)
 	_overlay_layer.add_child(_gear_button)
-	_position_gear_button()
 	_overlay_layer.resized.connect(_position_gear_button)
+	get_tree().process_frame.connect(_position_gear_button, CONNECT_ONE_SHOT)
 
 
 func _position_gear_button() -> void:
