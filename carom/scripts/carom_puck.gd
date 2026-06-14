@@ -9,8 +9,16 @@ extends RigidBody3D
 @export var stall_speed_threshold: float = 1.8
 @export var reset_height: float = 0.0
 
+const EMISSION_BASE: float = 2.0
+const EMISSION_PEAK: float = 5.0
+const PULSE_FREQ_FAR: float = 0.5
+const PULSE_FREQ_MID: float = 1.5
+const PULSE_FREQ_NEAR: float = 3.0
+
 var _goal_targets: Array[Vector3] = []
 var _reset_position: Vector3 = Vector3.ZERO
+var _puck_material: StandardMaterial3D = null
+var _pulse_time: float = 0.0
 
 
 func _ready() -> void:
@@ -18,6 +26,20 @@ func _ready() -> void:
 	# Lock X and Z rotation, allow Y spin
 	axis_lock_angular_x = true
 	axis_lock_angular_z = true
+	_setup_emission_material()
+
+
+func _setup_emission_material() -> void:
+	_puck_material = StandardMaterial3D.new()
+	_puck_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_puck_material.albedo_color = Color(0.02, 0.08, 0.1, 1)
+	_puck_material.emission_enabled = true
+	_puck_material.emission = Color(0.8, 1.0, 1.0, 1)
+	_puck_material.emission_energy_multiplier = EMISSION_BASE
+	_puck_material.roughness = 0.2
+	for child in get_children():
+		if child is MeshInstance3D:
+			(child as MeshInstance3D).material_override = _puck_material
 
 
 func configure(goal_targets: Array[Vector3], reset_position: Vector3) -> void:
@@ -31,6 +53,57 @@ func reset_to_center(reset_position: Vector3 = Vector3.ZERO) -> void:
 	global_position = Vector3(reset_position.x, reset_height, reset_position.z)
 	linear_velocity = Vector3.ZERO
 	angular_velocity = Vector3.ZERO
+
+
+func _process(delta: float) -> void:
+	_update_pulse(delta)
+
+
+func _update_pulse(delta: float) -> void:
+	if _puck_material == null:
+		return
+	var freq := _get_pulse_frequency()
+	_pulse_time = fmod(_pulse_time + delta * freq * TAU, TAU)
+	var t := (sin(_pulse_time) + 1.0) * 0.5
+	_puck_material.emission_energy_multiplier = lerpf(EMISSION_BASE, EMISSION_PEAK, t)
+
+
+func _get_pulse_frequency() -> float:
+	if _goal_targets.is_empty():
+		return PULSE_FREQ_FAR
+
+	var nearest_dist := _get_nearest_goal_distance()
+	var arena_length := _get_arena_length()
+	if arena_length <= 0.0:
+		return PULSE_FREQ_FAR
+
+	var fraction := nearest_dist / arena_length
+
+	if fraction >= 0.6:
+		return PULSE_FREQ_FAR
+	elif fraction <= 0.0:
+		return PULSE_FREQ_NEAR
+	elif fraction <= 0.3:
+		# Near zone: lerp 3.0 Hz → 1.5 Hz as puck moves away from goal
+		return lerpf(PULSE_FREQ_NEAR, PULSE_FREQ_MID, fraction / 0.3)
+	else:
+		# Mid zone: lerp 1.5 Hz → 0.5 Hz as puck moves further away
+		return lerpf(PULSE_FREQ_MID, PULSE_FREQ_FAR, (fraction - 0.3) / 0.3)
+
+
+func _get_nearest_goal_distance() -> float:
+	var nearest: float = 1e20
+	for goal in _goal_targets:
+		var d := Vector2(goal.x - global_position.x, goal.z - global_position.z).length()
+		if d < nearest:
+			nearest = d
+	return nearest
+
+
+func _get_arena_length() -> float:
+	if _goal_targets.size() < 2:
+		return 30.0
+	return _goal_targets[0].distance_to(_goal_targets[1])
 
 
 func _physics_process(_delta: float) -> void:
