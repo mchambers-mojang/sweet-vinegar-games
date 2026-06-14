@@ -6,6 +6,7 @@ extends Node3D
 
 signal ammo_changed(current_ammo: int, max_ammo: int)
 signal reload_state_changed(is_reloading: bool)
+signal reload_completed
 signal projectile_fired(projectile: CaromProjectile)
 
 enum ControlMode {
@@ -220,6 +221,8 @@ func _process_reload(delta: float) -> void:
 		ammo_changed.emit(current_ammo, clip_size)
 		if current_ammo >= clip_size:
 			cancel_reload()
+			_pulse_ammo_ring()
+			reload_completed.emit()
 			break
 
 
@@ -315,3 +318,19 @@ func _update_ammo_visuals() -> void:
 func _on_ammo_changed_visual(_current: int, _max: int) -> void:
 	if _ammo_indicators.size() > 0:
 		_update_ammo_visuals()
+
+
+func _pulse_ammo_ring() -> void:
+	if _ammo_indicators.is_empty():
+		return
+	var tween := create_tween().set_parallel(true)
+	for indicator: MeshInstance3D in _ammo_indicators:
+		var mat := indicator.material_override as StandardMaterial3D
+		if mat == null:
+			continue
+		# Emission spike: 4.0 -> 12.0 over 0.05 s, then ease back to 4.0 over 0.3 s
+		tween.tween_property(mat, "emission_energy_multiplier", 12.0, 0.05)
+		tween.tween_property(mat, "emission_energy_multiplier", 4.0, 0.3).set_delay(0.05)
+		# Scale bounce: 1.0 -> 1.3 -> 1.0 over 0.2 s
+		tween.tween_property(indicator, "scale", Vector3(1.3, 1.3, 1.3), 0.08)
+		tween.tween_property(indicator, "scale", Vector3.ONE, 0.12).set_delay(0.08)
