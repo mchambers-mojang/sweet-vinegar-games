@@ -96,5 +96,5 @@ func _spawn_sparks(pos: Vector3, direction: Vector3, color: Color, count: int, s
 	mesh_mat.emission_energy_multiplier = 3.0
 	particles.material_override = mesh_mat
 
-	particles.global_position = pos
 	get_tree().current_scene.add_child(particles)
+	particles.global_position = pos
