@@ -1,0 +1,193 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/theme_editor_screen.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/demo_board.gd" id="2"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bg"]
+bg_color = Color(1, 1, 1, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_preview"]
+bg_color = Color(0, 0, 0, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[node name="ThemeEditorScreen" type="PanelContainer"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_bg")
+script = ExtResource("1")
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 40
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TopBar" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="BackButton" type="Button" parent="MarginContainer/VBoxContainer/TopBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "←"
+
+[node name="Title" type="Label" parent="MarginContainer/VBoxContainer/TopBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Customize Theme"
+horizontal_alignment = 1
+
+[node name="SaveButton" type="Button" parent="MarginContainer/VBoxContainer/TopBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Save"
+
+[node name="ScrollContainer" type="ScrollContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ContentList" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 16
+
+[node name="PaletteHeader" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentList"]
+layout_mode = 2
+text = "Palette"
+theme_override_font_sizes/font_size = 20
+
+[node name="BgRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentList"]
+layout_mode = 2
+
+[node name="BgLabel" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentList/BgRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Background"
+
+[node name="BgPicker" type="ColorPickerButton" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentList/BgRow"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(80, 40)
+color = Color(0.04, 0.04, 0.1, 1)
+edit_alpha = false
+
+[node name="BgGlowSlider" type="HSlider" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentList/BgRow"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(100, 0)
+size_flags_horizontal = 0
+min_value = 1.0
+max_value = 3.0
+step = 0.05
+value = 1.0
+
+[node name="AccentRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentList"]
+layout_mode = 2
+
+[node name="AccentLabel" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentList/AccentRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Accent"
+
+[node name="AccentPicker" type="ColorPickerButton" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentList/AccentRow"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(80, 40)
+color = Color(0, 1, 1, 1)
+edit_alpha = false
+
+[node name="AccentGlowSlider" type="HSlider" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentList/AccentRow"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(100, 0)
+size_flags_horizontal = 0
+min_value = 1.0
+max_value = 3.0
+step = 0.05
+value = 1.5
+
+[node name="SecondaryRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentList"]
+layout_mode = 2
+
+[node name="SecondaryLabel" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentList/SecondaryRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Secondary"
+
+[node name="SecondaryPicker" type="ColorPickerButton" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentList/SecondaryRow"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(80, 40)
+color = Color(1, 0.15, 0.9, 1)
+edit_alpha = false
+
+[node name="SecondaryGlowSlider" type="HSlider" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentList/SecondaryRow"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(100, 0)
+size_flags_horizontal = 0
+min_value = 1.0
+max_value = 3.0
+step = 0.05
+value = 2.0
+
+[node name="ErrorRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentList"]
+layout_mode = 2
+
+[node name="ErrorLabel" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentList/ErrorRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Error"
+
+[node name="ErrorPicker" type="ColorPickerButton" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentList/ErrorRow"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(80, 40)
+color = Color(1, 0, 0.1, 1)
+edit_alpha = false
+
+[node name="ErrorGlowSlider" type="HSlider" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentList/ErrorRow"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(100, 0)
+size_flags_horizontal = 0
+min_value = 1.0
+max_value = 3.0
+step = 0.05
+value = 2.0
+
+[node name="ResetButton" type="Button" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentList"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Reset to Default"
+
+[node name="PreviewSep" type="HSeparator" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentList"]
+layout_mode = 2
+
+[node name="PreviewHeader" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentList"]
+layout_mode = 2
+text = "Preview"
+theme_override_font_sizes/font_size = 20
+
+[node name="PreviewContainer" type="PanelContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentList"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 200)
+size_flags_vertical = 3
+theme_override_styles/panel = SubResource("StyleBoxFlat_preview")
+
+[node name="DemoBoard" type="Control" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentList/PreviewContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+script = ExtResource("2")
