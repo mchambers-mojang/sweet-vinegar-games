@@ -2,14 +2,25 @@ extends GutTest
 
 ## Tests for the unified GameSaveManager and GameStatsManager
 
+const _TEST_SAVES_PATH := "user://test_game_saves.cfg"
+const _TEST_STATS_PATH := "user://test_game_stats.cfg"
 
 var save_mgr: Node
 var stats_mgr: Node
 
 
+func after_all() -> void:
+	if FileAccess.file_exists(_TEST_SAVES_PATH):
+		DirAccess.remove_absolute(_TEST_SAVES_PATH)
+	if FileAccess.file_exists(_TEST_STATS_PATH):
+		DirAccess.remove_absolute(_TEST_STATS_PATH)
+
+
 func before_each() -> void:
 	save_mgr = load("res://scripts/autoload/game_save_manager.gd").new()
 	stats_mgr = load("res://scripts/autoload/game_stats_manager.gd").new()
+	save_mgr.save_path = _TEST_SAVES_PATH
+	stats_mgr.save_path = _TEST_STATS_PATH
 	add_child_autofree(save_mgr)
 	add_child_autofree(stats_mgr)
 	# Clean slate for each test

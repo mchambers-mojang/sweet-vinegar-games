@@ -5,7 +5,8 @@ extends Node
 signal achievement_unlocked(achievement_id: String, definition: Dictionary)
 signal platform_unlock_requested(payload: Dictionary)
 
-const SAVE_PATH := "user://achievements.cfg"
+const DEFAULT_SAVE_PATH := "user://achievements.cfg"
+var save_path := DEFAULT_SAVE_PATH
 const CATEGORY_ORDER := {"General": 0, "Sudoku": 1, "Blockudoku": 2, "Shikaku": 3}
 const TIER_ORDER := {"Bronze": 0, "Silver": 1, "Gold": 2}
 
@@ -757,7 +758,7 @@ func _is_visible(achievement_id: String) -> bool:
 
 
 func reset_all_progress() -> void:
-	DirAccess.remove_absolute(SAVE_PATH)
+	DirAccess.remove_absolute(save_path)
 	_progress.clear()
 	_session_modes.clear()
 	_current_win_streak = 0
@@ -773,12 +774,12 @@ func _save_progress() -> void:
 		config.set_value(id, "unlocked", bool(entry.get("unlocked", false)))
 		config.set_value(id, "unlocked_at", int(entry.get("unlocked_at", 0)))
 	config.set_value("__meta", "current_win_streak", _current_win_streak)
-	config.save(SAVE_PATH)
+	config.save(save_path)
 
 
 func _load_progress() -> void:
 	var config := ConfigFile.new()
-	if config.load(SAVE_PATH) != OK:
+	if config.load(save_path) != OK:
 		return
 	for id in ACHIEVEMENT_DEFINITIONS.keys():
 		var target: int = int(ACHIEVEMENT_DEFINITIONS[id].get("target_value", 1))
