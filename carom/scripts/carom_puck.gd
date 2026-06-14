@@ -15,7 +15,8 @@ const PULSE_FREQ_FAR: float = 0.5
 const PULSE_FREQ_MID: float = 2.0
 const PULSE_FREQ_NEAR: float = 4.0
 
-var _goal_targets: Array[Vector3] = []
+var _player_goal: Vector3 = Vector3.ZERO
+var _arena_length: float = 30.0
 var _reset_position: Vector3 = Vector3.ZERO
 var _puck_material: StandardMaterial3D = null
 var _pulse_time: float = 0.0
@@ -55,7 +56,13 @@ func _setup_emission_material() -> void:
 
 
 func configure(goal_targets: Array[Vector3], reset_position: Vector3) -> void:
-	_goal_targets = goal_targets.duplicate()
+	# Player turret is at north position — puck entering north goal means
+	# the opponent (south) scores on the player. Pulse warns of that danger.
+	if goal_targets.size() >= 2:
+		_player_goal = goal_targets[1]  # [south_goal, north_goal] — north is player's goal zone
+		_arena_length = goal_targets[0].distance_to(goal_targets[1])
+	elif goal_targets.size() == 1:
+		_player_goal = goal_targets[0]
 	_reset_position = reset_position
 
 
@@ -74,22 +81,19 @@ func _update_pulse(delta: float) -> void:
 	if _puck_material == null:
 		return
 
-	# Only pulse when near a goal (fraction < 0.4), otherwise stay static cyan
-	var fraction := 1.0
-	if not _goal_targets.is_empty():
-		var arena_length := _get_arena_length()
-		if arena_length > 0.0:
-			fraction = _get_nearest_goal_distance() / arena_length
+	# Only pulse when puck is near the PLAYER's goal (danger zone)
+	var dist := _get_player_goal_distance()
+	var fraction := dist / _arena_length if _arena_length > 0.0 else 1.0
 
 	if fraction >= 0.4:
-		# Far from goal — static cyan
+		# Far from player's goal — static cyan
 		_puck_material.emission_energy_multiplier = EMISSION_BASE
 		_puck_material.albedo_color = Color(0.01, 0.06, 0.08, 1.0)
 		_puck_material.emission = Color(0.1, 0.7, 0.8, 1.0)
 		_pulse_time = 0.0
 		return
 
-	var freq := _get_pulse_frequency()
+	var freq := _get_pulse_frequency(fraction)
 	_pulse_time = fmod(_pulse_time + delta * freq * TAU, TAU)
 	var t := (sin(_pulse_time) + 1.0) * 0.5
 	_puck_material.emission_energy_multiplier = lerpf(EMISSION_BASE, EMISSION_PEAK, t)
@@ -98,40 +102,19 @@ func _update_pulse(delta: float) -> void:
 	_puck_material.emission = Color(0.1 + t * 0.7, 0.7 + t * 0.3, 0.8 + t * 0.2, 1.0)
 
 
-func _get_pulse_frequency() -> float:
-	if _goal_targets.is_empty():
-		return PULSE_FREQ_FAR
-
-	var nearest_dist := _get_nearest_goal_distance()
-	var arena_length := _get_arena_length()
-	if arena_length <= 0.0:
-		return PULSE_FREQ_FAR
-
-	var fraction := nearest_dist / arena_length
-
-	if fraction >= 0.6:
-		return PULSE_FREQ_FAR
+func _get_pulse_frequency(fraction: float) -> float:
+	if fraction <= 0.15:
+		return PULSE_FREQ_NEAR
 	elif fraction <= 0.3:
-		# Near zone: lerp 3.0 Hz → 1.5 Hz as puck moves away from goal
-		return lerpf(PULSE_FREQ_NEAR, PULSE_FREQ_MID, fraction / 0.3)
+		return lerpf(PULSE_FREQ_NEAR, PULSE_FREQ_MID, (fraction - 0.15) / 0.15)
 	else:
-		# Mid zone: lerp 1.5 Hz → 0.5 Hz as puck moves further away
-		return lerpf(PULSE_FREQ_MID, PULSE_FREQ_FAR, (fraction - 0.3) / 0.3)
+		return lerpf(PULSE_FREQ_MID, PULSE_FREQ_FAR, (fraction - 0.3) / 0.1)
 
 
-func _get_nearest_goal_distance() -> float:
-	var nearest: float = INF
-	for goal in _goal_targets:
-		var d := Vector2(goal.x - global_position.x, goal.z - global_position.z).length()
-		if d < nearest:
-			nearest = d
-	return nearest
-
-
-func _get_arena_length() -> float:
-	if _goal_targets.size() < 2:
-		return 30.0
-	return _goal_targets[0].distance_to(_goal_targets[1])
+func _get_player_goal_distance() -> float:
+	if _player_goal == Vector3.ZERO:
+		return INF
+	return Vector2(_player_goal.x - global_position.x, _player_goal.z - global_position.z).length()
 
 
 func _physics_process(_delta: float) -> void:
