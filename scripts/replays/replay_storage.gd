@@ -23,8 +23,11 @@ func _ready() -> void:
 
 
 func get_crash_recovery_payload() -> Dictionary:
+	var latest: Dictionary = {}
+	if not _replay_index.is_empty():
+		latest = _replay_index[-1].duplicate(true)
 	return {
-		"latest_completed_replay": _replay_index[-1].duplicate(true) if not _replay_index.is_empty() else {},
+		"latest_completed_replay": latest,
 		"replay_code": export_latest_replay_code(),
 	}
 
