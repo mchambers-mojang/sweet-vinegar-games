@@ -39,6 +39,8 @@ var _fire_cooldown_timer: float = 0.0
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var _aim_projection: CaromAimProjection = null
 var _aim_projection_distance: float = 0.0
+var _ammo_indicators: Array[MeshInstance3D] = []
+var _ammo_ring_node: Node3D = null
 
 ## Input provider (CaromHumanInput or CaromAI)
 var input: CaromTurretInput = null
@@ -53,6 +55,8 @@ func _ready() -> void:
 	_rng.randomize()
 	current_ammo = clip_size
 	_update_rotation()
+	_create_ammo_ring()
+	ammo_changed.connect(_on_ammo_changed_visual)
 	ammo_changed.emit(current_ammo, clip_size)
 	_ensure_aim_projection()
 	# Default to human input if not configured yet
@@ -239,3 +243,75 @@ func _update_aim_projection() -> void:
 		return
 	var direction := -projectile_spawn.global_transform.basis.z.normalized()
 	_aim_projection.update_projection(projectile_spawn.global_position, direction)
+
+
+# --- Ammo ring (3D visual on turret base) ---
+
+const AMMO_RING_RADIUS: float = 0.8
+const AMMO_BULLET_RADIUS: float = 0.1
+const AMMO_BULLET_HEIGHT: float = 0.35
+
+func _create_ammo_ring() -> void:
+	_ammo_ring_node = Node3D.new()
+	_ammo_ring_node.name = "AmmoRing"
+	# Ring stays world-aligned (doesn't rotate with turret aim)
+	get_parent().call_deferred("add_child", _ammo_ring_node)
+	call_deferred("_build_ammo_indicators")
+
+
+func _build_ammo_indicators() -> void:
+	_ammo_ring_node.global_position = global_position + Vector3(0.0, 0.25, 0.0)
+	_ammo_indicators.clear()
+
+	var arc_start := -PI * 0.4
+	var arc_end := PI * 0.4
+	var arc_span := arc_end - arc_start
+
+	for i in clip_size:
+		var angle := arc_start + (arc_span * float(i) / float(maxi(clip_size - 1, 1)))
+		# Offset behind the turret (positive Z is toward player's own goal)
+		var offset := Vector3(sin(angle) * AMMO_RING_RADIUS, 0.0, cos(angle) * AMMO_RING_RADIUS)
+		if side == &"north":
+			offset.z = -offset.z
+
+		var mesh_inst := MeshInstance3D.new()
+		var capsule := CapsuleMesh.new()
+		capsule.radius = AMMO_BULLET_RADIUS
+		capsule.height = AMMO_BULLET_HEIGHT
+		mesh_inst.mesh = capsule
+
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = team_color
+		mat.emission_enabled = true
+		mat.emission = team_color
+		mat.emission_energy_multiplier = 4.0
+		mesh_inst.material_override = mat
+
+		mesh_inst.position = offset
+		_ammo_ring_node.add_child(mesh_inst)
+		_ammo_indicators.append(mesh_inst)
+
+	_update_ammo_visuals()
+
+
+func _update_ammo_visuals() -> void:
+	for i in _ammo_indicators.size():
+		var indicator := _ammo_indicators[i]
+		var mat := indicator.material_override as StandardMaterial3D
+		if i < current_ammo:
+			mat.albedo_color = team_color
+			mat.emission = team_color
+			mat.emission_energy_multiplier = 4.0
+			indicator.scale = Vector3.ONE
+			indicator.visible = true
+		else:
+			mat.albedo_color = Color(0.15, 0.15, 0.15)
+			mat.emission = Color.BLACK
+			mat.emission_energy_multiplier = 0.0
+			indicator.scale = Vector3(0.5, 0.5, 0.5)
+			indicator.visible = true
+
+
+func _on_ammo_changed_visual(_current: int, _max: int) -> void:
+	if _ammo_indicators.size() > 0:
+		_update_ammo_visuals()

@@ -5,7 +5,8 @@ extends Node
 ## Each Game records opaque stat entries; computation (averages, bests) is
 ## the Game's responsibility.
 
-const SAVE_PATH := "user://game_stats.cfg"
+const DEFAULT_SAVE_PATH := "user://game_stats.cfg"
+var save_path := DEFAULT_SAVE_PATH
 const HISTORY_LIMIT := 30
 
 signal stats_recorded(game_id: String)
@@ -80,8 +81,8 @@ func clear(game_id: String) -> void:
 func clear_all() -> void:
 	_history_cache.clear()
 	_counters_cache.clear()
-	if FileAccess.file_exists(SAVE_PATH):
-		DirAccess.remove_absolute(SAVE_PATH)
+	if FileAccess.file_exists(save_path):
+		DirAccess.remove_absolute(save_path)
 
 
 func _ensure_game(game_id: String) -> void:
@@ -97,12 +98,12 @@ func _save_all() -> void:
 		config.set_value(game_id, "history", _history_cache[game_id])
 	for game_id in _counters_cache.keys():
 		config.set_value(game_id, "counters", _counters_cache[game_id])
-	config.save(SAVE_PATH)
+	config.save(save_path)
 
 
 func _load_all() -> void:
 	var config := ConfigFile.new()
-	if config.load(SAVE_PATH) != OK:
+	if config.load(save_path) != OK:
 		return
 	for game_id in config.get_sections():
 		var raw_history = config.get_value(game_id, "history", [])
