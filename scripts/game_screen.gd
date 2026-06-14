@@ -141,11 +141,6 @@ func _ready() -> void:
 	_apply_game_theme()
 	AppTheme.theme_changed.connect(func(_d: bool) -> void: _apply_game_theme())
 
-	# Safe area
-	var margin := get_node_or_null("MarginContainer") as MarginContainer
-	if margin:
-		SafeAreaManager.apply(margin)
-
 	# Let subclass do its own setup
 	_on_game_screen_ready()
 

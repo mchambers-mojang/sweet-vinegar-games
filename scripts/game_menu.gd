@@ -129,11 +129,6 @@ func _ready() -> void:
 	_apply_theme_internal()
 	AppTheme.theme_changed.connect(func(_d: bool) -> void: _apply_theme_internal())
 
-	# Safe area
-	var margin := get_node_or_null("MarginContainer") as MarginContainer
-	if margin:
-		SafeAreaManager.apply(margin)
-
 	_on_menu_ready()
 
 
