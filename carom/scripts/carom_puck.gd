@@ -73,6 +73,22 @@ func reset_to_center(reset_position: Vector3 = Vector3.ZERO) -> void:
 func _update_pulse(delta: float) -> void:
 	if _puck_material == null:
 		return
+
+	# Only pulse when near a goal (fraction < 0.4), otherwise stay static cyan
+	var fraction := 1.0
+	if not _goal_targets.is_empty():
+		var arena_length := _get_arena_length()
+		if arena_length > 0.0:
+			fraction = _get_nearest_goal_distance() / arena_length
+
+	if fraction >= 0.4:
+		# Far from goal — static cyan
+		_puck_material.emission_energy_multiplier = EMISSION_BASE
+		_puck_material.albedo_color = Color(0.01, 0.06, 0.08, 1.0)
+		_puck_material.emission = Color(0.1, 0.7, 0.8, 1.0)
+		_pulse_time = 0.0
+		return
+
 	var freq := _get_pulse_frequency()
 	_pulse_time = fmod(_pulse_time + delta * freq * TAU, TAU)
 	var t := (sin(_pulse_time) + 1.0) * 0.5
