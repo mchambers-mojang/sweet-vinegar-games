@@ -181,6 +181,9 @@ func set_theme_mode(mode: String) -> void:
 
 ## Derives a full 22-key color palette from 4 user-chosen base colors.
 ## Intended for use with the "custom" neon-style theme mode.
+## [b]accent[/b], [b]secondary[/b], and [b]error[/b] may carry HDR values (>1.0)
+## to drive neon bloom; derived surface/cell colors are clamped to [0, 1] so they
+## display correctly on non-HDR render targets.
 static func build_custom_palette(bg: Color, accent: Color, secondary: Color, error: Color) -> Dictionary:
 	# Background variants — slight brightness offsets to keep the dark neon feel.
 	# Clamped to [0,1] because these are standard (non-HDR) surface colors.
