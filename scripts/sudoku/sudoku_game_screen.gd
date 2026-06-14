@@ -352,7 +352,7 @@ func _handle_number_first_cell_tap(index: int) -> void:
 				GlassShatter.create(board, error_cell_rect, Color(2.0, 0.0, 0.2), 10)
 				var err_center := error_cell_rect.position + error_cell_rect.size / 2.0
 				NeonRing.create(board, err_center, Color(2.0, 0.0, 0.2), error_cell_rect.size.x * 2.5, 0.2, 0.4)
-				NeonFxManager.screen_shake(5.0, 0.15)
+				AppTheme.screen_shake(5.0, 0.15)
 
 			var revert_tween := create_tween()
 			revert_tween.tween_interval(0.4)
@@ -457,7 +457,7 @@ func _place_or_note_number(number: int) -> void:
 				GlassShatter.create(board, error_cell_rect, Color(2.0, 0.0, 0.2), 10)
 				var err_center := error_cell_rect.position + error_cell_rect.size / 2.0
 				NeonRing.create(board, err_center, Color(2.0, 0.0, 0.2), error_cell_rect.size.x * 2.5, 0.2, 0.4)
-				NeonFxManager.screen_shake(5.0, 0.15)
+				AppTheme.screen_shake(5.0, 0.15)
 
 			var revert_tween := create_tween()
 			revert_tween.tween_interval(0.4)
@@ -665,7 +665,7 @@ func _play_win_celebration() -> void:
 		var center_rect := board.get_cell_rect(40)  # Center cell (row 4, col 4)
 		var center := center_rect.position + center_rect.size / 2.0
 		NeonRing.create(board, center, Color(0.0, 2.0, 1.5), center_rect.size.x * 8.0, 0.5, 1.2)
-		NeonFxManager.screen_shake(6.0, 0.2)
+		AppTheme.screen_shake(6.0, 0.2)
 	# Cascade reveal: flash each cell in sequence from top-left to bottom-right
 	var tween := create_tween()
 	for i in 81:

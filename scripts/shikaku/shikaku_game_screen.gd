@@ -343,7 +343,7 @@ func _handle_win() -> void:
 			(board.grid_height / 2.0) * cell_size
 		)
 		NeonRing.create(board, center, Color(0.0, 2.0, 1.5), cell_size * 6.0, 0.5, 1.2)
-		NeonFxManager.screen_shake(6.0, 0.2)
+		AppTheme.screen_shake(6.0, 0.2)
 	board.flash_all(Color(1.2, 1.1, 0.8), 0.4)
 	var timer := get_tree().create_timer(0.5)
 	timer.timeout.connect(_show_win_dialog)
