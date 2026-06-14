@@ -21,6 +21,14 @@ var _goal_locked: bool = false
 func _ready() -> void:
 	south_goal.body_entered.connect(_on_south_goal_body_entered)
 	north_goal.body_entered.connect(_on_north_goal_body_entered)
+	_setup_ambient_particles()
+
+
+func _setup_ambient_particles() -> void:
+	var ambient := CaromAmbientParticles.new()
+	ambient.name = "AmbientParticles"
+	add_child(ambient)
+	ambient.setup(arena_width, arena_depth)
 
 
 func reset_goal_lock() -> void:
