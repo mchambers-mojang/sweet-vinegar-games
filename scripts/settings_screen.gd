@@ -146,7 +146,7 @@ func _build_settings_ui() -> void:
 				2: PlatformSettings.dark_mode = "dark"
 				3: PlatformSettings.dark_mode = "neon"
 				4:
-					PlatformSettings.ensure_default_palette()
+					AppTheme.palette.ensure_default_palette()
 					PlatformSettings.dark_mode = "custom"
 			PlatformSettings.save_settings()
 	)
