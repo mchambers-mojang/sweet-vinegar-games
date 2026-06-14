@@ -143,13 +143,11 @@ func show_game_over(winner: String, player_score: int, ai_score: int, current_di
 
 func _create_reload_button() -> void:
 	_reload_button = CaromReloadButton.new()
-	_reload_button.size = _reload_button.custom_minimum_size
 	_reload_button.reload_requested.connect(func() -> void:
 		reload_requested.emit()
 	)
-	# Add directly to the CanvasLayer
+	# Add to tree first so _ready() sets size, then position next frame
 	get_parent().add_child(_reload_button)
-	# Wait one frame for viewport to be ready, then position
 	get_tree().process_frame.connect(_position_reload_button_once, CONNECT_ONE_SHOT)
 	get_viewport().size_changed.connect(_position_reload_button)
 

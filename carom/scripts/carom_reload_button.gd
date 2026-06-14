@@ -28,6 +28,7 @@ var _pulse_time: float = 0.0
 
 func _ready() -> void:
 	custom_minimum_size = Vector2(120, 120)
+	size = custom_minimum_size
 	pivot_offset = custom_minimum_size * 0.5
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	_reset_segments()
