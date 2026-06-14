@@ -15,6 +15,9 @@ func _ready() -> void:
 	axis_lock_linear_y = true
 	axis_lock_angular_x = true
 	axis_lock_angular_z = true
+	# Enable contact monitoring for effects system
+	contact_monitor = true
+	max_contacts_reported = 4
 
 
 func setup(new_direction: Vector3, new_speed: float, new_owner_side: StringName, color: Color = Color(0.16, 0.95, 1.0)) -> void:

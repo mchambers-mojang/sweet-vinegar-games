@@ -52,9 +52,7 @@ func _on_projectile_fired(projectile: CaromProjectile, color: Color) -> void:
 	# Register for impact detection
 	_impact_spawner.register_projectile(projectile)
 
-	# Enable contact reporting on this projectile
-	projectile.contact_monitor = true
-	projectile.max_contacts_reported = 4
+	# Wire collision signal for effects
 	projectile.body_entered.connect(_on_projectile_body_entered.bind(projectile, color))
 
 	# Fire screen shake (debug only)
@@ -63,17 +61,19 @@ func _on_projectile_fired(projectile: CaromProjectile, color: Color) -> void:
 
 
 func _on_projectile_body_entered(body: Node, projectile: CaromProjectile, color: Color) -> void:
-	if not is_instance_valid(projectile):
+	if not is_instance_valid(projectile) or not is_instance_valid(body):
 		return
 
 	var impact_pos := projectile.global_position
 	var velocity := projectile.linear_velocity
 
 	if body is CaromPuck:
-		var normal := (body.global_position - impact_pos).normalized()
-		var force := velocity.length() / projectile.speed
+		var diff := body.global_position - impact_pos
+		if diff.length_squared() < 0.0001:
+			diff = velocity.normalized()
+		var normal := diff.normalized()
+		var force := velocity.length() / maxf(projectile.speed, 1.0)
 		_impact_spawner.spawn_puck_impact(impact_pos, -normal, color, force)
 	elif body is StaticBody3D:
-		# Wall hit — use velocity as impact direction (approximate normal)
-		var normal := -velocity.normalized()
+		var normal := -velocity.normalized() if velocity.length_squared() > 0.001 else Vector3.UP
 		_impact_spawner.spawn_wall_impact(impact_pos, normal, color)
