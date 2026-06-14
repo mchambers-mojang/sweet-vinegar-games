@@ -141,15 +141,33 @@ func _build_settings_ui() -> void:
 		"light": dark_idx = 1
 		"dark": dark_idx = 2
 		"neon": dark_idx = 3
-	_add_option_button("Theme", ["System", "Light", "Dark", "Neon"], dark_idx,
+		"custom": dark_idx = 4
+	_add_option_button("Theme", ["System", "Light", "Dark", "Neon", "Custom"], dark_idx,
 		func(idx: int) -> void:
 			match idx:
 				0: PlatformSettings.dark_mode = "system"
 				1: PlatformSettings.dark_mode = "light"
 				2: PlatformSettings.dark_mode = "dark"
 				3: PlatformSettings.dark_mode = "neon"
+				4: PlatformSettings.dark_mode = "custom"
 			PlatformSettings.save_settings()
 	)
+
+	# Customize palette button
+	var customize_row := HBoxContainer.new()
+	customize_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	customize_row.mouse_filter = Control.MOUSE_FILTER_PASS
+	var customize_spacer := Control.new()
+	customize_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	customize_spacer.mouse_filter = Control.MOUSE_FILTER_PASS
+	customize_row.add_child(customize_spacer)
+	var customize_btn := Button.new()
+	customize_btn.text = "Customize..."
+	customize_btn.pressed.connect(func() -> void:
+		SceneTransition.transition_to(Scenes.THEME_EDITOR)
+	)
+	customize_row.add_child(customize_btn)
+	settings_list.add_child(customize_row)
 
 	# Timer
 	_add_toggle("Show Timer", PlatformSettings.show_timer,

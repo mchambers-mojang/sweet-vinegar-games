@@ -91,6 +91,8 @@ var _neon_colors := {
 	"strike_inactive": Color(0.2, 0.15, 0.35),
 }
 
+var _custom_colors: Dictionary = {}
+
 # --- Icon state ---
 
 var _icons: Dictionary = {}
@@ -144,6 +146,8 @@ func _apply_theme_setting() -> void:
 			set_theme_mode("light")
 		"neon":
 			set_theme_mode("neon")
+		"custom":
+			set_theme_mode("custom")
 
 
 func set_theme_mode(mode: String) -> void:
@@ -164,6 +168,16 @@ func set_theme_mode(mode: String) -> void:
 			is_neon = true
 			is_dark = true
 			_apply_color_set(_neon_colors)
+		"custom":
+			is_neon = true
+			is_dark = true
+			_custom_colors = _build_custom_palette(
+				PlatformSettings.custom_palette_bg,
+				PlatformSettings.custom_palette_accent,
+				PlatformSettings.custom_palette_secondary,
+				PlatformSettings.custom_palette_error
+			)
+			_apply_color_set(_custom_colors)
 	_rebuild_ui_theme()
 	theme_changed.emit(is_dark)
 	_retint_icon_buttons()
@@ -172,6 +186,45 @@ func set_theme_mode(mode: String) -> void:
 func _apply_color_set(source: Dictionary) -> void:
 	for key in source:
 		colors[key] = source[key]
+
+
+func _build_custom_palette(bg: Color, accent: Color, secondary: Color, error: Color) -> Dictionary:
+	var p := {}
+
+	# Background group — slight value shifts
+	p["background"] = bg
+	p["cell_background"] = Color(bg.r + 0.02, bg.g + 0.02, bg.b + 0.04)
+	p["cell_given"] = Color(bg.r + 0.04, bg.g + 0.04, bg.b + 0.08)
+	p["button_bg"] = Color(bg.r + 0.04, bg.g + 0.02, bg.b + 0.08)
+	p["button_bg_hover"] = Color(bg.r + 0.08, bg.g + 0.04, bg.b + 0.18)
+	p["button_bg_pressed"] = Color(bg.r + 0.02, bg.g + 0.0, bg.b + 0.04)
+	p["button_disabled"] = Color(bg.r + 0.04, bg.g + 0.02, bg.b + 0.04)
+
+	# Accent group — full intensity + cell tints
+	p["grid_line_thick"] = accent
+	p["text_given"] = accent
+	p["button_text"] = accent
+	p["label_text"] = accent
+	p["cell_selected"] = Color(bg.r + accent.r * 0.08, bg.g + accent.g * 0.08, bg.b + accent.b * 0.08)
+	p["cell_same_number"] = Color(bg.r + accent.r * 0.05, bg.g + accent.g * 0.05, bg.b + accent.b * 0.05)
+
+	# Secondary group — full intensity + cell tint
+	p["text_placed"] = secondary
+	p["timer_text"] = secondary
+	p["cell_highlighted"] = Color(bg.r + secondary.r * 0.05, bg.g + secondary.g * 0.05, bg.b + secondary.b * 0.05)
+
+	# Error group — full intensity + cell tint
+	p["text_error"] = error
+	p["strike_active"] = error
+	p["cell_error"] = Color(bg.r + error.r * 0.15, bg.g + error.g * 0.02, bg.b + error.b * 0.02)
+
+	# Auto-derived (~15–25 % intensity of parent group)
+	p["grid_line_thin"] = Color(accent.r * 0.15, accent.g * 0.15, accent.b * 0.15)
+	p["text_pencil"] = Color(secondary.r * 0.15, secondary.g * 0.15, secondary.b * 0.15)
+	p["button_disabled_text"] = Color(accent.r * 0.25, accent.g * 0.25, accent.b * 0.25)
+	p["strike_inactive"] = Color(error.r * 0.15, error.g * 0.15, error.b * 0.15)
+
+	return p
 
 
 func set_dark(dark: bool) -> void:
