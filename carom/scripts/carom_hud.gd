@@ -144,21 +144,18 @@ func show_game_over(winner: String, player_score: int, ai_score: int, current_di
 func _create_reload_button() -> void:
 	_reload_button = CaromReloadButton.new()
 	_reload_button.size = _reload_button.custom_minimum_size
-
-	# Wrap in an anchor container so positioning works reliably
-	var anchor := Control.new()
-	anchor.name = "ReloadButtonAnchor"
-	anchor.set_anchors_preset(Control.PRESET_FULL_RECT)
-	anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	get_parent().add_child(anchor)
-
-	anchor.add_child(_reload_button)
 	_reload_button.reload_requested.connect(func() -> void:
 		reload_requested.emit()
 	)
-	# Position after tree is ready
-	anchor.resized.connect(_position_reload_button)
-	call_deferred("_position_reload_button")
+	# Add directly to the CanvasLayer
+	get_parent().add_child(_reload_button)
+	# Wait one frame for viewport to be ready, then position
+	get_tree().process_frame.connect(_position_reload_button_once, CONNECT_ONE_SHOT)
+	get_viewport().size_changed.connect(_position_reload_button)
+
+
+func _position_reload_button_once() -> void:
+	_position_reload_button()
 
 
 func _position_reload_button() -> void:
@@ -166,18 +163,17 @@ func _position_reload_button() -> void:
 		return
 	var btn_size := _reload_button.custom_minimum_size
 	var margin := Vector2(16.0, 24.0)
-	var parent_control := _reload_button.get_parent() as Control
-	var container_size: Vector2
-	if parent_control and parent_control.size.x > 0.0:
-		container_size = parent_control.size
-	else:
-		container_size = get_viewport().get_visible_rect().size
-	if container_size.x <= 0.0:
+	var vp_size := Vector2(get_viewport().size)
+	if vp_size.x <= 0.0:
+		vp_size = get_viewport().get_visible_rect().size
+	if vp_size.x <= 0.0:
+		push_warning("[CaromHUD] Cannot position reload button — viewport size is zero")
 		return
 	if CaromSettings.reload_button_side == CaromSettings.ReloadButtonSide.LEFT:
-		_reload_button.position = Vector2(margin.x, container_size.y - btn_size.y - margin.y)
+		_reload_button.position = Vector2(margin.x, vp_size.y - btn_size.y - margin.y)
 	else:
-		_reload_button.position = Vector2(container_size.x - btn_size.x - margin.x, container_size.y - btn_size.y - margin.y)
+		_reload_button.position = Vector2(vp_size.x - btn_size.x - margin.x, vp_size.y - btn_size.y - margin.y)
+	print("[CaromHUD] Reload button pos=%s size=%s viewport=%s" % [_reload_button.position, _reload_button.size, vp_size])
 
 
 # --- Settings gear button ---
@@ -186,30 +182,25 @@ func _create_gear_button() -> void:
 	_gear_button = Button.new()
 	_gear_button.text = "⚙"
 	_gear_button.custom_minimum_size = Vector2(44, 44)
+	_gear_button.size = Vector2(44, 44)
 	_gear_button.add_theme_font_size_override("font_size", 22)
 	_gear_button.pressed.connect(_toggle_settings_panel)
+	get_parent().add_child(_gear_button)
+	get_tree().process_frame.connect(_position_gear_button_once, CONNECT_ONE_SHOT)
+	get_viewport().size_changed.connect(_position_gear_button)
 
-	var anchor := Control.new()
-	anchor.name = "GearButtonAnchor"
-	anchor.set_anchors_preset(Control.PRESET_FULL_RECT)
-	anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	get_parent().add_child(anchor)
-	anchor.add_child(_gear_button)
 
-	call_deferred("_position_gear_button")
-	anchor.resized.connect(_position_gear_button)
+func _position_gear_button_once() -> void:
+	_position_gear_button()
 
 
 func _position_gear_button() -> void:
 	if not _gear_button:
 		return
-	var parent_control := _gear_button.get_parent() as Control
-	var container_size: Vector2
-	if parent_control and parent_control.size.x > 0.0:
-		container_size = parent_control.size
-	else:
-		container_size = get_viewport().get_visible_rect().size
-	_gear_button.position = Vector2(container_size.x - 52.0, 8.0)
+	var vp_size := Vector2(get_viewport().size)
+	if vp_size.x <= 0.0:
+		vp_size = get_viewport().get_visible_rect().size
+	_gear_button.position = Vector2(vp_size.x - 52.0, 8.0)
 
 
 func _toggle_settings_panel() -> void:
@@ -237,33 +228,13 @@ func _create_pause_button() -> void:
 	_pause_button = Button.new()
 	_pause_button.text = "⏸"
 	_pause_button.custom_minimum_size = Vector2(44, 44)
+	_pause_button.size = Vector2(44, 44)
+	_pause_button.position = Vector2(8.0, 8.0)
 	_pause_button.add_theme_font_size_override("font_size", 20)
 	_pause_button.pressed.connect(func() -> void:
 		pause_requested.emit()
 	)
-
-	var anchor := Control.new()
-	anchor.name = "PauseButtonAnchor"
-	anchor.set_anchors_preset(Control.PRESET_FULL_RECT)
-	anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	get_parent().add_child(anchor)
-	anchor.add_child(_pause_button)
-
-	call_deferred("_position_pause_button")
-	anchor.resized.connect(_position_pause_button)
-
-
-func _position_pause_button() -> void:
-	if not _pause_button:
-		return
-	var parent_control := _pause_button.get_parent() as Control
-	var container_size: Vector2
-	if parent_control and parent_control.size.x > 0.0:
-		container_size = parent_control.size
-	else:
-		container_size = get_viewport().get_visible_rect().size
-	# Top-left corner
-	_pause_button.position = Vector2(8.0, 8.0)
+	get_parent().add_child(_pause_button)
 
 
 func show_pause_overlay() -> void:
