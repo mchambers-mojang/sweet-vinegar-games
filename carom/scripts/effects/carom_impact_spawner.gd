@@ -5,11 +5,11 @@ extends Node
 ## Attach as child of the arena or match controller.
 ## Call register_projectile() for each new projectile.
 
-const WALL_PARTICLE_COUNT: int = 8
-const PUCK_PARTICLE_COUNT: int = 20
-const SPARK_LIFETIME: float = 0.4
-const SPARK_SPEED: float = 6.0
-const PUCK_SPARK_SPEED: float = 10.0
+const WALL_PARTICLE_COUNT: int = 4
+const PUCK_PARTICLE_COUNT: int = 14
+const SPARK_LIFETIME: float = 0.25
+const SPARK_SPEED: float = 4.0
+const PUCK_SPARK_SPEED: float = 8.0
 
 var _screen_shake: CaromScreenShake = null
 var _registered: Array[CaromProjectile] = []
@@ -49,7 +49,7 @@ func _on_projectile_removed(projectile: CaromProjectile) -> void:
 
 ## Spawn a wall-hit spark effect at position, spraying in the given direction.
 func spawn_wall_impact(pos: Vector3, normal: Vector3, color: Color) -> void:
-	_spawn_sparks(pos, normal, color, WALL_PARTICLE_COUNT, SPARK_SPEED, 0.6)
+	_spawn_sparks(pos, normal, color, WALL_PARTICLE_COUNT, SPARK_SPEED, 0.3)
 
 
 ## Spawn a puck-hit burst at position.
