@@ -9,6 +9,8 @@ const GOAL_BURST_LIFETIME: float = 0.5
 const GOAL_FRAGMENT_MIN_COUNT: int = 5
 const GOAL_FRAGMENT_MAX_COUNT: int = 8
 const GOAL_FRAGMENT_LIFETIME: float = 1.0
+const GOAL_FRAGMENT_EMISSION_ENERGY: float = 3.5
+const GOAL_FLARE_EMISSION_ENERGY: float = 5.0
 const GOAL_CELEBRATION_LIFETIME: float = 1.2
 const GOAL_SCREEN_SHAKE_INTENSITY: float = 0.35
 
@@ -158,7 +160,6 @@ func _spawn_puck_fragments(parent: Node3D, goal_puck: CaromPuck, goal_position: 
 		origin = goal_puck.global_position + Vector3(0.0, 0.14, 0.0)
 
 	var rng := RandomNumberGenerator.new()
-	rng.randomize()
 	var fragment_count := rng.randi_range(GOAL_FRAGMENT_MIN_COUNT, GOAL_FRAGMENT_MAX_COUNT)
 
 	for i in fragment_count:
@@ -185,7 +186,7 @@ func _spawn_puck_fragments(parent: Node3D, goal_puck: CaromPuck, goal_position: 
 			rng.randf_range(0.12, 0.2)
 		)
 		mesh_instance.mesh = mesh
-		var material := _make_emissive_material(color, 3.5, 1.0)
+		var material := _make_emissive_material(color, GOAL_FRAGMENT_EMISSION_ENERGY, 1.0)
 		mesh_instance.material_override = material
 		fragment.add_child(mesh_instance)
 
@@ -209,7 +210,7 @@ func _spawn_puck_fragments(parent: Node3D, goal_puck: CaromPuck, goal_position: 
 		tween.set_parallel(true)
 		tween.tween_property(mesh_instance, "scale", Vector3.ONE * 0.18, GOAL_FRAGMENT_LIFETIME)
 		tween.tween_method(
-			Callable(self, "_set_material_alpha").bind(material, color, 3.5),
+			Callable(self, "_set_material_alpha").bind(material, color, GOAL_FRAGMENT_EMISSION_ENERGY),
 			1.0,
 			0.0,
 			GOAL_FRAGMENT_LIFETIME
@@ -227,7 +228,7 @@ func _spawn_goal_flare(parent: Node3D, goal_zone: Area3D, scoring_side: StringNa
 	flare.mesh = goal_mesh.mesh
 	flare.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
-	var material := _make_emissive_material(color, 5.0, 0.85)
+	var material := _make_emissive_material(color, GOAL_FLARE_EMISSION_ENERGY, 0.85)
 	material.albedo_color = Color(color.r * 0.35, color.g * 0.35, color.b * 0.35, 0.85)
 	flare.material_override = material
 	parent.add_child(flare)
@@ -281,4 +282,4 @@ func _set_flare_state(amount: float, material: StandardMaterial3D, color: Color)
 		clamped_amount * 0.85
 	)
 	material.emission = color
-	material.emission_energy_multiplier = 5.0 * clamped_amount
+	material.emission_energy_multiplier = GOAL_FLARE_EMISSION_ENERGY * clamped_amount
