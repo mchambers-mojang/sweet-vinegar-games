@@ -29,7 +29,7 @@ func _build_ui() -> void:
 	import_btn.pressed.connect(_import_from_clipboard)
 	replay_list.add_child(import_btn)
 
-	var replays := ReplayManager.get_recent_replays(50)
+	var replays := ReplayStorage.get_recent_replays(50)
 	if replays.is_empty():
 		var empty_label := Label.new()
 		empty_label.mouse_filter = Control.MOUSE_FILTER_PASS
@@ -130,8 +130,8 @@ func _add_replay_row(replay: Dictionary) -> void:
 		play_btn.text = "▶ Play"
 		play_btn.custom_minimum_size = Vector2(0, 36)
 		play_btn.pressed.connect(func() -> void:
-			var full_replay := ReplayManager.get_replay_by_id(replay_id)
-			ReplayManager.set_pending_playback(full_replay)
+			var full_replay := ReplayStorage.get_replay_by_id(replay_id)
+			ReplayStorage.set_pending_playback(full_replay)
 			SceneTransition.transition_to(Scenes.REPLAY_VIEWER)
 		)
 		btn_row.add_child(play_btn)
@@ -141,7 +141,7 @@ func _add_replay_row(replay: Dictionary) -> void:
 	share_btn.text = "📤 Share"
 	share_btn.custom_minimum_size = Vector2(0, 36)
 	share_btn.pressed.connect(func() -> void:
-		var code := ReplayManager.export_replay_code(replay_id)
+		var code := ReplayStorage.export_replay_code(replay_id)
 		if code.is_empty():
 			return
 		DisplayServer.clipboard_set(code)
@@ -154,7 +154,7 @@ func _add_replay_row(replay: Dictionary) -> void:
 	delete_btn.text = "✕"
 	delete_btn.custom_minimum_size = Vector2(36, 36)
 	delete_btn.pressed.connect(func() -> void:
-		ReplayManager.delete_replay(replay_id)
+		ReplayStorage.delete_replay(replay_id)
 		_build_ui()
 	)
 	btn_row.add_child(delete_btn)
@@ -184,7 +184,7 @@ func _import_from_clipboard() -> void:
 	if code.is_empty():
 		_show_toast("Clipboard is empty")
 		return
-	var replay := ReplayManager.import_replay_code(code)
+	var replay := ReplayStorage.import_replay_code(code)
 	if replay.is_empty():
 		_show_toast("Invalid replay code")
 		return
@@ -194,7 +194,7 @@ func _import_from_clipboard() -> void:
 	if game_mode not in ["blockudoku", "shikaku", "sudoku"]:
 		_show_toast("Unknown game mode: %s" % game_mode)
 		return
-	ReplayManager.set_pending_playback(replay)
+	ReplayStorage.set_pending_playback(replay)
 	SceneTransition.transition_to(Scenes.REPLAY_VIEWER)
 
 

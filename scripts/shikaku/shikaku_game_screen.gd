@@ -172,7 +172,7 @@ func _on_rectangle_placed(rect: Rect2i) -> void:
 	var result: ShikakuLogic.PlaceRectResult = logic.place_rectangle(rect.position.x, rect.position.y, rect.size.x, rect.size.y)
 	if not result.valid:
 		return
-	ReplayManager.record_input(elapsed_time, "rectangle_placed", {
+	ReplayRecorder.record_input(elapsed_time, "rectangle_placed", {
 		"x": rect.position.x,
 		"y": rect.position.y,
 		"w": rect.size.x,
@@ -205,9 +205,8 @@ func _on_rectangle_tapped(index: int) -> void:
 	var result: ShikakuLogic.RemoveRectResult = logic.remove_rectangle(rect.position.x, rect.position.y, rect.size.x, rect.size.y)
 	if not result.was_present:
 		return
-	ReplayManager.record_input(elapsed_time, "rectangle_removed", {"index": index})
+	ReplayRecorder.record_input(elapsed_time, "rectangle_removed", {"index": index})
 	board.remove_rect(index)
-	SoundManager.play_erase()
 	HapticManager.vibrate_light()
 	_update_button_states()
 	_save_current_state()
@@ -225,13 +224,13 @@ func _on_undo() -> void:
 		# Find and remove it
 		for i in range(board.placed_rects.size() - 1, -1, -1):
 			if board.placed_rects[i] == placed_rect:
-				ReplayManager.record_input(elapsed_time, "rectangle_removed", {"index": i})
+				ReplayRecorder.record_input(elapsed_time, "rectangle_removed", {"index": i})
 				board.remove_rect(i)
 				break
 	elif result.action_type == "remove":
 		# Undo a removal = re-add the rect
 		var removed_rect: Rect2i = _rect_from_dict(result.rect)
-		ReplayManager.record_input(elapsed_time, "rectangle_placed", {
+		ReplayRecorder.record_input(elapsed_time, "rectangle_placed", {
 			"x": removed_rect.position.x,
 			"y": removed_rect.position.y,
 			"w": removed_rect.size.x,
@@ -250,7 +249,7 @@ func _on_redo() -> void:
 		return
 	if result.action_type == "place":
 		var redo_rect: Rect2i = _rect_from_dict(result.rect)
-		ReplayManager.record_input(elapsed_time, "rectangle_placed", {
+		ReplayRecorder.record_input(elapsed_time, "rectangle_placed", {
 			"x": redo_rect.position.x,
 			"y": redo_rect.position.y,
 			"w": redo_rect.size.x,
@@ -261,7 +260,7 @@ func _on_redo() -> void:
 		var removed_rect: Rect2i = _rect_from_dict(result.rect)
 		for i in range(board.placed_rects.size() - 1, -1, -1):
 			if board.placed_rects[i] == removed_rect:
-				ReplayManager.record_input(elapsed_time, "rectangle_removed", {"index": i})
+				ReplayRecorder.record_input(elapsed_time, "rectangle_removed", {"index": i})
 				board.remove_rect(i)
 				break
 	_update_button_states()
@@ -276,7 +275,7 @@ func _on_hint() -> void:
 		return
 	CrashCollector.register_user_action("shikaku_hint_used")
 	var hint_rect: Rect2i = _rect_from_dict(result.rect)
-	ReplayManager.record_input(elapsed_time, "rectangle_placed", {
+	ReplayRecorder.record_input(elapsed_time, "rectangle_placed", {
 		"x": hint_rect.position.x,
 		"y": hint_rect.position.y,
 		"w": hint_rect.size.x,
@@ -299,10 +298,11 @@ func _on_pause() -> void:
 
 
 func _on_back() -> void:
-	ReplayManager.finish_session("abandoned", board.placed_rects.size(), elapsed_time, {
+	var completed := ReplayRecorder.finish_session("abandoned", board.placed_rects.size(), elapsed_time, {
 		"width": grid_width,
 		"height": grid_height,
 	})
+	ReplayStorage.save_replay(completed)
 	CrashCollector.register_user_action("shikaku_back_to_menu")
 	if not logic.is_completed:
 		AchievementManager.track_streak_broken()
@@ -311,11 +311,12 @@ func _on_back() -> void:
 
 
 func _handle_win() -> void:
-	ReplayManager.finish_session("win", board.placed_rects.size(), elapsed_time, {
+	var completed := ReplayRecorder.finish_session("win", board.placed_rects.size(), elapsed_time, {
 		"width": grid_width,
 		"height": grid_height,
 		"hints_used": logic.hints_used,
 	})
+	ReplayStorage.save_replay(completed)
 	var is_new_best := _is_new_best_time()
 	_record_shikaku_completion(grid_width, elapsed_time)
 	AchievementManager.track_game_won("shikaku")
@@ -388,7 +389,7 @@ func _show_win_dialog() -> void:
 			dialog.queue_free()
 			SceneTransition.transition_to(Scenes.SHIKAKU_MENU)
 		elif action == "bookmark":
-			var success := ReplayManager.bookmark_latest_replay()
+			var success := ReplayStorage.bookmark_latest_replay()
 			if success:
 				dialog.dialog_text += "\n\n✓ Replay bookmarked!"
 			else:

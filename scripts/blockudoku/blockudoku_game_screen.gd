@@ -262,7 +262,7 @@ func _start_drag(index: int, screen_pos: Vector2) -> void:
 	_drag_start_screen_pos = screen_pos
 	_drag_moved = false
 	_drag_last_grid_pos = Vector2i(-999, -999)
-	ReplayManager.record_input(elapsed_time, "piece_selected", {
+	ReplayRecorder.record_input(elapsed_time, "piece_selected", {
 		"tray_index": index,
 	})
 	DragEffect.suppress()
@@ -332,7 +332,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 		if shape.size() > 0:
 			logic.apply_rotation(_drag_block_index)
 			var rotated_shape: Array = logic.available_blocks[_drag_block_index]
-			ReplayManager.record_input(elapsed_time, "piece_rotated", {
+			ReplayRecorder.record_input(elapsed_time, "piece_rotated", {
 				"tray_index": _drag_block_index,
 				"shape": _serialize_shape(rotated_shape),
 			})
@@ -350,7 +350,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 	var place_result := logic.try_place(_drag_block_index, grid_pos)
 
 	if place_result.valid:
-		ReplayManager.record_input(elapsed_time, "piece_placed", {
+		ReplayRecorder.record_input(elapsed_time, "piece_placed", {
 			"tray_index": _drag_block_index,
 			"grid_x": grid_pos.x,
 			"grid_y": grid_pos.y,
@@ -462,7 +462,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 			_save_current_state()
 	else:
 		# Invalid placement — do nothing
-		ReplayManager.record_input(elapsed_time, "placement_rejected", {
+		ReplayRecorder.record_input(elapsed_time, "placement_rejected", {
 			"tray_index": _drag_block_index,
 			"grid_x": grid_pos.x,
 			"grid_y": grid_pos.y,
@@ -498,10 +498,11 @@ func _pulse_board_for_combo(combo: int) -> void:
 func _handle_game_over() -> void:
 	CrashCollector.register_user_action("blockudoku_game_over", {"score": logic.score, "turns": logic.turns})
 	logic.is_game_over = true
-	ReplayManager.finish_session("game_over", logic.score, elapsed_time, {
+	var completed := ReplayRecorder.finish_session("game_over", logic.score, elapsed_time, {
 		"turns": logic.turns,
 		"board_state": board.get_state(),
 	})
+	ReplayStorage.save_replay(completed)
 	_update_undo_redo_buttons()
 	_record_blockudoku_game_over(logic.score, logic.turns)
 	AchievementManager.track_blockudoku_game_played(logic.score)
@@ -613,7 +614,7 @@ func _show_game_over_dialog() -> void:
 			dialog.queue_free()
 			SceneTransition.transition_to(Scenes.BLOCKUDOKU_MENU)
 		elif action == "bookmark":
-			var success := ReplayManager.bookmark_latest_replay()
+			var success := ReplayStorage.bookmark_latest_replay()
 			if success:
 				dialog.dialog_text += "\n\n✓ Replay bookmarked!"
 			else:
@@ -679,10 +680,11 @@ func _check_for_new_best() -> void:
 func _on_back() -> void:
 	CrashCollector.register_user_action("blockudoku_back_to_menu")
 	if not logic.is_game_over:
-		ReplayManager.finish_session("abandoned", logic.score, elapsed_time, {
+		var completed := ReplayRecorder.finish_session("abandoned", logic.score, elapsed_time, {
 			"turns": logic.turns,
 			"board_state": board.get_state(),
 		})
+		ReplayStorage.save_replay(completed)
 		AchievementManager.track_streak_broken()
 		_save_current_state()
 	SceneTransition.transition_to(Scenes.BLOCKUDOKU_MENU)

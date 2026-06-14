@@ -23,26 +23,40 @@ Each replay is stored as:
 
 ## Architecture
 
-### ReplayManager (storage layer)
+### ReplayRecorder (session lifecycle)
 
-`scripts/autoload/replay_manager.gd` is the autoload that handles storage, indexing, import/export, and crash recovery. Exposes:
+`scripts/replays/replay_recorder.gd` is an autoload that owns the in-memory recording lifecycle. It exposes:
 
-- `start_session(game_mode, seed, initial_state, settings_snapshot)` — begin a recording session
+- `start_session(game_mode, seed, initial_state, settings_snapshot)` → `String` — begin a recording session, returns replay_id
+- `has_active_session()` → `bool` — whether a session is in progress
 - `record_input(elapsed_time, event_type, payload)` — append a frame
-- `finish_session(outcome, final_score, duration, final_state)` — finalize and persist
-- `bookmark_latest_replay()`
-- `delete_replay(replay_id)`
+- `finish_session(outcome, final_score, duration, final_state)` → `Dictionary` — finalize and return the completed replay; caller must persist it via `ReplayStorage.save_replay()`
+- `flush_active_replay()` — immediately flush the in-progress snapshot to disk
+- `get_crash_recovery_payload()` — crash reporter hook; returns the active in-progress replay
+
+The active (in-progress) replay is snapshotted to `user://active_replay.json` for crash recovery.
+
+### ReplayStorage (file I/O)
+
+`scripts/replays/replay_storage.gd` is an autoload that handles all persistence. It exposes:
+
+- `save_replay(replay)` → `String` — persist a completed replay dict; returns replay_id
+- `delete_replay(replay_id)` — remove from index and disk
+- `bookmark_replay(replay_id)` / `bookmark_latest_replay()` — mark a replay as permanently retained
 - `get_recent_replays(limit)` — metadata list for the replays screen
 - `get_replay_by_id(replay_id)` — full replay with frames
 - `export_replay_code(replay_id)` / `import_replay_code(code)` — compact base64 payloads
 - `set_pending_playback(replay)` / `get_pending_playback()` — pass a replay between screens
-- `get_crash_recovery_payload()` — crash reporter hook
+
+### ReplayManager (facade)
+
+`scripts/autoload/replay_manager.gd` is a thin facade that delegates to `ReplayRecorder` and `ReplayStorage`. It exists for backward compatibility. New callers should use the specific module directly.
 
 ### ReplayPlayer (playback engine)
 
 `scripts/replays/replay_player.gd` is a generic playback engine attached to `scenes/replay_viewer.tscn`. It:
 
-- Reads the pending replay from `ReplayManager`
+- Reads the pending replay from `ReplayStorage`
 - Selects a `GameReplayAdapter` based on `game_mode`
 - Drives play/pause, speed cycling (1×/2×/4×), and board reset via the adapter
 - All games use the single `replay_viewer.tscn` scene
