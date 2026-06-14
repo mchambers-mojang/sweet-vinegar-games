@@ -56,9 +56,13 @@ func _resume_game(data: Dictionary) -> void:
 	)
 
 
+func _get_save_adapter() -> GameSaveAdapter:
+	return ShikakuSaveAdapter.new()
+
+
 func _on_abandon_confirmed() -> void:
-	var save_data := GameSaveManager.load_game("shikaku")
-	var saved_size: int = save_data.get("width", 10)
+	var adapter := _save_adapter as ShikakuSaveAdapter
+	var saved_size: int = adapter.get_grid_width() if adapter else 10
 	GameStatsManager.increment_counter("shikaku", "abandoned_s%d" % saved_size)
 	GameStatsManager.set_counter("shikaku", "current_streak", 0)
 

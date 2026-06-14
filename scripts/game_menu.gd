@@ -9,6 +9,10 @@ class_name GameMenu
 ##   continue_button, new_game_button, stats_button, settings_button, back_button
 ## Any of these may be null if the menu doesn't need that button.
 
+# Cached save adapter — set in _ready() via _get_save_adapter().
+# null for games that have not yet migrated to the adapter contract.
+var _save_adapter: GameSaveAdapter = null
+
 # --- Virtual methods (override in subclasses) ---
 
 ## Unique game identifier (e.g. "sudoku", "shikaku")
@@ -46,6 +50,12 @@ func _has_save_support() -> bool:
 	return true
 
 
+## Return a GameSaveAdapter for this game, or null to fall back to direct
+## GameSaveManager calls.  Override in concrete menus.
+func _get_save_adapter() -> GameSaveAdapter:
+	return null
+
+
 ## Called after base _ready() completes. Wire game-specific UI here.
 func _on_menu_ready() -> void:
 	pass
@@ -75,6 +85,9 @@ func _apply_game_theme() -> void:
 # --- Base lifecycle ---
 
 func _ready() -> void:
+	# Cache the save adapter (null for games not yet using the adapter contract)
+	_save_adapter = _get_save_adapter()
+
 	# Set title
 	var title_lbl := get_node_or_null("%TitleLabel") as Label
 	if title_lbl and not _get_display_name().is_empty():
@@ -107,7 +120,8 @@ func _ready() -> void:
 	# Save/continue flow
 	if _has_save_support():
 		if continue_btn:
-			continue_btn.visible = GameSaveManager.has_saved_game(_get_game_id())
+			var resumable: bool = _save_adapter.can_resume() if _save_adapter else GameSaveManager.has_saved_game(_get_game_id())
+			continue_btn.visible = resumable
 			continue_btn.pressed.connect(_on_continue_pressed)
 		if new_game_btn:
 			new_game_btn.pressed.connect(_on_new_game_pressed)
@@ -140,14 +154,15 @@ func _ready() -> void:
 # --- Continue/New-game/Abandon orchestration ---
 
 func _on_continue_pressed() -> void:
-	var data := GameSaveManager.load_game(_get_game_id())
+	var data: Dictionary = _save_adapter.restore() if _save_adapter else GameSaveManager.load_game(_get_game_id())
 	if data.is_empty():
 		return
 	_resume_game(data)
 
 
 func _on_new_game_pressed() -> void:
-	if GameSaveManager.has_saved_game(_get_game_id()):
+	var has_game: bool = _save_adapter.has_save() if _save_adapter else GameSaveManager.has_saved_game(_get_game_id())
+	if has_game:
 		_show_abandon_dialog()
 	else:
 		_start_game()
@@ -166,7 +181,10 @@ func _show_abandon_dialog() -> void:
 	dialog.popup_centered()
 	dialog.confirmed.connect(func() -> void:
 		_on_abandon_confirmed()
-		GameSaveManager.clear_save(_get_game_id())
+		if _save_adapter:
+			_save_adapter.clear()
+		else:
+			GameSaveManager.clear_save(_get_game_id())
 		dialog.queue_free()
 		_start_game()
 	)

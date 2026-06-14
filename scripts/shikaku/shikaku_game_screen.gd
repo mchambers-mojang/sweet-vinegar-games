@@ -37,6 +37,10 @@ func _get_scene_path() -> String:
 	return Scenes.SHIKAKU_GAME
 
 
+func _get_save_adapter() -> GameSaveAdapter:
+	return ShikakuSaveAdapter.new()
+
+
 func _is_initialized() -> bool:
 	return not logic.numbers.is_empty()
 

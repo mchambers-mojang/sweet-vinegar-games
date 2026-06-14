@@ -79,6 +79,10 @@ func _get_scene_path() -> String:
 	return Scenes.SUDOKU_GAME
 
 
+func _get_save_adapter() -> GameSaveAdapter:
+	return SudokuSaveAdapter.new()
+
+
 func _is_initialized() -> bool:
 	return logic != null and not logic.puzzle.is_empty()
 

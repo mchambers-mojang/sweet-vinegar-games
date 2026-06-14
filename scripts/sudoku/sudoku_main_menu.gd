@@ -68,9 +68,13 @@ func _resume_game(data: Dictionary) -> void:
 	)
 
 
+func _get_save_adapter() -> GameSaveAdapter:
+	return SudokuSaveAdapter.new()
+
+
 func _on_abandon_confirmed() -> void:
-	var save_data := GameSaveManager.load_game("sudoku")
-	var saved_diff: int = save_data.get("difficulty", 0)
+	var adapter := _save_adapter as SudokuSaveAdapter
+	var saved_diff: int = adapter.get_difficulty() if adapter else 0
 	GameStatsManager.increment_counter("sudoku", "abandoned_d%d" % saved_diff)
 	GameStatsManager.set_counter("sudoku", "current_streak", 0)
 

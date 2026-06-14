@@ -17,6 +17,10 @@ var elapsed_time: float = 0.0
 var random_seed: int = 0
 var replay_id: String = ""
 
+# Cached save adapter — set in _ready() via _get_save_adapter().
+# null for games that have not yet migrated to the adapter contract.
+var _save_adapter: GameSaveAdapter = null
+
 @onready var timer_label: Label = %TimerLabel
 
 
@@ -61,6 +65,12 @@ func _get_crash_state() -> Dictionary:
 ## Return the help topic string for HowToPlay.
 func _get_help_topic() -> String:
 	return _get_game_id()
+
+
+## Return a GameSaveAdapter for this game, or null to fall back to direct
+## GameSaveManager calls.  Override in concrete game screens.
+func _get_save_adapter() -> GameSaveAdapter:
+	return null
 
 
 ## Called after the base lifecycle setup is complete.
@@ -125,6 +135,9 @@ func _should_tick_timer() -> bool:
 # --- Lifecycle ---
 
 func _ready() -> void:
+	# Cache the save adapter (null for games not yet using the adapter contract)
+	_save_adapter = _get_save_adapter()
+
 	# Crash reporting
 	CrashCollector.register_state_provider(_get_crash_state)
 	CrashCollector.register_user_action("%s_screen_opened" % _get_game_id())
@@ -214,17 +227,26 @@ func begin_session(saved_data: Dictionary = {}) -> void:
 func save_progress() -> void:
 	if _is_completed():
 		return
-	GameSaveManager.save_game(_get_game_id(), _serialize_state())
+	if _save_adapter:
+		_save_adapter.save(_serialize_state())
+	else:
+		GameSaveManager.save_game(_get_game_id(), _serialize_state())
 
 
 func clear_save() -> void:
-	GameSaveManager.clear_save(_get_game_id())
+	if _save_adapter:
+		_save_adapter.clear()
+	else:
+		GameSaveManager.clear_save(_get_game_id())
 
 
 func _try_auto_resume() -> void:
 	if _is_initialized():
 		return
-	if GameSaveManager.has_saved_game(_get_game_id()):
+	if _save_adapter:
+		if _save_adapter.can_resume():
+			_deserialize_state(_save_adapter.restore())
+	elif GameSaveManager.has_saved_game(_get_game_id()):
 		var data := GameSaveManager.load_game(_get_game_id())
 		if not data.is_empty():
 			_deserialize_state(data)
