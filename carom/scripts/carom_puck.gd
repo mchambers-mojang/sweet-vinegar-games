@@ -30,18 +30,34 @@ func _ready() -> void:
 
 
 func _setup_emission_material() -> void:
-	_puck_material = StandardMaterial3D.new()
-	_puck_material.albedo_color = Color(0.02, 0.08, 0.1, 1)
-	_puck_material.emission_enabled = true
-	_puck_material.emission = Color(0.8, 1.0, 1.0, 1)
-	_puck_material.emission_energy_multiplier = EMISSION_BASE
-	_puck_material.roughness = 0.2
+	# Grab the existing material from the first mesh (shared SubResource in .tscn)
+	# and modify it in place — creating a new one doesn't reliably override the scene material.
 	var mesh_count: int = 0
 	for child in get_children():
 		if child is MeshInstance3D:
-			(child as MeshInstance3D).material_override = _puck_material
-			mesh_count += 1
-	print("[DEBUG-puck] Applied emission material to %d meshes" % mesh_count)
+			var mesh_inst := child as MeshInstance3D
+			if _puck_material == null and mesh_inst.material_override != null:
+				# Make it unique so we don't affect the PackedScene resource
+				_puck_material = mesh_inst.material_override.duplicate() as StandardMaterial3D
+				_puck_material.emission_enabled = true
+				_puck_material.emission = Color(0.8, 1.0, 1.0, 1)
+				_puck_material.emission_energy_multiplier = EMISSION_BASE
+			if _puck_material != null:
+				mesh_inst.material_override = _puck_material
+				mesh_count += 1
+	if _puck_material == null:
+		# Fallback: create from scratch if no existing material found
+		_puck_material = StandardMaterial3D.new()
+		_puck_material.albedo_color = Color(0.02, 0.08, 0.1, 1)
+		_puck_material.emission_enabled = true
+		_puck_material.emission = Color(0.8, 1.0, 1.0, 1)
+		_puck_material.emission_energy_multiplier = EMISSION_BASE
+		_puck_material.roughness = 0.2
+		for child in get_children():
+			if child is MeshInstance3D:
+				(child as MeshInstance3D).material_override = _puck_material
+				mesh_count += 1
+	print("[DEBUG-puck] Applied emission material to %d meshes, mat_rid=%s" % [mesh_count, str(_puck_material.get_rid())])
 
 
 func configure(goal_targets: Array[Vector3], reset_position: Vector3) -> void:
@@ -70,10 +86,11 @@ func _update_pulse(delta: float) -> void:
 	_pulse_time = fmod(_pulse_time + delta * freq * TAU, TAU)
 	var t := (sin(_pulse_time) + 1.0) * 0.5
 	_puck_material.emission_energy_multiplier = lerpf(EMISSION_BASE, EMISSION_PEAK, t)
-	# Pulse between dark blue and bright white — impossible to miss
-	_puck_material.albedo_color = Color(t, t, t, 1.0)
+	# Extreme test: toggle between bright red and bright green
+	_puck_material.albedo_color = Color(t, 1.0 - t, 0.0, 1.0)
+	_puck_material.emission = Color(t, 1.0 - t, 0.0, 1.0)
 	if Engine.get_frames_drawn() % 60 == 0:
-		print("[DEBUG-pulse] freq=%.1f t=%.2f emission=%.1f" % [freq, t, _puck_material.emission_energy_multiplier])
+		print("[DEBUG-pulse] freq=%.1f t=%.2f albedo=%s" % [freq, t, str(_puck_material.albedo_color)])
 
 
 func _get_pulse_frequency() -> float:
