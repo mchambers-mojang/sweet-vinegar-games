@@ -171,7 +171,7 @@ func _on_rematch() -> void:
 
 
 func _on_menu() -> void:
-	SceneTransition.transition_to("res://scenes/carom_menu.tscn")
+	SceneTransition.transition_to(Scenes.CAROM_MENU)
 
 
 func _on_difficulty_changed(level: int) -> void:
