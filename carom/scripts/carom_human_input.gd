@@ -170,7 +170,7 @@ func _process_gyroscope(delta: float, aim_arc: float, aim_speed: float) -> void:
 	# Scale by aim_speed so the sensitivity feels consistent with other modes.
 	var scaled := clampf(rate_dps, -aim_speed, aim_speed)
 	_aim_target = clampf(
-		_aim_target + scaled * delta,
+		_aim_target - scaled * delta,
 		-aim_arc * 0.5,
 		aim_arc * 0.5
 	)
