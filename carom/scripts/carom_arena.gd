@@ -4,6 +4,11 @@ extends Node3D
 ## Carom arena root — provides spawn points and goal detection for the match controller.
 
 const CaromAmbientParticlesScene := preload("res://carom/scripts/effects/carom_ambient_particles.gd")
+const CAMERA_TRANSITION_SECONDS: float = 0.5
+const TOP_DOWN_POSITION: Vector3 = Vector3(0.0, 20.0, 12.0)
+const TOP_DOWN_ROTATION: Vector3 = Vector3(-90.0, 0.0, 0.0)
+const ISOMETRIC_POSITION: Vector3 = Vector3(0.0, 16.0, 24.0)
+const ISOMETRIC_ROTATION: Vector3 = Vector3(-45.0, 0.0, 0.0)
 
 signal goal_scored(scoring_side: StringName, puck: CaromPuck)
 
@@ -11,6 +16,7 @@ signal goal_scored(scoring_side: StringName, puck: CaromPuck)
 @export var arena_depth: float = 12.0
 
 var _goal_locked: bool = false
+var _camera_mode_tween: Tween = null
 
 @onready var south_goal: Area3D = $SouthGoal
 @onready var north_goal: Area3D = $NorthGoal
@@ -18,12 +24,42 @@ var _goal_locked: bool = false
 @onready var north_turret_spawn: Marker3D = $SpawnMarkers/NorthTurretSpawn
 @onready var puck_spawn: Marker3D = $SpawnMarkers/PuckSpawn
 @onready var puck_spawn_2: Marker3D = $SpawnMarkers/PuckSpawn2
+@onready var _camera: Camera3D = $Camera3D
 
 
 func _ready() -> void:
 	south_goal.body_entered.connect(_on_south_goal_body_entered)
 	north_goal.body_entered.connect(_on_north_goal_body_entered)
 	_setup_ambient_particles()
+	CaromSettings.ensure_loaded()
+	set_camera_mode(CaromSettings.camera_mode, false)
+
+
+func set_camera_mode(mode: String, animate: bool = true) -> void:
+	if _camera == null:
+		return
+
+	var target_mode := CaromSettings.normalize_camera_mode(mode)
+
+	var target_position := TOP_DOWN_POSITION
+	var target_rotation := TOP_DOWN_ROTATION
+	if target_mode == CaromSettings.CAMERA_MODE_ISOMETRIC:
+		target_position = ISOMETRIC_POSITION
+		target_rotation = ISOMETRIC_ROTATION
+
+	if is_instance_valid(_camera_mode_tween):
+		_camera_mode_tween.kill()
+		_camera_mode_tween = null
+
+	if not animate:
+		_camera.position = target_position
+		_camera.rotation_degrees = target_rotation
+		return
+
+	_camera_mode_tween = create_tween()
+	_camera_mode_tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	_camera_mode_tween.tween_property(_camera, "position", target_position, CAMERA_TRANSITION_SECONDS)
+	_camera_mode_tween.parallel().tween_property(_camera, "rotation_degrees", target_rotation, CAMERA_TRANSITION_SECONDS)
 
 
 func _setup_ambient_particles() -> void:
