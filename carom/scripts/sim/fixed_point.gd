@@ -73,7 +73,8 @@ static func sqrt(a: int) -> int:
 static func abs_fp(a: int) -> int:
 	return -a if a < 0 else a
 
-## Sign of a fixed-point number.  Returns FP +1 or FP -1 (never 0).
+## Sign of a fixed-point number.  Returns FP +1 or FP -1.
+## Zero is treated as positive and returns ONE.
 static func sign_fp(a: int) -> int:
 	return -ONE if a < 0 else ONE
 

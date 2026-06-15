@@ -3,6 +3,10 @@ extends GutTest
 ## Unit tests for FP (fixed-point 48.16 math library) and FP.FPVec2.
 ## All computation must use only integer arithmetic — floats appear only in
 ## from_float / to_float, which are tested here for round-trip accuracy.
+##
+## FPScript holds the preloaded script for scalar helpers (from_int, mul, …).
+## FP.FPVec2 is accessed via the global class_name declared in fixed_point.gd —
+## both aliases resolve to the same class at runtime.
 
 const FPScript := preload("res://carom/scripts/sim/fixed_point.gd")
 
