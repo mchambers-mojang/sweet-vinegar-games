@@ -133,6 +133,7 @@ func _on_abandon_confirmed() -> void:
 	var stat_val: int = save_data.get(config.abandon_stat_save_key, config.abandon_stat_default)
 	GameStatsManager.increment_counter(config.game_id, config.abandon_stat_prefix + str(stat_val))
 	GameStatsManager.set_counter(config.game_id, "current_streak", 0)
+	GameStatsManager.set_counter("general", "current_win_streak", 0)
 
 
 ## Apply game-specific theme.

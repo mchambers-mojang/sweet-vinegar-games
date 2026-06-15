@@ -311,7 +311,8 @@ func _on_back() -> void:
 	session.save_completed_replay(completed)
 	session.register_user_action("shikaku_back_to_menu")
 	if not logic.is_completed:
-		session.track_streak_broken()
+		session.set_stats_counter("general", "current_win_streak", 0)
+		session.check_achievements()
 	_save_current_state()
 	SceneTransition.transition_to(Scenes.SHIKAKU_MENU)
 
@@ -326,8 +327,12 @@ func _handle_win() -> void:
 	session.save_completed_replay(completed)
 	var is_new_best := _is_new_best_time()
 	_record_shikaku_completion(grid_width, elapsed_time)
-	session.track_game_won("shikaku")
-	session.track_shikaku_won(grid_width, elapsed_time)
+	session.increment_stats_counter("general", "games_won")
+	session.increment_stats_counter("general", "current_win_streak")
+	session.increment_stats_counter("shikaku", "games_won")
+	if elapsed_time < 60.0:
+		session.increment_stats_counter("shikaku", "wins_under_60s")
+	session.check_achievements()
 	session.log_event("game_over", {
 		"game": "shikaku",
 		"won": true,

@@ -75,26 +75,11 @@ class MockAnalytics:
 class MockAchievements:
 	var calls: Array = []
 
-	func track_game_started(game_id: String) -> void:
-		calls.append(["track_game_started", game_id])
+	func track(event_key: String, value: int = 1) -> void:
+		calls.append(["track", event_key, value])
 
-	func track_game_won(game_id: String, metadata: Dictionary = {}) -> void:
-		calls.append(["track_game_won", game_id, metadata])
-
-	func track_streak_broken() -> void:
-		calls.append(["track_streak_broken"])
-
-	func track_blockudoku_clear(n: int) -> void:
-		calls.append(["track_blockudoku_clear", n])
-
-	func track_blockudoku_combo(n: int) -> void:
-		calls.append(["track_blockudoku_combo", n])
-
-	func track_blockudoku_game_played(score: int) -> void:
-		calls.append(["track_blockudoku_game_played", score])
-
-	func track_shikaku_won(size: int, time: float) -> void:
-		calls.append(["track_shikaku_won", size, time])
+	func check_stats() -> void:
+		calls.append(["check_stats"])
 
 
 class MockSaves:
@@ -309,45 +294,17 @@ func test_log_event_delegates_to_analytics() -> void:
 # Achievements
 # ---------------------------------------------------------------------------
 
-func test_track_game_started_delegates() -> void:
-	session.track_game_started("sudoku")
+func test_track_achievement_delegates() -> void:
+	session.track_achievement("blockudoku.clear_count", 3)
 	assert_eq(achievements.calls.size(), 1)
-	assert_eq(achievements.calls[0][0], "track_game_started")
-	assert_eq(achievements.calls[0][1], "sudoku")
+	assert_eq(achievements.calls[0][0], "track")
+	assert_eq(achievements.calls[0][1], "blockudoku.clear_count")
+	assert_eq(achievements.calls[0][2], 3)
 
 
-func test_track_game_won_delegates() -> void:
-	session.track_game_won("shikaku", {"difficulty": 2})
-	assert_eq(achievements.calls[0][0], "track_game_won")
-	assert_eq(achievements.calls[0][1], "shikaku")
-
-
-func test_track_streak_broken_delegates() -> void:
-	session.track_streak_broken()
-	assert_eq(achievements.calls[0][0], "track_streak_broken")
-
-
-func test_track_blockudoku_clear_delegates() -> void:
-	session.track_blockudoku_clear(3)
-	assert_eq(achievements.calls[0][0], "track_blockudoku_clear")
-	assert_eq(achievements.calls[0][1], 3)
-
-
-func test_track_blockudoku_combo_delegates() -> void:
-	session.track_blockudoku_combo(2)
-	assert_eq(achievements.calls[0][0], "track_blockudoku_combo")
-
-
-func test_track_blockudoku_game_played_delegates() -> void:
-	session.track_blockudoku_game_played(500)
-	assert_eq(achievements.calls[0][0], "track_blockudoku_game_played")
-	assert_eq(achievements.calls[0][1], 500)
-
-
-func test_track_shikaku_won_delegates() -> void:
-	session.track_shikaku_won(6, 45.0)
-	assert_eq(achievements.calls[0][0], "track_shikaku_won")
-	assert_eq(achievements.calls[0][1], 6)
+func test_check_achievements_delegates() -> void:
+	session.check_achievements()
+	assert_eq(achievements.calls[0][0], "check_stats")
 
 
 # ---------------------------------------------------------------------------

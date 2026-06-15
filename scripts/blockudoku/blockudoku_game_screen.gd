@@ -417,8 +417,8 @@ func _end_drag(screen_pos: Vector2) -> void:
 					var combo_amp := minf(0.5 + place_result.combo * 0.3, 2.0)
 					NeonRing.create(board, combo_center, Color(2.0, 0.3, 1.8), cell_size * (4.0 + place_result.combo), 0.4, combo_amp)
 			session.increment_stats_counter("blockudoku", "total_clears", place_result.lines_cleared + place_result.boxes_cleared)
-			session.track_blockudoku_clear(place_result.lines_cleared + place_result.boxes_cleared)
-			session.track_blockudoku_combo(place_result.combo)
+			session.track_achievement("blockudoku.clear_count", place_result.lines_cleared + place_result.boxes_cleared)
+			session.track_achievement("blockudoku.combo_count", place_result.combo)
 			session.log_event("line_cleared", {
 				"game": "blockudoku",
 				"cleared": place_result.total_cells_cleared,
@@ -510,8 +510,9 @@ func _handle_game_over() -> void:
 	session.save_completed_replay(completed)
 	_update_undo_redo_buttons()
 	_record_blockudoku_game_over(logic.score, logic.turns)
-	session.track_blockudoku_game_played(logic.score)
-	session.track_streak_broken()
+	session.increment_stats_counter("blockudoku", "games_completed")
+	session.set_stats_counter("general", "current_win_streak", 0)
+	session.check_achievements()
 	session.log_event("game_over", {
 		"game": "blockudoku",
 		"won": false,
@@ -700,7 +701,8 @@ func _on_back() -> void:
 			"board_state": board.get_state(),
 		})
 		session.save_completed_replay(completed)
-		session.track_streak_broken()
+		session.set_stats_counter("general", "current_win_streak", 0)
+		session.check_achievements()
 		_save_current_state()
 	SceneTransition.transition_to(Scenes.BLOCKUDOKU_MENU)
 
