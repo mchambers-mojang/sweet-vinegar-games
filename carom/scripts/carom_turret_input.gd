@@ -25,3 +25,9 @@ extends RefCounted
 
 func process(_delta: float, _turret_state: Dictionary) -> Dictionary:
 	return {}
+
+
+## Called for every unhandled InputEvent when the turret is in HUMAN mode.
+## Override in human-input subclasses; default is a no-op so AI adapters don't need to.
+func handle_input_event(_event: InputEvent, _aim_arc: float) -> void:
+	pass
