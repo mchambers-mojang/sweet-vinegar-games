@@ -39,7 +39,7 @@ func _init(
 	_storage = p_storage if p_storage != null else ReplayStorage
 	_crash = p_crash if p_crash != null else CrashCollector
 	_analytics = p_analytics if p_analytics != null else AnalyticsManager
-	_achievements = p_achievements if p_achievements != null else AchievementManager
+	_achievements = p_achievements if p_achievements != null else AchievementEngine
 	_saves = p_saves if p_saves != null else GameSaveManager
 	_stats = p_stats if p_stats != null else GameStatsManager
 	_sound = p_sound if p_sound != null else SoundManager
@@ -108,32 +108,12 @@ func log_event(event_name: String, params: Dictionary = {}) -> void:
 
 # === Achievements ===
 
-func track_game_started(game_id: String) -> void:
-	_achievements.track_game_started(game_id)
+func track_achievement(event_key: String, value: int = 1) -> void:
+	_achievements.track(event_key, value)
 
 
-func track_game_won(game_id: String, metadata: Dictionary = {}) -> void:
-	_achievements.track_game_won(game_id, metadata)
-
-
-func track_streak_broken() -> void:
-	_achievements.track_streak_broken()
-
-
-func track_blockudoku_clear(clear_count: int) -> void:
-	_achievements.track_blockudoku_clear(clear_count)
-
-
-func track_blockudoku_combo(combo: int) -> void:
-	_achievements.track_blockudoku_combo(combo)
-
-
-func track_blockudoku_game_played(score: int) -> void:
-	_achievements.track_blockudoku_game_played(score)
-
-
-func track_shikaku_won(size: int, time: float) -> void:
-	_achievements.track_shikaku_won(size, time)
+func check_achievements() -> void:
+	_achievements.check_stats()
 
 
 # === Stats ===

@@ -369,7 +369,8 @@ func _handle_number_first_cell_tap(index: int) -> void:
 			if result.game_failed:
 				_can_continue_after_failure = false
 				_update_button_states()
-				session.track_streak_broken()
+				session.set_stats_counter("general", "current_win_streak", 0)
+				session.check_achievements()
 				_log_game_over_analytics(false)
 				_show_fail_dialog()
 			_save_current_state()
@@ -472,7 +473,8 @@ func _place_or_note_number(number: int) -> void:
 			if result.game_failed:
 				_can_continue_after_failure = false
 				_update_button_states()
-				session.track_streak_broken()
+				session.set_stats_counter("general", "current_win_streak", 0)
+				session.check_achievements()
 				_log_game_over_analytics(false)
 				_show_fail_dialog()
 			_save_current_state()
@@ -599,7 +601,8 @@ func _on_back_pressed() -> void:
 	session.save_completed_replay(completed)
 	session.user_action("sudoku_back_to_menu")
 	if not logic.is_completed:
-		session.track_streak_broken()
+		session.set_stats_counter("general", "current_win_streak", 0)
+		session.check_achievements()
 	_save_current_state()
 	SceneTransition.transition_to(Scenes.SUDOKU_MENU)
 
@@ -647,11 +650,18 @@ func _handle_win() -> void:
 	var previous_best: float = _get_best_time(difficulty)
 	_record_sudoku_completion(difficulty, elapsed_time, GameRulesRegistry.get_rule("sudoku", "error_mode") == "strict", won)
 	if won:
-		session.track_game_won("sudoku", {
-			"difficulty": difficulty,
-			"elapsed_time": elapsed_time,
-			"strikes": logic.strikes,
-		})
+		session.increment_stats_counter("general", "games_won")
+		session.increment_stats_counter("sudoku", "games_won")
+		session.increment_stats_counter("general", "current_win_streak")
+		if logic.strikes == 0:
+			session.increment_stats_counter("sudoku", "perfect_wins")
+		if elapsed_time < 300.0:
+			session.increment_stats_counter("sudoku", "wins_under_300s")
+		if elapsed_time < 180.0:
+			session.increment_stats_counter("sudoku", "wins_under_180s")
+	else:
+		session.set_stats_counter("general", "current_win_streak", 0)
+	session.check_achievements()
 	_log_game_over_analytics(won)
 	clear_save()
 	_play_win_celebration()
@@ -1032,7 +1042,8 @@ func _apply_number_to_multi_selection(number: int) -> void:
 				)
 				if result.game_failed:
 					_can_continue_after_failure = false
-					session.track_streak_broken()
+					session.set_stats_counter("general", "current_win_streak", 0)
+					session.check_achievements()
 					_update_button_states()
 					_log_game_over_analytics(false)
 					_show_fail_dialog()
@@ -1149,6 +1160,5 @@ func _get_best_time(diff: int) -> float:
 	if best_ms == 0:
 		return -1.0
 	return float(best_ms) / 1000.0
-
 
 

@@ -229,9 +229,11 @@ func begin_session(saved_data: Dictionary = {}) -> void:
 
 	if not is_resuming:
 		_increment_stats()
+		session.increment_stats_counter("general", "games_played")
 		GameEvents.game_started.emit(game_id, _get_difficulty(), _get_analytics_params())
 
-	session.track_game_started(game_id)
+	session.track_achievement("general.game_started.%s" % game_id)
+	session.check_achievements()
 	_save_current_state()
 
 

@@ -184,7 +184,7 @@ func _build_ui() -> void:
 	var reset_btn := Button.new()
 	reset_btn.text = "Reset Achievements"
 	reset_btn.pressed.connect(func() -> void:
-		AchievementManager.reset_all_progress()
+		AchievementEngine.reset_all_progress()
 		log_analytics_event("debug_cheat:reset_achievements")
 	)
 	list.add_child(reset_btn)

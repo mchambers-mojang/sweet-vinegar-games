@@ -24,7 +24,7 @@ func _ready() -> void:
 		_build_ui()
 		_apply_theme()
 	)
-	AchievementManager.achievement_unlocked.connect(func(_achievement_id: String, _definition: Dictionary) -> void:
+	AchievementEngine.achievement_unlocked.connect(func(_achievement_id: String, _definition: Dictionary) -> void:
 		_build_ui()
 	)
 
@@ -33,7 +33,7 @@ func _build_ui() -> void:
 	for child in achievements_list.get_children():
 		child.queue_free()
 
-	var all_achievements: Array[Dictionary] = AchievementManager.get_achievement_snapshot()
+	var all_achievements: Array[Dictionary] = AchievementEngine.get_achievement_snapshot()
 	for category in CATEGORY_ORDER:
 		var category_achievements: Array[Dictionary] = _get_category_achievements(all_achievements, category)
 		if category_achievements.is_empty():
