@@ -25,7 +25,7 @@ var _debug_visible: bool = false
 var _reload_button: CaromReloadButton = null
 var _settings_panel: CaromSettings = null
 var _gear_button: Button = null
-var _current_camera_mode: String = "top_down"
+var _current_camera_mode: String = CaromSettings.CAMERA_MODE_TOP_DOWN
 
 const AI_STATE_NAMES := ["ATTACK", "DEFEND", "RELOAD_PRESSURE", "TRICK_SHOT"]
 

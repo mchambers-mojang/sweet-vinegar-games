@@ -16,18 +16,17 @@ enum ReloadButtonSide {
 	LEFT = 1,
 }
 
-enum CameraMode {
-	TOP_DOWN = 0,
-	ISOMETRIC = 1,
-}
-
 const SAVE_PATH := "user://carom_settings.cfg"
+const CAMERA_MODE_TOP_DOWN := "top_down"
+const CAMERA_MODE_ISOMETRIC := "isometric"
+const CAMERA_MODE_TOP_DOWN_INDEX := 0
+const CAMERA_MODE_ISOMETRIC_INDEX := 1
 
 # --- Static data (singleton-like, persists across scene changes) ---
 
 static var aim_mode: int = AimMode.DRAG
 static var reload_button_side: int = ReloadButtonSide.RIGHT
-static var camera_mode: String = "top_down"
+static var camera_mode: String = CAMERA_MODE_TOP_DOWN
 static var _loaded: bool = false
 
 signal closed
@@ -47,9 +46,7 @@ static func ensure_loaded() -> void:
 		return
 	aim_mode = config.get_value("carom", "aim_mode", AimMode.DRAG)
 	reload_button_side = config.get_value("carom", "reload_button_side", ReloadButtonSide.RIGHT)
-	camera_mode = config.get_value("carom", "camera_mode", "top_down")
-	if camera_mode != "top_down" and camera_mode != "isometric":
-		camera_mode = "top_down"
+	camera_mode = normalize_camera_mode(config.get_value("carom", "camera_mode", CAMERA_MODE_TOP_DOWN))
 
 
 static func save() -> void:
@@ -58,6 +55,12 @@ static func save() -> void:
 	config.set_value("carom", "reload_button_side", reload_button_side)
 	config.set_value("carom", "camera_mode", camera_mode)
 	config.save(SAVE_PATH)
+
+
+static func normalize_camera_mode(mode: String) -> String:
+	if mode == CAMERA_MODE_TOP_DOWN or mode == CAMERA_MODE_ISOMETRIC:
+		return mode
+	return CAMERA_MODE_TOP_DOWN
 
 
 ## Returns true if this device likely has a usable gyroscope sensor.
@@ -160,9 +163,17 @@ func _build_ui() -> void:
 	var camera_picker := OptionButton.new()
 	camera_picker.add_item("Top Down")
 	camera_picker.add_item("Isometric")
-	camera_picker.selected = CaromSettings.CameraMode.ISOMETRIC if CaromSettings.camera_mode == "isometric" else CaromSettings.CameraMode.TOP_DOWN
+	camera_picker.selected = (
+		CaromSettings.CAMERA_MODE_ISOMETRIC_INDEX
+		if CaromSettings.camera_mode == CaromSettings.CAMERA_MODE_ISOMETRIC
+		else CaromSettings.CAMERA_MODE_TOP_DOWN_INDEX
+	)
 	camera_picker.item_selected.connect(func(idx: int) -> void:
-		CaromSettings.camera_mode = "isometric" if idx == CaromSettings.CameraMode.ISOMETRIC else "top_down"
+		CaromSettings.camera_mode = (
+			CaromSettings.CAMERA_MODE_ISOMETRIC
+			if idx == CaromSettings.CAMERA_MODE_ISOMETRIC_INDEX
+			else CaromSettings.CAMERA_MODE_TOP_DOWN
+		)
 		CaromSettings.save()
 		setting_changed.emit()
 	)

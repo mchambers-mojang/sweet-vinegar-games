@@ -4,8 +4,6 @@ extends Node3D
 ## Carom arena root — provides spawn points and goal detection for the match controller.
 
 const CaromAmbientParticlesScene := preload("res://carom/scripts/effects/carom_ambient_particles.gd")
-const CAMERA_MODE_TOP_DOWN: String = "top_down"
-const CAMERA_MODE_ISOMETRIC: String = "isometric"
 const CAMERA_TRANSITION_SECONDS: float = 0.5
 const TOP_DOWN_POSITION: Vector3 = Vector3(0.0, 20.0, 12.0)
 const TOP_DOWN_ROTATION: Vector3 = Vector3(-90.0, 0.0, 0.0)
@@ -41,17 +39,15 @@ func set_camera_mode(mode: String, animate: bool = true) -> void:
 	if _camera == null:
 		return
 
-	var target_mode := mode
-	if target_mode != CAMERA_MODE_TOP_DOWN and target_mode != CAMERA_MODE_ISOMETRIC:
-		target_mode = CAMERA_MODE_TOP_DOWN
+	var target_mode := CaromSettings.normalize_camera_mode(mode)
 
 	var target_position := TOP_DOWN_POSITION
 	var target_rotation := TOP_DOWN_ROTATION
-	if target_mode == CAMERA_MODE_ISOMETRIC:
+	if target_mode == CaromSettings.CAMERA_MODE_ISOMETRIC:
 		target_position = ISOMETRIC_POSITION
 		target_rotation = ISOMETRIC_ROTATION
 
-	if _camera_mode_tween and _camera_mode_tween.is_valid():
+	if is_instance_valid(_camera_mode_tween):
 		_camera_mode_tween.kill()
 		_camera_mode_tween = null
 

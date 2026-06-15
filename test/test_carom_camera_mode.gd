@@ -10,24 +10,24 @@ func after_each() -> void:
 	CaromSettings._loaded = false
 	CaromSettings.aim_mode = CaromSettings.AimMode.DRAG
 	CaromSettings.reload_button_side = CaromSettings.ReloadButtonSide.RIGHT
-	CaromSettings.camera_mode = "top_down"
+	CaromSettings.camera_mode = CaromSettings.CAMERA_MODE_TOP_DOWN
 
 
 func test_camera_mode_persists_in_carom_settings() -> void:
 	CaromSettings._loaded = true
-	CaromSettings.camera_mode = "isometric"
+	CaromSettings.camera_mode = CaromSettings.CAMERA_MODE_ISOMETRIC
 	CaromSettings.save()
 
-	CaromSettings.camera_mode = "top_down"
+	CaromSettings.camera_mode = CaromSettings.CAMERA_MODE_TOP_DOWN
 	CaromSettings._loaded = false
 	CaromSettings.ensure_loaded()
 
-	assert_eq(CaromSettings.camera_mode, "isometric")
+	assert_eq(CaromSettings.camera_mode, CaromSettings.CAMERA_MODE_ISOMETRIC)
 
 
 func test_arena_applies_camera_modes_without_animation() -> void:
 	CaromSettings._loaded = true
-	CaromSettings.camera_mode = "top_down"
+	CaromSettings.camera_mode = CaromSettings.CAMERA_MODE_TOP_DOWN
 	var arena := ArenaScene.instantiate() as CaromArena
 	add_child_autofree(arena)
 
@@ -41,4 +41,3 @@ func test_arena_applies_camera_modes_without_animation() -> void:
 	arena.set_camera_mode("top_down", false)
 	assert_eq(camera.position, CaromArena.TOP_DOWN_POSITION)
 	assert_eq(camera.rotation_degrees, CaromArena.TOP_DOWN_ROTATION)
-
