@@ -63,12 +63,9 @@ func test_start_round_activates_ai_turret() -> void:
 
 func test_start_round_emits_round_ready() -> void:
 	var round := await _make_configured_round()
-	var emitted := false
-	round.round_ready.connect(func() -> void:
-		emitted = true
-	)
+	watch_signals(round)
 	round.start_round()
-	assert_true(emitted)
+	assert_signal_emitted(round, "round_ready")
 
 
 # --- end_round ---
