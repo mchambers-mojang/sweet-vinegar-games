@@ -16,12 +16,18 @@ enum ReloadButtonSide {
 	LEFT = 1,
 }
 
+enum CameraMode {
+	TOP_DOWN = 0,
+	ISOMETRIC = 1,
+}
+
 const SAVE_PATH := "user://carom_settings.cfg"
 
 # --- Static data (singleton-like, persists across scene changes) ---
 
 static var aim_mode: int = AimMode.DRAG
 static var reload_button_side: int = ReloadButtonSide.RIGHT
+static var camera_mode: String = "top_down"
 static var _loaded: bool = false
 
 signal closed
@@ -41,12 +47,16 @@ static func ensure_loaded() -> void:
 		return
 	aim_mode = config.get_value("carom", "aim_mode", AimMode.DRAG)
 	reload_button_side = config.get_value("carom", "reload_button_side", ReloadButtonSide.RIGHT)
+	camera_mode = config.get_value("carom", "camera_mode", "top_down")
+	if camera_mode != "top_down" and camera_mode != "isometric":
+		camera_mode = "top_down"
 
 
 static func save() -> void:
 	var config := ConfigFile.new()
 	config.set_value("carom", "aim_mode", aim_mode)
 	config.set_value("carom", "reload_button_side", reload_button_side)
+	config.set_value("carom", "camera_mode", camera_mode)
 	config.save(SAVE_PATH)
 
 
@@ -59,7 +69,7 @@ static func is_gyroscope_supported() -> bool:
 
 func _ready() -> void:
 	CaromSettings.ensure_loaded()
-	custom_minimum_size = Vector2(300, 240)
+	custom_minimum_size = Vector2(300, 280)
 	_build_ui()
 
 
@@ -136,6 +146,27 @@ func _build_ui() -> void:
 		setting_changed.emit()
 	)
 	side_row.add_child(side_picker)
+
+	# Camera mode row
+	var camera_row := HBoxContainer.new()
+	camera_row.add_theme_constant_override("separation", 8)
+	vbox.add_child(camera_row)
+
+	var camera_label := Label.new()
+	camera_label.text = "Camera"
+	camera_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	camera_row.add_child(camera_label)
+
+	var camera_picker := OptionButton.new()
+	camera_picker.add_item("Top Down")
+	camera_picker.add_item("Isometric")
+	camera_picker.selected = CaromSettings.CameraMode.ISOMETRIC if CaromSettings.camera_mode == "isometric" else CaromSettings.CameraMode.TOP_DOWN
+	camera_picker.item_selected.connect(func(idx: int) -> void:
+		CaromSettings.camera_mode = "isometric" if idx == CaromSettings.CameraMode.ISOMETRIC else "top_down"
+		CaromSettings.save()
+		setting_changed.emit()
+	)
+	camera_row.add_child(camera_picker)
 
 	# Aim mode description
 	var desc_label := Label.new()

@@ -10,6 +10,7 @@ signal difficulty_changed(level: int)
 signal reload_requested
 signal pause_requested
 signal resume_requested
+signal camera_mode_changed(mode: String)
 
 @onready var player_score_label: Label = %PlayerScoreLabel
 @onready var ai_score_label: Label = %AIScoreLabel
@@ -24,12 +25,14 @@ var _debug_visible: bool = false
 var _reload_button: CaromReloadButton = null
 var _settings_panel: CaromSettings = null
 var _gear_button: Button = null
+var _current_camera_mode: String = "top_down"
 
 const AI_STATE_NAMES := ["ATTACK", "DEFEND", "RELOAD_PRESSURE", "TRICK_SHOT"]
 
 
 func _ready() -> void:
 	CaromSettings.ensure_loaded()
+	_current_camera_mode = CaromSettings.camera_mode
 	_create_reload_button()
 	_create_pause_button()
 	_create_gear_button()
@@ -222,11 +225,14 @@ func _toggle_settings_panel() -> void:
 	_settings_panel.anchor_right = 0.5
 	_settings_panel.anchor_bottom = 0.5
 	_settings_panel.offset_left = -150.0
-	_settings_panel.offset_top = -120.0
+	_settings_panel.offset_top = -140.0
 	_settings_panel.offset_right = 150.0
-	_settings_panel.offset_bottom = 120.0
+	_settings_panel.offset_bottom = 140.0
 	_settings_panel.setting_changed.connect(func() -> void:
 		_position_reload_button()
+		if CaromSettings.camera_mode != _current_camera_mode:
+			_current_camera_mode = CaromSettings.camera_mode
+			camera_mode_changed.emit(_current_camera_mode)
 	)
 	_settings_panel.closed.connect(func() -> void:
 		_settings_panel = null
