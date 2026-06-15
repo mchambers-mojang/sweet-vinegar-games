@@ -1,8 +1,9 @@
 name: Release
 
 on:
-  push:
+  pull_request:
     branches: [main]
+    types: [closed]
   workflow_dispatch:
 
 permissions:
@@ -14,6 +15,7 @@ env:
 
 jobs:
   tag:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     outputs:
       tagged: ${{ steps.check.outputs.tagged }}
@@ -109,6 +111,7 @@ jobs:
 
   build-android:
     needs: tag
+    if: needs.tag.outputs.tagged == 'true'
     runs-on: ubuntu-latest
     container:
       image: barichello/godot-ci:4.6.3
@@ -190,6 +193,7 @@ jobs:
 
   build-ios:
     needs: tag
+    if: needs.tag.outputs.tagged == 'true'
     uses: ./.github/workflows/build-ios.yml
     secrets:
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
