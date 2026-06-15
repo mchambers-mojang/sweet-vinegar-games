@@ -188,3 +188,51 @@ func test_is_match_over_true_after_limit_reached() -> void:
 	s.on_round_ready()
 	s.on_goal_scored("ai")
 	assert_true(s.is_match_over())
+
+
+# --- score_changed signal ---
+
+func test_score_changed_emitted_on_init_match() -> void:
+	var s: CaromMatchState = MatchStateScript.new()
+	var received: Array = []
+	s.score_changed.connect(func(p: int, a: int) -> void:
+		received.append([p, a])
+	)
+	s.init_match(1, 5)
+	assert_eq(received.size(), 1)
+	assert_eq(received[0], [0, 0])
+
+
+func test_score_changed_emitted_on_player_goal() -> void:
+	var s := _make_state()
+	s.on_round_ready()
+	var received: Array = []
+	s.score_changed.connect(func(p: int, a: int) -> void:
+		received.append([p, a])
+	)
+	s.on_goal_scored("player")
+	assert_eq(received.size(), 1)
+	assert_eq(received[0], [1, 0])
+
+
+func test_score_changed_emitted_on_ai_goal() -> void:
+	var s := _make_state()
+	s.on_round_ready()
+	var received: Array = []
+	s.score_changed.connect(func(p: int, a: int) -> void:
+		received.append([p, a])
+	)
+	s.on_goal_scored("ai")
+	assert_eq(received.size(), 1)
+	assert_eq(received[0], [0, 1])
+
+
+func test_score_changed_not_emitted_when_phase_not_playing() -> void:
+	var s: CaromMatchState = MatchStateScript.new()
+	s.init_match(1, 5)
+	var received: Array = []
+	s.score_changed.connect(func(p: int, a: int) -> void:
+		received.append([p, a])
+	)
+	s.on_goal_scored("player")
+	assert_eq(received.size(), 0, "score_changed must not emit when phase is not PLAYING")

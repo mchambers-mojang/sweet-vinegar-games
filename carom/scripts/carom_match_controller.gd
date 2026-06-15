@@ -14,6 +14,7 @@ var state: CaromMatchState = CaromMatchState.new()
 @onready var hud: CaromHUD = arena.get_node("HUD/HUDController") as CaromHUD
 
 var _effects: CaromEffectsController = null
+var _match_round: CaromMatchRound = CaromMatchRound.new()
 
 const MATCH_WIN_SLOWMO_SCALE: float = 0.15
 const MATCH_WIN_SLOWMO_REAL_SECONDS: float = 1.5
@@ -30,6 +31,7 @@ func _ready() -> void:
 	hud.pause_requested.connect(_on_pause)
 	hud.resume_requested.connect(_on_resume)
 	hud.camera_mode_changed.connect(_on_camera_mode_changed)
+	state.score_changed.connect(hud.update_scores)
 
 	state.difficulty = arena.get_meta("carom_difficulty", 1) as int
 	if arena.has_meta("carom_difficulty"):
@@ -64,40 +66,31 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _process(_delta: float) -> void:
-	if setup.ai_turret:
-		hud.update_debug_overlay(setup.ai_turret)
+	var ai_turret := _match_round.get_ai_turret()
+	if ai_turret:
+		hud.update_debug_overlay(ai_turret)
 
 
 func _init_match() -> void:
+	_spawn_and_configure()
+	_start_match()
+
+
+func _spawn_and_configure() -> void:
 	setup.spawn_entities(arena, actors, state.difficulty)
+	_match_round.configure(arena, setup)
 	_wire_hud_signals()
 	_setup_effects()
-	_start_match()
 
 
 func _start_match() -> void:
 	state.init_match(state.difficulty, score_limit)
-	hud.update_scores(state.player_score, state.ai_score)
 	_begin_round()
 
 
 func _begin_round() -> void:
 	state.on_round_ready()
-	arena.reset_goal_lock()
-
-	var spawn_positions := arena.get_puck_spawn_positions()
-	for i in setup.pucks.size():
-		if is_instance_valid(setup.pucks[i]):
-			var reset_pos := spawn_positions[i] if i < spawn_positions.size() else arena.get_puck_spawn_position()
-			setup.pucks[i].reset_to_center(reset_pos)
-
-	setup.player_turret.reset_for_round()
-	setup.ai_turret.reset_for_round()
-	setup.player_turret.set_active(true)
-	setup.ai_turret.set_active(true)
-
-	var diff_name := CaromAIDifficulty.get_preset(state.difficulty).difficulty_name
-	hud.update_status("")
+	_match_round.start_round()
 	_update_ammo_display()
 
 
@@ -107,7 +100,9 @@ func _on_goal_scored(scoring_side: StringName, goal_puck: CaromPuck) -> void:
 
 	var goal_position: Vector3 = goal_puck.global_position
 	var goal_zone := arena.south_goal if scoring_side == &"north" else arena.north_goal
-	var scoring_color := setup.player_turret.team_color if scoring_side == &"south" else setup.ai_turret.team_color
+	var player_turret := _match_round.get_player_turret()
+	var ai_turret := _match_round.get_ai_turret()
+	var scoring_color := player_turret.team_color if scoring_side == &"south" else ai_turret.team_color
 	if _effects:
 		_effects.play_goal_scored(goal_position, scoring_side, scoring_color, goal_puck, goal_zone)
 
@@ -127,7 +122,6 @@ func _on_goal_scored(scoring_side: StringName, goal_puck: CaromPuck) -> void:
 	else:
 		HapticManager.vibrate_error()
 
-	hud.update_scores(state.player_score, state.ai_score)
 	_update_ammo_display()
 
 	if result.match_over:
@@ -136,14 +130,13 @@ func _on_goal_scored(scoring_side: StringName, goal_puck: CaromPuck) -> void:
 		return
 
 	# Unlock goals so the next puck entry can score
-	arena.reset_goal_lock()
+	_match_round.unlock_goals()
 
 
 
 func _finish_match(winner: String) -> void:
 	_reset_time_scale()
-	setup.player_turret.set_active(false)
-	setup.ai_turret.set_active(false)
+	_match_round.end_round()
 	hud.update_status("")
 	hud.show_game_over(winner, state.player_score, state.ai_score, state.difficulty)
 
@@ -175,43 +168,49 @@ func _reset_time_scale() -> void:
 # --- HUD signal wiring ---
 
 func _wire_hud_signals() -> void:
-	setup.player_turret.ammo_changed.connect(_on_player_ammo_changed)
-	setup.player_turret.reload_state_changed.connect(_on_player_reload_state_changed)
-	setup.ai_turret.ammo_changed.connect(_on_ai_ammo_changed)
-	setup.ai_turret.reload_state_changed.connect(_on_ai_reload_state_changed)
+	var player_turret := _match_round.get_player_turret()
+	var ai_turret := _match_round.get_ai_turret()
+	player_turret.ammo_changed.connect(_on_player_ammo_changed)
+	player_turret.reload_state_changed.connect(_on_player_reload_state_changed)
+	ai_turret.ammo_changed.connect(_on_ai_ammo_changed)
+	ai_turret.reload_state_changed.connect(_on_ai_reload_state_changed)
 
 
 func _update_ammo_display() -> void:
-	if setup.player_turret:
-		hud.update_player_ammo(setup.player_turret.current_ammo, setup.player_turret.clip_size, setup.player_turret.is_reloading)
-	if setup.ai_turret:
-		hud.update_ai_ammo(setup.ai_turret.current_ammo, setup.ai_turret.clip_size, setup.ai_turret.is_reloading)
+	var player_turret := _match_round.get_player_turret()
+	var ai_turret := _match_round.get_ai_turret()
+	if player_turret:
+		hud.update_player_ammo(player_turret.current_ammo, player_turret.clip_size, player_turret.is_reloading)
+	if ai_turret:
+		hud.update_ai_ammo(ai_turret.current_ammo, ai_turret.clip_size, ai_turret.is_reloading)
 
 
 func _on_player_ammo_changed(current_ammo: int, max_ammo: int) -> void:
-	hud.update_player_ammo(current_ammo, max_ammo, setup.player_turret.is_reloading if setup.player_turret else false)
+	var player_turret := _match_round.get_player_turret()
+	hud.update_player_ammo(current_ammo, max_ammo, player_turret.is_reloading if player_turret else false)
 
 
 func _on_ai_ammo_changed(current_ammo: int, max_ammo: int) -> void:
-	hud.update_ai_ammo(current_ammo, max_ammo, setup.ai_turret.is_reloading if setup.ai_turret else false)
+	var ai_turret := _match_round.get_ai_turret()
+	hud.update_ai_ammo(current_ammo, max_ammo, ai_turret.is_reloading if ai_turret else false)
 
 
 func _on_player_reload_state_changed(_is_reloading: bool) -> void:
-	if setup.player_turret:
-		hud.update_player_ammo(setup.player_turret.current_ammo, setup.player_turret.clip_size, setup.player_turret.is_reloading)
+	var player_turret := _match_round.get_player_turret()
+	if player_turret:
+		hud.update_player_ammo(player_turret.current_ammo, player_turret.clip_size, player_turret.is_reloading)
 
 
 func _on_ai_reload_state_changed(_is_reloading: bool) -> void:
-	if setup.ai_turret:
-		hud.update_ai_ammo(setup.ai_turret.current_ammo, setup.ai_turret.clip_size, setup.ai_turret.is_reloading)
+	var ai_turret := _match_round.get_ai_turret()
+	if ai_turret:
+		hud.update_ai_ammo(ai_turret.current_ammo, ai_turret.clip_size, ai_turret.is_reloading)
 
 
 # --- Game-over panel callbacks ---
 
 func _on_rematch() -> void:
-	setup.spawn_entities(arena, actors, state.difficulty)
-	_wire_hud_signals()
-	_setup_effects()
+	_spawn_and_configure()
 	_start_match()
 
 
@@ -225,8 +224,8 @@ func _setup_effects() -> void:
 		_effects = CaromEffectsController.new()
 		_effects.name = "EffectsController"
 		arena.add_child(_effects)
-	_effects.register_turret(setup.player_turret)
-	_effects.register_turret(setup.ai_turret)
+	_effects.register_turret(_match_round.get_player_turret())
+	_effects.register_turret(_match_round.get_ai_turret())
 
 
 func _on_difficulty_changed(level: int) -> void:
@@ -234,8 +233,9 @@ func _on_difficulty_changed(level: int) -> void:
 
 
 func _on_reload_requested() -> void:
-	if setup.player_turret and setup.player_turret.is_active:
-		setup.player_turret.start_reload()
+	var player_turret := _match_round.get_player_turret()
+	if player_turret and player_turret.is_active:
+		player_turret.start_reload()
 
 
 func _on_pause() -> void:
