@@ -184,7 +184,10 @@ func _evaluate_event_triggers(event_key: String, value: int) -> bool:
 func _apply_stat_progress(achievement_id: String, definition: Dictionary) -> bool:
 	var trigger: Dictionary = definition.get("trigger", {})
 	var stat_value: int = _get_stat_value(str(trigger.get("key", "")))
+	var threshold: int = int(trigger.get("threshold", 0))
 	var target: int = int(definition.get("target_value", 1))
+	if threshold > target:
+		stat_value = target if stat_value >= threshold else 0
 	var progress_mode: String = str(definition.get("progress_mode", "max"))
 	if progress_mode == "exact":
 		return _set_progress_exact(achievement_id, clampi(stat_value, 0, target))

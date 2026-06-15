@@ -94,6 +94,15 @@ func test_blockudoku_tracking_unlocks_score_and_clear_achievements() -> void:
 	assert_true(bool(_get_achievement("blockudoku_200_clears").get("unlocked", false)))
 
 
+func test_blockudoku_score_thresholds_do_not_unlock_below_required_high_score() -> void:
+	GameStatsManager.set_counter("blockudoku", "high_score", 5)
+	achievements.check_stats()
+
+	assert_false(bool(_get_achievement("blockudoku_score_100").get("unlocked", false)))
+	assert_false(bool(_get_achievement("blockudoku_score_500").get("unlocked", false)))
+	assert_false(bool(_get_achievement("blockudoku_score_1000").get("unlocked", false)))
+
+
 func test_shikaku_and_general_streaks_unlock_and_reset() -> void:
 	for i in 10:
 		GameStatsManager.increment_counter("general", "games_won")
