@@ -4,6 +4,8 @@ extends RefCounted
 ## Pure match lifecycle state — no Node, SceneTree, or autoload dependencies.
 ## Tracks phase, scores, and produces a GoalResult on each goal event.
 
+signal score_changed(player_score: int, ai_score: int)
+
 enum Phase { SETUP, PLAYING, GAME_OVER }
 
 ## Result returned by on_goal_scored().
@@ -29,6 +31,7 @@ func init_match(p_difficulty: int, p_score_limit: int) -> void:
 	ai_score = 0
 	rounds_played = 0
 	phase = Phase.SETUP
+	score_changed.emit(player_score, ai_score)
 
 
 ## Record a goal and advance state.
@@ -56,6 +59,7 @@ func on_goal_scored(scorer: String) -> GoalResult:
 		result.match_over = true
 		result.winner = get_winner()
 
+	score_changed.emit(player_score, ai_score)
 	return result
 
 

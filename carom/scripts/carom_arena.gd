@@ -37,6 +37,10 @@ func reset_goal_lock() -> void:
 	_goal_locked = false
 
 
+func lock_goals() -> void:
+	_goal_locked = true
+
+
 func get_puck_spawn_positions() -> Array[Vector3]:
 	return [puck_spawn.global_position, puck_spawn_2.global_position]
 
