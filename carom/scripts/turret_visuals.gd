@@ -36,6 +36,16 @@ func _process(_delta: float) -> void:
 
 
 func _exit_tree() -> void:
+	# Disconnect signals so a lingering turret reference can't call into a freed node.
+	if _turret != null:
+		if _turret.ammo_changed.is_connected(_on_ammo_changed):
+			_turret.ammo_changed.disconnect(_on_ammo_changed)
+		if _turret.reload_completed.is_connected(_on_reload_completed):
+			_turret.reload_completed.disconnect(_on_reload_completed)
+		if _turret.aim_projection_distance_changed.is_connected(_on_aim_projection_distance_changed):
+			_turret.aim_projection_distance_changed.disconnect(_on_aim_projection_distance_changed)
+	# Free the ammo ring node: it lives under the turret's parent (not under
+	# TurretVisuals) so it is not freed automatically when this node is removed.
 	if _ammo_ring_node and is_instance_valid(_ammo_ring_node):
 		_ammo_ring_node.queue_free()
 		_ammo_ring_node = null
@@ -79,6 +89,8 @@ func _create_ammo_ring() -> void:
 
 
 func _build_ammo_indicators() -> void:
+	# Turrets are stationary during a match, so setting the ring position once
+	# here is sufficient and matches the original single-assignment behaviour.
 	_ammo_ring_node.global_position = _turret.global_position + Vector3(0.0, 0.25, 0.0)
 	_ammo_indicators.clear()
 
