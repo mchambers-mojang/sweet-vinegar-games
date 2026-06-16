@@ -139,14 +139,21 @@ func handle_input_event(event: InputEvent, _aim_arc: float) -> void:
 func _process_hold_zones(delta: float, aim_arc: float, aim_speed: float) -> void:
 	if _active_touches.is_empty():
 		return
-	# Use window size so touch positions (in viewport/window pixels) are correctly normalised.
-	var half_width: float = DisplayServer.window_get_size().x * 0.5
+	# Use window size minus safe area insets so touch positions are normalised
+	# within the usable screen region.
+	var window_width: float = DisplayServer.window_get_size().x
+	var insets := SafeAreaManager.get_insets()
+	var left_inset: float = insets["left"]
+	var right_inset: float = insets["right"]
+	var usable_width: float = window_width - left_inset - right_inset
+	var half_usable: float = usable_width * 0.5
 
 	var total_input: float = 0.0
 	for data: Dictionary in _active_touches.values():
 		var touch_x: float = (data["current_pos"] as Vector2).x
-		# -1.0 = far left, 0 = centre, +1.0 = far right.
-		total_input += (touch_x - half_width) / half_width
+		# Offset by left inset so centre of usable area maps to 0.
+		var adjusted_x: float = touch_x - left_inset - half_usable
+		total_input += adjusted_x / half_usable
 
 	# Clamp so opposing touches cancel.
 	total_input = clampf(total_input, -1.0, 1.0)

@@ -182,6 +182,8 @@ func _ready() -> void:
 		stats_btn.pressed.connect(func() -> void:
 			SceneTransition.transition_to(_get_stats_scene_path())
 		)
+	elif stats_btn:
+		stats_btn.visible = false
 
 	# Save/continue flow
 	if continue_btn:

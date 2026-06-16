@@ -36,6 +36,9 @@ func _ready() -> void:
 	_create_reload_button()
 	_create_pause_button()
 	_create_gear_button()
+	# Re-apply safe area offsets when the viewport resizes
+	get_tree().root.size_changed.connect(_apply_safe_area_offsets)
+	_apply_safe_area_offsets.call_deferred()
 
 
 func update_scores(player_score: int, ai_score: int) -> void:
@@ -157,39 +160,33 @@ func _create_reload_button() -> void:
 		reload_requested.emit()
 	)
 	_overlay_layer.add_child(_reload_button)
+	_position_reload_button()
+
+
+func _position_reload_button() -> void:
+	if not _reload_button:
+		return
+	var insets := SafeAreaManager.get_insets()
+	var bottom_inset: float = insets["bottom"]
+	var left_inset: float = insets["left"]
+	var right_inset: float = insets["right"]
 	# Use anchors for positioning — bottom-left or bottom-right
 	_reload_button.anchor_top = 1.0
 	_reload_button.anchor_bottom = 1.0
 	if CaromSettings.reload_button_side == CaromSettings.ReloadButtonSide.LEFT:
 		_reload_button.anchor_left = 0.0
 		_reload_button.anchor_right = 0.0
-		_reload_button.offset_left = 16.0
-		_reload_button.offset_top = -210.0
-		_reload_button.offset_right = 116.0
-		_reload_button.offset_bottom = -110.0
+		_reload_button.offset_left = 16.0 + left_inset
+		_reload_button.offset_top = -210.0 - bottom_inset
+		_reload_button.offset_right = 116.0 + left_inset
+		_reload_button.offset_bottom = -110.0 - bottom_inset
 	else:
 		_reload_button.anchor_left = 1.0
 		_reload_button.anchor_right = 1.0
-		_reload_button.offset_left = -116.0
-		_reload_button.offset_top = -210.0
-		_reload_button.offset_right = -16.0
-		_reload_button.offset_bottom = -110.0
-
-
-func _position_reload_button() -> void:
-	if not _reload_button:
-		return
-	# Re-apply anchors based on current setting
-	if CaromSettings.reload_button_side == CaromSettings.ReloadButtonSide.LEFT:
-		_reload_button.anchor_left = 0.0
-		_reload_button.anchor_right = 0.0
-		_reload_button.offset_left = 16.0
-		_reload_button.offset_right = 116.0
-	else:
-		_reload_button.anchor_left = 1.0
-		_reload_button.anchor_right = 1.0
-		_reload_button.offset_left = -116.0
-		_reload_button.offset_right = -16.0
+		_reload_button.offset_left = -116.0 - right_inset
+		_reload_button.offset_top = -210.0 - bottom_inset
+		_reload_button.offset_right = -16.0 - right_inset
+		_reload_button.offset_bottom = -110.0 - bottom_inset
 
 
 # --- Settings gear button ---
@@ -201,15 +198,11 @@ func _create_gear_button() -> void:
 	_gear_button.add_theme_font_size_override("font_size", 22)
 	_gear_button.pressed.connect(_toggle_settings_panel)
 	_overlay_layer.add_child(_gear_button)
-	# Top-right corner via anchors
+	# Top-right corner via anchors (safe area applied in _apply_safe_area_offsets)
 	_gear_button.anchor_left = 1.0
 	_gear_button.anchor_right = 1.0
 	_gear_button.anchor_top = 0.0
 	_gear_button.anchor_bottom = 0.0
-	_gear_button.offset_left = -52.0
-	_gear_button.offset_top = 8.0
-	_gear_button.offset_right = -8.0
-	_gear_button.offset_bottom = 52.0
 
 
 func _toggle_settings_panel() -> void:
@@ -248,12 +241,34 @@ func _create_pause_button() -> void:
 	_pause_button.text = "⏸"
 	_pause_button.custom_minimum_size = Vector2(44, 44)
 	_pause_button.size = Vector2(44, 44)
-	_pause_button.position = Vector2(8.0, 8.0)
 	_pause_button.add_theme_font_size_override("font_size", 20)
 	_pause_button.pressed.connect(func() -> void:
 		pause_requested.emit()
 	)
 	_overlay_layer.add_child(_pause_button)
+
+
+## Applies safe area insets to all overlay buttons so they don't overlap
+## the notch, Dynamic Island, or home indicator on mobile devices.
+func _apply_safe_area_offsets() -> void:
+	var insets := SafeAreaManager.get_insets()
+	var top: float = insets["top"]
+	var right: float = insets["right"]
+	var left: float = insets["left"]
+
+	# Pause button — top-left
+	if _pause_button:
+		_pause_button.position = Vector2(8.0 + left, 8.0 + top)
+
+	# Gear button — top-right
+	if _gear_button:
+		_gear_button.offset_left = -52.0 - right
+		_gear_button.offset_top = 8.0 + top
+		_gear_button.offset_right = -8.0 - right
+		_gear_button.offset_bottom = 52.0 + top
+
+	# Reload button respects safe area via _position_reload_button
+	_position_reload_button()
 
 
 func show_pause_overlay() -> void:
