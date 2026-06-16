@@ -22,6 +22,7 @@ var _pause_overlay: Control = null
 var _pause_button: Button = null
 var _debug_label: Label = null
 var _debug_visible: bool = false
+var _touch_debug_draw: Control = null
 var _reload_button: CaromReloadButton = null
 var _settings_panel: CaromSettings = null
 var _gear_button: Button = null
@@ -353,12 +354,33 @@ func toggle_debug_overlay() -> void:
 			_debug_label.add_theme_constant_override("shadow_offset_y", 1)
 			_overlay_layer.add_child(_debug_label)
 		_debug_label.visible = true
-	elif _debug_label:
-		_debug_label.visible = false
+		if not _touch_debug_draw:
+			_touch_debug_draw = TouchDebugDraw.new()
+			_touch_debug_draw.set_anchors_preset(Control.PRESET_FULL_RECT)
+			_touch_debug_draw.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			_overlay_layer.add_child(_touch_debug_draw)
+		_touch_debug_draw.visible = true
+	else:
+		if _debug_label:
+			_debug_label.visible = false
+		if _touch_debug_draw:
+			_touch_debug_draw.visible = false
 
 
-func update_debug_overlay(ai_turret: CaromTurret) -> void:
-	if not _debug_visible or not _debug_label:
+func update_debug_overlay(ai_turret: CaromTurret, player_turret: CaromTurret = null) -> void:
+	if not _debug_visible:
+		return
+
+	# Update touch debug draw from the player turret's input state
+	if _touch_debug_draw and player_turret and player_turret.input is CaromHumanInput:
+		var human_input := player_turret.input as CaromHumanInput
+		_touch_debug_draw.update_touch_state(
+			human_input._active_touches,
+			human_input.debug_total_input,
+			human_input.debug_last_fire
+		)
+
+	if not _debug_label:
 		return
 	if not ai_turret or not ai_turret.ai_controller:
 		_debug_label.text = "AI: no controller"

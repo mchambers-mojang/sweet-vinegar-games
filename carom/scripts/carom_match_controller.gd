@@ -67,8 +67,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _process(_delta: float) -> void:
 	var ai_turret := _match_round.get_ai_turret()
+	var player_turret := _match_round.get_player_turret()
 	if ai_turret:
-		hud.update_debug_overlay(ai_turret)
+		hud.update_debug_overlay(ai_turret, player_turret)
 
 
 func _init_match() -> void:

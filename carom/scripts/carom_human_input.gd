@@ -32,6 +32,10 @@ var _active_touches: Dictionary = {}
 ## Reset to 0 after being consumed in process().
 var _pending_drag_x: float = 0.0
 
+## Debug state — exposed for TouchDebugDraw overlay.
+var debug_total_input: float = 0.0
+var debug_last_fire: bool = false
+
 
 func process(delta: float, turret_state: Dictionary) -> Dictionary:
 	CaromSettings.ensure_loaded()
@@ -82,9 +86,12 @@ func process(delta: float, turret_state: Dictionary) -> Dictionary:
 	var current_ammo: int = turret_state.get("ammo", 0)
 	var clip_size: int = turret_state.get("clip_size", 8)
 	if fire:
+		debug_last_fire = true
 		# Reset the auto-reload timer on every shot.
 		if CaromSettings.auto_reload:
 			_auto_reload_timer = AUTO_RELOAD_DELAY
+	else:
+		debug_last_fire = false
 
 	# Keyboard reload.
 	var reload := _reload_requested
@@ -161,13 +168,15 @@ func handle_input_event(event: InputEvent, _aim_arc: float) -> void:
 func _process_hold_zones(delta: float, aim_arc: float, aim_speed: float) -> void:
 	if _active_touches.is_empty():
 		return
-	# Use window size minus safe area insets so touch positions are normalised
-	# within the usable screen region.
-	var window_width: float = DisplayServer.window_get_size().x
+	# Touch positions are in viewport coordinates, so use the viewport size
+	# (NOT DisplayServer.window_get_size() which returns physical pixels).
+	var viewport_width: float = ProjectSettings.get_setting(
+		"display/window/size/viewport_width", 390
+	)
 	var insets := SafeAreaManager.get_insets()
 	var left_inset: float = insets["left"]
 	var right_inset: float = insets["right"]
-	var usable_width: float = window_width - left_inset - right_inset
+	var usable_width: float = viewport_width - left_inset - right_inset
 	var half_usable: float = usable_width * 0.5
 
 	var total_input: float = 0.0
@@ -179,10 +188,12 @@ func _process_hold_zones(delta: float, aim_arc: float, aim_speed: float) -> void
 
 	# Clamp so opposing touches cancel.
 	total_input = clampf(total_input, -1.0, 1.0)
+	debug_total_input = total_input
 
-	# Positive total_input (right side) should increase aim → barrel swings right.
+	# Negative aim = barrel swings right on screen (matching keyboard convention).
+	# Touch right → total_input positive → aim decreases → turns right.
 	_aim_target = clampf(
-		_aim_target + total_input * aim_speed * delta,
+		_aim_target - total_input * aim_speed * delta,
 		-aim_arc * 0.5,
 		aim_arc * 0.5
 	)
