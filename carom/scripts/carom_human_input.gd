@@ -11,13 +11,18 @@ extends CaromTurretInput
 ## Multiple simultaneous drags are summed (opposing drags cancel out).
 
 ## Touch movement below this threshold is treated as a tap (fire trigger).
-const TAP_THRESHOLD_PIXELS: float = 10.0
+## Higher on mobile to account for finger imprecision on high-DPI screens.
+const TAP_THRESHOLD_PIXELS: float = 24.0
 ## Drag-to-degrees sensitivity (pixels → degrees of aim offset per frame).
 const TOUCH_DRAG_SENSITIVITY: float = 0.12
 
 var _aim_target: float = 0.0
 var _fire_requested: bool = false
 var _reload_requested: bool = false
+
+## Auto-reload: time remaining before triggering reload after last shot.
+const AUTO_RELOAD_DELAY: float = 0.5
+var _auto_reload_timer: float = -1.0
 
 ## Active touches keyed by finger index.
 ## Each value: {start_pos: Vector2, current_pos: Vector2, total_movement: float, is_drag: bool}
@@ -72,12 +77,29 @@ func process(delta: float, turret_state: Dictionary) -> Dictionary:
 	if Input.is_action_just_pressed("ui_accept"):
 		fire = true
 
+	# Auto-reload: start countdown when we fire, trigger reload when it expires.
+	var is_reloading: bool = turret_state.get("is_reloading", false)
+	var current_ammo: int = turret_state.get("ammo", 0)
+	var clip_size: int = turret_state.get("clip_size", 8)
+	if fire:
+		# Reset the auto-reload timer on every shot.
+		if CaromSettings.auto_reload:
+			_auto_reload_timer = AUTO_RELOAD_DELAY
+
 	# Keyboard reload.
 	var reload := _reload_requested
 	_reload_requested = false
 
 	if InputMap.has_action("reload") and Input.is_action_just_pressed("reload"):
 		reload = true
+
+	# Tick auto-reload timer.
+	if CaromSettings.auto_reload and _auto_reload_timer > 0.0:
+		_auto_reload_timer -= delta
+		if _auto_reload_timer <= 0.0:
+			_auto_reload_timer = -1.0
+			if not is_reloading and current_ammo < clip_size:
+				reload = true
 
 	return {
 		"aim_target": _aim_target,
@@ -158,8 +180,9 @@ func _process_hold_zones(delta: float, aim_arc: float, aim_speed: float) -> void
 	# Clamp so opposing touches cancel.
 	total_input = clampf(total_input, -1.0, 1.0)
 
+	# Positive total_input (right side) should increase aim → barrel swings right.
 	_aim_target = clampf(
-		_aim_target - total_input * aim_speed * delta,
+		_aim_target + total_input * aim_speed * delta,
 		-aim_arc * 0.5,
 		aim_arc * 0.5
 	)

@@ -218,9 +218,9 @@ func _toggle_settings_panel() -> void:
 	_settings_panel.anchor_right = 0.5
 	_settings_panel.anchor_bottom = 0.5
 	_settings_panel.offset_left = -150.0
-	_settings_panel.offset_top = -140.0
+	_settings_panel.offset_top = -170.0
 	_settings_panel.offset_right = 150.0
-	_settings_panel.offset_bottom = 140.0
+	_settings_panel.offset_bottom = 170.0
 	_settings_panel.setting_changed.connect(func() -> void:
 		_position_reload_button()
 		if CaromSettings.camera_mode != _current_camera_mode:

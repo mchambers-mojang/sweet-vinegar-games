@@ -27,6 +27,7 @@ const CAMERA_MODE_ISOMETRIC_INDEX := 1
 static var aim_mode: int = AimMode.DRAG
 static var reload_button_side: int = ReloadButtonSide.RIGHT
 static var camera_mode: String = CAMERA_MODE_TOP_DOWN
+static var auto_reload: bool = false
 static var _loaded: bool = false
 
 signal closed
@@ -47,6 +48,7 @@ static func ensure_loaded() -> void:
 	aim_mode = config.get_value("carom", "aim_mode", AimMode.DRAG)
 	reload_button_side = config.get_value("carom", "reload_button_side", ReloadButtonSide.RIGHT)
 	camera_mode = normalize_camera_mode(config.get_value("carom", "camera_mode", CAMERA_MODE_TOP_DOWN))
+	auto_reload = config.get_value("carom", "auto_reload", false)
 
 
 static func save() -> void:
@@ -54,6 +56,7 @@ static func save() -> void:
 	config.set_value("carom", "aim_mode", aim_mode)
 	config.set_value("carom", "reload_button_side", reload_button_side)
 	config.set_value("carom", "camera_mode", camera_mode)
+	config.set_value("carom", "auto_reload", auto_reload)
 	config.save(SAVE_PATH)
 
 
@@ -72,7 +75,7 @@ static func is_gyroscope_supported() -> bool:
 
 func _ready() -> void:
 	CaromSettings.ensure_loaded()
-	custom_minimum_size = Vector2(300, 280)
+	custom_minimum_size = Vector2(300, 340)
 	_build_ui()
 
 
@@ -149,6 +152,25 @@ func _build_ui() -> void:
 		setting_changed.emit()
 	)
 	side_row.add_child(side_picker)
+
+	# Auto-reload row
+	var auto_row := HBoxContainer.new()
+	auto_row.add_theme_constant_override("separation", 8)
+	vbox.add_child(auto_row)
+
+	var auto_label := Label.new()
+	auto_label.text = "Auto Reload"
+	auto_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	auto_row.add_child(auto_label)
+
+	var auto_check := CheckButton.new()
+	auto_check.button_pressed = CaromSettings.auto_reload
+	auto_check.toggled.connect(func(on: bool) -> void:
+		CaromSettings.auto_reload = on
+		CaromSettings.save()
+		setting_changed.emit()
+	)
+	auto_row.add_child(auto_check)
 
 	# Camera mode row
 	var camera_row := HBoxContainer.new()
