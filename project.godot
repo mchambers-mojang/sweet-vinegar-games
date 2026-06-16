@@ -57,6 +57,7 @@ window/ios/hide_status_bar=false
 
 environment/defaults/default_clear_color=Color(0, 0, 0, 1)
 renderer/rendering_method="mobile"
+textures/vram_compression/import_etc2_astc=true
 
 [editor_plugins]
 
@@ -68,4 +69,3 @@ touch={
 "deadzone": 0.2,
 "events": []
 }
-textures/vram_compression/import_etc2_astc=true
