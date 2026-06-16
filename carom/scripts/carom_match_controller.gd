@@ -103,8 +103,6 @@ func _on_goal_scored(scoring_side: StringName, goal_puck: CaromPuck) -> void:
 	var player_turret := _match_round.get_player_turret()
 	var ai_turret := _match_round.get_ai_turret()
 	var scoring_color := player_turret.team_color if scoring_side == &"south" else ai_turret.team_color
-	if _effects:
-		_effects.play_goal_scored(goal_position, scoring_side, scoring_color, goal_puck, goal_zone)
 
 	# Only respawn the puck that scored — gameplay continues uninterrupted
 	var puck_index := setup.pucks.find(goal_puck)
@@ -125,9 +123,15 @@ func _on_goal_scored(scoring_side: StringName, goal_puck: CaromPuck) -> void:
 	_update_ammo_display()
 
 	if result.match_over:
-		await _play_match_win_sequence(goal_position)
+		# Match-winning goal: start slow-mo FIRST, then play celebrations so
+		# explosions and zoom happen together during the dramatic pause.
+		await _play_match_win_sequence(goal_position, scoring_side, scoring_color, goal_puck, goal_zone)
 		_finish_match(result.winner)
 		return
+
+	# Normal goal — play celebration at regular speed
+	if _effects:
+		_effects.play_goal_scored(goal_position, scoring_side, scoring_color, goal_puck, goal_zone)
 
 	# Unlock goals so the next puck entry can score
 	_match_round.unlock_goals()
@@ -141,10 +145,21 @@ func _finish_match(winner: String) -> void:
 	hud.show_game_over(winner, state.player_score, state.ai_score, state.difficulty)
 
 
-func _play_match_win_sequence(goal_position: Vector3) -> void:
+func _play_match_win_sequence(
+	goal_position: Vector3,
+	scoring_side: StringName,
+	scoring_color: Color,
+	goal_puck: CaromPuck,
+	goal_zone: Area3D
+) -> void:
+	# Start slow-mo immediately so explosions and zoom play out dramatically.
 	Engine.time_scale = MATCH_WIN_SLOWMO_SCALE
 
+	# Fire all celebrations together — particles/explosions run on game time
+	# so they look spectacular in slow-mo, while the camera zoom uses a
+	# compensated speed_scale to run in real-time seconds.
 	if _effects:
+		_effects.play_goal_scored(goal_position, scoring_side, scoring_color, goal_puck, goal_zone)
 		_effects.play_match_win(goal_position)
 
 	var hold_tween := create_tween()
