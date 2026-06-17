@@ -49,7 +49,9 @@ export function createServer(
   const wss = new WebSocketServer({ port });
 
   wss.on('connection', (ws: WebSocket) => {
-    let myRoomCode: string | null = null;
+    // Track all rooms this connection owns so every room is cleaned up on disconnect,
+    // even if the client sent multiple `create` messages.
+    const myRoomCodes = new Set<string>();
 
     ws.on('message', (raw: Buffer) => {
       let msg: Record<string, unknown>;
@@ -62,19 +64,27 @@ export function createServer(
 
       switch (msg.type) {
         case 'create': {
+          if (typeof msg.sdp !== 'string' || !msg.sdp) {
+            send(ws, { type: 'error', message: 'Missing or empty sdp' });
+            return;
+          }
           if (rooms.size >= MAX_ROOMS) {
             send(ws, { type: 'error', message: 'Server full' });
             return;
           }
           const code = generateCode(rooms);
           const timer = setTimeout(() => deleteRoom(code), roomExpiryMs);
-          rooms.set(code, { code, creatorSdp: msg.sdp as string, creator: ws, timer });
-          myRoomCode = code;
+          rooms.set(code, { code, creatorSdp: msg.sdp, creator: ws, timer });
+          myRoomCodes.add(code);
           send(ws, { type: 'room_created', code });
           break;
         }
 
         case 'join': {
+          if (typeof msg.sdp !== 'string' || !msg.sdp) {
+            send(ws, { type: 'error', message: 'Missing or empty sdp' });
+            return;
+          }
           const room = rooms.get(msg.code as string);
           if (!room) {
             send(ws, { type: 'error', message: 'Room not found' });
@@ -89,7 +99,7 @@ export function createServer(
             room.timer = null;
           }
           room.joiner = ws;
-          myRoomCode = msg.code as string;
+          myRoomCodes.add(msg.code as string);
           send(room.creator, { type: 'peer_joined', sdp: msg.sdp });
           send(ws, { type: 'room_joined', sdp: room.creatorSdp });
           break;
@@ -99,6 +109,10 @@ export function createServer(
           const room = rooms.get(msg.code as string);
           if (!room) {
             send(ws, { type: 'error', message: 'Room not found' });
+            return;
+          }
+          if (ws !== room.creator && ws !== room.joiner) {
+            send(ws, { type: 'error', message: 'Not a member of this room' });
             return;
           }
           const other = ws === room.creator ? room.joiner : room.creator;
@@ -114,8 +128,8 @@ export function createServer(
     });
 
     ws.on('close', () => {
-      if (myRoomCode) {
-        deleteRoom(myRoomCode);
+      for (const code of myRoomCodes) {
+        deleteRoom(code);
       }
     });
   });

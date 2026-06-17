@@ -76,6 +76,66 @@ describe('Signaling Server', () => {
     ws.close();
   });
 
+  test('create without sdp → error', async () => {
+    const ws = await connect(port);
+    ws.send(JSON.stringify({ type: 'create' }));
+    const msg = await nextMessage(ws);
+    expect(msg.type).toBe('error');
+    expect(msg.message).toBe('Missing or empty sdp');
+    ws.close();
+  });
+
+  test('join without sdp → error', async () => {
+    const creator = await connect(port);
+    creator.send(JSON.stringify({ type: 'create', sdp: 'offer-sdp' }));
+    const { code } = await nextMessage(creator) as { code: string };
+
+    const ws = await connect(port);
+    ws.send(JSON.stringify({ type: 'join', code }));
+    const msg = await nextMessage(ws);
+    expect(msg.type).toBe('error');
+    expect(msg.message).toBe('Missing or empty sdp');
+    creator.close();
+    ws.close();
+  });
+
+  test('ICE from non-member → error', async () => {
+    const creator = await connect(port);
+    creator.send(JSON.stringify({ type: 'create', sdp: 'offer-sdp' }));
+    const { code } = await nextMessage(creator) as { code: string };
+
+    const outsider = await connect(port);
+    outsider.send(JSON.stringify({ type: 'ice', code, candidate: { candidate: 'evil' } }));
+    const msg = await nextMessage(outsider);
+    expect(msg.type).toBe('error');
+    expect(msg.message).toBe('Not a member of this room');
+    creator.close();
+    outsider.close();
+  });
+
+  test('multiple creates from one connection are all cleaned up on disconnect', async () => {
+    const creator = await connect(port);
+
+    // Send two creates from the same connection
+    creator.send(JSON.stringify({ type: 'create', sdp: 'offer-sdp' }));
+    const first = await nextMessage(creator) as { code: string };
+    creator.send(JSON.stringify({ type: 'create', sdp: 'offer-sdp-2' }));
+    const second = await nextMessage(creator) as { code: string };
+
+    creator.close();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // Both rooms should now be gone
+    for (const code of [first.code, second.code]) {
+      const joiner = await connect(port);
+      joiner.send(JSON.stringify({ type: 'join', code, sdp: 'answer-sdp' }));
+      const msg = await nextMessage(joiner);
+      expect(msg.type).toBe('error');
+      expect(msg.message).toBe('Room not found');
+      joiner.close();
+    }
+  });
+
   test('room expires after timeout', async () => {
     // Use a short expiry for this test — create a dedicated server
     const { wss: expWss, port: expPort } = await makeServer({ roomExpiryMs: 100 });
