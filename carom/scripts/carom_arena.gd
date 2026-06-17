@@ -33,6 +33,8 @@ func _ready() -> void:
 	_setup_ambient_particles()
 	CaromSettings.ensure_loaded()
 	set_camera_mode(CaromSettings.camera_mode, false)
+	_apply_camera_safe_area()
+	get_tree().root.size_changed.connect(_apply_camera_safe_area)
 
 
 func set_camera_mode(mode: String, animate: bool = true) -> void:
@@ -67,6 +69,30 @@ func _setup_ambient_particles() -> void:
 	ambient.name = "AmbientParticles"
 	add_child(ambient)
 	ambient.setup(arena_width, arena_depth)
+
+
+## Adjust orthographic camera frustum offset so the playfield doesn't render
+## behind the notch or home indicator. Uses frustum_offset to shift the visible
+## area without moving the camera node itself.
+func _apply_camera_safe_area() -> void:
+	if _camera == null:
+		return
+	var insets := SafeAreaManager.get_insets()
+	var viewport_h: float = ProjectSettings.get_setting("display/window/size/viewport_height", 844)
+	var viewport_w: float = ProjectSettings.get_setting("display/window/size/viewport_width", 390)
+	# Convert pixel insets to fraction of viewport.
+	var top_frac: float = insets["top"] / viewport_h
+	var bottom_frac: float = insets["bottom"] / viewport_h
+	var left_frac: float = insets["left"] / viewport_w
+	var right_frac: float = insets["right"] / viewport_w
+	# Net vertical offset: push view down (positive Y in frustum) if top > bottom.
+	var vert_offset: float = (top_frac - bottom_frac) * 0.5 * _camera.size
+	# Net horizontal offset.
+	var horiz_offset: float = (left_frac - right_frac) * 0.5 * _camera.size
+	_camera.frustum_offset = Vector2(horiz_offset, vert_offset)
+	# Increase camera size to add breathing room for the larger inset side.
+	var inset_frac: float = maxf(top_frac + bottom_frac, left_frac + right_frac)
+	_camera.size = 26.0 * (1.0 + inset_frac)
 
 
 func reset_goal_lock() -> void:

@@ -11,13 +11,18 @@ extends CaromTurretInput
 ## Multiple simultaneous drags are summed (opposing drags cancel out).
 
 ## Touch movement below this threshold is treated as a tap (fire trigger).
-const TAP_THRESHOLD_PIXELS: float = 10.0
+## Higher on mobile to account for finger imprecision on high-DPI screens.
+const TAP_THRESHOLD_PIXELS: float = 24.0
 ## Drag-to-degrees sensitivity (pixels → degrees of aim offset per frame).
 const TOUCH_DRAG_SENSITIVITY: float = 0.12
 
 var _aim_target: float = 0.0
 var _fire_requested: bool = false
 var _reload_requested: bool = false
+
+## Auto-reload: time remaining before triggering reload after last shot.
+const AUTO_RELOAD_DELAY: float = 0.5
+var _auto_reload_timer: float = -1.0
 
 ## Active touches keyed by finger index.
 ## Each value: {start_pos: Vector2, current_pos: Vector2, total_movement: float, is_drag: bool}
@@ -26,6 +31,10 @@ var _active_touches: Dictionary = {}
 ## Accumulated horizontal drag pixels from all drag events in the current frame.
 ## Reset to 0 after being consumed in process().
 var _pending_drag_x: float = 0.0
+
+## Debug state — exposed for TouchDebugDraw overlay.
+var debug_total_input: float = 0.0
+var debug_last_fire: bool = false
 
 
 func process(delta: float, turret_state: Dictionary) -> Dictionary:
@@ -72,12 +81,32 @@ func process(delta: float, turret_state: Dictionary) -> Dictionary:
 	if Input.is_action_just_pressed("ui_accept"):
 		fire = true
 
+	# Auto-reload: start countdown when we fire, trigger reload when it expires.
+	var is_reloading: bool = turret_state.get("is_reloading", false)
+	var current_ammo: int = turret_state.get("ammo", 0)
+	var clip_size: int = turret_state.get("clip_size", 8)
+	if fire:
+		debug_last_fire = true
+		# Reset the auto-reload timer on every shot.
+		if CaromSettings.auto_reload:
+			_auto_reload_timer = AUTO_RELOAD_DELAY
+	else:
+		debug_last_fire = false
+
 	# Keyboard reload.
 	var reload := _reload_requested
 	_reload_requested = false
 
 	if InputMap.has_action("reload") and Input.is_action_just_pressed("reload"):
 		reload = true
+
+	# Tick auto-reload timer.
+	if CaromSettings.auto_reload and _auto_reload_timer > 0.0:
+		_auto_reload_timer -= delta
+		if _auto_reload_timer <= 0.0:
+			_auto_reload_timer = -1.0
+			if not is_reloading and current_ammo < clip_size:
+				reload = true
 
 	return {
 		"aim_target": _aim_target,
@@ -139,18 +168,30 @@ func handle_input_event(event: InputEvent, _aim_arc: float) -> void:
 func _process_hold_zones(delta: float, aim_arc: float, aim_speed: float) -> void:
 	if _active_touches.is_empty():
 		return
-	# Use window size so touch positions (in viewport/window pixels) are correctly normalised.
-	var half_width: float = DisplayServer.window_get_size().x * 0.5
+	# Touch positions are in viewport coordinates, so use the viewport size
+	# (NOT DisplayServer.window_get_size() which returns physical pixels).
+	var viewport_width: float = ProjectSettings.get_setting(
+		"display/window/size/viewport_width", 390
+	)
+	var insets := SafeAreaManager.get_insets()
+	var left_inset: float = insets["left"]
+	var right_inset: float = insets["right"]
+	var usable_width: float = viewport_width - left_inset - right_inset
+	var half_usable: float = usable_width * 0.5
 
 	var total_input: float = 0.0
 	for data: Dictionary in _active_touches.values():
 		var touch_x: float = (data["current_pos"] as Vector2).x
-		# -1.0 = far left, 0 = centre, +1.0 = far right.
-		total_input += (touch_x - half_width) / half_width
+		# Offset by left inset so centre of usable area maps to 0.
+		var adjusted_x: float = touch_x - left_inset - half_usable
+		total_input += adjusted_x / half_usable
 
 	# Clamp so opposing touches cancel.
 	total_input = clampf(total_input, -1.0, 1.0)
+	debug_total_input = total_input
 
+	# Negative aim = barrel swings right on screen (matching keyboard convention).
+	# Touch right → total_input positive → aim decreases → turns right.
 	_aim_target = clampf(
 		_aim_target - total_input * aim_speed * delta,
 		-aim_arc * 0.5,

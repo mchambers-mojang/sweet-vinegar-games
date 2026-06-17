@@ -69,3 +69,28 @@ _Avoid_: Bot, opponent (too informal for code/doc)
 **Difficulty Tier**:
 A named preset (Easy, Medium, Hard, Brutal) that scales the AI Controller's reaction speed, aim precision, fire rate, and tactical decision quality. A property of the AI, not the Match.
 
+## Multiplayer (Carom)
+
+**Sim** _(synonym: Deterministic Simulation)_:
+The authoritative game-state loop running at a fixed tick rate. Pure data — no Godot scene tree dependency. Owns all physics bodies, positions, velocities. Both peers run identical Sims; rendering reads from the Sim but never writes to it.
+_Avoid_: Physics engine (implies Godot Jolt), world (too vague)
+
+**Tick**:
+One discrete timestep of the Sim. At 30 ticks/sec, each Tick advances the Sim by 1/30th of a second using fixed-point arithmetic.
+
+**Fixed-Point**:
+Integer arithmetic with an implicit fractional part (48.16 format: 48 integer bits, 16 fractional). Used for all Sim math to guarantee cross-platform determinism.
+_Avoid_: Float, double (within the Sim)
+
+**Rollback**:
+When a remote input arrives late, rewind the Sim to the frame it applies to, inject the correct input, and re-simulate forward to the present. Hides latency without input delay.
+
+**Input Frame**:
+A compact bitfield (4 bytes) capturing one player's actions for one Tick: aim angle (10 bits, quantized), fire button, reload button.
+
+**Signaling Server**:
+A lightweight WebSocket service that introduces two peers by exchanging connection metadata (SDP). Not involved in gameplay traffic — once peers connect via WebRTC, the signaling server is no longer needed.
+
+**Room Code**:
+A short alphanumeric code (4 characters) that identifies a pending match. One player creates a room, shares the code out-of-band, the other player joins with it.
+

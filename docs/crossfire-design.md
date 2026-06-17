@@ -79,23 +79,30 @@ Top-down is the default because stationary turrets and ricochet planning both be
 
 ## Multiplayer
 
-### Architecture
-- **Rollback netcode** for responsive feel (critical for fast-paced physics game)
-- **Deterministic game state** required for rollback consistency
-- Physics approach: custom deterministic simulation with fixed-point math OR fixed timestep with state snapshots and reconciliation
-- Evaluate: NetFox addon (Godot 4, supports rollback + prediction) vs custom implementation
+### Architecture (Decided)
+- **Rollback netcode** — full rollback, no input delay in normal conditions
+- **Custom deterministic physics** in `carom/scripts/sim/` — pure RefCounted GDScript, zero Godot dependencies (see ADR 0001)
+- **Fixed-point arithmetic** (48.16 format) for all sim math — guarantees cross-platform determinism (ARM vs x86)
+- **2D simulation on XZ plane** — current gameplay is effectively top-down; 3D rendering reads from 2D sim state
+- **WebRTC** via Godot's WebRTCMultiplayerPeer for transport — handles NAT traversal (ICE/STUN/TURN)
+
+### Sim Details
+- **Tick rate**: 30 Hz (tunable constant, not structural)
+- **Rollback buffer**: 10 frames (333ms one-way latency coverage)
+- **Input format**: 4-byte bitfield per tick — 10-bit quantized aim angle + fire bit + reload bit
+- **Collision shapes**: circle (projectiles), convex polygon (puck prism), line segments (walls), point-in-zone (goals)
+- **Build order**: deterministic sim → render adapters → networking layer
+
+### Networking
+- **Signaling server**: self-hosted WebSocket service for SDP exchange (room code → peer introduction)
+- **TURN server**: self-hosted coturn for the ~15% of connections where STUN hole-punching fails
+- **Matchmaking (M4)**: simple 4-character room codes shared out-of-band
+- **Disconnect handling**: pause sim + 10-second reconnect window → forfeit on timeout
+- **Match length**: 3-minute maximum (timer in sim, agreed by both peers)
 
 ### Modes
-- **1v1 Ranked** — random matchmaking with skill rating
-- **Lobby/Custom** — create games, invite friends, configure rules
-- **LAN** — local network discovery for low-latency play
-- **Future**: 2v2, 4-player FFA, 8-player chaos mode
-
-### Netcode Strategy
-- Fixed simulation tick rate (e.g., 60Hz)
-- Input delay + rollback hybrid
-- State serialization for snapshots (positions, velocities, ammo counts)
-- Server-authoritative for ranked; peer-to-peer for LAN/casual
+- **M4**: 1v1 via room codes (friends only)
+- **Future**: quick-match queue, ranked with ELO, 2v2, 4-player FFA, LAN discovery
 
 ## Technical Architecture
 
@@ -120,27 +127,16 @@ carom/
     └── impact_ripple.gdshader # Hit effects
 ```
 
-### Physics Approach (M1 Decision)
+### Physics Approach (Decided)
 
-**Option A: Custom Deterministic Sim**
-- Fixed-point math (no floating point drift)
-- Simple shapes only (spheres, boxes, planes)
-- Full control over state serialization
-- More work upfront, but guaranteed rollback compatibility
-- Arena is simple enough that this is feasible
+**Custom Deterministic Sim** (Option A — chosen for M4):
+- Fixed-point math (48.16 format, no floating point in sim)
+- Shapes: circles, convex polygons, line segments
+- Full control over state serialization for rollback
+- GDScript RefCounted classes in `carom/scripts/sim/`
+- See `docs/adr/0001-custom-deterministic-physics-for-multiplayer.md`
 
-**Option B: Godot Physics + State Reconciliation**
-- Use Godot's built-in 3D physics (Jolt)
-- Accept non-determinism, compensate with aggressive reconciliation
-- Simpler to prototype, harder to make feel right in multiplayer
-- May have "snapping" artifacts on correction
-
-**Option C: NetFox + Careful State Management**
-- Use NetFox addon for rollback infrastructure
-- Custom physics layer for the puck/projectiles only
-- Godot physics for non-gameplay elements (particles, debris)
-
-**Recommendation**: Start with Option B for prototyping (get gameplay feel right), plan migration to Option A or C for multiplayer. This is the chosen M1 path.
+**Godot Jolt** remains in use for M1-M3 single-player (current state). M4 replaces Jolt for gameplay bodies; Jolt may still drive visual-only physics (debris, particles).
 
 ## Milestones
 
@@ -171,16 +167,24 @@ carom/
 > **Note:** Stun mechanic is deferred beyond M3. It doesn't apply to the current stationary-turret design — it only becomes relevant if turrets gain mobility or the game moves to a first-person perspective.
 
 ### M4: Multiplayer Foundation
-- [ ] Deterministic physics migration (Option A or C)
-- [ ] Rollback netcode integration
-- [ ] Peer-to-peer LAN play
-- [ ] Input serialization and state snapshots
+- [ ] Fixed-point math library (`carom/scripts/sim/fixed_point.gd`)
+- [ ] Deterministic physics sim — bodies, collisions, impulse resolution (`carom/scripts/sim/`)
+- [ ] Render adapter layer — existing scene scripts read from sim, interpolate visuals
+- [ ] Single-player works through sim (Jolt replaced for gameplay bodies)
+- [ ] Rollback manager — state snapshots, rewind, re-simulate
+- [ ] Input serialization (4-byte bitfield) and network input buffer
+- [ ] WebRTC peer connection via WebRTCMultiplayerPeer
+- [ ] Signaling server (WebSocket, room codes)
+- [ ] 1v1 online play with rollback working end-to-end
+- [ ] Disconnect handling (pause + 10s timeout)
+- [ ] 3-minute match timer (in sim)
 
-### M5: Online Multiplayer
-- [ ] Server infrastructure (matchmaking, lobbies)
+### M5: Online Polish
+- [ ] TURN server deployment for NAT-failure fallback
+- [ ] Quick-match queue (matchmaking server)
 - [ ] Ranked mode with skill rating
-- [ ] Custom lobbies with rule configuration
-- [ ] Anti-cheat considerations
+- [ ] Connection quality indicator in HUD
+- [ ] Spectator mode
 
 ### M6: Expansion
 - [ ] 4-player and 8-player arena layouts
