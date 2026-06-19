@@ -16,6 +16,12 @@ var state: CaromMatchState = CaromMatchState.new()
 var _effects: CaromEffectsController = null
 var _match_round: CaromMatchRound = CaromMatchRound.new()
 
+## Deterministic sim used as an authoritative match timer.
+## Advanced at 30 ticks/sec via _process() accumulation.
+var _sim: SimWorld = SimWorld.new()
+var _sim_tick_accum: float = 0.0
+const SIM_TICK_RATE: float = 1.0 / 30.0
+
 const MATCH_WIN_SLOWMO_SCALE: float = 0.15
 const MATCH_WIN_SLOWMO_REAL_SECONDS: float = 1.5
 const MATCH_WIN_RECOVER_REAL_SECONDS: float = 0.5
@@ -65,11 +71,13 @@ func _unhandled_input(event: InputEvent) -> void:
 				_on_pause()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	var ai_turret := _match_round.get_ai_turret()
 	var player_turret := _match_round.get_player_turret()
 	if ai_turret:
 		hud.update_debug_overlay(ai_turret, player_turret)
+
+	_tick_sim_timer(delta)
 
 
 func _init_match() -> void:
@@ -86,6 +94,8 @@ func _spawn_and_configure() -> void:
 
 func _start_match() -> void:
 	state.init_match(state.difficulty, score_limit)
+	_sim = SimWorld.new()
+	_sim_tick_accum = 0.0
 	_begin_round()
 
 
@@ -179,6 +189,30 @@ func _play_match_win_sequence(
 func _reset_time_scale() -> void:
 	if not is_equal_approx(Engine.time_scale, 1.0):
 		Engine.time_scale = 1.0
+
+
+# --- Sim timer ---
+
+func _tick_sim_timer(delta: float) -> void:
+	if state.phase != CaromMatchState.Phase.PLAYING:
+		return
+	_sim_tick_accum += delta
+	while _sim_tick_accum >= SIM_TICK_RATE:
+		_sim_tick_accum -= SIM_TICK_RATE
+		_sim.advance()
+		if _sim.time_expired and not state.is_sudden_death:
+			_on_time_expired()
+			return
+	hud.update_timer(_sim.get_timer_ticks_remaining(), state.is_sudden_death)
+
+
+func _on_time_expired() -> void:
+	var result := state.on_time_expired()
+	if result.sudden_death:
+		_sim.sudden_death = true
+		hud.update_timer(0, true)
+	elif result.match_over:
+		_finish_match(result.winner)
 
 
 # --- HUD signal wiring ---

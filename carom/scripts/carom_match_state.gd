@@ -15,12 +15,19 @@ class GoalResult:
 	var match_over: bool  ## True if this goal ends the match
 	var winner: String    ## "Player", "AI", or "" if the match is not over
 
+## Result returned by on_time_expired().
+class TimeExpiredResult:
+	var match_over: bool   ## True when one side leads and the match ends
+	var winner: String     ## "Player", "AI", or "" if tied → sudden death
+	var sudden_death: bool ## True when scores are tied → sudden death
+
 var phase: Phase = Phase.SETUP
 var player_score: int = 0
 var ai_score: int = 0
 var score_limit: int = 5
 var difficulty: int = 1  ## Difficulty tier index: 0=Easy, 1=Medium, 2=Hard, 3=Brutal
 var rounds_played: int = 0
+var is_sudden_death: bool = false
 
 
 ## Initialise (or reset) the match with the given parameters.
@@ -30,6 +37,7 @@ func init_match(p_difficulty: int, p_score_limit: int) -> void:
 	player_score = 0
 	ai_score = 0
 	rounds_played = 0
+	is_sudden_death = false
 	phase = Phase.SETUP
 	score_changed.emit(player_score, ai_score)
 
@@ -54,12 +62,44 @@ func on_goal_scored(scorer: String) -> GoalResult:
 		ai_score += 1
 		result.new_score = ai_score
 
-	if player_score >= score_limit or ai_score >= score_limit:
+	# In sudden death, the first goal after time expires wins immediately.
+	if is_sudden_death:
+		phase = Phase.GAME_OVER
+		result.match_over = true
+		result.winner = "Player" if scorer == "player" else "AI"
+	elif player_score >= score_limit or ai_score >= score_limit:
 		phase = Phase.GAME_OVER
 		result.match_over = true
 		result.winner = get_winner()
 
 	score_changed.emit(player_score, ai_score)
+	return result
+
+
+## Called when the match timer expires.
+## Returns a TimeExpiredResult: either the leading side wins or sudden death begins.
+func on_time_expired() -> TimeExpiredResult:
+	var result := TimeExpiredResult.new()
+	result.match_over = false
+	result.winner = ""
+	result.sudden_death = false
+
+	if phase != Phase.PLAYING:
+		return result
+
+	if player_score > ai_score:
+		phase = Phase.GAME_OVER
+		result.match_over = true
+		result.winner = "Player"
+	elif ai_score > player_score:
+		phase = Phase.GAME_OVER
+		result.match_over = true
+		result.winner = "AI"
+	else:
+		# Tied — enter sudden death (next goal wins, no timer)
+		is_sudden_death = true
+		result.sudden_death = true
+
 	return result
 
 

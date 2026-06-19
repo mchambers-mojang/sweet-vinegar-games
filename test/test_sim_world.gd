@@ -258,3 +258,74 @@ func test_determinism_100_ticks() -> void:
 		assert_eq(sa.pos_y, sb.pos_y, "Determinism: pos_y mismatch body %s" % id_str)
 		assert_eq(sa.vel_x, sb.vel_x, "Determinism: vel_x mismatch body %s" % id_str)
 		assert_eq(sa.vel_y, sb.vel_y, "Determinism: vel_y mismatch body %s" % id_str)
+
+# ---------------------------------------------------------------------------
+# 8. Timer — starts at MATCH_DURATION_TICKS, expires after exactly that many ticks
+# ---------------------------------------------------------------------------
+
+func test_timer_starts_at_match_duration() -> void:
+	var world: SimWorld = _make_world()
+	assert_eq(world.get_timer_ticks_remaining(), SimWorld.MATCH_DURATION_TICKS,
+		"Timer should start at MATCH_DURATION_TICKS (%d)" % SimWorld.MATCH_DURATION_TICKS)
+	assert_false(world.time_expired, "time_expired must be false at start")
+
+
+func test_timer_reaches_zero_after_full_duration() -> void:
+	var world: SimWorld = _make_world()
+	for _i in range(SimWorld.MATCH_DURATION_TICKS):
+		world.advance()
+	assert_eq(world.get_timer_ticks_remaining(), 0, "Timer should be 0 after full duration")
+	assert_true(world.time_expired, "time_expired should be true after full duration")
+
+
+func test_timer_not_expired_one_tick_before() -> void:
+	var world: SimWorld = _make_world()
+	for _i in range(SimWorld.MATCH_DURATION_TICKS - 1):
+		world.advance()
+	assert_false(world.time_expired,
+		"time_expired must still be false one tick before expiry")
+	assert_eq(world.get_timer_ticks_remaining(), 1,
+		"One tick should remain before expiry")
+
+
+func test_timer_snapshot_restore_preserves_ticks() -> void:
+	var world: SimWorld = _make_world()
+	# Advance partway through the match
+	for _i in range(100):
+		world.advance()
+
+	var snapshot: Dictionary = world.get_body_state()
+	var ticks_at_snapshot: int = world.get_timer_ticks_remaining()
+
+	# Continue advancing
+	for _i in range(50):
+		world.advance()
+
+	# Restore from snapshot and verify timer is back to snapshot value
+	var world_b: SimWorld = _make_world()
+	world_b.set_body_state(snapshot)
+	assert_eq(world_b.get_timer_ticks_remaining(), ticks_at_snapshot,
+		"Restored timer should match snapshot value")
+
+
+func test_timer_sudden_death_no_decrement() -> void:
+	var world: SimWorld = _make_world()
+	world.sudden_death = true
+	var ticks_before: int = world.get_timer_ticks_remaining()
+	for _i in range(100):
+		world.advance()
+	assert_eq(world.get_timer_ticks_remaining(), ticks_before,
+		"Timer must not decrement in sudden death mode")
+	assert_false(world.time_expired,
+		"time_expired must not be set in sudden death mode")
+
+
+func test_timer_snapshot_preserves_sudden_death_flag() -> void:
+	var world: SimWorld = _make_world()
+	world.sudden_death = true
+	var snapshot: Dictionary = world.get_body_state()
+
+	var world_b: SimWorld = _make_world()
+	world_b.set_body_state(snapshot)
+	assert_true(world_b.sudden_death,
+		"sudden_death flag should survive snapshot/restore")
