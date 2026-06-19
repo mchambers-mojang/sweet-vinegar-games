@@ -13,13 +13,16 @@ extends RefCounted
 ## FP.from_float(1.0/30.0) = round(65536/30) = 2185
 const DT: int = 2185
 
+## Tick rate: the sim advances 30 steps per real second.
+const TICKS_PER_SECOND: int = 30
+
 ## Maximum speed a body may reach (FP). Clamp applied after integration.
 ## Default: 30 units/tick  → 900 units/second at 30 Hz
-const DEFAULT_MAX_SPEED: int = 30 * FP.ONE
+const DEFAULT_MAX_SPEED: int = TICKS_PER_SECOND * FP.ONE
 
 ## Match duration in ticks (30 ticks/sec × 180 sec = 3 minutes).
 ## Tunable constant — adjust here to change match length.
-const MATCH_DURATION_TICKS: int = 30 * 180
+const MATCH_DURATION_TICKS: int = TICKS_PER_SECOND * 180
 
 ## Max int64 sentinel used to initialise a "smallest depth found so far" accumulator.
 const _MAX_INT: int = 0x7FFFFFFFFFFFFFFF
@@ -141,8 +144,7 @@ func _tick_timer() -> void:
 	if sudden_death or time_expired:
 		return
 	_timer_ticks_remaining -= 1
-	if _timer_ticks_remaining <= 0:
-		_timer_ticks_remaining = 0
+	if _timer_ticks_remaining == 0:
 		time_expired = true
 
 # ---------------------------------------------------------------------------

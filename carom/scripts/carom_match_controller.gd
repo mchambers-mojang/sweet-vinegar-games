@@ -20,7 +20,7 @@ var _match_round: CaromMatchRound = CaromMatchRound.new()
 ## Advanced at 30 ticks/sec via _process() accumulation.
 var _sim: SimWorld = SimWorld.new()
 var _sim_tick_accum: float = 0.0
-const SIM_TICK_RATE: float = 1.0 / 30.0
+const SIM_TICK_RATE: float = 1.0 / SimWorld.TICKS_PER_SECOND
 
 const MATCH_WIN_SLOWMO_SCALE: float = 0.15
 const MATCH_WIN_SLOWMO_REAL_SECONDS: float = 1.5

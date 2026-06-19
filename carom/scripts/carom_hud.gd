@@ -61,7 +61,7 @@ func update_timer(ticks_remaining: int, is_sudden_death: bool) -> void:
 		_timer_label.text = "SUDDEN DEATH"
 		_timer_label.add_theme_color_override("font_color", Color(1.0, 0.3, 0.1))
 		return
-	var seconds: int = ticks_remaining / 30
+	var seconds: int = ticks_remaining / SimWorld.TICKS_PER_SECOND
 	var minutes: int = seconds / 60
 	var secs: int = seconds % 60
 	_timer_label.text = "%d:%02d" % [minutes, secs]
