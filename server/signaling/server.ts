@@ -46,7 +46,7 @@ export function createServer(
     }
   }
 
-  const wss = new WebSocketServer({ port });
+  const wss = new WebSocketServer({ port, maxPayload: 16384 });
 
   wss.on('connection', (ws: WebSocket) => {
     // Track all rooms this connection owns so every room is cleaned up on disconnect,
