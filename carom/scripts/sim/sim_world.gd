@@ -17,6 +17,9 @@ const DT: int = 2185
 ## Default: 30 units/tick  → 900 units/second at 30 Hz
 const DEFAULT_MAX_SPEED: int = 30 * FP.ONE
 
+## Max int64 sentinel used to initialise a "smallest depth found so far" accumulator.
+const _MAX_INT: int = 0x7FFFFFFFFFFFFFFF
+
 ## Fixed-point π constants (48.16 format).
 const FP_PI: int      = 205887   # ≈ π   * 65536
 const FP_TWO_PI: int  = 411774   # ≈ 2π  * 65536
@@ -163,6 +166,9 @@ func _resolve_circle_circle(a: SimBody, b: SimBody) -> void:
 
 	# Positional correction (push apart so they just touch)
 	var penetration: int = radii_sum - dist
+	# Split penetration equally between both bodies.
+	# Integer >> 1 may lose the LSB for odd values; the sub-unit rounding is
+	# negligible for game physics and preserves determinism.
 	var half_pen: int    = penetration >> 1
 	a.position = FP.FPVec2.sub(a.position, FP.FPVec2.scale(n, half_pen))
 	b.position = FP.FPVec2.add(b.position, FP.FPVec2.scale(n, half_pen))
@@ -240,7 +246,7 @@ func _resolve_polygon_circle(poly: SimBody, circle: SimBody) -> void:
 	if verts.is_empty():
 		return
 
-	var min_depth: int = 0x7FFFFFFFFFFFFFFF
+	var min_depth: int = _MAX_INT
 	var best_normal: Dictionary = FP.FPVec2.make(0, 0)
 	var colliding: bool = false
 

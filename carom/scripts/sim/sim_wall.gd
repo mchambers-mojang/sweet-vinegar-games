@@ -1,7 +1,7 @@
 class_name SimWall
 extends RefCounted
 
-## An infinite line segment used as an arena boundary.
+## A finite line segment used as an arena boundary.
 ## All values are 48.16 fixed-point integers.
 
 ## Endpoint A (FPVec2).
