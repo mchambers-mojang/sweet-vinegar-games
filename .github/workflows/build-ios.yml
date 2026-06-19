@@ -61,7 +61,7 @@ jobs:
           if ! grep -q 'platform="iOS"' export_presets.cfg; then
             cat >> export_presets.cfg << EOF
 
-          [preset.1]
+          [preset.2]
 
           name="iOS"
           platform="iOS"
@@ -85,7 +85,7 @@ jobs:
           encrypt_directory=false
           script_export_mode=2
 
-          [preset.1.options]
+          [preset.2.options]
 
           custom_template/debug=""
           custom_template/release=""
