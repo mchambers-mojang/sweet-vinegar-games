@@ -35,7 +35,7 @@ func _on_projectile_fired(projectile: CaromProjectile, color: Color) -> void:
 	if _impact_spawner != null:
 		_impact_spawner.register_projectile(projectile)
 
-	projectile.body_entered.connect(_on_projectile_body_entered.bind(projectile, color))
+	projectile.impact_occurred.connect(_on_projectile_impact.bind(projectile, color))
 
 	HapticManager.vibrate_light()
 
@@ -43,22 +43,15 @@ func _on_projectile_fired(projectile: CaromProjectile, color: Color) -> void:
 		_screen_shake.shake(0.05)
 
 
-func _on_projectile_body_entered(body: Node, projectile: CaromProjectile, color: Color) -> void:
-	if not is_instance_valid(projectile) or not is_instance_valid(body) or _impact_spawner == null:
+func _on_projectile_impact(pos: Vector3, hit_puck: bool, projectile: CaromProjectile, color: Color) -> void:
+	if not is_instance_valid(projectile) or _impact_spawner == null:
 		return
 
-	var impact_pos := projectile.global_position
-	var velocity := projectile.linear_velocity
-
-	if body is CaromPuck:
-		var puck_pos: Vector3 = (body as CaromPuck).global_position
-		var diff: Vector3 = puck_pos - impact_pos
-		if diff.length_squared() < 0.0001:
-			diff = velocity.normalized()
-		var normal: Vector3 = diff.normalized()
-		var force := velocity.length() / maxf(projectile.speed, 1.0)
-		_impact_spawner.spawn_puck_impact(impact_pos, -normal, color, force)
+	if hit_puck:
+		var diff: Vector3 = projectile.global_position - pos
+		var normal: Vector3 = diff.normalized() if diff.length_squared() > 0.0001 else Vector3.FORWARD
+		_impact_spawner.spawn_puck_impact(pos, -normal, color, 1.0)
 		HapticManager.vibrate_medium()
-	elif body is StaticBody3D:
-		var normal := -velocity.normalized() if velocity.length_squared() > 0.001 else Vector3.UP
-		_impact_spawner.spawn_wall_impact(impact_pos, normal, color)
+	else:
+		var normal := Vector3.FORWARD
+		_impact_spawner.spawn_wall_impact(pos, normal, color)

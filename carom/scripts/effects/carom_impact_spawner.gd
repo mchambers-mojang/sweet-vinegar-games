@@ -28,21 +28,6 @@ func register_projectile(projectile: CaromProjectile) -> void:
 	projectile.tree_exiting.connect(_on_projectile_removed.bind(projectile))
 
 
-func _physics_process(_delta: float) -> void:
-	for projectile in _registered:
-		if not is_instance_valid(projectile):
-			continue
-		_check_collisions(projectile)
-
-
-func _check_collisions(projectile: CaromProjectile) -> void:
-	# RigidBody3D contact monitoring
-	var contact_count := projectile.get_contact_count()
-	for i in contact_count:
-		var collider := projectile.get_colliding_bodies()
-		break  # We use body_entered signal approach instead
-
-
 func _on_projectile_removed(projectile: CaromProjectile) -> void:
 	_registered.erase(projectile)
 

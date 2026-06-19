@@ -1,23 +1,23 @@
 class_name CaromProjectile
-extends RigidBody3D
+extends Node3D
 
-## Straight-line projectile that bounces off walls and pushes the puck via natural physics.
-## Only leaves play when entering a goal area.
+## Straight-line projectile — render adapter.
+## Position is driven by CaromSimBridge each frame via interpolation between
+## deterministic sim ticks.  The sim handles all bouncing and collision logic.
+
+## Emitted by CaromSimBridge when the sim body collides with something.
+## pos is the impact position in world space; hit_puck is true when the
+## collision was against the puck body.
+signal impact_occurred(pos: Vector3, hit_puck: bool)
 
 @export var speed: float = 18.0
 
 var direction: Vector3 = Vector3.FORWARD
 var owner_side: StringName = StringName()
 
-
-func _ready() -> void:
-	# Lock to ground plane
-	axis_lock_linear_y = true
-	axis_lock_angular_x = true
-	axis_lock_angular_z = true
-	# Enable contact monitoring for effects system
-	contact_monitor = true
-	max_contacts_reported = 4
+## Set by CaromSimBridge.setup_sim_bridge() after the projectile is registered.
+var _bridge: CaromSimBridge = null
+var _sim_body_id: int = 0
 
 
 func setup(new_direction: Vector3, new_speed: float, new_owner_side: StringName, color: Color = Color(0.16, 0.95, 1.0)) -> void:
@@ -25,7 +25,6 @@ func setup(new_direction: Vector3, new_speed: float, new_owner_side: StringName,
 	if new_speed > 0.0:
 		speed = new_speed
 	owner_side = new_owner_side
-	linear_velocity = direction * speed
 	if direction.length_squared() > 0.0:
 		look_at(global_position + direction, Vector3.UP)
 	# Apply team color to mesh
@@ -39,16 +38,19 @@ func setup(new_direction: Vector3, new_speed: float, new_owner_side: StringName,
 		mesh_instance.material_override = mat
 
 
-func _physics_process(_delta: float) -> void:
-	# Keep projectile moving at constant speed (counteract energy loss from bounces)
-	var current_speed := linear_velocity.length()
-	if current_speed > 0.1:
-		linear_velocity = linear_velocity.normalized() * speed
-	# Keep on ground plane
-	global_position.y = 0.0
-	linear_velocity.y = 0.0
+## Called by CaromSimBridge after the projectile's sim body is registered.
+func setup_sim_bridge(bridge: CaromSimBridge, body_id: int) -> void:
+	_bridge = bridge
+	_sim_body_id = body_id
 
 
-## Called by goal Area3D when this projectile enters — removes from play.
+func _process(_delta: float) -> void:
+	if _bridge != null and _sim_body_id != 0:
+		var alpha := _bridge.get_render_alpha()
+		global_position = _bridge.get_projectile_position(_sim_body_id, alpha)
+
+
+## Called when this projectile enters a goal zone — removes it from play.
 func enter_goal() -> void:
 	queue_free()
+

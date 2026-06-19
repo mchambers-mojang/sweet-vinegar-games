@@ -41,6 +41,11 @@ var max_speed: int = DEFAULT_MAX_SPEED
 ## Each entry is {body_id: int, zone_id: int}.
 var zone_events: Array = []
 
+## Collision events recorded during the last advance() call.
+## Each entry is {body_id: int, other_id: int, pos_x: int, pos_y: int}.
+## other_id = -1 for wall collisions. Populated in _resolve_circle_circle and _resolve_circle_wall.
+var collision_events: Array = []
+
 # ---------------------------------------------------------------------------
 # Body management
 # ---------------------------------------------------------------------------
@@ -71,6 +76,7 @@ func add_zone(zone: SimZone) -> void:
 ## `inputs` is reserved for future player-input integration and is unused here.
 func advance(_inputs: Dictionary = {}) -> void:
 	zone_events = []
+	collision_events = []
 	_integrate()
 	_detect_and_resolve()
 	_clamp_speed()
@@ -202,6 +208,12 @@ func _resolve_circle_circle(a: SimBody, b: SimBody) -> void:
 	a.velocity = FP.FPVec2.sub(a.velocity, FP.FPVec2.scale(impulse, FP.div(FP.ONE, a.mass)))
 	b.velocity = FP.FPVec2.add(b.velocity, FP.FPVec2.scale(impulse, FP.div(FP.ONE, b.mass)))
 
+	# Record collision event for render adapters (e.g. projectile impact effects)
+	var contact_x: int = (a.position.x + b.position.x) >> 1
+	var contact_y: int = (a.position.y + b.position.y) >> 1
+	collision_events.append({body_id = a.id, other_id = b.id, pos_x = contact_x, pos_y = contact_y})
+	collision_events.append({body_id = b.id, other_id = a.id, pos_x = contact_x, pos_y = contact_y})
+
 # --- Circle–Wall ---
 
 func _resolve_circle_wall(body: SimBody, wall: SimWall) -> void:
@@ -260,6 +272,9 @@ func _resolve_circle_wall(body: SimBody, wall: SimWall) -> void:
 	var delta_vn: int = FP.mul(FP.ONE + e, vn)
 	var correction: Dictionary = FP.FPVec2.scale(push_normal, delta_vn)
 	body.velocity = FP.FPVec2.sub(body.velocity, correction)
+
+	# Record collision event for render adapters
+	collision_events.append({body_id = body.id, other_id = -1, pos_x = body.position.x, pos_y = body.position.y})
 
 # --- Polygon–Circle (SAT nearest-edge approach) ---
 

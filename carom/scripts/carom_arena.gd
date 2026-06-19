@@ -28,8 +28,6 @@ var _camera_mode_tween: Tween = null
 
 
 func _ready() -> void:
-	south_goal.body_entered.connect(_on_south_goal_body_entered)
-	north_goal.body_entered.connect(_on_north_goal_body_entered)
 	_setup_ambient_particles()
 	CaromSettings.ensure_loaded()
 	set_camera_mode(CaromSettings.camera_mode, false)
@@ -122,21 +120,10 @@ func get_goal_targets() -> Array[Vector3]:
 	return [south_goal.global_position, north_goal.global_position]
 
 
-func _on_south_goal_body_entered(body: Node) -> void:
-	if body is CaromProjectile:
-		(body as CaromProjectile).enter_goal()
-		return
-	if _goal_locked or not body is CaromPuck:
-		return
-	_goal_locked = true
-	goal_scored.emit(&"north", body as CaromPuck)
-
-
-func _on_north_goal_body_entered(body: Node) -> void:
-	if body is CaromProjectile:
-		(body as CaromProjectile).enter_goal()
-		return
-	if _goal_locked or not body is CaromPuck:
+## Called by CaromMatchController when the sim reports a puck zone event.
+## scoring_side is &"north" (AI scores) or &"south" (player scores).
+func on_sim_puck_scored(puck: CaromPuck, scoring_side: StringName) -> void:
+	if _goal_locked:
 		return
 	_goal_locked = true
-	goal_scored.emit(&"south", body as CaromPuck)
+	goal_scored.emit(scoring_side, puck)
