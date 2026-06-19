@@ -378,21 +378,35 @@ func _world_vertices(body: SimBody) -> Array:
 # ---------------------------------------------------------------------------
 
 ## Fixed-point sine.  Input is FP radians.
-## Uses: sin(x) ≈ x − x³/6 + x⁵/120  (accurate within ±0.001 for |x| ≤ π)
+## Uses: sin(x) ≈ x − x³/6 + x⁵/120 − x⁷/5040  (max absolute error ≤ 0.0002 for |x| ≤ π/2)
+##
+## Two-step range reduction:
+##  1. Normalise to [−π, π] via modulo.
+##  2. Reduce to [−π/2, π/2] via sin(π − x) = sin(x), keeping the series
+##     in the interval where the 7th-order polynomial is highly accurate.
 static func _fp_sin(angle: int) -> int:
-	# Normalise to [−π, π]
+	# Step 1: normalise to [−π, π]
 	var a: int = angle % FP_TWO_PI
 	if a > FP_PI:
 		a -= FP_TWO_PI
 	elif a < -FP_PI:
 		a += FP_TWO_PI
 
+	# Step 2: further reduce to [−π/2, π/2] using sin(π − x) = sin(x)
+	if a > FP_HALF_PI:
+		a = FP_PI - a
+	elif a < -FP_HALF_PI:
+		a = -FP_PI - a
+
 	var x2: int = FP.mul(a, a)
 	var x3: int = FP.mul(x2, a)
-	var x5: int = FP.mul(FP.mul(x2, x2), a)
-	# 1/6   ≈ 0.16667 → 10923 in 48.16
-	# 1/120 ≈ 0.00833 →   546 in 48.16
-	return a - FP.mul(x3, 10923) + FP.mul(x5, 546)
+	var x4: int = FP.mul(x2, x2)
+	var x5: int = FP.mul(x4, a)
+	var x7: int = FP.mul(x4, x3)
+	# 1/6    ≈ 0.16667 → 10923 in 48.16
+	# 1/120  ≈ 0.00833 →   546 in 48.16
+	# 1/5040 ≈ 0.000198 →   13 in 48.16
+	return a - FP.mul(x3, 10923) + FP.mul(x5, 546) - FP.mul(x7, 13)
 
 ## Fixed-point cosine.  cos(x) = sin(x + π/2).
 static func _fp_cos(angle: int) -> int:
