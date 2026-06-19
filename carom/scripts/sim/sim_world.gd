@@ -80,7 +80,11 @@ func advance(_inputs: Dictionary = {}) -> void:
 # Serialisation
 # ---------------------------------------------------------------------------
 
-func get_state() -> Dictionary:
+## Returns a snapshot of body state, _next_id, and max_speed.
+## Walls and zones are NOT included — they are static geometry that the
+## caller is expected to re-add after calling set_body_state().
+## Use this pair for rollback snapshots where geometry never changes.
+func get_body_state() -> Dictionary:
 	var bodies_state: Dictionary = {}
 	for id: int in _bodies:
 		bodies_state[str(id)] = (_bodies[id] as SimBody).get_state()
@@ -90,8 +94,12 @@ func get_state() -> Dictionary:
 		max_speed = max_speed,
 	}
 
-func set_state(state: Dictionary) -> void:
+## Restores body state from a snapshot produced by get_body_state().
+## Walls and zones are cleared and must be re-added by the caller.
+func set_body_state(state: Dictionary) -> void:
 	_bodies = {}
+	_walls  = []
+	_zones  = []
 	var bodies_dict: Dictionary = state.bodies
 	for key: String in bodies_dict:
 		var b: SimBody = SimBody.new()
@@ -211,32 +219,46 @@ func _resolve_circle_wall(body: SimBody, wall: SimWall) -> void:
 		return  # degenerate wall
 
 	var t_num: int = FP.FPVec2.dot(to_a, ab)
-	# t = dot(to_a, ab) / |ab|² — clamp to [0,1] in FP
+	# t = dot(to_a, ab) / |ab|² in FP — compare before clamping to detect endpoint
 	var t: int = FP.div(t_num, ab_len_sq)
-	t = _clamp_fp(t, 0, FP.ONE)
+	var at_endpoint: bool = t < 0 or t > FP.ONE
+	var t_clamped: int = _clamp_fp(t, 0, FP.ONE)
 
 	# Closest point on segment
-	var closest: Dictionary = FP.FPVec2.add(wall.a, FP.FPVec2.scale(ab, t))
+	var closest: Dictionary = FP.FPVec2.add(wall.a, FP.FPVec2.scale(ab, t_clamped))
 	var to_centre: Dictionary = FP.FPVec2.sub(body.position, closest)
 	var dist: int = FP.FPVec2.length(to_centre)
 
 	if dist >= body.radius:
 		return  # outside radius
 
-	# Push body out
-	var penetration: int = body.radius - dist
-	body.position = FP.FPVec2.add(body.position,
-		FP.FPVec2.scale(wall.normal, penetration))
+	# Choose push direction and penetration depth.
+	# At a segment endpoint: push radially away from that endpoint so corner
+	# reflections are physically correct (wall.normal is only valid on the face).
+	# On the wall face: use wall.normal with the signed depth so that a centre
+	# that has already crossed through (signed_dist < 0) is pushed back to
+	# radius distance rather than only to the wall surface.
+	var push_normal: Dictionary
+	var penetration: int
+	if at_endpoint and dist > 0:
+		push_normal = FP.FPVec2.normalize(to_centre)
+		penetration = body.radius - dist
+	else:
+		push_normal = wall.normal
+		penetration = body.radius - signed_dist
 
-	# Reflect velocity component along the wall normal
-	var vn: int = FP.FPVec2.dot(body.velocity, wall.normal)
+	body.position = FP.FPVec2.add(body.position,
+		FP.FPVec2.scale(push_normal, penetration))
+
+	# Reflect velocity component along the push normal
+	var vn: int = FP.FPVec2.dot(body.velocity, push_normal)
 	if vn >= 0:
 		return  # moving away from wall
 
 	# v_reflected = v - (1+e)*vn*n
 	var e: int = body.restitution
 	var delta_vn: int = FP.mul(FP.ONE + e, vn)
-	var correction: Dictionary = FP.FPVec2.scale(wall.normal, delta_vn)
+	var correction: Dictionary = FP.FPVec2.scale(push_normal, delta_vn)
 	body.velocity = FP.FPVec2.sub(body.velocity, correction)
 
 # --- Polygon–Circle (SAT nearest-edge approach) ---

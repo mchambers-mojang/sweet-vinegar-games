@@ -197,20 +197,20 @@ func test_serialize_deserialize_advance_identical() -> void:
 		world_a.advance()
 
 	# Snapshot
-	var state: Dictionary = world_a.get_state()
+	var state: Dictionary = world_a.get_body_state()
 
 	# Clone via serialisation
 	var world_b: SimWorld = _make_world()
 	_add_box_walls(world_b, 20, 20)
-	world_b.set_state(state)
+	world_b.set_body_state(state)
 
 	# Advance both one more tick
 	world_a.advance()
 	world_b.advance()
 
 	# Positions and velocities must match exactly (bit-for-bit)
-	var final_a: Dictionary = world_a.get_state()
-	var final_b: Dictionary = world_b.get_state()
+	var final_a: Dictionary = world_a.get_body_state()
+	var final_b: Dictionary = world_b.get_body_state()
 	for id_str: String in final_a.bodies.keys():
 		var sa: Dictionary = final_a.bodies[id_str]
 		var sb: Dictionary = final_b.bodies[id_str]
@@ -248,8 +248,8 @@ func test_determinism_100_ticks() -> void:
 		world_a.advance()
 		world_b.advance()
 
-	var state_a: Dictionary = world_a.get_state()
-	var state_b: Dictionary = world_b.get_state()
+	var state_a: Dictionary = world_a.get_body_state()
+	var state_b: Dictionary = world_b.get_body_state()
 
 	for id_str: String in state_a.bodies.keys():
 		var sa: Dictionary = state_a.bodies[id_str]
