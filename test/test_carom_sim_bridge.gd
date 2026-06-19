@@ -114,10 +114,10 @@ func test_puck_zone_event_fires_when_puck_enters_goal() -> void:
 	arena.get_node("Actors").add_child(puck)
 	await get_tree().process_frame
 
-	# Place puck just above the north goal (z ≈ -0.4 in world space)
-	# A nudge velocity pointed straight toward the goal will carry it in.
+	# Place puck just above the north goal (z ≈ -0.4 in world space) so that
+	# a single tick with velocity -5 u/s carries it inside the zone.
 	var north_goal_z: float = arena.north_goal.global_position.z  # ≈ -0.4
-	var start_pos := Vector3(0.0, 0.0, 0.2)
+	var start_pos := Vector3(0.0, 0.0, north_goal_z + 0.6)  # 0.6 units north of the goal line
 	puck.global_position = start_pos
 	puck.configure(arena.get_goal_targets(), start_pos)
 	bridge.register_puck(puck, start_pos)

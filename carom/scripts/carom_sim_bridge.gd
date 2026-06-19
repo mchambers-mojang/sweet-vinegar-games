@@ -33,6 +33,9 @@ const ZONE_SOUTH_GOAL: int = 2
 
 const TICK_DURATION: float = 1.0 / 30.0
 
+## Sentinel representing "no best distance found yet" in nearest-goal search.
+const _DIST_SQ_INIT: int = 0x7FFFFFFFFFFFFFFF  # max int64
+
 # ---------------------------------------------------------------------------
 # Signals
 # ---------------------------------------------------------------------------
@@ -381,7 +384,7 @@ func _apply_puck_stall_nudge(idx: int) -> void:
 	if goal_targets.is_empty():
 		return
 
-	var best_dist_sq: int = 0x7FFFFFFFFFFFFFFF
+	var best_dist_sq: int = _DIST_SQ_INIT
 	var best_dir: Dictionary = FP.FPVec2.make(FP.ONE, 0)
 
 	for goal_pos: Vector3 in goal_targets:

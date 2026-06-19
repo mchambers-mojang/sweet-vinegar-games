@@ -49,9 +49,13 @@ func _on_projectile_impact(pos: Vector3, hit_puck: bool, projectile: CaromProjec
 
 	if hit_puck:
 		var diff: Vector3 = projectile.global_position - pos
+		# Approximate outward normal from the impact point toward the projectile centre.
 		var normal: Vector3 = diff.normalized() if diff.length_squared() > 0.0001 else Vector3.FORWARD
 		_impact_spawner.spawn_puck_impact(pos, -normal, color, 1.0)
 		HapticManager.vibrate_medium()
 	else:
+		# The sim does not expose the wall surface normal in the collision event.
+		# Vector3.FORWARD is a cosmetic placeholder; the sparks appear at the
+		# correct position even if their spray direction is approximate.
 		var normal := Vector3.FORWARD
 		_impact_spawner.spawn_wall_impact(pos, normal, color)

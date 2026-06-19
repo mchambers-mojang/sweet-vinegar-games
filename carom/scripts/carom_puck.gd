@@ -59,8 +59,9 @@ func _setup_emission_material() -> void:
 
 
 func configure(goal_targets: Array[Vector3], reset_position: Vector3) -> void:
-	# Player turret is at the bottom (south spawn, Z=22) defending the SouthGoal (Z=24.4).
-	# Puck entering SouthGoal = AI scores. Player's danger zone is NorthGoal (Z=-0.4) direction.
+	# Arena layout (world Z axis): NorthGoal at Z≈-0.4, SouthGoal at Z≈24.4.
+	# Player turret spawns at south end (Z≈22); AI turret at north end (Z≈2).
+	# Puck entering SouthGoal = AI scores. Player's danger zone is NorthGoal (Z≈-0.4) direction.
 	_goal_targets = goal_targets.duplicate()
 	if goal_targets.size() >= 2:
 		_player_goal = goal_targets[0]  # [south_goal, north_goal] — south is player's danger zone
@@ -93,7 +94,8 @@ func _process(delta: float) -> void:
 
 	_update_pulse(delta)
 
-	# Safety bounds check — reset if escaped arena (e.g. after a severe sim error).
+	# Safety bounds check — reset if escaped arena.
+	# Arena spans x∈[-4,4], z∈[0,24]; goals add ±0.4 overlap, so use generous margins.
 	if abs(global_position.x) > 8.0 or global_position.z < -3.0 or global_position.z > 28.0:
 		push_warning("Puck escaped bounds at %s — resetting" % str(global_position))
 		reset_to_center()
