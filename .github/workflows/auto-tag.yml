@@ -194,7 +194,7 @@ jobs:
           prerelease: false
 
   build-windows:
-    needs: tag
+    needs: [tag, build-android]
     if: needs.tag.outputs.tagged == 'true'
     runs-on: ubuntu-latest
     container:
