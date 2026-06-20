@@ -41,49 +41,35 @@ func start_join(code: String, signaling_url: String = "") -> void:
 	_match_ctrl.join(code, _signaling_url)
 
 
-## Local play: try to join an existing local server; if none is running, become the host.
+## Local play: try to become host; if port is taken, join the existing host.
 func start_local() -> void:
 	_signaling_url = "ws://127.0.0.1:%d" % CaromLocalSignaling.DEFAULT_PORT
 	_ensure_overlay()
 
-	# Probe whether a local signaling server is already running
-	var probe := WebSocketPeer.new()
-	var err := probe.connect_to_url(_signaling_url)
-	if err != OK:
-		# Can't even start connecting — become host
-		_start_local_as_host()
-		return
-
-	# Poll briefly to see if we can connect
-	var attempts := 0
-	while attempts < 15:
-		probe.poll()
-		var state := probe.get_ready_state()
-		if state == WebSocketPeer.STATE_OPEN:
-			probe.close()
-			# Server is already running — join as client
-			_ensure_match_controller()
-			_match_ctrl.join(CaromLocalSignaling.ROOM_CODE, _signaling_url)
-			return
-		if state == WebSocketPeer.STATE_CLOSED:
-			break
-		attempts += 1
-		await get_tree().create_timer(0.05).timeout
-
-	probe.close()
-	# No server found — become host
-	_start_local_as_host()
-
-
-func _start_local_as_host() -> void:
+	# Try to start the embedded signaling server.
+	# If the port is already in use, another instance is hosting — join it.
 	_local_server = CaromLocalSignaling.new()
 	_local_server.name = "LocalSignaling"
 	add_child(_local_server)
+
+	var bound := false
+	_local_server.started.connect(func() -> void: bound = true, CONNECT_ONE_SHOT)
+	_local_server.failed.connect(func(_reason: String) -> void: bound = false, CONNECT_ONE_SHOT)
 	_local_server.start()
-	# Small delay to let the server socket bind
-	await get_tree().create_timer(0.1).timeout
-	_ensure_match_controller()
-	_match_ctrl.host(_signaling_url)
+
+	# Give the bind a frame to resolve
+	await get_tree().process_frame
+
+	if bound:
+		# We're the host — wait a beat then create the room
+		_ensure_match_controller()
+		_match_ctrl.host(_signaling_url)
+	else:
+		# Port taken — another instance is host. Join it.
+		_local_server.queue_free()
+		_local_server = null
+		_ensure_match_controller()
+		_match_ctrl.join(CaromLocalSignaling.ROOM_CODE, _signaling_url)
 
 
 ## Returns the room code (valid after hosting and receiving room_created).

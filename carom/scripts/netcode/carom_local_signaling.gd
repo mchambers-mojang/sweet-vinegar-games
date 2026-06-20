@@ -71,6 +71,7 @@ func _process(_delta: float) -> void:
 			var ws := WebSocketPeer.new()
 			ws.accept_stream(tcp)
 			_peers.append(ws)
+			print("[LocalSignaling] TCP connected, upgrading to WebSocket (peers: %d)" % _peers.size())
 		elif tcp_status == StreamPeerTCP.STATUS_CONNECTING:
 			still_pending.append(tcp)
 		# else: STATUS_ERROR or STATUS_NONE — drop it
@@ -104,6 +105,8 @@ func _process(_delta: float) -> void:
 
 func _handle_message(peer: WebSocketPeer, msg: Dictionary) -> void:
 	var msg_type: String = msg.get("type", "")
+	if OS.is_debug_build():
+		print("[LocalSignaling] Received: %s" % msg_type)
 	match msg_type:
 		"create":
 			if _creator != null:
@@ -112,8 +115,10 @@ func _handle_message(peer: WebSocketPeer, msg: Dictionary) -> void:
 			_creator = peer
 			_creator_sdp = msg.get("sdp", "")
 			_send(peer, { "type": "room_created", "code": ROOM_CODE })
+			print("[LocalSignaling] Room created, SDP length: %d" % _creator_sdp.length())
 			# If a joiner arrived before the creator, fulfill them now
 			if _joiner != null:
+				print("[LocalSignaling] Fulfilling queued joiner")
 				_send(_joiner, { "type": "room_joined", "sdp": _creator_sdp })
 				for ice_msg in _pending_ice_for_joiner:
 					_send(_joiner, ice_msg)
@@ -125,9 +130,10 @@ func _handle_message(peer: WebSocketPeer, msg: Dictionary) -> void:
 				return
 			_joiner = peer
 			if _creator == null:
-				# Room not created yet — queue joiner; will be fulfilled when create arrives
+				print("[LocalSignaling] Joiner queued (waiting for creator)")
 				return
 			# Send creator's offer to joiner
+			print("[LocalSignaling] Joiner connected, sending offer")
 			_send(peer, { "type": "room_joined", "sdp": _creator_sdp })
 			# Flush buffered ICE for joiner
 			for ice_msg in _pending_ice_for_joiner:
@@ -136,6 +142,7 @@ func _handle_message(peer: WebSocketPeer, msg: Dictionary) -> void:
 
 		"answer":
 			if peer == _joiner and _creator != null:
+				print("[LocalSignaling] Relaying answer to creator")
 				_send(_creator, {
 					"type": "peer_joined",
 					"sdp": msg.get("sdp", "")
