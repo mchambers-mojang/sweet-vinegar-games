@@ -290,7 +290,11 @@ func _process(delta: float) -> void:
 	# buildup while waiting for remote input.
 	if _use_local_network:
 		if _tick_accum >= TICK_RATE:
-			_do_tick()
+			if _multiplayer_ctrl and _multiplayer_ctrl._lockstep_pending_send:
+				# Already waiting for remote input — just poll, don't consume new events
+				_multiplayer_ctrl.advance_with_input(0.0, false, false)
+			else:
+				_do_tick()
 			# Only drain the accumulator if the tick actually advanced
 			if _multiplayer_ctrl and _multiplayer_ctrl._lockstep_pending_send == false:
 				_tick_accum -= TICK_RATE
