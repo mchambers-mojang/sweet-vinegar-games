@@ -99,19 +99,21 @@ func _handle_message(peer: WebSocketPeer, msg: Dictionary) -> void:
 			_creator = peer
 			_creator_sdp = msg.get("sdp", "")
 			_send(peer, { "type": "room_created", "code": ROOM_CODE })
-			# Flush any ICE candidates buffered before create was processed
-			for ice_msg in _pending_ice_for_joiner:
-				_send(_joiner, ice_msg) if _joiner != null else null
-			_pending_ice_for_joiner.clear()
+			# If a joiner arrived before the creator, fulfill them now
+			if _joiner != null:
+				_send(_joiner, { "type": "room_joined", "sdp": _creator_sdp })
+				for ice_msg in _pending_ice_for_joiner:
+					_send(_joiner, ice_msg)
+				_pending_ice_for_joiner.clear()
 
 		"join":
-			if _creator == null:
-				_send(peer, { "type": "error", "message": "Room not found" })
-				return
 			if _joiner != null:
 				_send(peer, { "type": "error", "message": "Room full" })
 				return
 			_joiner = peer
+			if _creator == null:
+				# Room not created yet — queue joiner; will be fulfilled when create arrives
+				return
 			# Send creator's offer to joiner
 			_send(peer, { "type": "room_joined", "sdp": _creator_sdp })
 			# Flush buffered ICE for joiner
