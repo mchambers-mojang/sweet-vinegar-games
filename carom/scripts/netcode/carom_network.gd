@@ -194,7 +194,7 @@ func _poll_websocket() -> void:
 		_on_ws_open()
 
 	# Read incoming messages
-	while _ws.get_available_packet_count() > 0:
+	while _ws != null and _ws.get_available_packet_count() > 0:
 		var text := _ws.get_packet().get_string_from_utf8()
 		var json := JSON.new()
 		if json.parse(text) != OK:
