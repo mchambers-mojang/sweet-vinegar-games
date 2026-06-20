@@ -1,9 +1,6 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://carom/scripts/carom_projectile.gd" id="1"]
-
-[sub_resource type="SphereShape3D" id="1"]
-radius = 0.14
 
 [sub_resource type="SphereMesh" id="2"]
 radius = 0.14
@@ -16,25 +13,8 @@ emission = Color(0.1, 0.8, 1.0, 1)
 emission_energy_multiplier = 1.0
 roughness = 0.05
 
-[sub_resource type="PhysicsMaterial" id="4"]
-friction = 0.0
-bounce = 1.0
-
-[node name="CaromProjectile" type="RigidBody3D"]
-collision_layer = 8
-collision_mask = 14
-mass = 0.3
-physics_material_override = SubResource("4")
-gravity_scale = 0.0
-linear_damp = 0.0
-angular_damp = 0.0
-continuous_cd = true
-contact_monitor = true
-max_contacts_reported = 4
+[node name="CaromProjectile" type="Node3D"]
 script = ExtResource("1")
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
-shape = SubResource("1")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]
 mesh = SubResource("2")

@@ -1,8 +1,11 @@
 class_name CaromPuck
-extends RigidBody3D
+extends Node3D
 
-## Triangular prism puck — spins freely on Y axis, locked on X/Z.
-## The 3 angled faces create unpredictable deflections when hit.
+## Triangular prism puck — render adapter.
+## Position and rotation are driven by CaromSimBridge each frame via
+## interpolation between deterministic sim ticks (30 Hz → display rate).
+## All visual logic (tension pulse, material effects) reads from node state
+## but never writes to the physics simulation.
 
 @export var max_speed: float = 14.0
 @export var stall_nudge_force: float = 0.18
@@ -22,12 +25,11 @@ var _reset_position: Vector3 = Vector3.ZERO
 var _puck_material: StandardMaterial3D = null
 var _pulse_time: float = 0.0
 
+## Set by CaromSimBridge.register_puck() — null until registered.
+var _bridge: CaromSimBridge = null
+
 
 func _ready() -> void:
-	can_sleep = false
-	# Lock X and Z rotation, allow Y spin
-	axis_lock_angular_x = true
-	axis_lock_angular_z = true
 	_setup_emission_material()
 
 
@@ -57,8 +59,9 @@ func _setup_emission_material() -> void:
 
 
 func configure(goal_targets: Array[Vector3], reset_position: Vector3) -> void:
-	# Player turret is at the bottom (south spawn, Z=2) defending the SouthGoal (Z=-0.4).
-	# Puck entering SouthGoal = opponent scores on player. That's the danger zone.
+	# Arena layout (world Z axis): NorthGoal at Z≈-0.4, SouthGoal at Z≈24.4.
+	# Player turret spawns at south end (Z≈22); AI turret at north end (Z≈2).
+	# Puck entering SouthGoal = AI scores. Player's danger zone is NorthGoal (Z≈-0.4) direction.
 	_goal_targets = goal_targets.duplicate()
 	if goal_targets.size() >= 2:
 		_player_goal = goal_targets[0]  # [south_goal, north_goal] — south is player's danger zone
@@ -68,15 +71,34 @@ func configure(goal_targets: Array[Vector3], reset_position: Vector3) -> void:
 	_reset_position = reset_position
 
 
+## Called by CaromSimBridge.register_puck() to give this adapter access to the sim.
+func setup_sim_bridge(bridge: CaromSimBridge) -> void:
+	_bridge = bridge
+
+
 func reset_to_center(reset_position: Vector3 = Vector3.ZERO) -> void:
 	if reset_position == Vector3.ZERO:
 		reset_position = _reset_position
-	global_position = Vector3(reset_position.x, reset_height, reset_position.z)
-	linear_velocity = Vector3.ZERO
-	angular_velocity = Vector3.ZERO
+	var target := Vector3(reset_position.x, reset_height, reset_position.z)
+	global_position = target
+	if _bridge != null:
+		_bridge.reset_puck_to(self, target)
 
 
+func _process(delta: float) -> void:
+	# Drive position from sim interpolation if registered with the bridge.
+	if _bridge != null:
+		var alpha := _bridge.get_render_alpha()
+		global_position = _bridge.get_puck_position(self, alpha)
+		rotation.y      = _bridge.get_puck_rotation(self, alpha)
 
+	_update_pulse(delta)
+
+	# Safety bounds check — reset if escaped arena.
+	# Arena spans x∈[-4,4], z∈[0,24]; goals add ±0.4 overlap, so use generous margins.
+	if abs(global_position.x) > 8.0 or global_position.z < -3.0 or global_position.z > 28.0:
+		push_warning("Puck escaped bounds at %s — resetting" % str(global_position))
+		reset_to_center()
 
 
 func _update_pulse(delta: float) -> void:
@@ -117,42 +139,3 @@ func _get_player_goal_distance() -> float:
 	if _player_goal == Vector3.ZERO:
 		return INF
 	return Vector2(_player_goal.x - global_position.x, _player_goal.z - global_position.z).length()
-
-
-func _physics_process(_delta: float) -> void:
-	_update_pulse(_delta)
-
-	# Safety bounds check
-	if abs(global_position.x) > 8.0 or global_position.z < -2.0 or global_position.z > 28.0 or abs(global_position.y) > 3.0:
-		push_warning("Puck escaped bounds at %s — resetting" % str(global_position))
-		reset_to_center()
-		return
-
-	# Speed clamp
-	var speed := linear_velocity.length()
-	if speed > max_speed:
-		linear_velocity = linear_velocity.normalized() * max_speed
-
-	# Stall nudge
-	if stall_nudge_force > 0.0 and speed <= stall_speed_threshold:
-		_apply_goal_nudge()
-
-
-func _apply_goal_nudge() -> void:
-	if _goal_targets.is_empty():
-		return
-
-	var nearest_goal := _goal_targets[0]
-	var nearest_distance: float = 1e20
-	for goal_target in _goal_targets:
-		var flat_distance := Vector2(goal_target.x - global_position.x, goal_target.z - global_position.z).length_squared()
-		if flat_distance < nearest_distance:
-			nearest_distance = flat_distance
-			nearest_goal = goal_target
-
-	var direction := nearest_goal - global_position
-	direction.y = 0.0
-	if direction.length_squared() <= 0.0001:
-		return
-
-	apply_central_force(direction.normalized() * stall_nudge_force)

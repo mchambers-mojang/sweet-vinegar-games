@@ -15,6 +15,7 @@ var state: CaromMatchState = CaromMatchState.new()
 
 var _effects: CaromEffectsController = null
 var _match_round: CaromMatchRound = CaromMatchRound.new()
+var _bridge: CaromSimBridge = null
 
 const MATCH_WIN_SLOWMO_SCALE: float = 0.15
 const MATCH_WIN_SLOWMO_REAL_SECONDS: float = 1.5
@@ -78,10 +79,30 @@ func _init_match() -> void:
 
 
 func _spawn_and_configure() -> void:
+	_setup_sim_bridge()
 	setup.spawn_entities(arena, actors, state.difficulty)
+	_configure_sim_bridge()
 	_match_round.configure(arena, setup)
 	_wire_hud_signals()
 	_setup_effects()
+
+
+func _setup_sim_bridge() -> void:
+	if is_instance_valid(_bridge):
+		_bridge.queue_free()
+	_bridge = CaromSimBridge.new()
+	_bridge.name = "SimBridge"
+	arena.add_child(_bridge)
+	_bridge.setup_arena(arena)
+	_bridge.puck_zone_entered.connect(_on_bridge_puck_zone_entered)
+	_bridge.projectile_zone_entered.connect(_on_bridge_projectile_zone_entered)
+
+
+func _configure_sim_bridge() -> void:
+	for puck: CaromPuck in setup.pucks:
+		_bridge.register_puck(puck, puck.global_position)
+	_bridge.register_turret(setup.player_turret)
+	_bridge.register_turret(setup.ai_turret)
 
 
 func _start_match() -> void:
@@ -136,6 +157,26 @@ func _on_goal_scored(scoring_side: StringName, goal_puck: CaromPuck) -> void:
 
 	# Unlock goals so the next puck entry can score
 	_match_round.unlock_goals()
+
+
+## Invoked by CaromSimBridge when the puck body enters a goal zone.
+func _on_bridge_puck_zone_entered(body_id: int, zone_id: int) -> void:
+	var puck_node := _bridge.get_puck_node(body_id)
+	if puck_node == null:
+		return
+
+	# Determine which side scored based on which goal zone was entered.
+	# ZONE_NORTH_GOAL (1): puck passed north end → player ("south") scores.
+	# ZONE_SOUTH_GOAL (2): puck passed south end → AI ("north") scores.
+	var scoring_side: StringName = &"south" if zone_id == CaromSimBridge.ZONE_NORTH_GOAL else &"north"
+	arena.on_sim_puck_scored(puck_node, scoring_side)
+
+
+## Invoked by CaromSimBridge when a projectile body enters a goal zone.
+func _on_bridge_projectile_zone_entered(body_id: int, _zone_id: int) -> void:
+	var projectile := _bridge.get_projectile_node(body_id)
+	if is_instance_valid(projectile):
+		projectile.enter_goal()
 
 
 
