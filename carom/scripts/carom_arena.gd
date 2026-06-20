@@ -27,6 +27,7 @@ const ISOMETRIC_ROTATION_FLIPPED: Vector3 = Vector3(-45.0, 180.0, 0.0)
 var _goal_locked: bool = false
 var _perspective_flipped: bool = false
 var _camera_mode_tween: Tween = null
+var _current_camera_mode: String = ""
 
 @onready var south_goal: Area3D = $SouthGoal
 @onready var north_goal: Area3D = $NorthGoal
@@ -65,6 +66,7 @@ func set_camera_mode(mode: String, animate: bool = true) -> void:
 		return
 
 	var target_mode := CaromSettings.normalize_camera_mode(mode)
+	_current_camera_mode = target_mode
 
 	var target_position := TOP_DOWN_POSITION
 	var target_rotation := TOP_DOWN_ROTATION
@@ -101,7 +103,7 @@ func set_camera_mode(mode: String, animate: bool = true) -> void:
 func set_perspective_flipped(flipped: bool, animate: bool = false) -> void:
 	_perspective_flipped = flipped
 	# Re-apply current camera mode with the new flip state
-	set_camera_mode(CaromSettings.camera_mode, animate)
+	set_camera_mode(_current_camera_mode if _current_camera_mode != "" else CaromSettings.camera_mode, animate)
 
 
 ## Toggle perspective flip at runtime (debug shortcut).
