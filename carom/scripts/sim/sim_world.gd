@@ -93,11 +93,12 @@ func add_zone(zone: SimZone) -> void:
 func advance(_inputs: Dictionary = {}) -> void:
 	zone_events = []
 	collision_events = []
-	_integrate()
-	# Run collision detection twice to catch fast-moving bodies that
-	# tunneled past thin geometry in the first pass.
-	_detect_and_resolve()
-	_detect_and_resolve()
+	# Use substeps for integration + collision to reduce tunneling.
+	# Each substep moves bodies by DT/SUBSTEPS then resolves collisions.
+	const SUBSTEPS: int = 3
+	for _sub in range(SUBSTEPS):
+		_integrate_substep(SUBSTEPS)
+		_detect_and_resolve()
 	_clamp_speed()
 	_check_zones()
 	_tick_timer()
@@ -161,20 +162,33 @@ func _tick_timer() -> void:
 # ---------------------------------------------------------------------------
 
 func _integrate() -> void:
+	_integrate_substep(1)
+
+
+func _integrate_substep(substeps: int) -> void:
+	var sub_dt: int = DT / substeps if substeps > 1 else DT
 	for id: int in _bodies:
 		var b: SimBody = _bodies[id]
-		# position += velocity * dt
-		var dpos: Dictionary = FP.FPVec2.scale(b.velocity, DT)
+		# position += velocity * sub_dt
+		var dpos: Dictionary = FP.FPVec2.scale(b.velocity, sub_dt)
 		b.position = FP.FPVec2.add(b.position, dpos)
-		# Damping: velocity *= (ONE - damping)
+		# Damping: velocity *= (ONE - damping/substeps)
 		if b.damping != 0:
-			var keep: int = FP.ONE - b.damping
+			var sub_damping: int = b.damping / substeps if substeps > 1 else b.damping
+			var keep: int = FP.ONE - sub_damping
 			b.velocity = FP.FPVec2.scale(b.velocity, keep)
 		# Polygon rotation + angular damping
 		if b.shape == SimBody.Shape.POLYGON and b.angular_velocity != 0:
-			b.rotation = (b.rotation + b.angular_velocity) % FP_TWO_PI
-			# Angular damping: reduce spin over time
-			b.angular_velocity = FP.mul(b.angular_velocity, FP.ONE - (FP.ONE >> 5))  # ~3% per tick
+			# Cap angular velocity at ~1.5 rotations/sec (FP_TWO_PI / 30 * 1.5 ≈ 20588)
+			const MAX_ANGULAR: int = 20588
+			b.angular_velocity = clampi(b.angular_velocity, -MAX_ANGULAR, MAX_ANGULAR)
+			b.rotation = (b.rotation + b.angular_velocity / substeps) % FP_TWO_PI
+			# Angular damping: reduce spin ~12.5% per full tick, distributed across substeps
+			var damp_factor: int = FP.ONE - (FP.ONE >> 3) / substeps
+			b.angular_velocity = FP.mul(b.angular_velocity, damp_factor)
+			# Kill tiny residual spin
+			if absi(b.angular_velocity) < 32:
+				b.angular_velocity = 0
 
 # ---------------------------------------------------------------------------
 # 2 & 3. Collision detection + impulse resolution

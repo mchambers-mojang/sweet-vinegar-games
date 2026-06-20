@@ -12,11 +12,11 @@ extends Node3D
 @export var stall_speed_threshold: float = 1.8
 @export var reset_height: float = 0.0
 
-const EMISSION_BASE: float = 2.0
-const EMISSION_PEAK: float = 10.0
-const PULSE_FREQ_FAR: float = 0.5
-const PULSE_FREQ_MID: float = 2.0
-const PULSE_FREQ_NEAR: float = 4.0
+const EMISSION_BASE: float = 1.5
+const EMISSION_PEAK: float = 4.0
+const PULSE_FREQ_FAR: float = 0.4
+const PULSE_FREQ_MID: float = 1.2
+const PULSE_FREQ_NEAR: float = 2.5
 
 var _player_goal: Vector3 = Vector3.ZERO
 var _goal_targets: Array[Vector3] = []
@@ -121,9 +121,9 @@ func _update_pulse(delta: float) -> void:
 	_pulse_time = fmod(_pulse_time + delta * freq * TAU, TAU)
 	var t := (sin(_pulse_time) + 1.0) * 0.5
 	_puck_material.emission_energy_multiplier = lerpf(EMISSION_BASE, EMISSION_PEAK, t)
-	var albedo_t := lerpf(0.02, 0.12, t)
-	_puck_material.albedo_color = Color(albedo_t * 0.5, albedo_t * 3.5, albedo_t * 4.0, 1.0)
-	_puck_material.emission = Color(0.1 + t * 0.7, 0.7 + t * 0.3, 0.8 + t * 0.2, 1.0)
+	var albedo_t := lerpf(0.02, 0.06, t)
+	_puck_material.albedo_color = Color(albedo_t * 0.5, albedo_t * 3.0, albedo_t * 3.5, 1.0)
+	_puck_material.emission = Color(0.1 + t * 0.4, 0.7 + t * 0.2, 0.8 + t * 0.1, 1.0)
 
 
 func _get_pulse_frequency(fraction: float) -> float:
