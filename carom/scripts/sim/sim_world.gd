@@ -402,8 +402,9 @@ func _resolve_polygon_circle(poly: SimBody, circle: SimBody) -> void:
 	poly.velocity   = FP.FPVec2.sub(poly.velocity,   FP.FPVec2.scale(impulse, inv_poly))
 	circle.velocity = FP.FPVec2.add(circle.velocity, FP.FPVec2.scale(impulse, inv_circle))
 
-	# Angular impulse on the polygon (torque from off-center hit)
+	# Angular impulse on the polygon (torque from off-center hit, clamped)
 	# r = contact_point - poly.center; torque = r × F (2D cross product = rx*Fy - ry*Fx)
+	const MAX_ANGULAR_IMPULSE: int = 3000
 	var contact_x: int = (poly.position.x + circle.position.x) >> 1
 	var contact_y: int = (poly.position.y + circle.position.y) >> 1
 	var rx: int = contact_x - poly.position.x
@@ -413,7 +414,8 @@ func _resolve_polygon_circle(poly: SimBody, circle: SimBody) -> void:
 	# Approximate moment of inertia as mass * radius² / 2 (use radius = poly half-size)
 	var inertia: int = FP.mul(poly.mass, FP.mul(poly.radius, poly.radius)) >> 1
 	if inertia > 0:
-		poly.angular_velocity += FP.div(torque, inertia)
+		var delta_av: int = clampi(FP.div(torque, inertia), -MAX_ANGULAR_IMPULSE, MAX_ANGULAR_IMPULSE)
+		poly.angular_velocity += delta_av
 
 	# Record collision event for render adapters (e.g. projectile impact VFX)
 	collision_events.append({body_id = circle.id, other_id = poly.id, pos_x = contact_x, pos_y = contact_y})
@@ -495,7 +497,8 @@ func _resolve_polygon_polygon(a: SimBody, b: SimBody) -> void:
 	a.velocity = FP.FPVec2.add(a.velocity, FP.FPVec2.scale(impulse, inv_a))
 	b.velocity = FP.FPVec2.sub(b.velocity, FP.FPVec2.scale(impulse, inv_b))
 
-	# Angular impulse on both polygons
+	# Angular impulse on both polygons (clamped to prevent oscillation when stacked)
+	const MAX_ANGULAR_IMPULSE: int = 3000  # ~0.046 rad/tick max per collision
 	var contact_x: int = (a.position.x + b.position.x) >> 1
 	var contact_y: int = (a.position.y + b.position.y) >> 1
 	for body in [a, b]:
@@ -506,7 +509,8 @@ func _resolve_polygon_polygon(a: SimBody, b: SimBody) -> void:
 		var torque: int = FP.mul(rx, imp.y) - FP.mul(ry, imp.x)
 		var inertia: int = FP.mul(body.mass, FP.mul(body.radius, body.radius)) >> 1
 		if inertia > 0:
-			body.angular_velocity += FP.div(torque, inertia)
+			var delta_av: int = clampi(FP.div(torque, inertia), -MAX_ANGULAR_IMPULSE, MAX_ANGULAR_IMPULSE)
+			body.angular_velocity += delta_av
 
 	collision_events.append({body_id = a.id, other_id = b.id, pos_x = contact_x, pos_y = contact_y})
 	collision_events.append({body_id = b.id, other_id = a.id, pos_x = contact_x, pos_y = contact_y})
