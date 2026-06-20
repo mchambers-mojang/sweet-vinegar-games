@@ -223,7 +223,7 @@ func _on_match_disconnected() -> void:
 
 func _on_connection_failed(reason: String) -> void:
 	phase = Phase.IDLE
-	connection_status_changed.emit("error", reason if reason != "" else "Connection failed")
+	connection_status_changed.emit("error", reason)
 
 
 func _begin_play() -> void:

@@ -7,6 +7,12 @@ const STATE_CONNECTING := "connecting"
 const STATE_WAITING := "waiting"
 const STATE_CONNECTED := "connected"
 const STATE_ERROR := "error"
+const STATUS_FONT_SIZE: int = 28
+const INDICATOR_FONT_SIZE: int = 36
+const ACCENT_COLOR := Color(0.2, 1.0, 0.85)
+const SUCCESS_COLOR := Color(0.35, 1.0, 0.65)
+const ERROR_COLOR := Color(1.0, 0.35, 0.35)
+const SHADOW_COLOR := Color(0.0, 0.0, 0.0, 0.8)
 const INDICATOR_PULSE_SCALE: float = 1.18
 const INDICATOR_PULSE_MIN_ALPHA: float = 0.45
 const INDICATOR_PULSE_DURATION: float = 0.45
@@ -24,12 +30,12 @@ func _ready() -> void:
 	_apply_safe_area()
 	get_tree().root.size_changed.connect(_apply_safe_area)
 
-	_status_label.add_theme_font_size_override("font_size", 28)
-	_status_label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.85))
+	_status_label.add_theme_font_size_override("font_size", STATUS_FONT_SIZE)
+	_status_label.add_theme_color_override("font_color", ACCENT_COLOR)
 	_apply_label_shadow(_status_label)
 
-	_indicator_label.add_theme_font_size_override("font_size", 36)
-	_indicator_label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.85))
+	_indicator_label.add_theme_font_size_override("font_size", INDICATOR_FONT_SIZE)
+	_indicator_label.add_theme_color_override("font_color", ACCENT_COLOR)
 	_apply_label_shadow(_indicator_label)
 
 	_back_button.custom_minimum_size = Vector2(180.0, 48.0)
@@ -82,7 +88,7 @@ func _apply_safe_area() -> void:
 
 
 func _apply_label_shadow(label: Label) -> void:
-	label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.8))
+	label.add_theme_color_override("font_shadow_color", SHADOW_COLOR)
 	label.add_theme_constant_override("shadow_offset_x", 1)
 	label.add_theme_constant_override("shadow_offset_y", 1)
 
@@ -132,8 +138,8 @@ func _default_message(state: String) -> String:
 func _state_color(state: String) -> Color:
 	match state:
 		STATE_ERROR:
-			return Color(1.0, 0.35, 0.35)
+			return ERROR_COLOR
 		STATE_CONNECTED:
-			return Color(0.35, 1.0, 0.65)
+			return SUCCESS_COLOR
 		_:
-			return Color(0.2, 1.0, 0.85)
+			return ACCENT_COLOR

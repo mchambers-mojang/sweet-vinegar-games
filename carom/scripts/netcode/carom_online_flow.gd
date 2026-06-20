@@ -9,7 +9,7 @@ extends Node
 
 const SIGNALING_URL_DEFAULT := "ws://localhost:8080"
 const CONNECTION_OVERLAY_SCENE := preload("res://carom/scenes/carom_connection_overlay.tscn")
-const CONNECTED_FLASH_SECONDS: float = 1.2
+const CONNECTED_DISPLAY_DURATION: float = 1.2
 const OVERLAY_LAYER_PATH := "HUD/OverlayLayer"
 
 signal flow_completed  ## Emitted when the player returns to menu
@@ -100,20 +100,20 @@ func _hide_overlay_after_connected_flash(request_id: int) -> void:
 	var remaining: float = 0.0
 	if _connected_started_at_msec >= 0:
 		var elapsed_msec: int = Time.get_ticks_msec() - _connected_started_at_msec
-		remaining = maxf(CONNECTED_FLASH_SECONDS - (float(elapsed_msec) / 1000.0), 0.0)
-	if remaining <= 0.0:
-		if request_id == _pending_hide_request_id and is_instance_valid(_overlay):
-			_overlay.hide()
-		_connected_started_at_msec = -1
+		remaining = maxf(CONNECTED_DISPLAY_DURATION - (float(elapsed_msec) / 1000.0), 0.0)
+	if remaining > 0.0:
+		var timer := get_tree().create_timer(remaining)
+		timer.timeout.connect(func() -> void:
+			if request_id != _pending_hide_request_id:
+				return
+			if is_instance_valid(_overlay):
+				_overlay.hide()
+			_connected_started_at_msec = -1
+		)
 		return
-	var timer := get_tree().create_timer(remaining)
-	timer.timeout.connect(func() -> void:
-		if request_id != _pending_hide_request_id:
-			return
-		if is_instance_valid(_overlay):
-			_overlay.hide()
-		_connected_started_at_msec = -1
-	)
+	if request_id == _pending_hide_request_id and is_instance_valid(_overlay):
+		_overlay.hide()
+	_connected_started_at_msec = -1
 
 
 func _on_back_requested() -> void:
