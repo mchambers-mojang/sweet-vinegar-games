@@ -193,6 +193,53 @@ jobs:
           draft: false
           prerelease: false
 
+  build-windows:
+    needs: [tag, build-android]
+    if: needs.tag.outputs.tagged == 'true'
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.6.3
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup export templates
+        run: |
+          TEMPLATES_DIR="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$TEMPLATES_DIR"
+          if [ -d "/root/.local/share/godot/export_templates/${GODOT_VERSION}.stable" ] && [ "$HOME" != "/root" ]; then
+            cp -r /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable/* "$TEMPLATES_DIR/" 2>/dev/null || true
+          fi
+
+      - name: Import project
+        run: |
+          cd $GITHUB_WORKSPACE
+          godot --headless --import 2>&1 || true
+          godot --headless --import 2>&1 || true
+
+      - name: Build Windows exe
+        run: |
+          mkdir -p $GITHUB_WORKSPACE/build/windows
+          cd $GITHUB_WORKSPACE
+          godot --headless --export-debug "Windows Desktop" build/windows/${EXPORT_NAME}.exe 2>&1
+
+      - name: Zip Windows build
+        run: |
+          cd $GITHUB_WORKSPACE/build/windows
+          zip -r $GITHUB_WORKSPACE/build/${EXPORT_NAME}-Windows.zip .
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: build/${{ env.EXPORT_NAME }}-Windows.zip
+          retention-days: 30
+
+      - name: Attach to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.tag.outputs.version }}
+          files: build/${{ env.EXPORT_NAME }}-Windows.zip
+
   build-ios:
     needs: tag
     if: needs.tag.outputs.tagged == 'true'

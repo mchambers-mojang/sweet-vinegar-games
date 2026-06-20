@@ -57,6 +57,11 @@ var sudden_death: bool = false
 ## Set to true on the tick the timer first reaches 0. Stays true thereafter.
 var time_expired: bool = false
 
+## Collision events recorded during the last advance() call.
+## Each entry is {body_id: int, other_id: int, pos_x: int, pos_y: int}.
+## other_id = -1 for wall collisions. Populated in _resolve_circle_circle and _resolve_circle_wall.
+var collision_events: Array = []
+
 # ---------------------------------------------------------------------------
 # Body management
 # ---------------------------------------------------------------------------
@@ -87,6 +92,7 @@ func add_zone(zone: SimZone) -> void:
 ## `inputs` is reserved for future player-input integration and is unused here.
 func advance(_inputs: Dictionary = {}) -> void:
 	zone_events = []
+	collision_events = []
 	_integrate()
 	_detect_and_resolve()
 	_clamp_speed()
@@ -241,6 +247,12 @@ func _resolve_circle_circle(a: SimBody, b: SimBody) -> void:
 	a.velocity = FP.FPVec2.sub(a.velocity, FP.FPVec2.scale(impulse, FP.div(FP.ONE, a.mass)))
 	b.velocity = FP.FPVec2.add(b.velocity, FP.FPVec2.scale(impulse, FP.div(FP.ONE, b.mass)))
 
+	# Record collision event for render adapters (e.g. projectile impact effects)
+	var contact_x: int = (a.position.x + b.position.x) >> 1
+	var contact_y: int = (a.position.y + b.position.y) >> 1
+	collision_events.append({body_id = a.id, other_id = b.id, pos_x = contact_x, pos_y = contact_y})
+	collision_events.append({body_id = b.id, other_id = a.id, pos_x = contact_x, pos_y = contact_y})
+
 # --- Circle–Wall ---
 
 func _resolve_circle_wall(body: SimBody, wall: SimWall) -> void:
@@ -300,6 +312,9 @@ func _resolve_circle_wall(body: SimBody, wall: SimWall) -> void:
 	var correction: Dictionary = FP.FPVec2.scale(push_normal, delta_vn)
 	body.velocity = FP.FPVec2.sub(body.velocity, correction)
 
+	# Record collision event for render adapters
+	collision_events.append({body_id = body.id, other_id = -1, pos_x = body.position.x, pos_y = body.position.y})
+
 # --- Polygon–Circle (SAT nearest-edge approach) ---
 
 func _resolve_polygon_circle(poly: SimBody, circle: SimBody) -> void:
@@ -336,19 +351,32 @@ func _resolve_polygon_circle(poly: SimBody, circle: SimBody) -> void:
 	if not colliding:
 		return
 
-	# Push circle out along minimum depth axis
+	# Positional correction — mass-weighted split (heavier body moves less)
+	var inv_poly: int   = FP.div(FP.ONE, poly.mass)
+	var inv_circle: int = FP.div(FP.ONE, circle.mass)
+	var total_inv: int  = inv_poly + inv_circle
+	poly.position = FP.FPVec2.sub(poly.position,
+		FP.FPVec2.scale(best_normal, FP.mul(min_depth, FP.div(inv_poly, total_inv))))
 	circle.position = FP.FPVec2.add(circle.position,
-		FP.FPVec2.scale(best_normal, min_depth))
+		FP.FPVec2.scale(best_normal, FP.mul(min_depth, FP.div(inv_circle, total_inv))))
 
-	# Impulse (treat polygon as immovable for now — large mass)
-	var vn: int = FP.FPVec2.dot(circle.velocity, best_normal)
+	# Two-body impulse — transfers momentum from circle (projectile) to poly (puck)
+	var rel_v: Dictionary = FP.FPVec2.sub(circle.velocity, poly.velocity)
+	var vn: int = FP.FPVec2.dot(rel_v, best_normal)
 	if vn >= 0:
-		return
+		return  # already separating
 
 	var e: int = _min_int(poly.restitution, circle.restitution)
-	var delta_vn: int = FP.mul(FP.ONE + e, vn)
-	var correction: Dictionary = FP.FPVec2.scale(best_normal, delta_vn)
-	circle.velocity = FP.FPVec2.sub(circle.velocity, correction)
+	var j: int = FP.div(FP.mul(-(FP.ONE + e), vn), total_inv)
+
+	var impulse: Dictionary = FP.FPVec2.scale(best_normal, j)
+	poly.velocity   = FP.FPVec2.sub(poly.velocity,   FP.FPVec2.scale(impulse, inv_poly))
+	circle.velocity = FP.FPVec2.add(circle.velocity, FP.FPVec2.scale(impulse, inv_circle))
+
+	# Record collision event for render adapters (e.g. projectile impact VFX)
+	var contact_x: int = (poly.position.x + circle.position.x) >> 1
+	var contact_y: int = (poly.position.y + circle.position.y) >> 1
+	collision_events.append({body_id = circle.id, other_id = poly.id, pos_x = contact_x, pos_y = contact_y})
 
 # --- Polygon–Wall (vertex penetration checks) ---
 
