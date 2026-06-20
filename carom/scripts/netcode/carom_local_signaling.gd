@@ -18,6 +18,7 @@ signal failed(reason: String)
 
 var _server: TCPServer = null
 var _peers: Array[WebSocketPeer] = []
+var _pending_tcp: Array[StreamPeerTCP] = []
 
 ## Room state — at most one room with two peers.
 var _creator: WebSocketPeer = null
@@ -43,6 +44,7 @@ func stop() -> void:
 	for peer in _peers:
 		peer.close()
 	_peers.clear()
+	_pending_tcp.clear()
 	if _server:
 		_server.stop()
 		_server = null
@@ -54,16 +56,27 @@ func _process(_delta: float) -> void:
 	if _server == null:
 		return
 
-	# Accept new TCP connections and upgrade to WebSocket
+	# Accept new TCP connections into pending list
 	while _server.is_connection_available():
 		var tcp := _server.take_connection()
-		if tcp == null:
-			continue
-		var ws := WebSocketPeer.new()
-		ws.accept_stream(tcp)
-		_peers.append(ws)
+		if tcp != null:
+			_pending_tcp.append(tcp)
 
-	# Poll all peers
+	# Upgrade pending TCP connections once they're fully connected
+	var still_pending: Array[StreamPeerTCP] = []
+	for tcp in _pending_tcp:
+		tcp.poll()
+		var tcp_status := tcp.get_status()
+		if tcp_status == StreamPeerTCP.STATUS_CONNECTED:
+			var ws := WebSocketPeer.new()
+			ws.accept_stream(tcp)
+			_peers.append(ws)
+		elif tcp_status == StreamPeerTCP.STATUS_CONNECTING:
+			still_pending.append(tcp)
+		# else: STATUS_ERROR or STATUS_NONE — drop it
+	_pending_tcp = still_pending
+
+	# Poll all WebSocket peers
 	var to_remove: Array[int] = []
 	for i in _peers.size():
 		var peer := _peers[i]
