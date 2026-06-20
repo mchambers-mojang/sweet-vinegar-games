@@ -15,6 +15,7 @@ signal match_connected
 signal match_disconnected
 signal room_created(code: String)
 signal match_started  ## Emitted when frame sync is complete and play begins
+signal connection_failed(reason: String)
 
 var _network: CaromNetwork = null
 var _rollback: RollbackManager = null
@@ -197,6 +198,7 @@ func _on_disconnected() -> void:
 func _on_connection_failed(reason: String) -> void:
 	push_warning("Multiplayer connection failed: %s" % reason)
 	_is_active = false
+	connection_failed.emit(reason)
 
 
 ## Called by CaromNetwork for every received gameplay input packet.
