@@ -14,7 +14,6 @@ export interface Room {
   joiner?: WebSocket;
   timer: ReturnType<typeof setTimeout> | null;
   pendingIceForJoiner: object[];  // ICE from host before joiner arrives
-  pendingIceForCreator: object[];  // ICE from joiner before peer_joined delivered
 }
 
 export function generateCode(existing: Map<string, unknown>): string {
@@ -76,7 +75,7 @@ export function createServer(
           }
           const code = generateCode(rooms);
           const timer = setTimeout(() => deleteRoom(code), roomExpiryMs);
-          rooms.set(code, { code, creatorSdp: msg.sdp, creator: ws, timer, pendingIceForJoiner: [], pendingIceForCreator: [] });
+          rooms.set(code, { code, creatorSdp: msg.sdp, creator: ws, timer, pendingIceForJoiner: [] });
           myRoomCodes.add(code);
           send(ws, { type: 'room_created', code });
           break;
@@ -125,13 +124,9 @@ export function createServer(
           const other = ws === room.creator ? room.joiner : room.creator;
           if (other) {
             send(other, { type: 'ice', candidate: msg.candidate });
-          } else {
-            // Buffer ICE for the peer that hasn't joined yet
-            if (ws === room.creator) {
-              room.pendingIceForJoiner.push(msg.candidate);
-            } else {
-              room.pendingIceForCreator.push(msg.candidate);
-            }
+          } else if (ws === room.creator) {
+            // Host ICE arrived before joiner — buffer for flush on join
+            room.pendingIceForJoiner.push(msg.candidate);
           }
           break;
         }

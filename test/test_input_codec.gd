@@ -87,10 +87,20 @@ func test_pack_unpack_input() -> void:
 	var reload: bool = true
 	var packed: int = Codec.pack_input(aim_fp, fire, reload)
 	var unpacked: Dictionary = Codec.unpack_input(packed)
-	# aim is truncated to 16 bits in packed format
-	assert_eq(unpacked.aim, aim_fp & 0xFFFF)
+	# aim_fp fits within 20 bits (max 411774 = 0x6487E)
+	assert_eq(unpacked.aim, aim_fp)
 	assert_eq(unpacked.fire, true)
 	assert_eq(unpacked.reload, true)
+
+
+func test_pack_unpack_max_aim() -> void:
+	# FP_TWO_PI = 411774 (0x6487E) — needs 19 bits, must survive 20-bit pack
+	var max_aim: int = 411774
+	var packed: int = Codec.pack_input(max_aim, false, false)
+	var unpacked: Dictionary = Codec.unpack_input(packed)
+	assert_eq(unpacked.aim, max_aim, "Max aim (FP_TWO_PI) must survive pack/unpack")
+	assert_eq(unpacked.fire, false)
+	assert_eq(unpacked.reload, false)
 
 
 func test_decode_empty_returns_empty() -> void:

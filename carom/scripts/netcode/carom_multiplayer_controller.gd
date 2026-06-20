@@ -170,10 +170,15 @@ func _on_remote_input(frame: int, packed_input: int) -> void:
 	if _rollback == null or not _sync_complete:
 		return
 
-	# Store as confirmed remote input (bounded to rollback window)
-	if frame >= _local_frame and frame < _local_frame + RollbackManager.ROLLBACK_BUFFER:
-		_confirmed_remote_inputs[frame] = packed_input
-	# Always inform rollback (handles past frames + misprediction detection)
+	# Buffer future frames locally — they'll be passed to advance_frame()
+	# when the local tick catches up. Do NOT forward to RollbackManager
+	# early, as it would overwrite active ring buffer slots.
+	if frame >= _local_frame:
+		if frame < _local_frame + RollbackManager.ROLLBACK_BUFFER:
+			_confirmed_remote_inputs[frame] = packed_input
+		return
+
+	# Past/current frames: inform rollback for misprediction detection
 	_rollback.receive_remote_input(frame, packed_input)
 	if _rollback.needs_rollback():
 		_rollback.execute_rollback()

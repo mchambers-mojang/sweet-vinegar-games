@@ -63,11 +63,11 @@ static func decode(data: PackedByteArray) -> Dictionary:
 
 
 ## Pack decoded input fields into a single int for RollbackManager.
-## Layout: [31..16] aim_fp(16 bits), [1] reload, [0] fire
+## Layout: [21..2] aim_fp (20 bits, max 411774), [1] reload, [0] fire
 ## This is the format consumed by RollbackManager.advance_frame().
 static func pack_input(aim_fp: int, fire: bool, reload: bool) -> int:
 	var packed: int = 0
-	packed |= (aim_fp & 0xFFFF) << 16
+	packed |= (aim_fp & 0xFFFFF) << 2
 	packed |= (1 << 1) if reload else 0
 	packed |= 1 if fire else 0
 	return packed
@@ -76,7 +76,7 @@ static func pack_input(aim_fp: int, fire: bool, reload: bool) -> int:
 ## Unpack a RollbackManager input int back into components.
 static func unpack_input(packed: int) -> Dictionary:
 	return {
-		aim = (packed >> 16) & 0xFFFF,
+		aim = (packed >> 2) & 0xFFFFF,
 		fire = (packed & 1) == 1,
 		reload = ((packed >> 1) & 1) == 1,
 	}

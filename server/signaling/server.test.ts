@@ -215,4 +215,39 @@ describe('Signaling Server', () => {
     creator.close();
     joiner.close();
   });
+
+  test('host ICE is buffered and flushed when joiner connects', async () => {
+    const creator = await connect(port);
+
+    creator.send(JSON.stringify({ type: 'create', sdp: 'offer-sdp' }));
+    const roomCreated = await nextMessage(creator);
+    const code = roomCreated.code as string;
+
+    // Host sends ICE candidates before joiner arrives
+    creator.send(JSON.stringify({ type: 'ice', code, candidate: { candidate: 'early-cand1' } }));
+    creator.send(JSON.stringify({ type: 'ice', code, candidate: { candidate: 'early-cand2' } }));
+
+    // Small delay to ensure server processes the ICE messages
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // Now joiner connects — should receive buffered ICE after room_joined
+    const joiner = await connect(port);
+    joiner.send(JSON.stringify({ type: 'join', code }));
+
+    // Joiner gets room_joined first
+    const roomJoined = await nextMessage(joiner);
+    expect(roomJoined.type).toBe('room_joined');
+
+    // Then the buffered ICE candidates
+    const ice1 = await nextMessage(joiner);
+    expect(ice1.type).toBe('ice');
+    expect((ice1.candidate as Record<string, unknown>).candidate).toBe('early-cand1');
+
+    const ice2 = await nextMessage(joiner);
+    expect(ice2.type).toBe('ice');
+    expect((ice2.candidate as Record<string, unknown>).candidate).toBe('early-cand2');
+
+    creator.close();
+    joiner.close();
+  });
 });
