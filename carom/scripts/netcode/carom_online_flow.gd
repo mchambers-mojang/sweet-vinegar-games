@@ -7,7 +7,7 @@ extends Node
 ## Add this as a child of the CaromArena scene when launching online mode.
 ## It creates the CaromOnlineMatchController and coordinates UI overlays.
 
-const SIGNALING_URL_DEFAULT := "ws://localhost:8080"
+const SIGNALING_URL_DEFAULT := "wss://carom-signaling.azurewebsites.net"
 const CONNECTION_OVERLAY_SCENE := preload("res://carom/scenes/carom_connection_overlay.tscn")
 const CONNECTED_DISPLAY_DURATION: float = 1.2
 const OVERLAY_LAYER_PATH := "HUD/OverlayLayer"
@@ -24,8 +24,7 @@ var _pending_hide_request_id: int = 0
 ## Start hosting a new online match. Call after this node is in the tree
 ## under a CaromArena.
 func start_host(signaling_url: String = "") -> void:
-	if signaling_url != "":
-		_signaling_url = signaling_url
+	_resolve_signaling_url(signaling_url)
 	_ensure_overlay()
 	_ensure_match_controller()
 	_match_ctrl.host(_signaling_url)
@@ -33,11 +32,18 @@ func start_host(signaling_url: String = "") -> void:
 
 ## Join an existing match by room code.
 func start_join(code: String, signaling_url: String = "") -> void:
-	if signaling_url != "":
-		_signaling_url = signaling_url
+	_resolve_signaling_url(signaling_url)
 	_ensure_overlay()
 	_ensure_match_controller()
 	_match_ctrl.join(code, _signaling_url)
+
+
+## Start matchmaking: connect to server, enter queue, get auto-paired.
+func start_matchmake() -> void:
+	_resolve_signaling_url("")
+	_ensure_overlay()
+	_ensure_match_controller()
+	_match_ctrl.matchmake(_signaling_url)
 
 
 ## Local play: try to host on TCP; if port is taken, join as client.
@@ -73,6 +79,15 @@ func _ensure_match_controller() -> void:
 	get_parent().add_child(_match_ctrl)
 	_match_ctrl.connection_status_changed.connect(_on_connection_status)
 	_match_ctrl.match_ended.connect(_on_match_ended)
+
+
+func _resolve_signaling_url(explicit: String) -> void:
+	if explicit != "":
+		_signaling_url = explicit
+	elif DebugFlags.signaling_url_override != "":
+		_signaling_url = DebugFlags.signaling_url_override
+	else:
+		_signaling_url = SIGNALING_URL_DEFAULT
 
 
 func _ensure_overlay() -> void:

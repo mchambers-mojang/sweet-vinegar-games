@@ -12,7 +12,7 @@ signal disconnected
 signal connection_failed(reason: String)
 signal sync_received  ## Emitted when remote peer's sync packet arrives
 
-const DEFAULT_SIGNALING_URL: String = "ws://127.0.0.1:8080"
+const DEFAULT_SIGNALING_URL: String = "wss://carom-signaling.azurewebsites.net"
 const INPUT_CHANNEL_ID: int = 0
 const SYNC_CHANNEL_ID: int = 1
 
@@ -69,6 +69,18 @@ func join_room(code: String) -> void:
 	_room_code = code.to_upper()
 	_state = State.JOINING
 	_setup_rtc()
+	_connect_signaling()
+	set_process(true)
+
+
+## Enter the matchmaking queue. Server will pair with another queued player.
+## Emits connected() when matched and WebRTC is established.
+func matchmake() -> void:
+	if _state != State.IDLE:
+		connection_failed.emit("Already active")
+		return
+	_state = State.CREATING  # Re-use CREATING state until matched
+	_is_host = false  # Will be assigned by server
 	_connect_signaling()
 	set_process(true)
 
@@ -192,8 +204,12 @@ func _poll_websocket() -> void:
 
 func _on_ws_open() -> void:
 	if _state == State.CREATING:
-		# Now that WS is open, create the offer — SDP callback will send it
-		_rtc.create_offer()
+		if _room_code == "" and not _is_host:
+			# Matchmaking mode — send matchmake request
+			_ws_send({ "type": "matchmake" })
+		else:
+			# Manual room creation — create the offer
+			_rtc.create_offer()
 	elif _state == State.JOINING:
 		# Send join without SDP — server replies with room_joined + host's offer
 		_ws_send({ "type": "join", "code": _room_code })
@@ -222,6 +238,24 @@ func _handle_signaling_message(msg: Dictionary) -> void:
 				ice_msg["code"] = _room_code
 				_ws_send(ice_msg)
 			_ice_send_queue.clear()
+
+		"queued":
+			# Acknowledged in matchmaking queue — wait for match
+			pass
+
+		"matched":
+			# Server paired us with an opponent
+			_room_code = msg.get("code", "")
+			var role: String = msg.get("role", "")
+			_is_host = (role == "host")
+			_setup_rtc()
+			if _is_host:
+				# Host creates the offer and sends it via "offer" message
+				_state = State.SIGNALING
+				_rtc.create_offer()
+			else:
+				# Joiner waits for host's offer (arrives as room_joined)
+				_state = State.SIGNALING
 
 		"peer_joined":
 			# Host receives joiner's answer SDP
@@ -275,7 +309,12 @@ func _on_session_description(type: String, sdp: String) -> void:
 
 func _send_local_sdp(type: String, sdp: String) -> void:
 	if _is_host and type == "offer":
-		_ws_send({ "type": "create", "sdp": sdp })
+		if _room_code != "":
+			# Matchmade — use "offer" message (room already exists on server)
+			_ws_send({ "type": "offer", "code": _room_code, "sdp": sdp })
+		else:
+			# Manual room creation — use "create" message
+			_ws_send({ "type": "create", "sdp": sdp })
 	elif not _is_host and type == "answer":
 		_ws_send({ "type": "answer", "code": _room_code, "sdp": sdp })
 

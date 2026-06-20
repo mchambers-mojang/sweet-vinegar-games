@@ -79,6 +79,16 @@ func join(code: String, signaling_url: String) -> void:
 	_multiplayer_ctrl.join_match(code, signaling_url)
 
 
+## Enter matchmaking queue — server pairs us with another player.
+func matchmake(signaling_url: String) -> void:
+	_is_host = false  # Will be assigned by server after matching
+	phase = Phase.CONNECTING
+	connection_status_changed.emit("connecting", "Finding opponent...")
+	# Don't call _setup_match() yet — we don't know our role.
+	# Setup happens in _on_match_connected after the server assigns us.
+	_setup_match_deferred(signaling_url)
+
+
 ## Host a local match (direct TCP, no WebRTC).
 func host_local() -> void:
 	_is_host = true
@@ -105,9 +115,29 @@ func get_room_code() -> String:
 	return ""
 
 
+var _is_matchmaking: bool = false
+
 # ---------------------------------------------------------------------------
 # Setup
 # ---------------------------------------------------------------------------
+
+## Deferred setup for matchmaking — only creates network layer, spawns later.
+func _setup_match_deferred(signaling_url: String) -> void:
+	_is_matchmaking = true
+	if is_instance_valid(_multiplayer_ctrl):
+		_multiplayer_ctrl.shutdown()
+		_multiplayer_ctrl.queue_free()
+	_multiplayer_ctrl = CaromMultiplayerController.new()
+	_multiplayer_ctrl.name = "MultiplayerController"
+	arena.add_child(_multiplayer_ctrl)
+	# Setup with no bridge/turrets yet — just the network
+	_multiplayer_ctrl.setup(null, null, null, null)
+	_multiplayer_ctrl.match_connected.connect(_on_match_connected)
+	_multiplayer_ctrl.match_started.connect(_on_match_started)
+	_multiplayer_ctrl.match_disconnected.connect(_on_match_disconnected)
+	_multiplayer_ctrl.room_created.connect(_on_room_created)
+	_multiplayer_ctrl.connection_failed.connect(_on_connection_failed)
+	_multiplayer_ctrl.matchmake(signaling_url)
 
 func _setup_match() -> void:
 	_player_score = 0
@@ -128,8 +158,9 @@ func _setup_match() -> void:
 	# Spawn entities — both turrets configured as HUMAN
 	_spawn_multiplayer_entities()
 
-	# Apply perspective normalization: force top-down and flip for joiner
-	arena.set_camera_mode("top_down", false)
+	# Apply perspective normalization: isometric for online, top-down for local
+	var camera_mode := "isometric" if not _use_local_network else "top_down"
+	arena.set_camera_mode(camera_mode, false)
 	arena.set_perspective_flipped(not _is_host, false)
 
 	# Register with sim bridge
@@ -246,8 +277,58 @@ func _on_room_created(code: String) -> void:
 
 
 func _on_match_connected() -> void:
+	if _is_matchmaking:
+		# Now we know our role — finish setting up the match
+		_is_host = _multiplayer_ctrl.is_host()
+		_is_matchmaking = false
+		_finish_matchmake_setup()
 	phase = Phase.SYNCING
 	connection_status_changed.emit("connected", "Opponent found!")
+
+
+## Complete match setup after matchmaking assigns our role.
+func _finish_matchmake_setup() -> void:
+	_player_score = 0
+	_opponent_score = 0
+
+	# Create sim bridge
+	if is_instance_valid(_bridge):
+		_bridge.cleanup_all_projectiles()
+		_bridge.queue_free()
+	_bridge = CaromSimBridge.new()
+	_bridge.name = "SimBridge"
+	_bridge.multiplayer_mode = true
+	arena.add_child(_bridge)
+	_bridge.setup_arena(arena)
+	_bridge.puck_zone_entered.connect(_on_bridge_puck_zone_entered)
+	_bridge.projectile_zone_entered.connect(_on_bridge_projectile_zone_entered)
+
+	# Spawn entities
+	_spawn_multiplayer_entities()
+
+	# Camera — isometric for online, flipped for joiner
+	arena.set_camera_mode("isometric", false)
+	arena.set_perspective_flipped(not _is_host, false)
+
+	# Register with sim
+	for puck: CaromPuck in setup.pucks:
+		_bridge.register_puck(puck, puck.global_position)
+	_bridge.register_turret(_local_turret)
+	_bridge.register_turret(_remote_turret)
+
+	# Late-bind the bridge and turrets to the existing multiplayer controller
+	_multiplayer_ctrl.bind_match(_bridge, _local_turret, _remote_turret)
+	_multiplayer_ctrl.is_host_side = _is_host
+
+	# Effects + HUD
+	_setup_effects()
+	_local_turret.ammo_changed.connect(func(ammo: int, max_a: int) -> void:
+		hud.update_player_ammo(ammo, max_a, _local_turret.is_reloading))
+	_local_turret.reload_state_changed.connect(func(_r: bool) -> void:
+		hud.update_player_ammo(_local_turret.current_ammo, _local_turret.clip_size, _local_turret.is_reloading))
+	hud.reload_requested.connect(func() -> void:
+		if _local_turret and _local_turret.is_active:
+			_local_turret.start_reload())
 
 
 func _on_match_started() -> void:

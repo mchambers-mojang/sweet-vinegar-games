@@ -15,6 +15,9 @@ var debug_show_analytics_tail: bool = true
 var debug_show_grid_coordinates: bool = true
 var debug_fire_screen_shake: bool = false
 
+## Override signaling server URL for local development (empty = use default).
+var signaling_url_override: String = ""
+
 
 func _ready() -> void:
 	load_settings()

@@ -13,6 +13,7 @@ extends Control
 signal room_create_requested
 signal room_join_requested(code: String)
 signal local_play_requested
+signal matchmake_requested
 signal cancelled
 
 ## Valid characters for room codes (unambiguous subset of alphanumerics).
@@ -118,7 +119,11 @@ func _build_lobby_view() -> Control:
 	var sep := _make_separator()
 	vbox.add_child(sep)
 
-	var create_btn := _make_primary_button("Create Room")
+	var matchmake_btn := _make_primary_button("Play Online")
+	matchmake_btn.pressed.connect(func() -> void: matchmake_requested.emit())
+	vbox.add_child(matchmake_btn)
+
+	var create_btn := _make_secondary_button("Create Room")
 	create_btn.pressed.connect(_on_create_room_pressed)
 	vbox.add_child(create_btn)
 

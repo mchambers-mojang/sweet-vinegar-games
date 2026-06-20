@@ -204,6 +204,10 @@ func _switch_to_online_mode() -> void:
 		menu.queue_free()
 		flow.start_join(code)
 	)
+	menu.matchmake_requested.connect(func() -> void:
+		menu.queue_free()
+		flow.start_matchmake()
+	)
 	menu.local_play_requested.connect(func() -> void:
 		menu.queue_free()
 		flow.start_local()

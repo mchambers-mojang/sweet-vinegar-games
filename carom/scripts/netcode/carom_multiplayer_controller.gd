@@ -70,8 +70,9 @@ func setup(bridge: CaromSimBridge, local_turret: CaromTurret = null, remote_turr
 		_remote_turret.input = _remote_input_provider
 		_remote_turret.control_mode = CaromTurret.ControlMode.AI  # Disable unhandled_input
 
-	_rollback = RollbackManager.new()
-	_rollback.initialize(bridge._sim)
+	if bridge != null:
+		_rollback = RollbackManager.new()
+		_rollback.initialize(bridge._sim)
 
 	if network_override != null:
 		_network = network_override
@@ -87,6 +88,20 @@ func setup(bridge: CaromSimBridge, local_turret: CaromTurret = null, remote_turr
 	_network.set_input_callback(_on_remote_input)
 
 
+## Late-bind the bridge and turrets after matchmaking resolves roles.
+## Call after setup() when the bridge/turrets weren't available at setup time.
+func bind_match(bridge: CaromSimBridge, local_turret: CaromTurret, remote_turret: CaromTurret) -> void:
+	_bridge = bridge
+	_local_turret = local_turret
+	_remote_turret = remote_turret
+	if _remote_turret != null:
+		_remote_input_provider = CaromNetworkInput.new()
+		_remote_turret.input = _remote_input_provider
+		_remote_turret.control_mode = CaromTurret.ControlMode.AI
+	_rollback = RollbackManager.new()
+	_rollback.initialize(bridge._sim)
+
+
 ## Host a new online match.
 func host_match(signaling_url: String = "") -> void:
 	if signaling_url != "":
@@ -99,6 +114,13 @@ func join_match(code: String, signaling_url: String = "") -> void:
 	if signaling_url != "":
 		_network.set_signaling_url(signaling_url)
 	_network.join_room(code)
+
+
+## Enter matchmaking queue on the signaling server.
+func matchmake(signaling_url: String = "") -> void:
+	if signaling_url != "":
+		_network.set_signaling_url(signaling_url)
+	_network.matchmake()
 
 
 ## Call each sim tick instead of _sim.advance() in multiplayer mode.
