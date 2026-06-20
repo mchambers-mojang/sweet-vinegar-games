@@ -34,6 +34,11 @@ func _ready() -> void:
 	_apply_camera_safe_area()
 	get_tree().root.size_changed.connect(_apply_camera_safe_area)
 
+	# If launched in online mode, swap the match controller
+	if has_meta("carom_online"):
+		remove_meta("carom_online")
+		_switch_to_online_mode()
+
 
 func set_camera_mode(mode: String, animate: bool = true) -> void:
 	if _camera == null:
@@ -127,3 +132,21 @@ func on_sim_puck_scored(puck: CaromPuck, scoring_side: StringName) -> void:
 		return
 	_goal_locked = true
 	goal_scored.emit(scoring_side, puck)
+
+
+## Replace the standard MatchController with the online multiplayer flow.
+## Called from _ready() when the arena is launched with carom_online meta.
+func _switch_to_online_mode() -> void:
+	# Remove the single-player match controller
+	var match_ctrl := get_node_or_null("MatchController")
+	if match_ctrl:
+		match_ctrl.queue_free()
+
+	# Add the online flow controller — it will set up its own match controller
+	var flow := CaromOnlineFlow.new()
+	flow.name = "OnlineFlow"
+	add_child(flow)
+
+	# For now, auto-host (the online menu UI will replace this when ready)
+	# TODO: Replace with proper CaromOnlineMenu integration (#143)
+	flow.start_host()

@@ -18,7 +18,11 @@ autowrap_mode = 3
 [node name="MarginContainer/VBoxContainer/NewGameButton" parent="."]
 text = "Play"
 
-[node name="DifficultyRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer" index=7]
+[node name="OnlineButton" type="Button" parent="MarginContainer/VBoxContainer" index=7]
+layout_mode = 2
+text = "Online (Beta)"
+
+[node name="DifficultyRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer" index=8]
 layout_mode = 2
 alignment = 1
 
@@ -39,7 +43,7 @@ popup/item_3/text = "Brutal"
 popup/item_3/id = 3
 selected = 1
 
-[node name="HintLabel" type="Label" parent="MarginContainer/VBoxContainer" index=8]
+[node name="HintLabel" type="Label" parent="MarginContainer/VBoxContainer" index=9]
 layout_mode = 2
 text = "Controls: Left/Right to aim, Enter/click to fire, R to reload"
 horizontal_alignment = 1

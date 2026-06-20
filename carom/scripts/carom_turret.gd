@@ -40,6 +40,11 @@ var _reload_timer: float = 0.0
 var _fire_cooldown_timer: float = 0.0
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
+## Tick-level event flags for multiplayer input capture.
+## Poll via consume_tick_events() each sim tick, then clear.
+var _fired_this_tick: bool = false
+var _reload_started_this_tick: bool = false
+
 ## Input provider (CaromHumanInput or CaromAI)
 var input: CaromTurretInput = null
 
@@ -141,6 +146,7 @@ func try_fire() -> bool:
 	current_ammo -= 1
 	ammo_changed.emit(current_ammo, clip_size)
 	_fire_cooldown_timer = fire_cooldown
+	_fired_this_tick = true
 
 	var parent_scene := get_tree().current_scene
 	if parent_scene == null:
@@ -157,6 +163,7 @@ func start_reload() -> void:
 		return
 	is_reloading = true
 	_reload_timer = 0.0
+	_reload_started_this_tick = true
 	reload_state_changed.emit(true)
 
 
@@ -166,6 +173,15 @@ func cancel_reload() -> void:
 	is_reloading = false
 	_reload_timer = 0.0
 	reload_state_changed.emit(false)
+
+
+## Poll and clear tick-level events. Returns {fired: bool, reloaded: bool}.
+## Call once per sim tick in multiplayer to capture input for the network.
+func consume_tick_events() -> Dictionary:
+	var events := { fired = _fired_this_tick, reloaded = _reload_started_this_tick }
+	_fired_this_tick = false
+	_reload_started_this_tick = false
+	return events
 
 
 func _get_turret_state() -> Dictionary:

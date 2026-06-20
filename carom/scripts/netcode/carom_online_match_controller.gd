@@ -259,19 +259,13 @@ func _do_tick() -> void:
 	if _multiplayer_ctrl == null or not _multiplayer_ctrl.is_ready_to_play():
 		return
 
-	# Read local player's current input state
+	# Capture local turret's aim angle (absolute radians for the wire)
 	var aim_rad: float = deg_to_rad(_local_turret.aim_offset_degrees + _local_turret.base_yaw_degrees)
-	var fire: bool = false
-	var reload: bool = false
 
-	# The turret's input provider handles aim/fire/reload via _process.
-	# We sample the turret's current aim and check if it fired this tick.
-	# For fire/reload, we detect from the turret state (the human input
-	# already called try_fire/start_reload on the turret directly).
-	# Actually, in multiplayer mode we need to capture the intent and
-	# prevent the turret from acting on it locally until confirmed.
-	# For now, use a simpler approach: local turret acts immediately
-	# (like single-player), and we just send its state over the wire.
+	# Poll fire/reload events that occurred since last tick
+	var events: Dictionary = _local_turret.consume_tick_events()
+	var fire: bool = events.fired
+	var reload: bool = events.reloaded
 
 	_multiplayer_ctrl.advance_with_input(aim_rad, fire, reload)
 
