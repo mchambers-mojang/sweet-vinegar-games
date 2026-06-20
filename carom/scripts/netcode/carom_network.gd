@@ -249,17 +249,21 @@ func _handle_signaling_message(msg: Dictionary) -> void:
 			_room_code = msg.get("code", "")
 			var role: String = msg.get("role", "")
 			_is_host = (role == "host")
+			print("[CaromNetwork] Matched! role=%s code=%s" % [role, _room_code])
 			_setup_rtc()
 			if _is_host:
 				# Host creates the offer and sends it via "offer" message
 				_state = State.SIGNALING
+				print("[CaromNetwork] Creating RTC offer...")
 				_rtc.create_offer()
 			else:
 				# Joiner waits for host's offer (arrives as room_joined)
 				_state = State.SIGNALING
+				print("[CaromNetwork] Waiting for host offer...")
 
 		"peer_joined":
 			# Host receives joiner's answer SDP
+			print("[CaromNetwork] Received peer answer SDP")
 			var sdp: String = msg.get("sdp", "")
 			if sdp != "":
 				_rtc.set_remote_description("answer", sdp)
@@ -269,6 +273,7 @@ func _handle_signaling_message(msg: Dictionary) -> void:
 		"room_joined":
 			# Joiner receives host's offer SDP — set_remote_description
 			# will trigger session_description_created with type "answer"
+			print("[CaromNetwork] Received host offer SDP")
 			var sdp: String = msg.get("sdp", "")
 			if sdp != "":
 				_rtc.set_remote_description("offer", sdp)
@@ -298,6 +303,7 @@ func _flush_ice_queue() -> void:
 
 
 func _on_session_description(type: String, sdp: String) -> void:
+	print("[CaromNetwork] Session description created: type=%s len=%d" % [type, sdp.length()])
 	_rtc.set_local_description(type, sdp)
 
 	if _ws == null or _ws.get_ready_state() != WebSocketPeer.STATE_OPEN:
@@ -346,6 +352,7 @@ func _poll_rtc() -> void:
 
 	if input_open and sync_open:
 		if _state != State.CONNECTED:
+			print("[CaromNetwork] WebRTC connected! Both channels open.")
 			_state = State.CONNECTED
 			connected.emit()
 			# Signaling no longer needed

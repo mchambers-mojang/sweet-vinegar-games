@@ -180,8 +180,7 @@ func _setup_match() -> void:
 	var net_override: Node = CaromLocalNetwork.new() if _use_local_network else null
 	_multiplayer_ctrl.setup(_bridge, _local_turret, _remote_turret, net_override)
 	_multiplayer_ctrl.is_host_side = _is_host
-	if _use_local_network:
-		_multiplayer_ctrl.lockstep = true
+	_multiplayer_ctrl.lockstep = true
 
 	# Connect multiplayer signals
 	_multiplayer_ctrl.match_connected.connect(_on_match_connected)
@@ -324,6 +323,7 @@ func _finish_matchmake_setup() -> void:
 	# Late-bind the bridge and turrets to the existing multiplayer controller
 	_multiplayer_ctrl.bind_match(_bridge, _local_turret, _remote_turret)
 	_multiplayer_ctrl.is_host_side = _is_host
+	_multiplayer_ctrl.lockstep = true
 
 	# Effects + HUD
 	_setup_effects()
@@ -401,7 +401,7 @@ func _process(delta: float) -> void:
 		return
 
 	# Soft-disconnect detection: if lockstep is stuck for too long, opponent is gone
-	if _use_local_network and _multiplayer_ctrl and _multiplayer_ctrl._lockstep_pending_send:
+	if _multiplayer_ctrl and _multiplayer_ctrl._lockstep_pending_send:
 		_no_input_timer += delta
 		if _no_input_timer >= SOFT_DISCONNECT_TIMEOUT:
 			_enter_disconnect_state("Opponent disconnected")
@@ -411,24 +411,18 @@ func _process(delta: float) -> void:
 
 	_tick_accum += delta
 
-	# In lockstep mode, only attempt one tick per frame to avoid accumulator
-	# buildup while waiting for remote input.
-	if _use_local_network:
-		if _tick_accum >= TICK_RATE:
-			if _multiplayer_ctrl and _multiplayer_ctrl._lockstep_pending_send:
-				# Already waiting for remote input — just poll, don't consume new events
-				_multiplayer_ctrl.advance_with_input(0.0, false, false)
-			else:
-				_do_tick()
-			# Only drain the accumulator if the tick actually advanced
-			if _multiplayer_ctrl and _multiplayer_ctrl._lockstep_pending_send == false:
-				_tick_accum -= TICK_RATE
-				# Cap to prevent burst after a stall
-				_tick_accum = minf(_tick_accum, TICK_RATE)
-	else:
-		while _tick_accum >= TICK_RATE:
-			_tick_accum -= TICK_RATE
+	# Lockstep: only attempt one tick per frame, wait for remote input
+	if _tick_accum >= TICK_RATE:
+		if _multiplayer_ctrl and _multiplayer_ctrl._lockstep_pending_send:
+			# Already waiting for remote input — just poll, don't consume new events
+			_multiplayer_ctrl.advance_with_input(0.0, false, false)
+		else:
 			_do_tick()
+		# Only drain the accumulator if the tick actually advanced
+		if _multiplayer_ctrl and _multiplayer_ctrl._lockstep_pending_send == false:
+			_tick_accum -= TICK_RATE
+			# Cap to prevent burst after a stall
+			_tick_accum = minf(_tick_accum, TICK_RATE)
 
 	# Match timer
 	_timer_accum += delta
