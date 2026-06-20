@@ -16,6 +16,7 @@ signal match_disconnected
 signal room_created(code: String)
 signal match_started  ## Emitted when frame sync is complete and play begins
 signal connection_failed(reason: String)
+signal matchmake_queued  ## Server confirmed we're in the matchmaking queue
 
 var _network: Node = null  # CaromNetwork or CaromLocalNetwork
 var _rollback: RollbackManager = null
@@ -86,6 +87,8 @@ func setup(bridge: CaromSimBridge, local_turret: CaromTurret = null, remote_turr
 	_network.room_created.connect(func(code: String) -> void: room_created.emit(code))
 	_network.sync_received.connect(_on_sync_received)
 	_network.set_input_callback(_on_remote_input)
+	if _network.has_signal("queued"):
+		_network.queued.connect(func() -> void: matchmake_queued.emit())
 
 
 ## Late-bind the bridge and turrets after matchmaking resolves roles.

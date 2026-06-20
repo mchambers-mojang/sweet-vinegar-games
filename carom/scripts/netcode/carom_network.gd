@@ -11,6 +11,7 @@ signal connected
 signal disconnected
 signal connection_failed(reason: String)
 signal sync_received  ## Emitted when remote peer's sync packet arrives
+signal queued  ## Emitted when server confirms we're in the matchmaking queue
 
 const DEFAULT_SIGNALING_URL: String = "wss://carom-signaling.azurewebsites.net"
 const INPUT_CHANNEL_ID: int = 0
@@ -241,7 +242,7 @@ func _handle_signaling_message(msg: Dictionary) -> void:
 
 		"queued":
 			# Acknowledged in matchmaking queue — wait for match
-			pass
+			queued.emit()
 
 		"matched":
 			# Server paired us with an opponent

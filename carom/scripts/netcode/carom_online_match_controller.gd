@@ -137,6 +137,7 @@ func _setup_match_deferred(signaling_url: String) -> void:
 	_multiplayer_ctrl.match_disconnected.connect(_on_match_disconnected)
 	_multiplayer_ctrl.room_created.connect(_on_room_created)
 	_multiplayer_ctrl.connection_failed.connect(_on_connection_failed)
+	_multiplayer_ctrl.matchmake_queued.connect(_on_matchmake_queued)
 	_multiplayer_ctrl.matchmake(signaling_url)
 
 func _setup_match() -> void:
@@ -274,6 +275,10 @@ func _spawn_multiplayer_entities() -> void:
 
 func _on_room_created(code: String) -> void:
 	connection_status_changed.emit("waiting", "Room: %s\nWaiting for opponent..." % code)
+
+
+func _on_matchmake_queued() -> void:
+	connection_status_changed.emit("connecting", "Searching for opponent...")
 
 
 func _on_match_connected() -> void:
