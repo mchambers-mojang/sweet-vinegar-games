@@ -57,7 +57,7 @@ func _ready() -> void:
 func host(signaling_url: String) -> void:
 	_is_host = true
 	phase = Phase.CONNECTING
-	connection_status_changed.emit("connecting", "Creating room...")
+	connection_status_changed.emit("connecting", "Connecting to server...")
 	_setup_match()
 	_multiplayer_ctrl.host_match(signaling_url)
 
@@ -66,7 +66,7 @@ func host(signaling_url: String) -> void:
 func join(code: String, signaling_url: String) -> void:
 	_is_host = false
 	phase = Phase.CONNECTING
-	connection_status_changed.emit("connecting", "Joining room...")
+	connection_status_changed.emit("connecting", "Connecting to server...")
 	_setup_match()
 	_multiplayer_ctrl.join_match(code, signaling_url)
 
@@ -120,6 +120,7 @@ func _setup_match() -> void:
 	_multiplayer_ctrl.match_started.connect(_on_match_started)
 	_multiplayer_ctrl.match_disconnected.connect(_on_match_disconnected)
 	_multiplayer_ctrl.room_created.connect(_on_room_created)
+	_multiplayer_ctrl.connection_failed.connect(_on_connection_failed)
 
 	# Set up effects
 	_setup_effects()
@@ -200,7 +201,7 @@ func _on_room_created(code: String) -> void:
 
 func _on_match_connected() -> void:
 	phase = Phase.SYNCING
-	connection_status_changed.emit("connected", "Opponent found! Syncing...")
+	connection_status_changed.emit("connected", "Opponent found!")
 
 
 func _on_match_started() -> void:
@@ -218,6 +219,11 @@ func _on_match_disconnected() -> void:
 	elif phase != Phase.GAME_OVER:
 		phase = Phase.IDLE
 		connection_status_changed.emit("error", "Connection lost")
+
+
+func _on_connection_failed(reason: String) -> void:
+	phase = Phase.IDLE
+	connection_status_changed.emit("error", reason if reason != "" else "Connection failed")
 
 
 func _begin_play() -> void:
