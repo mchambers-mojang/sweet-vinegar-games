@@ -337,7 +337,7 @@ func _show_join() -> void:
 	_join_view.visible   = true
 	if _code_input:
 		_code_input.text = ""
-		_code_input.grab_focus()
+		_code_input.call_deferred("grab_focus")
 
 
 # ---------------------------------------------------------------------------
