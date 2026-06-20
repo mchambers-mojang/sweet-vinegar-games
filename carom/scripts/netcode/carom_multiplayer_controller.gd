@@ -37,6 +37,17 @@ var _sync_complete: bool = false
 var _sync_sent: bool = false
 var _sync_received: bool = false
 
+## Lockstep mode: when true, won't advance until remote input is available.
+## Use for local (same-machine) play where latency is zero.
+var lockstep: bool = false
+
+## Buffered local input waiting to be sent (for lockstep when we need to
+## re-send while waiting for remote).
+var _lockstep_pending_send: bool = false
+var _lockstep_pending_aim: float = 0.0
+var _lockstep_pending_fire: bool = false
+var _lockstep_pending_reload: bool = false
+
 
 func _ready() -> void:
 	set_process(false)
@@ -94,6 +105,50 @@ func advance_with_input(aim_angle_rad: float, fire: bool, reload: bool) -> void:
 	if not _is_active or not _sync_complete:
 		return
 
+	# In lockstep mode, don't advance until we have remote input for this frame.
+	if lockstep:
+		# Send our input for this frame (only once per frame)
+		if not _lockstep_pending_send:
+			var encoded: PackedByteArray = InputCodec.encode(aim_angle_rad, fire, reload, _local_frame)
+			_network.send_input(_local_frame, encoded)
+			_lockstep_pending_send = true
+			_lockstep_pending_aim = aim_angle_rad
+			_lockstep_pending_fire = fire
+			_lockstep_pending_reload = reload
+
+		# Poll network to pick up any data that arrived this frame
+		if _network.has_method("poll"):
+			_network.poll()
+
+		# Wait for remote input
+		if not _confirmed_remote_inputs.has(_local_frame):
+			return
+
+		# We have remote input — advance
+		var remote_input: int = _confirmed_remote_inputs[_local_frame]
+		_confirmed_remote_inputs.erase(_local_frame)
+		_lockstep_pending_send = false
+
+		var aim_fp: int = _quantize_aim_to_fp(_lockstep_pending_aim)
+		var local_packed: int = InputCodec.pack_input(aim_fp, _lockstep_pending_fire, _lockstep_pending_reload)
+
+		# Apply remote input to the remote turret
+		if _remote_input_provider != null:
+			var unpacked: Dictionary = InputCodec.unpack_input(remote_input)
+			_remote_input_provider.set_tick_input(
+				unpacked.aim,
+				unpacked.fire,
+				unpacked.reload,
+				_remote_turret.aim_arc_degrees
+			)
+
+		_rollback.advance_frame(local_packed, remote_input, true)
+		if _bridge != null:
+			_bridge.tick_external()
+		_local_frame += 1
+		return
+
+	# --- Non-lockstep (online with latency) ---
 	# Encode and send local input
 	var encoded: PackedByteArray = InputCodec.encode(aim_angle_rad, fire, reload, _local_frame)
 	_network.send_input(_local_frame, encoded)
@@ -172,6 +227,7 @@ func _on_connected() -> void:
 	_sync_complete = false
 	_sync_sent = false
 	_sync_received = false
+	_lockstep_pending_send = false
 	# Re-initialize rollback so _current_frame resets for new match
 	if _rollback != null and _bridge != null:
 		_rollback.initialize(_bridge._sim)
@@ -212,6 +268,11 @@ func _on_remote_input(frame_wire: int, packed_input: int) -> void:
 
 	# Reconstruct full frame from 16-bit wire value using nearest-wrap
 	var frame: int = _unwrap_frame(frame_wire)
+
+	# In lockstep mode, just buffer — we never advance past what we have.
+	if lockstep:
+		_confirmed_remote_inputs[frame] = packed_input
+		return
 
 	# Buffer future frames locally — they'll be passed to advance_frame()
 	# when the local tick catches up. Do NOT forward to RollbackManager

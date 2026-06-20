@@ -110,6 +110,17 @@ func close() -> void:
 	_cleanup()
 
 
+## Explicitly poll the TCP connection for new data.
+## Call this before checking for buffered inputs to avoid frame-order issues.
+func poll() -> void:
+	if _state == State.CONNECTED:
+		_poll_data()
+	elif _state == State.LISTENING:
+		_poll_server()
+	elif _state == State.CONNECTING:
+		_poll_connecting()
+
+
 func _process(_delta: float) -> void:
 	match _state:
 		State.LISTENING:

@@ -140,6 +140,8 @@ func _setup_match() -> void:
 	arena.add_child(_multiplayer_ctrl)
 	var net_override: Node = CaromLocalNetwork.new() if _use_local_network else null
 	_multiplayer_ctrl.setup(_bridge, _local_turret, _remote_turret, net_override)
+	if _use_local_network:
+		_multiplayer_ctrl.lockstep = true
 
 	# Connect multiplayer signals
 	_multiplayer_ctrl.match_connected.connect(_on_match_connected)
@@ -276,9 +278,21 @@ func _process(delta: float) -> void:
 		return
 
 	_tick_accum += delta
-	while _tick_accum >= TICK_RATE:
-		_tick_accum -= TICK_RATE
-		_do_tick()
+
+	# In lockstep mode, only attempt one tick per frame to avoid accumulator
+	# buildup while waiting for remote input.
+	if _use_local_network:
+		if _tick_accum >= TICK_RATE:
+			_do_tick()
+			# Only drain the accumulator if the tick actually advanced
+			if _multiplayer_ctrl and _multiplayer_ctrl._lockstep_pending_send == false:
+				_tick_accum -= TICK_RATE
+				# Cap to prevent burst after a stall
+				_tick_accum = minf(_tick_accum, TICK_RATE)
+	else:
+		while _tick_accum >= TICK_RATE:
+			_tick_accum -= TICK_RATE
+			_do_tick()
 
 	# Match timer
 	_timer_accum += delta
