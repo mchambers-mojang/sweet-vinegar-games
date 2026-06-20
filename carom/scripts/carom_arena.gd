@@ -196,6 +196,10 @@ func _switch_to_online_mode() -> void:
 		menu.queue_free()
 		flow.start_join(code)
 	)
+	menu.local_play_requested.connect(func() -> void:
+		menu.queue_free()
+		flow.start_local()
+	)
 	menu.cancelled.connect(func() -> void:
 		menu.queue_free()
 		SceneTransition.transition_to(Scenes.CAROM_MENU)

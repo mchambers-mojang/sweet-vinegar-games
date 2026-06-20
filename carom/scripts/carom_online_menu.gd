@@ -12,6 +12,7 @@ extends Control
 
 signal room_create_requested
 signal room_join_requested(code: String)
+signal local_play_requested
 signal cancelled
 
 ## Valid characters for room codes (unambiguous subset of alphanumerics).
@@ -124,6 +125,10 @@ func _build_lobby_view() -> Control:
 	var join_btn := _make_secondary_button("Join Room")
 	join_btn.pressed.connect(_on_join_room_pressed)
 	vbox.add_child(join_btn)
+
+	var local_btn := _make_secondary_button("Local Play")
+	local_btn.pressed.connect(func() -> void: local_play_requested.emit())
+	vbox.add_child(local_btn)
 
 	var cancel_btn := _make_cancel_button()
 	cancel_btn.pressed.connect(_on_cancelled)
