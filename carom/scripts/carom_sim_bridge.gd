@@ -66,6 +66,10 @@ var _projectile_nodes: Dictionary = {}
 ## Interpolation state for projectiles.
 var _proj_prev_pos: Dictionary = {}
 var _proj_curr_pos: Dictionary = {}
+## Bounce counter per projectile body_id → int.
+var _proj_bounces: Dictionary = {}
+## Maximum wall bounces before a projectile is auto-removed.
+const MAX_PROJECTILE_BOUNCES: int = 8
 
 
 func _ready() -> void:
@@ -210,6 +214,7 @@ func _on_turret_projectile_fired(projectile: CaromProjectile) -> void:
 	_projectile_nodes[body.id] = projectile
 	_proj_prev_pos[body.id]    = body.position
 	_proj_curr_pos[body.id]    = body.position
+	_proj_bounces[body.id]     = 0
 
 	projectile.setup_sim_bridge(self, body.id)
 	projectile.tree_exiting.connect(_on_projectile_removed.bind(body.id))
@@ -220,6 +225,26 @@ func _on_projectile_removed(body_id: int) -> void:
 	_projectile_nodes.erase(body_id)
 	_proj_prev_pos.erase(body_id)
 	_proj_curr_pos.erase(body_id)
+	_proj_bounces.erase(body_id)
+
+
+## Remove all tracked projectiles (and their trails) immediately.
+## Called before rematch to prevent orphaned visuals.
+func cleanup_all_projectiles() -> void:
+	for body_id: int in _projectile_nodes.keys():
+		var projectile := _projectile_nodes[body_id] as CaromProjectile
+		if is_instance_valid(projectile):
+			projectile.queue_free()
+	_projectile_nodes.clear()
+	_proj_prev_pos.clear()
+	_proj_curr_pos.clear()
+	_proj_bounces.clear()
+	# Also clean up any orphaned trails still in the arena
+	var arena_node := get_parent()
+	if arena_node:
+		for child in arena_node.get_children():
+			if child is CaromProjectileTrail:
+				child.queue_free()
 
 
 ## Return the CaromProjectile node for a given sim body id, or null.
@@ -310,6 +335,8 @@ func _process(delta: float) -> void:
 
 
 func _tick() -> void:
+	var _expired_projectiles_oob: Array[int] = []
+
 	# Apply stall nudge to each registered puck before advancing the sim.
 	for i in _puck_nodes.size():
 		_apply_puck_stall_nudge(i)
@@ -338,6 +365,17 @@ func _tick() -> void:
 		var body := _sim.get_body(body_id)
 		if body != null:
 			_proj_curr_pos[body_id] = body.position
+			# Out-of-bounds safety: remove projectiles that escaped the arena
+			var px: float = FP.to_float(body.position.x)
+			var pz: float = FP.to_float(body.position.y)
+			if abs(px) > 8.0 or pz < -3.0 or pz > 28.0:
+				_expired_projectiles_oob.append(body_id)
+
+	# Remove out-of-bounds projectiles.
+	for body_id: int in _expired_projectiles_oob:
+		var projectile := _projectile_nodes.get(body_id) as CaromProjectile
+		if is_instance_valid(projectile):
+			projectile.queue_free()
 
 	# Dispatch zone events.
 	for ev: Dictionary in _sim.zone_events:
@@ -349,6 +387,7 @@ func _tick() -> void:
 			projectile_zone_entered.emit(body_id, zone_id)
 
 	# Dispatch collision events to projectile render adapters.
+	var _expired_projectiles: Array[int] = []
 	for ev: Dictionary in _sim.collision_events:
 		var body_id: int = ev.body_id
 		if not _projectile_nodes.has(body_id):
@@ -356,9 +395,21 @@ func _tick() -> void:
 		var projectile := _projectile_nodes[body_id] as CaromProjectile
 		if not is_instance_valid(projectile):
 			continue
+		# Count wall bounces (other_id == -1 means wall hit)
+		if ev.other_id == -1:
+			_proj_bounces[body_id] = _proj_bounces.get(body_id, 0) + 1
+			if _proj_bounces[body_id] >= MAX_PROJECTILE_BOUNCES:
+				_expired_projectiles.append(body_id)
+				continue
 		var hit_puck: bool = _is_puck_body(ev.other_id)
 		var pos := Vector3(FP.to_float(ev.pos_x), 0.0, FP.to_float(ev.pos_y))
 		projectile.impact_occurred.emit(pos, hit_puck)
+
+	# Remove projectiles that exceeded max bounces.
+	for body_id: int in _expired_projectiles:
+		var projectile := _projectile_nodes.get(body_id) as CaromProjectile
+		if is_instance_valid(projectile):
+			projectile.queue_free()
 
 
 # ---------------------------------------------------------------------------

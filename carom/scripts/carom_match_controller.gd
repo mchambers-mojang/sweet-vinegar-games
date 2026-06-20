@@ -97,6 +97,7 @@ func _spawn_and_configure() -> void:
 
 func _setup_sim_bridge() -> void:
 	if is_instance_valid(_bridge):
+		_bridge.cleanup_all_projectiles()
 		_bridge.queue_free()
 	_bridge = CaromSimBridge.new()
 	_bridge.name = "SimBridge"

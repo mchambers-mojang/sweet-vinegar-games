@@ -167,9 +167,11 @@ func _integrate() -> void:
 		if b.damping != 0:
 			var keep: int = FP.ONE - b.damping
 			b.velocity = FP.FPVec2.scale(b.velocity, keep)
-		# Polygon rotation
+		# Polygon rotation + angular damping
 		if b.shape == SimBody.Shape.POLYGON and b.angular_velocity != 0:
 			b.rotation = (b.rotation + b.angular_velocity) % FP_TWO_PI
+			# Angular damping: reduce spin over time
+			b.angular_velocity = FP.mul(b.angular_velocity, FP.ONE - (FP.ONE >> 5))  # ~3% per tick
 
 # ---------------------------------------------------------------------------
 # 2 & 3. Collision detection + impulse resolution
@@ -373,9 +375,20 @@ func _resolve_polygon_circle(poly: SimBody, circle: SimBody) -> void:
 	poly.velocity   = FP.FPVec2.sub(poly.velocity,   FP.FPVec2.scale(impulse, inv_poly))
 	circle.velocity = FP.FPVec2.add(circle.velocity, FP.FPVec2.scale(impulse, inv_circle))
 
-	# Record collision event for render adapters (e.g. projectile impact VFX)
+	# Angular impulse on the polygon (torque from off-center hit)
+	# r = contact_point - poly.center; torque = r × F (2D cross product = rx*Fy - ry*Fx)
 	var contact_x: int = (poly.position.x + circle.position.x) >> 1
 	var contact_y: int = (poly.position.y + circle.position.y) >> 1
+	var rx: int = contact_x - poly.position.x
+	var ry: int = contact_y - poly.position.y
+	var impulse_on_poly: Dictionary = FP.FPVec2.scale(impulse, -inv_poly)
+	var torque: int = FP.mul(rx, impulse_on_poly.y) - FP.mul(ry, impulse_on_poly.x)
+	# Approximate moment of inertia as mass * radius² / 2 (use radius = poly half-size)
+	var inertia: int = FP.mul(poly.mass, FP.mul(poly.radius, poly.radius)) >> 1
+	if inertia > 0:
+		poly.angular_velocity += FP.div(torque, inertia)
+
+	# Record collision event for render adapters (e.g. projectile impact VFX)
 	collision_events.append({body_id = circle.id, other_id = poly.id, pos_x = contact_x, pos_y = contact_y})
 
 # --- Polygon–Wall (vertex penetration checks) ---
