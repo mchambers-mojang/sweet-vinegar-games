@@ -161,6 +161,9 @@ jobs:
           printf 'export/android/debug_keystore = "%s/release.keystore"\n' "$HOME" >> $HOME/.config/godot/editor_settings-4.tres
           printf 'export/android/debug_keystore_user = "%s"\n' "$KEYSTORE_ALIAS" >> $HOME/.config/godot/editor_settings-4.tres
           printf 'export/android/debug_keystore_pass = "%s"\n' "$KEYSTORE_PASSWORD" >> $HOME/.config/godot/editor_settings-4.tres
+          printf 'export/android/keystore/release = "%s/release.keystore"\n' "$HOME" >> $HOME/.config/godot/editor_settings-4.tres
+          printf 'export/android/keystore/release_user = "%s"\n' "$KEYSTORE_ALIAS" >> $HOME/.config/godot/editor_settings-4.tres
+          printf 'export/android/keystore/release_password = "%s"\n' "$KEYSTORE_PASSWORD" >> $HOME/.config/godot/editor_settings-4.tres
           echo "Editor settings written"
 
       - name: Import project
