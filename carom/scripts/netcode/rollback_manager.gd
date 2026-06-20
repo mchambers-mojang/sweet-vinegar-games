@@ -239,6 +239,8 @@ func _supports_custom_state_api() -> bool:
 func _restore_static_geometry() -> void:
 	if _sim == null:
 		return
+	_sim._walls = []
+	_sim._zones = []
 	for wall: Variant in _static_walls:
 		_sim.add_wall(wall)
 	for zone: Variant in _static_zones:
