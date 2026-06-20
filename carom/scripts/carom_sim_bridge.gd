@@ -400,7 +400,8 @@ func _apply_puck_stall_nudge(idx: int) -> void:
 			if len > 0:
 				best_dir = FP.FPVec2.normalize(raw)
 
-	var nudge: int = FP.from_float(puck.stall_nudge_force)
+	# Scale force → velocity change: Δv = F * dt / m  (mirrors apply_central_force semantics)
+	var nudge: int = FP.from_float(puck.stall_nudge_force * TICK_DURATION / FP.to_float(body.mass))
 	body.velocity = FP.FPVec2.add(body.velocity, FP.FPVec2.scale(best_dir, nudge))
 
 
