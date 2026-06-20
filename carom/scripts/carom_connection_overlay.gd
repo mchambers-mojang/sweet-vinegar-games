@@ -7,6 +7,9 @@ const STATE_CONNECTING := "connecting"
 const STATE_WAITING := "waiting"
 const STATE_CONNECTED := "connected"
 const STATE_ERROR := "error"
+const INDICATOR_PULSE_SCALE: float = 1.18
+const INDICATOR_PULSE_MIN_ALPHA: float = 0.45
+const INDICATOR_PULSE_DURATION: float = 0.45
 
 @onready var _margin: MarginContainer = $MarginContainer
 @onready var _status_label: Label = $MarginContainer/VBoxContainer/CenterBox/StatusLabel
@@ -90,10 +93,20 @@ func _start_indicator_pulse() -> void:
 	_indicator_label.scale = Vector2.ONE
 	_indicator_label.modulate = Color(1.0, 1.0, 1.0, 1.0)
 	_indicator_tween = create_tween().set_loops()
-	_indicator_tween.tween_property(_indicator_label, "scale", Vector2(1.18, 1.18), 0.45)
-	_indicator_tween.parallel().tween_property(_indicator_label, "modulate:a", 0.45, 0.45)
-	_indicator_tween.tween_property(_indicator_label, "scale", Vector2.ONE, 0.45)
-	_indicator_tween.parallel().tween_property(_indicator_label, "modulate:a", 1.0, 0.45)
+	_indicator_tween.tween_property(
+		_indicator_label,
+		"scale",
+		Vector2(INDICATOR_PULSE_SCALE, INDICATOR_PULSE_SCALE),
+		INDICATOR_PULSE_DURATION
+	)
+	_indicator_tween.parallel().tween_property(
+		_indicator_label,
+		"modulate:a",
+		INDICATOR_PULSE_MIN_ALPHA,
+		INDICATOR_PULSE_DURATION
+	)
+	_indicator_tween.tween_property(_indicator_label, "scale", Vector2.ONE, INDICATOR_PULSE_DURATION)
+	_indicator_tween.parallel().tween_property(_indicator_label, "modulate:a", 1.0, INDICATOR_PULSE_DURATION)
 
 
 func _stop_indicator_tween() -> void:

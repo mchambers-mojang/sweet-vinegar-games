@@ -10,6 +10,7 @@ extends Node
 const SIGNALING_URL_DEFAULT := "ws://localhost:8080"
 const CONNECTION_OVERLAY_SCENE := preload("res://carom/scenes/carom_connection_overlay.tscn")
 const CONNECTED_FLASH_SECONDS: float = 1.2
+const OVERLAY_LAYER_PATH := "HUD/OverlayLayer"
 
 signal flow_completed  ## Emitted when the player returns to menu
 
@@ -57,9 +58,9 @@ func _ensure_match_controller() -> void:
 
 
 func _ensure_overlay() -> void:
-	if _overlay != null:
+	if is_instance_valid(_overlay):
 		return
-	var overlay_layer := get_parent().get_node_or_null("HUD/OverlayLayer") as Control
+	var overlay_layer := get_parent().get_node_or_null(OVERLAY_LAYER_PATH) as Control
 	if overlay_layer == null:
 		return
 	_overlay = CONNECTION_OVERLAY_SCENE.instantiate() as CaromConnectionOverlay
@@ -93,14 +94,14 @@ func _on_match_ended(won: bool, your_score: int, their_score: int, forfeit: bool
 
 
 func _hide_overlay_after_connected_flash(request_id: int) -> void:
-	if _overlay == null:
+	if not is_instance_valid(_overlay):
 		return
 	var remaining: float = 0.0
 	if _connected_started_at_msec >= 0:
 		var elapsed_msec: int = Time.get_ticks_msec() - _connected_started_at_msec
 		remaining = maxf(CONNECTED_FLASH_SECONDS - (float(elapsed_msec) / 1000.0), 0.0)
 	if remaining <= 0.0:
-		if request_id == _pending_hide_request_id and _overlay != null:
+		if request_id == _pending_hide_request_id and is_instance_valid(_overlay):
 			_overlay.hide()
 		_connected_started_at_msec = -1
 		return
@@ -108,7 +109,7 @@ func _hide_overlay_after_connected_flash(request_id: int) -> void:
 	timer.timeout.connect(func() -> void:
 		if request_id != _pending_hide_request_id:
 			return
-		if _overlay != null:
+		if is_instance_valid(_overlay):
 			_overlay.hide()
 		_connected_started_at_msec = -1
 	)
@@ -116,7 +117,7 @@ func _hide_overlay_after_connected_flash(request_id: int) -> void:
 
 func _on_back_requested() -> void:
 	shutdown()
-	if _overlay != null:
+	if is_instance_valid(_overlay):
 		_overlay.hide()
 	flow_completed.emit()
 	SceneTransition.transition_to(Scenes.CAROM_MENU)
