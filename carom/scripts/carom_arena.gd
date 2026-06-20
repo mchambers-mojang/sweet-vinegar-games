@@ -142,11 +142,27 @@ func _switch_to_online_mode() -> void:
 	if match_ctrl:
 		match_ctrl.queue_free()
 
-	# Add the online flow controller — it will set up its own match controller
+	# Add the online flow controller
 	var flow := CaromOnlineFlow.new()
 	flow.name = "OnlineFlow"
 	add_child(flow)
 
-	# For now, auto-host (the online menu UI will replace this when ready)
-	# TODO: Replace with proper CaromOnlineMenu integration (#143)
-	flow.start_host()
+	# Show the online menu for create/join selection
+	var menu: CaromOnlineMenu = preload("res://carom/scenes/carom_online_menu.tscn").instantiate()
+	menu.name = "OnlineMenu"
+	var overlay_layer := get_node_or_null("HUD/OverlayLayer") as Control
+	if overlay_layer:
+		overlay_layer.add_child(menu)
+
+	menu.room_create_requested.connect(func() -> void:
+		menu.queue_free()
+		flow.start_host()
+	)
+	menu.room_join_requested.connect(func(code: String) -> void:
+		menu.queue_free()
+		flow.start_join(code)
+	)
+	menu.cancelled.connect(func() -> void:
+		menu.queue_free()
+		SceneTransition.transition_to(Scenes.CAROM_MENU)
+	)

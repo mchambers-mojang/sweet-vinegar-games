@@ -93,6 +93,21 @@ func _on_match_ended(won: bool, your_score: int, their_score: int, forfeit: bool
 		var note := " (forfeit)" if forfeit else ""
 		print("[CaromOnlineFlow] Match %s%s — %d:%d" % [result, note, your_score, their_score])
 
+	# Show the results panel
+	var results := CaromMultiplayerResults.new()
+	results.name = "MultiplayerResults"
+	var overlay_layer := get_parent().get_node_or_null(OVERLAY_LAYER_PATH) as Control
+	if overlay_layer:
+		overlay_layer.add_child(results)
+	else:
+		get_parent().add_child(results)
+	results.show_results(won, your_score, their_score, forfeit)
+	results.menu_requested.connect(func() -> void:
+		results.queue_free()
+		shutdown()
+		SceneTransition.transition_to(Scenes.CAROM_MENU)
+	)
+
 
 func _hide_overlay_after_connected_flash(request_id: int) -> void:
 	if not is_instance_valid(_overlay):
