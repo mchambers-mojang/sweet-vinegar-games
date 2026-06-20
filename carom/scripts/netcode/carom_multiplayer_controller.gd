@@ -136,6 +136,9 @@ func _on_connected() -> void:
 	_sync_complete = false
 	_sync_sent = false
 	_sync_received = false
+	# Re-initialize rollback so _current_frame resets for new match
+	if _rollback != null and _bridge != null:
+		_rollback.initialize(_bridge._sim)
 	# Send sync over the reliable channel — guaranteed delivery
 	_network.send_sync()
 	_sync_sent = true
@@ -166,9 +169,12 @@ func _on_connection_failed(reason: String) -> void:
 
 
 ## Called by CaromNetwork for every received gameplay input packet.
-func _on_remote_input(frame: int, packed_input: int) -> void:
+func _on_remote_input(frame_wire: int, packed_input: int) -> void:
 	if _rollback == null or not _sync_complete:
 		return
+
+	# Reconstruct full frame from 16-bit wire value using nearest-wrap
+	var frame: int = _unwrap_frame(frame_wire)
 
 	# Buffer future frames locally — they'll be passed to advance_frame()
 	# when the local tick catches up. Do NOT forward to RollbackManager
@@ -182,6 +188,21 @@ func _on_remote_input(frame: int, packed_input: int) -> void:
 	_rollback.receive_remote_input(frame, packed_input)
 	if _rollback.needs_rollback():
 		_rollback.execute_rollback()
+
+
+## Reconstruct full frame number from 16-bit wire value.
+## Uses _local_frame's high bits and picks the nearest wrap direction.
+func _unwrap_frame(wire: int) -> int:
+	const WRAP: int = 0x10000  # 65536
+	const HALF: int = 0x8000   # 32768
+	var local_low: int = _local_frame & 0xFFFF
+	var high: int = _local_frame - local_low
+	var candidate: int = high + wire
+	if wire - local_low > HALF:
+		candidate -= WRAP
+	elif local_low - wire > HALF:
+		candidate += WRAP
+	return candidate
 
 
 func _quantize_aim_to_fp(aim_rad: float) -> int:
