@@ -103,7 +103,7 @@ func _hide_overlay_after_connected_flash(request_id: int) -> void:
 		remaining = maxf(CONNECTED_DISPLAY_DURATION - (float(elapsed_usec) / 1000000.0), 0.0)
 	if remaining > 0.0:
 		var flow_ref: WeakRef = weakref(self)
-		var timer := get_tree().create_timer(remaining)
+		var timer := get_tree().create_timer(remaining, false)
 		timer.timeout.connect(func() -> void:
 			var flow := flow_ref.get_ref() as CaromOnlineFlow
 			if flow == null:
