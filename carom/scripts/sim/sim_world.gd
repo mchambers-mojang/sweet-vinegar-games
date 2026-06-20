@@ -94,6 +94,9 @@ func advance(_inputs: Dictionary = {}) -> void:
 	zone_events = []
 	collision_events = []
 	_integrate()
+	# Run collision detection twice to catch fast-moving bodies that
+	# tunneled past thin geometry in the first pass.
+	_detect_and_resolve()
 	_detect_and_resolve()
 	_clamp_speed()
 	_check_zones()
@@ -190,6 +193,8 @@ func _detect_and_resolve() -> void:
 				_resolve_polygon_circle(b, a)
 			elif a.shape == SimBody.Shape.POLYGON and b.shape == SimBody.Shape.CIRCLE:
 				_resolve_polygon_circle(a, b)
+			elif a.shape == SimBody.Shape.POLYGON and b.shape == SimBody.Shape.POLYGON:
+				_resolve_polygon_polygon(a, b)
 	# Body–wall
 	for id: int in _bodies:
 		var body: SimBody = _bodies[id]
@@ -390,6 +395,119 @@ func _resolve_polygon_circle(poly: SimBody, circle: SimBody) -> void:
 
 	# Record collision event for render adapters (e.g. projectile impact VFX)
 	collision_events.append({body_id = circle.id, other_id = poly.id, pos_x = contact_x, pos_y = contact_y})
+
+# --- Polygon–Polygon (SAT on both sets of edge normals) ---
+
+func _resolve_polygon_polygon(a: SimBody, b: SimBody) -> void:
+	# Broad phase: check if bounding circles overlap
+	var diff: Dictionary = FP.FPVec2.sub(b.position, a.position)
+	var dist_sq: int = FP.FPVec2.length_squared(diff)
+	var radii_sum: int = a.radius + b.radius
+	if dist_sq > FP.mul(radii_sum, radii_sum):
+		return
+
+	var verts_a: Array = _world_vertices(a)
+	var verts_b: Array = _world_vertices(b)
+
+	var min_depth: int = 0x7FFFFFFFFFFFFFFF
+	var best_normal: Dictionary = FP.FPVec2.make(FP.ONE, 0)
+	var colliding: bool = true
+
+	# Test edges of polygon A
+	for i in range(verts_a.size()):
+		var va: Dictionary = verts_a[i]
+		var vb: Dictionary = verts_a[(i + 1) % verts_a.size()]
+		var edge: Dictionary = FP.FPVec2.sub(vb, va)
+		var normal: Dictionary = FP.FPVec2.normalize(FP.FPVec2.make(-edge.y, edge.x))
+		var sep: Dictionary = _project_polygon_overlap(verts_a, verts_b, normal)
+		if sep.overlap <= 0:
+			colliding = false
+			break
+		if sep.overlap < min_depth:
+			min_depth = sep.overlap
+			best_normal = normal
+
+	if not colliding:
+		return
+
+	# Test edges of polygon B
+	for i in range(verts_b.size()):
+		var va: Dictionary = verts_b[i]
+		var vb: Dictionary = verts_b[(i + 1) % verts_b.size()]
+		var edge: Dictionary = FP.FPVec2.sub(vb, va)
+		var normal: Dictionary = FP.FPVec2.normalize(FP.FPVec2.make(-edge.y, edge.x))
+		var sep: Dictionary = _project_polygon_overlap(verts_a, verts_b, normal)
+		if sep.overlap <= 0:
+			colliding = false
+			break
+		if sep.overlap < min_depth:
+			min_depth = sep.overlap
+			best_normal = normal
+
+	if not colliding:
+		return
+
+	# Ensure normal points from A to B
+	var a_to_b: Dictionary = FP.FPVec2.sub(b.position, a.position)
+	if FP.FPVec2.dot(best_normal, a_to_b) < 0:
+		best_normal = FP.FPVec2.make(-best_normal.x, -best_normal.y)
+
+	# Positional correction (mass-weighted)
+	var inv_a: int = FP.div(FP.ONE, a.mass)
+	var inv_b: int = FP.div(FP.ONE, b.mass)
+	var total_inv: int = inv_a + inv_b
+	a.position = FP.FPVec2.sub(a.position,
+		FP.FPVec2.scale(best_normal, FP.mul(min_depth, FP.div(inv_a, total_inv))))
+	b.position = FP.FPVec2.add(b.position,
+		FP.FPVec2.scale(best_normal, FP.mul(min_depth, FP.div(inv_b, total_inv))))
+
+	# Impulse
+	var rel_v: Dictionary = FP.FPVec2.sub(a.velocity, b.velocity)
+	var vn: int = FP.FPVec2.dot(rel_v, best_normal)
+	if vn >= 0:
+		return
+
+	var e: int = _min_int(a.restitution, b.restitution)
+	var j: int = FP.div(FP.mul(-(FP.ONE + e), vn), total_inv)
+	var impulse: Dictionary = FP.FPVec2.scale(best_normal, j)
+	a.velocity = FP.FPVec2.add(a.velocity, FP.FPVec2.scale(impulse, inv_a))
+	b.velocity = FP.FPVec2.sub(b.velocity, FP.FPVec2.scale(impulse, inv_b))
+
+	# Angular impulse on both polygons
+	var contact_x: int = (a.position.x + b.position.x) >> 1
+	var contact_y: int = (a.position.y + b.position.y) >> 1
+	for body in [a, b]:
+		var rx: int = contact_x - body.position.x
+		var ry: int = contact_y - body.position.y
+		var sign: int = 1 if body == a else -1
+		var imp: Dictionary = FP.FPVec2.scale(impulse, FP.div(FP.ONE, body.mass) * sign)
+		var torque: int = FP.mul(rx, imp.y) - FP.mul(ry, imp.x)
+		var inertia: int = FP.mul(body.mass, FP.mul(body.radius, body.radius)) >> 1
+		if inertia > 0:
+			body.angular_velocity += FP.div(torque, inertia)
+
+	collision_events.append({body_id = a.id, other_id = b.id, pos_x = contact_x, pos_y = contact_y})
+	collision_events.append({body_id = b.id, other_id = a.id, pos_x = contact_x, pos_y = contact_y})
+
+
+## Project both polygon vertex sets onto an axis and return the overlap.
+func _project_polygon_overlap(verts_a: Array, verts_b: Array, axis: Dictionary) -> Dictionary:
+	var min_a: int = 0x7FFFFFFFFFFFFFFF
+	var max_a: int = -0x7FFFFFFFFFFFFFFF
+	for v: Dictionary in verts_a:
+		var proj: int = FP.FPVec2.dot(v, axis)
+		if proj < min_a: min_a = proj
+		if proj > max_a: max_a = proj
+
+	var min_b: int = 0x7FFFFFFFFFFFFFFF
+	var max_b: int = -0x7FFFFFFFFFFFFFFF
+	for v: Dictionary in verts_b:
+		var proj: int = FP.FPVec2.dot(v, axis)
+		if proj < min_b: min_b = proj
+		if proj > max_b: max_b = proj
+
+	var overlap: int = _min_int(max_a - min_b, max_b - min_a)
+	return {overlap = overlap}
 
 # --- Polygon–Wall (vertex penetration checks) ---
 
