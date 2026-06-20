@@ -25,6 +25,7 @@ const SHIKAKU_STATS := "res://scenes/shikaku_stats.tscn"
 
 # Carom
 const CAROM_MENU := "res://scenes/carom_menu.tscn"
+const CAROM_ONLINE_MENU := "res://carom/scenes/carom_online_menu.tscn"
 const CAROM_ARENA := "res://carom/scenes/carom_arena.tscn"
 const CAROM_TURRET := "res://carom/scenes/carom_turret.tscn"
 const CAROM_PUCK := "res://carom/scenes/carom_puck.tscn"
