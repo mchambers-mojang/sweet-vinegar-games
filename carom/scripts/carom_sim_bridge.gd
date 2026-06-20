@@ -128,20 +128,20 @@ func _setup_walls() -> void:
 
 
 func _setup_goal_zones(arena: CaromArena) -> void:
-	# Goal zones span 3 units each side of centre horizontally.
-	# Vertically they extend 2 units past the goal line so the puck centre
-	# must clearly cross the line before the zone fires.
-	var half_w: int = FP.from_float(3.0)
+	# Goal zones are wide enough to catch pucks with lateral drift after
+	# passing the corner walls, and extend inward past the corner tips (y≈1/23)
+	# so detection fires as soon as the puck clears the opening.
+	var half_w: int = FP.from_float(6.0)
 
 	var ng_z: int = FP.from_float(arena.north_goal.global_position.z)
 	_sim.add_zone(SimZone.make(
 		FP.FPVec2.make(-half_w, ng_z - FP.from_float(2.0)),
-		FP.FPVec2.make( half_w, ng_z + FP.from_float(0.5)),
+		FP.FPVec2.make( half_w, ng_z + FP.from_float(2.0)),
 		ZONE_NORTH_GOAL))
 
 	var sg_z: int = FP.from_float(arena.south_goal.global_position.z)
 	_sim.add_zone(SimZone.make(
-		FP.FPVec2.make(-half_w, sg_z - FP.from_float(0.5)),
+		FP.FPVec2.make(-half_w, sg_z - FP.from_float(2.0)),
 		FP.FPVec2.make( half_w, sg_z + FP.from_float(2.0)),
 		ZONE_SOUTH_GOAL))
 

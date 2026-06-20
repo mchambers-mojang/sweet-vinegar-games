@@ -17,6 +17,10 @@ signal goal_scored(scoring_side: StringName, puck: CaromPuck)
 const TOP_DOWN_POSITION_FLIPPED: Vector3 = Vector3(0.0, 20.0, 12.0)
 const TOP_DOWN_ROTATION_FLIPPED: Vector3 = Vector3(-90.0, 0.0, 180.0)
 
+## Flipped isometric — camera on the north side looking south.
+const ISOMETRIC_POSITION_FLIPPED: Vector3 = Vector3(0.0, 16.0, 0.0)
+const ISOMETRIC_ROTATION_FLIPPED: Vector3 = Vector3(-45.0, 180.0, 0.0)
+
 @export var arena_width: float = 20.0
 @export var arena_depth: float = 12.0
 
@@ -69,9 +73,13 @@ func set_camera_mode(mode: String, animate: bool = true) -> void:
 		target_rotation = ISOMETRIC_ROTATION
 
 	# Apply perspective flip if active (joiner sees from the opposite end)
-	if _perspective_flipped and target_mode != CaromSettings.CAMERA_MODE_ISOMETRIC:
-		target_position = TOP_DOWN_POSITION_FLIPPED
-		target_rotation = TOP_DOWN_ROTATION_FLIPPED
+	if _perspective_flipped:
+		if target_mode == CaromSettings.CAMERA_MODE_ISOMETRIC:
+			target_position = ISOMETRIC_POSITION_FLIPPED
+			target_rotation = ISOMETRIC_ROTATION_FLIPPED
+		else:
+			target_position = TOP_DOWN_POSITION_FLIPPED
+			target_rotation = TOP_DOWN_ROTATION_FLIPPED
 
 	if is_instance_valid(_camera_mode_tween):
 		_camera_mode_tween.kill()
