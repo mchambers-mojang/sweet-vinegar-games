@@ -2,8 +2,9 @@ class_name CaromMultiplayerResults
 extends Control
 
 signal menu_requested
+signal rematch_requested
 
-const PANEL_SIZE := Vector2(320, 220)
+const PANEL_SIZE := Vector2(320, 280)
 const BG_COLOR := Color(0.08, 0.08, 0.12, 0.95)
 const WIN_COLOR := Color(0.2, 1.0, 0.6, 0.9)
 const LOSS_COLOR := Color(1.0, 0.35, 0.35, 0.9)
@@ -13,6 +14,8 @@ var _panel: PanelContainer = null
 var _title_label: Label = null
 var _subtitle_label: Label = null
 var _score_label: Label = null
+var _rematch_button: Button = null
+var _rematch_status: Label = null
 
 
 func _ready() -> void:
@@ -33,9 +36,13 @@ func show_results(won: bool, your_score: int, their_score: int, forfeit: bool) -
 		_title_label.text = "Opponent Left"
 		_subtitle_label.text = "You win by forfeit"
 		_subtitle_label.visible = true
+		_rematch_button.visible = false  # Can't rematch a disconnected player
 	else:
 		_title_label.text = "You Win!" if won else "You Lose!"
 		_subtitle_label.visible = false
+		_rematch_button.visible = true
+		_rematch_button.disabled = false
+	_rematch_status.visible = false
 	_score_label.text = "%d – %d" % [your_score, their_score]
 	_title_label.add_theme_color_override("font_color", accent)
 	var style := _panel.get_theme_stylebox("panel") as StyleBoxFlat
@@ -96,6 +103,30 @@ func _ensure_ui() -> void:
 		menu_requested.emit()
 	)
 	vbox.add_child(menu_button)
+
+	_rematch_button = Button.new()
+	_rematch_button.name = "RematchButton"
+	_rematch_button.text = "Rematch"
+	_rematch_button.custom_minimum_size = Vector2(150, 44)
+	_rematch_button.pressed.connect(func() -> void:
+		_rematch_button.disabled = true
+		_rematch_status.text = "Waiting for opponent..."
+		_rematch_status.visible = true
+		rematch_requested.emit()
+	)
+	vbox.add_child(_rematch_button)
+	# Move rematch above menu
+	vbox.move_child(_rematch_button, vbox.get_child_count() - 2)
+
+	_rematch_status = Label.new()
+	_rematch_status.name = "RematchStatus"
+	_rematch_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_rematch_status.add_theme_font_size_override("font_size", 14)
+	_rematch_status.add_theme_color_override("font_color", Color(0.6, 0.7, 0.85))
+	_rematch_status.visible = false
+	vbox.add_child(_rematch_status)
+	# Move status label right after rematch button
+	vbox.move_child(_rematch_status, vbox.get_child_count() - 2)
 
 
 func _center_panel() -> void:

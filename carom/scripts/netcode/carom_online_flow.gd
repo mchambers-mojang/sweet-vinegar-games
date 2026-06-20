@@ -140,6 +140,13 @@ func _on_match_ended(won: bool, your_score: int, their_score: int, forfeit: bool
 		shutdown()
 		SceneTransition.transition_to(Scenes.CAROM_MENU)
 	)
+	results.rematch_requested.connect(func() -> void:
+		_match_ctrl.request_rematch()
+	)
+	# When both agree, tear down results and restart
+	_match_ctrl.rematch_agreed.connect(func() -> void:
+		results.queue_free()
+	)
 
 
 func _hide_overlay_after_connected_flash(request_id: int) -> void:

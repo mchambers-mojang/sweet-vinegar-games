@@ -12,6 +12,8 @@ signal disconnected
 signal connection_failed(reason: String)
 signal sync_received  ## Emitted when remote peer's sync packet arrives
 signal queued  ## Emitted when server confirms we're in the matchmaking queue
+signal rematch_requested  ## Remote peer wants a rematch
+signal rematch_accepted  ## Remote peer agreed to rematch
 
 const DEFAULT_SIGNALING_URL: String = "wss://carom-signaling-dae9dadjh0h9aqgb.westus3-01.azurewebsites.net"
 const INPUT_CHANNEL_ID: int = 0
@@ -100,6 +102,26 @@ func send_sync() -> void:
 	var buf := PackedByteArray()
 	buf.resize(1)
 	buf[0] = 0x01  # SYNC byte
+	_sync_channel.put_packet(buf)
+
+
+## Request a rematch from the remote peer.
+func send_rematch_request() -> void:
+	if _sync_channel == null or _sync_channel.get_ready_state() != WebRTCDataChannel.STATE_OPEN:
+		return
+	var buf := PackedByteArray()
+	buf.resize(1)
+	buf[0] = 0x02  # REMATCH_REQUEST
+	_sync_channel.put_packet(buf)
+
+
+## Accept the remote peer's rematch request.
+func send_rematch_accept() -> void:
+	if _sync_channel == null or _sync_channel.get_ready_state() != WebRTCDataChannel.STATE_OPEN:
+		return
+	var buf := PackedByteArray()
+	buf.resize(1)
+	buf[0] = 0x03  # REMATCH_ACCEPT
 	_sync_channel.put_packet(buf)
 
 
@@ -377,8 +399,11 @@ func _poll_rtc() -> void:
 	if sync_open:
 		while _sync_channel.get_available_packet_count() > 0:
 			var pkt := _sync_channel.get_packet()
-			if pkt.size() >= 1 and pkt[0] == 0x01:
-				sync_received.emit()
+			if pkt.size() >= 1:
+				match pkt[0]:
+					0x01: sync_received.emit()
+					0x02: rematch_requested.emit()
+					0x03: rematch_accepted.emit()
 
 
 func _handle_input_packet(data: PackedByteArray) -> void:

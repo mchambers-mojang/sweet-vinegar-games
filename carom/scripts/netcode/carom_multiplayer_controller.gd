@@ -17,6 +17,8 @@ signal room_created(code: String)
 signal match_started  ## Emitted when frame sync is complete and play begins
 signal connection_failed(reason: String)
 signal matchmake_queued  ## Server confirmed we're in the matchmaking queue
+signal rematch_requested  ## Remote peer wants a rematch
+signal rematch_accepted  ## Remote peer agreed to rematch
 
 var _network: Node = null  # CaromNetwork or CaromLocalNetwork
 var _rollback: RollbackManager = null
@@ -89,6 +91,10 @@ func setup(bridge: CaromSimBridge, local_turret: CaromTurret = null, remote_turr
 	_network.set_input_callback(_on_remote_input)
 	if _network.has_signal("queued"):
 		_network.queued.connect(func() -> void: matchmake_queued.emit())
+	if _network.has_signal("rematch_requested"):
+		_network.rematch_requested.connect(func() -> void: rematch_requested.emit())
+	if _network.has_signal("rematch_accepted"):
+		_network.rematch_accepted.connect(func() -> void: rematch_accepted.emit())
 
 
 ## Late-bind the bridge and turrets after matchmaking resolves roles.
@@ -253,6 +259,31 @@ func is_host() -> bool:
 
 func is_ready_to_play() -> bool:
 	return _is_active and _sync_complete
+
+
+func send_rematch_request() -> void:
+	if _network != null and _network.has_method("send_rematch_request"):
+		_network.send_rematch_request()
+
+
+func send_rematch_accept() -> void:
+	if _network != null and _network.has_method("send_rematch_accept"):
+		_network.send_rematch_accept()
+
+
+## Re-sync for a new match on the same connection.
+func restart_for_rematch() -> void:
+	_sync_complete = false
+	_sync_sent = false
+	_sync_received = false
+	_local_frame = 0
+	_confirmed_remote_inputs.clear()
+	_lockstep_pending_send = false
+	if _rollback != null and _bridge != null:
+		_rollback.initialize(_bridge._sim)
+	_network.send_sync()
+	_sync_sent = true
+	_check_sync_complete()
 
 
 func get_room_code() -> String:

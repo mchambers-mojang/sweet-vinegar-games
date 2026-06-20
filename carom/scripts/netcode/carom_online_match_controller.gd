@@ -13,11 +13,14 @@ extends Node
 
 signal connection_status_changed(status: String, message: String)
 signal match_ended(won: bool, your_score: int, their_score: int, forfeit: bool)
+signal rematch_agreed  ## Both peers agreed to rematch
 
 enum Phase { IDLE, CONNECTING, SYNCING, COUNTDOWN, PLAYING, DISCONNECTED, GAME_OVER }
 
 var phase: Phase = Phase.IDLE
 var _is_host: bool = false
+var _local_wants_rematch: bool = false
+var _remote_wants_rematch: bool = false
 
 @onready var arena: CaromArena = get_parent() as CaromArena
 @onready var actors: Node3D = arena.get_node("Actors") as Node3D
@@ -138,6 +141,8 @@ func _setup_match_deferred(signaling_url: String) -> void:
 	_multiplayer_ctrl.room_created.connect(_on_room_created)
 	_multiplayer_ctrl.connection_failed.connect(_on_connection_failed)
 	_multiplayer_ctrl.matchmake_queued.connect(_on_matchmake_queued)
+	_multiplayer_ctrl.rematch_requested.connect(_on_remote_rematch_requested)
+	_multiplayer_ctrl.rematch_accepted.connect(_on_remote_rematch_accepted)
 	_multiplayer_ctrl.matchmake(signaling_url)
 
 func _setup_match() -> void:
@@ -188,6 +193,8 @@ func _setup_match() -> void:
 	_multiplayer_ctrl.match_disconnected.connect(_on_match_disconnected)
 	_multiplayer_ctrl.room_created.connect(_on_room_created)
 	_multiplayer_ctrl.connection_failed.connect(_on_connection_failed)
+	_multiplayer_ctrl.rematch_requested.connect(_on_remote_rematch_requested)
+	_multiplayer_ctrl.rematch_accepted.connect(_on_remote_rematch_accepted)
 
 	# Set up effects
 	_setup_effects()
@@ -264,7 +271,7 @@ func _spawn_multiplayer_entities() -> void:
 
 	# Set aim projection distance for local player
 	var arena_length := absf(arena.north_goal.global_position.z - arena.south_goal.global_position.z)
-	_local_turret.set_aim_projection_distance(arena_length * 0.85)
+	_local_turret.set_aim_projection_distance(arena_length * 0.15)
 	_remote_turret.set_aim_projection_distance(0.0)
 
 
@@ -324,6 +331,11 @@ func _finish_matchmake_setup() -> void:
 	_multiplayer_ctrl.bind_match(_bridge, _local_turret, _remote_turret)
 	_multiplayer_ctrl.is_host_side = _is_host
 	_multiplayer_ctrl.lockstep = true
+
+	# Aim projection — short line like Hard difficulty
+	var arena_length := absf(arena.north_goal.global_position.z - arena.south_goal.global_position.z)
+	_local_turret.set_aim_projection_distance(arena_length * 0.15)
+	_remote_turret.set_aim_projection_distance(0.0)
 
 	# Effects + HUD
 	_setup_effects()
@@ -578,3 +590,75 @@ func shutdown() -> void:
 
 func _exit_tree() -> void:
 	shutdown()
+
+
+# ---------------------------------------------------------------------------
+# Rematch
+# ---------------------------------------------------------------------------
+
+## Local player requests a rematch. Sends to remote peer.
+func request_rematch() -> void:
+	_local_wants_rematch = true
+	_multiplayer_ctrl.send_rematch_request()
+	_check_rematch()
+
+
+func _on_remote_rematch_requested() -> void:
+	_remote_wants_rematch = true
+	# Auto-accept: send accept back so remote knows we got it
+	_multiplayer_ctrl.send_rematch_accept()
+	_check_rematch()
+
+
+func _on_remote_rematch_accepted() -> void:
+	_remote_wants_rematch = true
+	_check_rematch()
+
+
+func _check_rematch() -> void:
+	if _local_wants_rematch and _remote_wants_rematch:
+		_start_rematch()
+
+
+func _start_rematch() -> void:
+	_local_wants_rematch = false
+	_remote_wants_rematch = false
+	_player_score = 0
+	_opponent_score = 0
+	set_process(false)
+
+	# Tear down old sim bridge
+	if is_instance_valid(_bridge):
+		_bridge.cleanup_all_projectiles()
+		_bridge.queue_free()
+
+	# Create fresh sim bridge
+	_bridge = CaromSimBridge.new()
+	_bridge.name = "SimBridge"
+	_bridge.multiplayer_mode = true
+	arena.add_child(_bridge)
+	_bridge.setup_arena(arena)
+	_bridge.puck_zone_entered.connect(_on_bridge_puck_zone_entered)
+	_bridge.projectile_zone_entered.connect(_on_bridge_projectile_zone_entered)
+
+	# Reset pucks to spawn positions
+	var spawn_positions := arena.get_puck_spawn_positions()
+	for i in setup.pucks.size():
+		if is_instance_valid(setup.pucks[i]):
+			var reset_pos: Vector3 = spawn_positions[i] if i < spawn_positions.size() else arena.get_puck_spawn_position()
+			setup.pucks[i].reset_to_center(reset_pos)
+			_bridge.register_puck(setup.pucks[i], setup.pucks[i].global_position)
+
+	# Reset turrets
+	_local_turret.reset_for_round()
+	_remote_turret.reset_for_round()
+	_bridge.register_turret(_local_turret)
+	_bridge.register_turret(_remote_turret)
+
+	# Re-bind the multiplayer controller to the new bridge
+	_multiplayer_ctrl.bind_match(_bridge, _local_turret, _remote_turret)
+
+	# Re-sync over the existing connection
+	phase = Phase.SYNCING
+	_multiplayer_ctrl.restart_for_rematch()
+	rematch_agreed.emit()
