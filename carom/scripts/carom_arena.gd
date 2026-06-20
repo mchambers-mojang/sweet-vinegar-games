@@ -13,8 +13,9 @@ const ISOMETRIC_ROTATION: Vector3 = Vector3(-45.0, 0.0, 0.0)
 signal goal_scored(scoring_side: StringName, puck: CaromPuck)
 
 ## Flipped camera constants (joiner perspective — looking from the north end).
-const TOP_DOWN_POSITION_FLIPPED: Vector3 = Vector3(0.0, 20.0, -12.0)
-const TOP_DOWN_ROTATION_FLIPPED: Vector3 = Vector3(-90.0, 180.0, 0.0)
+## Position stays the same (ortho camera framing); rotation adds 180° on Z to flip the view.
+const TOP_DOWN_POSITION_FLIPPED: Vector3 = Vector3(0.0, 20.0, 12.0)
+const TOP_DOWN_ROTATION_FLIPPED: Vector3 = Vector3(-90.0, 0.0, 180.0)
 
 @export var arena_width: float = 20.0
 @export var arena_depth: float = 12.0
