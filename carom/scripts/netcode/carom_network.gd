@@ -190,8 +190,8 @@ func _handle_signaling_message(msg: Dictionary) -> void:
 				_rtc.set_remote_description("offer", sdp)
 				_remote_description_set = true
 				_flush_ice_queue()
-				# Create answer
-				_rtc.create_offer()
+				# Create answer (joiner must answer, not offer)
+					_rtc.create_answer()
 
 		"ice":
 			var candidate: Dictionary = msg.get("candidate", {})
