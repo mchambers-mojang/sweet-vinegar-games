@@ -5,7 +5,7 @@ extends Control
 ##
 ## Presents two top-level actions:
 ##   • Create Room — player becomes host; shows waiting state with room code.
-##   • Join Room   — player enters a 4-character code and connects.
+##   • Join Room — player enters a 4-character code and connects.
 ##
 ## Not a GameMenu subclass — driven directly by a match/flow controller.
 ## Safe area is applied automatically by SceneTransition._auto_apply_safe_area().
@@ -62,14 +62,18 @@ func _build_ui() -> void:
 	backdrop.color = Color(0.0, 0.0, 0.0, 0.65)
 	add_child(backdrop)
 
-	# Centred card panel
+	# Centred card panel — full-rect MarginContainer provides safe-area padding,
+	# CenterContainer keeps the card visually centred.
 	var margin := MarginContainer.new()
-	margin.set_anchors_preset(Control.PRESET_CENTER)
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	margin.add_theme_constant_override("margin_left", 24)
 	margin.add_theme_constant_override("margin_right", 24)
 	margin.add_theme_constant_override("margin_top", 24)
 	margin.add_theme_constant_override("margin_bottom", 24)
 	add_child(margin)
+
+	var center := CenterContainer.new()
+	margin.add_child(center)
 
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = Vector2(320, 0)
@@ -84,7 +88,7 @@ func _build_ui() -> void:
 	panel_style.content_margin_top = 28.0
 	panel_style.content_margin_bottom = 28.0
 	panel.add_theme_stylebox_override("panel", panel_style)
-	margin.add_child(panel)
+	center.add_child(panel)
 
 	var root_vbox := VBoxContainer.new()
 	root_vbox.add_theme_constant_override("separation", 0)
@@ -346,7 +350,7 @@ func _on_code_input_changed(new_text: String) -> void:
 	for ch in new_text.to_upper():
 		if ch in VALID_CHARS:
 			filtered += ch
-	if filtered != new_text.to_upper() or new_text != new_text.to_upper():
+	if filtered != new_text.to_upper():
 		_code_input.text = filtered
 		_code_input.caret_column = filtered.length()
 
