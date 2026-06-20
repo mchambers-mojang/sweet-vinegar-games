@@ -140,7 +140,7 @@ jobs:
       - name: Export Xcode project
         run: |
           mkdir -p build/ios
-          godot --headless --export-debug "iOS" build/ios/${EXPORT_NAME}.ipa 2>&1 || true
+          godot --headless --export-release "iOS" build/ios/${EXPORT_NAME}.ipa 2>&1 || true
 
       - name: Patch Info.plist for status bar visibility
         run: |
