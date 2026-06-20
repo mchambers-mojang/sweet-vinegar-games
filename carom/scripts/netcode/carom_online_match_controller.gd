@@ -28,6 +28,7 @@ var _bridge: CaromSimBridge = null
 var _multiplayer_ctrl: CaromMultiplayerController = null
 var _match_round: CaromMatchRound = CaromMatchRound.new()
 var _effects: CaromEffectsController = null
+var _use_local_network: bool = false
 
 var _local_turret: CaromTurret = null
 var _remote_turret: CaromTurret = null
@@ -69,6 +70,26 @@ func join(code: String, signaling_url: String) -> void:
 	connection_status_changed.emit("connecting", "Connecting to server...")
 	_setup_match()
 	_multiplayer_ctrl.join_match(code, signaling_url)
+
+
+## Host a local match (direct TCP, no WebRTC).
+func host_local() -> void:
+	_is_host = true
+	_use_local_network = true
+	phase = Phase.CONNECTING
+	connection_status_changed.emit("connecting", "Waiting for player...")
+	_setup_match()
+	_multiplayer_ctrl.host_match("")
+
+
+## Join a local match (direct TCP, no WebRTC).
+func join_local() -> void:
+	_is_host = false
+	_use_local_network = true
+	phase = Phase.CONNECTING
+	connection_status_changed.emit("connecting", "Connecting...")
+	_setup_match()
+	_multiplayer_ctrl.join_match(CaromLocalNetwork.ROOM_CODE, "")
 
 
 func get_room_code() -> String:
@@ -117,7 +138,8 @@ func _setup_match() -> void:
 	_multiplayer_ctrl = CaromMultiplayerController.new()
 	_multiplayer_ctrl.name = "MultiplayerController"
 	arena.add_child(_multiplayer_ctrl)
-	_multiplayer_ctrl.setup(_bridge, _local_turret, _remote_turret)
+	var net_override: Node = CaromLocalNetwork.new() if _use_local_network else null
+	_multiplayer_ctrl.setup(_bridge, _local_turret, _remote_turret, net_override)
 
 	# Connect multiplayer signals
 	_multiplayer_ctrl.match_connected.connect(_on_match_connected)

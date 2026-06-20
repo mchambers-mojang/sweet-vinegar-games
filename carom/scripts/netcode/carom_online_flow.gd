@@ -19,7 +19,6 @@ var _signaling_url: String = SIGNALING_URL_DEFAULT
 var _overlay: CaromConnectionOverlay = null
 var _connected_started_at_usec: int = -1
 var _pending_hide_request_id: int = 0
-var _local_server: CaromLocalSignaling = null
 
 
 ## Start hosting a new online match. Call after this node is in the tree
@@ -41,35 +40,22 @@ func start_join(code: String, signaling_url: String = "") -> void:
 	_match_ctrl.join(code, _signaling_url)
 
 
-## Local play: try to become host; if port is taken, join the existing host.
+## Local play: try to host on TCP; if port is taken, join as client.
 func start_local() -> void:
-	_signaling_url = "ws://127.0.0.1:%d" % CaromLocalSignaling.DEFAULT_PORT
 	_ensure_overlay()
+	_ensure_match_controller()
 
-	# Try to start the embedded signaling server.
-	# If the port is already in use, another instance is hosting — join it.
-	_local_server = CaromLocalSignaling.new()
-	_local_server.name = "LocalSignaling"
-	add_child(_local_server)
-
-	var bound := false
-	_local_server.started.connect(func() -> void: bound = true, CONNECT_ONE_SHOT)
-	_local_server.failed.connect(func(_reason: String) -> void: bound = false, CONNECT_ONE_SHOT)
-	_local_server.start()
-
-	# Give the bind a frame to resolve
-	await get_tree().process_frame
-
-	if bound:
-		# We're the host — wait a beat then create the room
-		_ensure_match_controller()
-		_match_ctrl.host(_signaling_url)
+	# Try to bind the port — if it works, we're the host.
+	# If it fails (port taken), another instance is hosting — join it.
+	var probe := TCPServer.new()
+	var err := probe.listen(CaromLocalNetwork.DEFAULT_PORT)
+	if err == OK:
+		# Port is free — we're the host
+		probe.stop()
+		_match_ctrl.host_local()
 	else:
-		# Port taken — another instance is host. Join it.
-		_local_server.queue_free()
-		_local_server = null
-		_ensure_match_controller()
-		_match_ctrl.join(CaromLocalSignaling.ROOM_CODE, _signaling_url)
+		# Port taken — join the existing host
+		_match_ctrl.join_local()
 
 
 ## Returns the room code (valid after hosting and receiving room_created).
@@ -178,10 +164,6 @@ func _on_back_requested() -> void:
 func shutdown() -> void:
 	if _match_ctrl:
 		_match_ctrl.shutdown()
-	if _local_server:
-		_local_server.stop()
-		_local_server.queue_free()
-		_local_server = null
 
 
 func _exit_tree() -> void:

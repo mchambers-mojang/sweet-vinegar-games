@@ -17,7 +17,7 @@ signal room_created(code: String)
 signal match_started  ## Emitted when frame sync is complete and play begins
 signal connection_failed(reason: String)
 
-var _network: CaromNetwork = null
+var _network: Node = null  # CaromNetwork or CaromLocalNetwork
 var _rollback: RollbackManager = null
 var _bridge: CaromSimBridge = null
 var _is_active: bool = false
@@ -45,7 +45,7 @@ func _ready() -> void:
 ## Initialize the multiplayer controller with the sim bridge and turrets.
 ## local_turret: the turret this player controls (HUMAN input)
 ## remote_turret: the opponent's turret (driven by network input)
-func setup(bridge: CaromSimBridge, local_turret: CaromTurret = null, remote_turret: CaromTurret = null) -> void:
+func setup(bridge: CaromSimBridge, local_turret: CaromTurret = null, remote_turret: CaromTurret = null, network_override: Node = null) -> void:
 	_bridge = bridge
 	_local_turret = local_turret
 	_remote_turret = remote_turret
@@ -58,8 +58,12 @@ func setup(bridge: CaromSimBridge, local_turret: CaromTurret = null, remote_turr
 
 	_rollback = RollbackManager.new()
 	_rollback.initialize(bridge._sim)
-	_network = CaromNetwork.new()
-	_network.name = "CaromNetwork"
+
+	if network_override != null:
+		_network = network_override
+	else:
+		_network = CaromNetwork.new()
+	_network.name = "NetworkLayer"
 	add_child(_network)
 	_network.connected.connect(_on_connected)
 	_network.disconnected.connect(_on_disconnected)

@@ -53,12 +53,6 @@ window/handheld/orientation=1
 window/ios/hide_home_indicator=false
 window/ios/hide_status_bar=false
 
-[rendering]
-
-environment/defaults/default_clear_color=Color(0, 0, 0, 1)
-renderer/rendering_method="mobile"
-textures/vram_compression/import_etc2_astc=true
-
 [editor_plugins]
 
 enabled=PackedStringArray("res://addons/gut/plugin.cfg")
@@ -69,3 +63,9 @@ touch={
 "deadzone": 0.2,
 "events": []
 }
+
+[rendering]
+
+renderer/rendering_method="mobile"
+textures/vram_compression/import_etc2_astc=true
+environment/defaults/default_clear_color=Color(0, 0, 0, 1)
