@@ -13,7 +13,7 @@ signal connection_failed(reason: String)
 signal sync_received  ## Emitted when remote peer's sync packet arrives
 signal queued  ## Emitted when server confirms we're in the matchmaking queue
 
-const DEFAULT_SIGNALING_URL: String = "wss://carom-signaling.azurewebsites.net"
+const DEFAULT_SIGNALING_URL: String = "wss://carom-signaling-dae9dadjh0h9aqgb.westus3-01.azurewebsites.net"
 const INPUT_CHANNEL_ID: int = 0
 const SYNC_CHANNEL_ID: int = 1
 

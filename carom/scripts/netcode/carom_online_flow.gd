@@ -7,7 +7,7 @@ extends Node
 ## Add this as a child of the CaromArena scene when launching online mode.
 ## It creates the CaromOnlineMatchController and coordinates UI overlays.
 
-const SIGNALING_URL_DEFAULT := "wss://carom-signaling.azurewebsites.net"
+const SIGNALING_URL_DEFAULT := "wss://carom-signaling-dae9dadjh0h9aqgb.westus3-01.azurewebsites.net"
 const CONNECTION_OVERLAY_SCENE := preload("res://carom/scenes/carom_connection_overlay.tscn")
 const CONNECTED_DISPLAY_DURATION: float = 1.2
 const OVERLAY_LAYER_PATH := "HUD/OverlayLayer"
