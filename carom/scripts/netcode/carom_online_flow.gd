@@ -17,7 +17,7 @@ signal flow_completed  ## Emitted when the player returns to menu
 var _match_ctrl: CaromOnlineMatchController = null
 var _signaling_url: String = SIGNALING_URL_DEFAULT
 var _overlay: CaromConnectionOverlay = null
-var _connected_started_at_msec: int = -1
+var _connected_started_at_usec: int = -1
 var _pending_hide_request_id: int = 0
 
 
@@ -76,12 +76,12 @@ func _on_connection_status(status: String, message: String) -> void:
 	if _overlay:
 		match status:
 			"connected":
-				_connected_started_at_msec = Time.get_ticks_msec()
+				_connected_started_at_usec = Time.get_ticks_usec()
 				_overlay.show_status(status, message)
 			"playing":
 				_hide_overlay_after_connected_flash(_pending_hide_request_id)
 			_:
-				_connected_started_at_msec = -1
+				_connected_started_at_usec = -1
 				_overlay.show_status(status, message)
 	if OS.is_debug_build():
 		print("[CaromOnlineFlow] Status: %s — %s" % [status, message])
@@ -98,22 +98,26 @@ func _hide_overlay_after_connected_flash(request_id: int) -> void:
 	if not is_instance_valid(_overlay):
 		return
 	var remaining: float = 0.0
-	if _connected_started_at_msec >= 0:
-		var elapsed_msec: int = Time.get_ticks_msec() - _connected_started_at_msec
-		remaining = maxf(CONNECTED_DISPLAY_DURATION - (float(elapsed_msec) / 1000.0), 0.0)
+	if _connected_started_at_usec >= 0:
+		var elapsed_usec: int = Time.get_ticks_usec() - _connected_started_at_usec
+		remaining = maxf(CONNECTED_DISPLAY_DURATION - (float(elapsed_usec) / 1000000.0), 0.0)
 	if remaining > 0.0:
+		var flow_ref: WeakRef = weakref(self)
 		var timer := get_tree().create_timer(remaining)
 		timer.timeout.connect(func() -> void:
-			if request_id != _pending_hide_request_id:
+			var flow := flow_ref.get_ref() as CaromOnlineFlow
+			if flow == null:
 				return
-			if is_instance_valid(_overlay):
-				_overlay.hide()
-			_connected_started_at_msec = -1
+			if request_id != flow._pending_hide_request_id:
+				return
+			if is_instance_valid(flow._overlay):
+				flow._overlay.hide()
+			flow._connected_started_at_usec = -1
 		)
 		return
 	if request_id == _pending_hide_request_id and is_instance_valid(_overlay):
 		_overlay.hide()
-	_connected_started_at_msec = -1
+	_connected_started_at_usec = -1
 
 
 func _on_back_requested() -> void:

@@ -23,12 +23,14 @@ const INDICATOR_PULSE_DURATION: float = 0.45
 @onready var _back_button: Button = $MarginContainer/VBoxContainer/BackButton
 
 var _indicator_tween: Tween = null
+var _root_window: Window = null
 
 
 func _ready() -> void:
 	hide()
+	_root_window = get_tree().root
 	_apply_safe_area()
-	get_tree().root.size_changed.connect(_apply_safe_area)
+	_root_window.size_changed.connect(_apply_safe_area)
 
 	_status_label.add_theme_font_size_override("font_size", STATUS_FONT_SIZE)
 	_status_label.add_theme_color_override("font_color", ACCENT_COLOR)
@@ -47,6 +49,9 @@ func _ready() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_VISIBILITY_CHANGED and not visible:
 		_stop_indicator_tween()
+	elif what == NOTIFICATION_PREDELETE:
+		if is_instance_valid(_root_window) and _root_window.size_changed.is_connected(_apply_safe_area):
+			_root_window.size_changed.disconnect(_apply_safe_area)
 
 
 func show_status(state: String, message: String = "") -> void:
