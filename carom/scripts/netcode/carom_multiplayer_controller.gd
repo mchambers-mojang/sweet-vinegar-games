@@ -31,10 +31,6 @@ var _sync_complete: bool = false
 var _sync_sent: bool = false
 var _sync_received: bool = false
 
-## Sync packet uses reserved bits [19..16] set to 0xF, which is impossible
-## in valid inputs (reserved bits are always zero). Frame field = 0.
-const SYNC_MAGIC: int = 0x000F0000
-
 
 func _ready() -> void:
 	set_process(false)
@@ -52,7 +48,8 @@ func setup(bridge: CaromSimBridge) -> void:
 	_network.disconnected.connect(_on_disconnected)
 	_network.connection_failed.connect(_on_connection_failed)
 	_network.room_created.connect(func(code: String) -> void: room_created.emit(code))
-	_network.set_input_callback(_on_remote_packet)
+	_network.sync_received.connect(_on_sync_received)
+	_network.set_input_callback(_on_remote_input)
 
 
 ## Host a new online match.
@@ -139,17 +136,15 @@ func _on_connected() -> void:
 	_sync_complete = false
 	_sync_sent = false
 	_sync_received = false
-	# Send sync packet to signal readiness
-	_send_sync()
+	# Send sync over the reliable channel — guaranteed delivery
+	_network.send_sync()
+	_sync_sent = true
+	_check_sync_complete()
 	match_connected.emit()
 
 
-func _send_sync() -> void:
-	var buf := PackedByteArray()
-	buf.resize(4)
-	buf.encode_u32(0, SYNC_MAGIC)
-	_network.send_input(0, buf)
-	_sync_sent = true
+func _on_sync_received() -> void:
+	_sync_received = true
 	_check_sync_complete()
 
 
@@ -170,20 +165,8 @@ func _on_connection_failed(reason: String) -> void:
 	_is_active = false
 
 
-## Called by CaromNetwork for every received packet (both sync and input).
-func _on_remote_packet(frame: int, packed_input: int) -> void:
-	# Check for sync magic: SYNC_MAGIC 0x000F0000 decodes to frame=0,
-	# aim=0, fire=false, reload=false but with reserved bits set.
-	# The packed_input from decode will be 0 (aim=0, fire=false, reload=false).
-	# Detect sync by checking frame=0 and the raw reserved bits pattern.
-	if not _sync_complete and frame == 0 and packed_input == 0:
-		# Could be sync or a genuine zero-input at frame 0.
-		# Since both peers send sync before any real inputs, and real
-		# frame 0 inputs only arrive after sync completes, this is safe.
-		_sync_received = true
-		_check_sync_complete()
-		return
-
+## Called by CaromNetwork for every received gameplay input packet.
+func _on_remote_input(frame: int, packed_input: int) -> void:
 	if _rollback == null or not _sync_complete:
 		return
 

@@ -4,21 +4,25 @@ extends Node
 ## WebRTC networking layer for Carom multiplayer.
 ## Connects to the signaling server, exchanges SDP/ICE, and establishes
 ## a peer-to-peer DataChannel for unreliable input transport.
+## Also maintains a reliable ordered channel for sync/control messages.
 
 signal room_created(code: String)
 signal connected
 signal disconnected
 signal connection_failed(reason: String)
+signal sync_received  ## Emitted when remote peer's sync packet arrives
 
 const DEFAULT_SIGNALING_URL: String = "ws://127.0.0.1:8080"
-const CHANNEL_ID: int = 0
+const INPUT_CHANNEL_ID: int = 0
+const SYNC_CHANNEL_ID: int = 1
 
 enum State { IDLE, CREATING, JOINING, SIGNALING, CONNECTED, DISCONNECTED }
 
 var _state: State = State.IDLE
 var _ws: WebSocketPeer = null
 var _rtc: WebRTCPeerConnection = null
-var _channel: WebRTCDataChannel = null
+var _input_channel: WebRTCDataChannel = null
+var _sync_channel: WebRTCDataChannel = null
 var _room_code: String = ""
 var _is_host: bool = false
 var _input_callback: Callable = Callable()
@@ -26,7 +30,12 @@ var _signaling_url: String = DEFAULT_SIGNALING_URL
 
 # ICE candidates queued before remote description is set
 var _ice_queue: Array[Dictionary] = []
+# ICE candidates queued before room code is known (host) or before WS open
+var _ice_send_queue: Array[Dictionary] = []
 var _remote_description_set: bool = false
+# Buffer local SDP until signaling WebSocket is open
+var _pending_local_sdp: Dictionary = {}  # { type: String, sdp: String }
+var _ws_open_handled: bool = false
 
 
 func _ready() -> void:
@@ -46,10 +55,9 @@ func create_room() -> void:
 	_is_host = true
 	_state = State.CREATING
 	_setup_rtc()
-	# Create offer — the callback will send it to signaling
-	_rtc.create_offer()
 	_connect_signaling()
 	set_process(true)
+	# Don't create offer yet — wait until WS is open so SDP isn't lost
 
 
 ## Join an existing room by code. Emits connected() on success.
@@ -65,11 +73,21 @@ func join_room(code: String) -> void:
 	set_process(true)
 
 
-## Send encoded input bytes over the DataChannel.
+## Send encoded input bytes over the unreliable DataChannel.
 func send_input(frame: int, encoded: PackedByteArray) -> void:
-	if _channel == null or _channel.get_ready_state() != WebRTCDataChannel.STATE_OPEN:
+	if _input_channel == null or _input_channel.get_ready_state() != WebRTCDataChannel.STATE_OPEN:
 		return
-	_channel.put_packet(encoded)
+	_input_channel.put_packet(encoded)
+
+
+## Send a sync packet over the reliable channel.
+func send_sync() -> void:
+	if _sync_channel == null or _sync_channel.get_ready_state() != WebRTCDataChannel.STATE_OPEN:
+		return
+	var buf := PackedByteArray()
+	buf.resize(1)
+	buf[0] = 0x01  # SYNC byte
+	_sync_channel.put_packet(buf)
 
 
 ## Register a callback for received remote inputs: fn(frame: int, input_packed: int)
@@ -113,18 +131,27 @@ func _setup_rtc() -> void:
 	_rtc.session_description_created.connect(_on_session_description)
 	_rtc.ice_candidate_created.connect(_on_ice_candidate)
 
-	# Create DataChannel: unreliable, unordered, negotiated on both sides
-	var ch_config: Dictionary = {
+	# Input channel: unreliable, unordered, negotiated on both sides
+	var input_config: Dictionary = {
 		"negotiated": true,
-		"id": CHANNEL_ID,
+		"id": INPUT_CHANNEL_ID,
 		"ordered": false,
 		"maxRetransmits": 0,
 	}
-	_channel = _rtc.create_data_channel("inputs", ch_config)
+	_input_channel = _rtc.create_data_channel("inputs", input_config)
+
+	# Sync channel: reliable, ordered, negotiated — for handshake/control
+	var sync_config: Dictionary = {
+		"negotiated": true,
+		"id": SYNC_CHANNEL_ID,
+		"ordered": true,
+	}
+	_sync_channel = _rtc.create_data_channel("sync", sync_config)
 
 
 func _connect_signaling() -> void:
 	_ws = WebSocketPeer.new()
+	_ws_open_handled = false
 	var err := _ws.connect_to_url(_signaling_url)
 	if err != OK:
 		_state = State.IDLE
@@ -148,15 +175,10 @@ func _poll_websocket() -> void:
 	if ws_state != WebSocketPeer.STATE_OPEN:
 		return
 
-	# Handle newly-open connection: send create/join
-	if _state == State.CREATING and _room_code == "":
-		# Waiting for offer to be created — it'll be sent in _on_session_description
-		pass
-	elif _state == State.JOINING and _room_code != "":
-		# Send join without SDP — server will reply with room_joined + host's offer.
-		# We'll create an answer after receiving the offer and send it via "answer".
-		_ws_send({ "type": "join", "code": _room_code })
-		_state = State.SIGNALING
+	# Handle the moment WS becomes open (once)
+	if not _ws_open_handled:
+		_ws_open_handled = true
+		_on_ws_open()
 
 	# Read incoming messages
 	while _ws.get_available_packet_count() > 0:
@@ -168,6 +190,26 @@ func _poll_websocket() -> void:
 		_handle_signaling_message(msg)
 
 
+func _on_ws_open() -> void:
+	if _state == State.CREATING:
+		# Now that WS is open, create the offer — SDP callback will send it
+		_rtc.create_offer()
+	elif _state == State.JOINING:
+		# Send join without SDP — server replies with room_joined + host's offer
+		_ws_send({ "type": "join", "code": _room_code })
+		_state = State.SIGNALING
+
+	# Flush any buffered local SDP (shouldn't happen now but defensive)
+	if not _pending_local_sdp.is_empty():
+		_send_local_sdp(_pending_local_sdp.type, _pending_local_sdp.sdp)
+		_pending_local_sdp = {}
+
+	# Flush any buffered ICE candidates
+	for ice_msg in _ice_send_queue:
+		_ws_send(ice_msg)
+	_ice_send_queue.clear()
+
+
 func _handle_signaling_message(msg: Dictionary) -> void:
 	var msg_type: String = msg.get("type", "")
 
@@ -175,6 +217,11 @@ func _handle_signaling_message(msg: Dictionary) -> void:
 		"room_created":
 			_room_code = msg.get("code", "")
 			room_created.emit(_room_code)
+			# Flush any ICE candidates that were waiting for room code
+			for ice_msg in _ice_send_queue:
+				ice_msg["code"] = _room_code
+				_ws_send(ice_msg)
+			_ice_send_queue.clear()
 
 		"peer_joined":
 			# Host receives joiner's answer SDP
@@ -185,13 +232,13 @@ func _handle_signaling_message(msg: Dictionary) -> void:
 				_flush_ice_queue()
 
 		"room_joined":
-			# Joiner receives host's offer SDP
+			# Joiner receives host's offer SDP — set_remote_description
+			# will trigger session_description_created with type "answer"
 			var sdp: String = msg.get("sdp", "")
 			if sdp != "":
 				_rtc.set_remote_description("offer", sdp)
 				_remote_description_set = true
 				_flush_ice_queue()
-				_rtc.create_answer()
 
 		"ice":
 			var candidate: Dictionary = msg.get("candidate", {})
@@ -219,23 +266,33 @@ func _on_session_description(type: String, sdp: String) -> void:
 	_rtc.set_local_description(type, sdp)
 
 	if _ws == null or _ws.get_ready_state() != WebSocketPeer.STATE_OPEN:
+		# Buffer until WS is ready
+		_pending_local_sdp = { "type": type, "sdp": sdp }
 		return
 
+	_send_local_sdp(type, sdp)
+
+
+func _send_local_sdp(type: String, sdp: String) -> void:
 	if _is_host and type == "offer":
 		_ws_send({ "type": "create", "sdp": sdp })
 	elif not _is_host and type == "answer":
-		# Send answer via dedicated message (joiner already joined the room)
 		_ws_send({ "type": "answer", "code": _room_code, "sdp": sdp })
 
 
 func _on_ice_candidate(media: String, index: int, candidate: String) -> void:
-	if _ws == null or _ws.get_ready_state() != WebSocketPeer.STATE_OPEN:
-		return
-	_ws_send({
+	var ice_msg: Dictionary = {
 		"type": "ice",
 		"code": _room_code,
 		"candidate": { "sdpMid": media, "sdpMLineIndex": index, "candidate": candidate }
-	})
+	}
+
+	# Buffer if WS not open or room code not yet known (host before room_created)
+	if _ws == null or _ws.get_ready_state() != WebSocketPeer.STATE_OPEN or _room_code == "":
+		_ice_send_queue.append(ice_msg)
+		return
+
+	_ws_send(ice_msg)
 
 
 func _poll_rtc() -> void:
@@ -243,9 +300,9 @@ func _poll_rtc() -> void:
 		return
 	_rtc.poll()
 
-	# Check DataChannel state
-	if _channel != null:
-		match _channel.get_ready_state():
+	# Check input DataChannel state
+	if _input_channel != null:
+		match _input_channel.get_ready_state():
 			WebRTCDataChannel.STATE_OPEN:
 				if _state != State.CONNECTED:
 					_state = State.CONNECTED
@@ -255,14 +312,21 @@ func _poll_rtc() -> void:
 						_ws.close()
 						_ws = null
 				# Read incoming input packets
-				while _channel.get_available_packet_count() > 0:
-					var pkt := _channel.get_packet()
+				while _input_channel.get_available_packet_count() > 0:
+					var pkt := _input_channel.get_packet()
 					_handle_input_packet(pkt)
 
 			WebRTCDataChannel.STATE_CLOSED:
 				if _state == State.CONNECTED:
 					_state = State.DISCONNECTED
 					disconnected.emit()
+
+	# Check sync DataChannel for control messages
+	if _sync_channel != null and _sync_channel.get_ready_state() == WebRTCDataChannel.STATE_OPEN:
+		while _sync_channel.get_available_packet_count() > 0:
+			var pkt := _sync_channel.get_packet()
+			if pkt.size() >= 1 and pkt[0] == 0x01:
+				sync_received.emit()
 
 
 func _handle_input_packet(data: PackedByteArray) -> void:
@@ -282,9 +346,12 @@ func _ws_send(msg: Dictionary) -> void:
 
 
 func _cleanup() -> void:
-	if _channel != null:
-		_channel.close()
-		_channel = null
+	if _input_channel != null:
+		_input_channel.close()
+		_input_channel = null
+	if _sync_channel != null:
+		_sync_channel.close()
+		_sync_channel = null
 	if _rtc != null:
 		_rtc.close()
 		_rtc = null
@@ -293,7 +360,10 @@ func _cleanup() -> void:
 		_ws = null
 	_room_code = ""
 	_remote_description_set = false
+	_ws_open_handled = false
 	_ice_queue.clear()
+	_ice_send_queue.clear()
+	_pending_local_sdp = {}
 	set_process(false)
 
 
