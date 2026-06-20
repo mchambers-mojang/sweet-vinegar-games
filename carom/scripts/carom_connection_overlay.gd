@@ -100,6 +100,7 @@ func _apply_label_shadow(label: Label) -> void:
 
 func _start_indicator_pulse() -> void:
 	_indicator_label.scale = Vector2.ONE
+	_indicator_label.pivot_offset = _indicator_label.size / 2.0
 	_indicator_label.modulate = Color(1.0, 1.0, 1.0, 1.0)
 	_indicator_tween = create_tween().set_process_mode(Tween.TWEEN_PROCESS_IDLE).set_loops()
 	_indicator_tween.tween_property(

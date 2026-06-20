@@ -31,6 +31,7 @@ func test_show_status_updates_all_overlay_states() -> void:
 	assert_true(overlay.visible)
 	assert_eq(status_label.text, "Connecting to server...")
 	assert_true(indicator_label.visible)
+	assert_eq(indicator_label.pivot_offset, indicator_label.size / 2.0)
 	assert_eq(back_button.text, "Cancel")
 
 	overlay.show_status("waiting", "Waiting for opponent...")
