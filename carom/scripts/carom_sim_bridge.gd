@@ -53,6 +53,10 @@ signal projectile_zone_entered(body_id: int, zone_id: int)
 var _sim: SimWorld = SimWorld.new()
 var _accumulator: float = 0.0
 
+## When true, _process() does NOT tick the sim autonomously.
+## The multiplayer controller drives ticks via tick_external().
+var multiplayer_mode: bool = false
+
 ## Puck tracking (parallel arrays — one entry per registered puck).
 var _puck_body_ids: Array[int]    = []
 var _puck_nodes: Array[CaromPuck] = []
@@ -322,10 +326,24 @@ func reset_puck_to(puck: CaromPuck, pos: Vector3) -> void:
 # ---------------------------------------------------------------------------
 
 func _process(delta: float) -> void:
+	if multiplayer_mode:
+		# In multiplayer, the accumulator still grows for interpolation alpha.
+		_accumulator += delta
+		if _accumulator > TICK_DURATION:
+			_accumulator = TICK_DURATION
+		return
 	_accumulator += delta
 	while _accumulator >= TICK_DURATION:
 		_accumulator -= TICK_DURATION
 		_tick()
+
+
+## Advance one tick externally (called by CaromMultiplayerController).
+## Resets the interpolation accumulator so puck/projectile renderers lerp
+## from the previous tick state to the new state.
+func tick_external() -> void:
+	_accumulator = 0.0
+	_tick()
 
 
 func _tick() -> void:

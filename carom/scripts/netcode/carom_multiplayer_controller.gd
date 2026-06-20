@@ -7,7 +7,7 @@ extends Node
 ## In multiplayer, this controller sits between the match controller and
 ## the sim bridge, routing inputs through:
 ##   local input → encode → send over network
-##   remote input → decode → RollbackManager → sim advance
+##   remote input → decode → apply to remote turret → sim advance
 ##
 ## Add as a child of CaromArena alongside CaromMatchController.
 
@@ -21,6 +21,11 @@ var _rollback: RollbackManager = null
 var _bridge: CaromSimBridge = null
 var _is_active: bool = false
 var _local_frame: int = 0
+
+## Turret references for applying network inputs.
+var _local_turret: CaromTurret = null
+var _remote_turret: CaromTurret = null
+var _remote_input_provider: CaromNetworkInput = null
 
 ## Buffer of confirmed remote inputs received ahead of our local frame.
 ## Key: frame number, Value: packed input int.
@@ -36,9 +41,20 @@ func _ready() -> void:
 	set_process(false)
 
 
-## Initialize the multiplayer controller with the sim bridge's SimWorld.
-func setup(bridge: CaromSimBridge) -> void:
+## Initialize the multiplayer controller with the sim bridge and turrets.
+## local_turret: the turret this player controls (HUMAN input)
+## remote_turret: the opponent's turret (driven by network input)
+func setup(bridge: CaromSimBridge, local_turret: CaromTurret = null, remote_turret: CaromTurret = null) -> void:
 	_bridge = bridge
+	_local_turret = local_turret
+	_remote_turret = remote_turret
+
+	# Set up network input provider for the remote turret
+	if _remote_turret != null:
+		_remote_input_provider = CaromNetworkInput.new()
+		_remote_turret.input = _remote_input_provider
+		_remote_turret.control_mode = CaromTurret.ControlMode.AI  # Disable unhandled_input
+
 	_rollback = RollbackManager.new()
 	_rollback.initialize(bridge._sim)
 	_network = CaromNetwork.new()
@@ -67,7 +83,8 @@ func join_match(code: String, signaling_url: String = "") -> void:
 
 
 ## Call each sim tick instead of _sim.advance() in multiplayer mode.
-## Encodes local input, sends it, and feeds both inputs to rollback.
+## Encodes local input, sends it, applies remote input to opponent turret,
+## then advances the sim via the bridge.
 func advance_with_input(aim_angle_rad: float, fire: bool, reload: bool) -> void:
 	if not _is_active or not _sync_complete:
 		return
@@ -81,7 +98,6 @@ func advance_with_input(aim_angle_rad: float, fire: bool, reload: bool) -> void:
 	var local_packed: int = InputCodec.pack_input(aim_fp, fire, reload)
 
 	# Check if we already have confirmed remote input for this frame
-	# (received ahead of time from a faster remote peer)
 	var remote_input: int = 0
 	var confirmed: bool = false
 	if _confirmed_remote_inputs.has(_local_frame):
@@ -89,7 +105,22 @@ func advance_with_input(aim_angle_rad: float, fire: bool, reload: bool) -> void:
 		confirmed = true
 		_confirmed_remote_inputs.erase(_local_frame)
 
+	# Apply remote input to the remote turret before advancing the sim
+	if _remote_input_provider != null and confirmed:
+		var unpacked: Dictionary = InputCodec.unpack_input(remote_input)
+		_remote_input_provider.set_tick_input(
+			unpacked.aim,
+			unpacked.fire,
+			unpacked.reload,
+			_remote_turret.aim_arc_degrees
+		)
+
 	_rollback.advance_frame(local_packed, remote_input, confirmed)
+
+	# Drive the bridge tick (advances sim + updates render state)
+	if _bridge != null:
+		_bridge.tick_external()
+
 	_local_frame += 1
 
 	# Execute any pending rollback after advancing
