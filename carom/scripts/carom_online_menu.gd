@@ -350,7 +350,7 @@ func _on_code_input_changed(new_text: String) -> void:
 	for ch in new_text.to_upper():
 		if ch in VALID_CHARS:
 			filtered += ch
-	if filtered != new_text.to_upper():
+	if filtered != new_text:
 		_code_input.text = filtered
 		_code_input.caret_column = filtered.length()
 
