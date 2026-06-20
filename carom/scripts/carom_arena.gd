@@ -12,10 +12,15 @@ const ISOMETRIC_ROTATION: Vector3 = Vector3(-45.0, 0.0, 0.0)
 
 signal goal_scored(scoring_side: StringName, puck: CaromPuck)
 
+## Flipped camera constants (joiner perspective — looking from the north end).
+const TOP_DOWN_POSITION_FLIPPED: Vector3 = Vector3(0.0, 20.0, -12.0)
+const TOP_DOWN_ROTATION_FLIPPED: Vector3 = Vector3(-90.0, 180.0, 0.0)
+
 @export var arena_width: float = 20.0
 @export var arena_depth: float = 12.0
 
 var _goal_locked: bool = false
+var _perspective_flipped: bool = false
 var _camera_mode_tween: Tween = null
 
 @onready var south_goal: Area3D = $SouthGoal
@@ -40,6 +45,16 @@ func _ready() -> void:
 		_switch_to_online_mode()
 
 
+func _unhandled_key_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		var key := event as InputEventKey
+		# F5: Toggle perspective flip (debug — test joiner view in single player)
+		if key.keycode == KEY_F5:
+			toggle_perspective_flip()
+			print("[DEBUG] Perspective flipped: %s" % _perspective_flipped)
+			get_viewport().set_input_as_handled()
+
+
 func set_camera_mode(mode: String, animate: bool = true) -> void:
 	if _camera == null:
 		return
@@ -51,6 +66,11 @@ func set_camera_mode(mode: String, animate: bool = true) -> void:
 	if target_mode == CaromSettings.CAMERA_MODE_ISOMETRIC:
 		target_position = ISOMETRIC_POSITION
 		target_rotation = ISOMETRIC_ROTATION
+
+	# Apply perspective flip if active (joiner sees from the opposite end)
+	if _perspective_flipped and target_mode != CaromSettings.CAMERA_MODE_ISOMETRIC:
+		target_position = TOP_DOWN_POSITION_FLIPPED
+		target_rotation = TOP_DOWN_ROTATION_FLIPPED
 
 	if is_instance_valid(_camera_mode_tween):
 		_camera_mode_tween.kill()
@@ -65,6 +85,19 @@ func set_camera_mode(mode: String, animate: bool = true) -> void:
 	_camera_mode_tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
 	_camera_mode_tween.tween_property(_camera, "position", target_position, CAMERA_TRANSITION_SECONDS)
 	_camera_mode_tween.parallel().tween_property(_camera, "rotation_degrees", target_rotation, CAMERA_TRANSITION_SECONDS)
+
+
+## Flip the camera perspective so the viewer sees from the opposite end of the arena.
+## Used in online multiplayer so the joiner always sees their turret at screen bottom.
+func set_perspective_flipped(flipped: bool, animate: bool = false) -> void:
+	_perspective_flipped = flipped
+	# Re-apply current camera mode with the new flip state
+	set_camera_mode(CaromSettings.camera_mode, animate)
+
+
+## Toggle perspective flip at runtime (debug shortcut).
+func toggle_perspective_flip() -> void:
+	set_perspective_flipped(not _perspective_flipped, true)
 
 
 func _setup_ambient_particles() -> void:

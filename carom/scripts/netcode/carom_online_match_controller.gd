@@ -100,6 +100,10 @@ func _setup_match() -> void:
 	# Spawn entities — both turrets configured as HUMAN
 	_spawn_multiplayer_entities()
 
+	# Apply perspective normalization: force top-down and flip for joiner
+	arena.set_camera_mode("top_down", false)
+	arena.set_perspective_flipped(not _is_host, false)
+
 	# Register with sim bridge
 	for puck: CaromPuck in setup.pucks:
 		_bridge.register_puck(puck, puck.global_position)
@@ -177,12 +181,16 @@ func _spawn_multiplayer_entities() -> void:
 	# Spawn pucks
 	var puck_scene: PackedScene = preload("res://carom/scenes/carom_puck.tscn")
 	var spawn_positions := arena.get_puck_spawn_positions()
+	var goal_targets: Array[Vector3] = arena.get_goal_targets()
+	# Reverse goal targets for joiner so goal_targets[0] is always the local player's danger zone
+	if not _is_host:
+		goal_targets.reverse()
 	for i in spawn_positions.size():
 		var p := puck_scene.instantiate() as CaromPuck
 		actors.add_child(p)
 		p.name = "Puck%d" % (i + 1)
 		p.global_position = spawn_positions[i]
-		p.configure(arena.get_goal_targets(), spawn_positions[i])
+		p.configure(goal_targets, spawn_positions[i])
 		setup.pucks.append(p)
 
 	# Set aim projection distance for local player
