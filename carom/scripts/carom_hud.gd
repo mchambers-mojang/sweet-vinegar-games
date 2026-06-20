@@ -176,6 +176,8 @@ func show_game_over(winner: String, player_score: int, ai_score: int, current_di
 # --- Reload button ---
 
 func _create_reload_button() -> void:
+	if CaromSettings.auto_reload:
+		return
 	_reload_button = CaromReloadButton.new()
 	_reload_button.reload_requested.connect(func() -> void:
 		reload_requested.emit()
@@ -208,6 +210,19 @@ func _position_reload_button() -> void:
 		_reload_button.offset_top = -210.0 - bottom_inset
 		_reload_button.offset_right = -16.0 - right_inset
 		_reload_button.offset_bottom = -110.0 - bottom_inset
+
+
+## Show or hide the reload button based on auto_reload setting.
+func _sync_reload_button_visibility() -> void:
+	if CaromSettings.auto_reload:
+		if _reload_button:
+			_reload_button.queue_free()
+			_reload_button = null
+	else:
+		if not _reload_button:
+			_create_reload_button()
+		else:
+			_position_reload_button()
 
 
 # --- Settings gear button ---
@@ -243,7 +258,7 @@ func _toggle_settings_panel() -> void:
 	_settings_panel.offset_right = 150.0
 	_settings_panel.offset_bottom = 170.0
 	_settings_panel.setting_changed.connect(func() -> void:
-		_position_reload_button()
+		_sync_reload_button_visibility()
 		if CaromSettings.camera_mode != _current_camera_mode:
 			_current_camera_mode = CaromSettings.camera_mode
 			camera_mode_changed.emit(_current_camera_mode)

@@ -27,7 +27,7 @@ const CAMERA_MODE_ISOMETRIC_INDEX := 1
 static var aim_mode: int = AimMode.DRAG
 static var reload_button_side: int = ReloadButtonSide.RIGHT
 static var camera_mode: String = CAMERA_MODE_TOP_DOWN
-static var auto_reload: bool = false
+static var auto_reload: bool = true
 static var _loaded: bool = false
 
 signal closed
@@ -132,9 +132,10 @@ func _build_ui() -> void:
 	)
 	aim_row.add_child(aim_picker)
 
-	# Reload Button Side row
+	# Reload Button Side row (hidden when auto-reload is active)
 	var side_row := HBoxContainer.new()
 	side_row.add_theme_constant_override("separation", 8)
+	side_row.visible = not CaromSettings.auto_reload
 	vbox.add_child(side_row)
 
 	var side_label := Label.new()
@@ -167,6 +168,7 @@ func _build_ui() -> void:
 	auto_check.button_pressed = CaromSettings.auto_reload
 	auto_check.toggled.connect(func(on: bool) -> void:
 		CaromSettings.auto_reload = on
+		side_row.visible = not on
 		CaromSettings.save()
 		setting_changed.emit()
 	)
