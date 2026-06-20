@@ -369,6 +369,7 @@ func _cleanup() -> void:
 	_ice_queue.clear()
 	_ice_send_queue.clear()
 	_pending_local_sdp = {}
+	_state = State.IDLE
 	set_process(false)
 
 

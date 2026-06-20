@@ -4,6 +4,7 @@ export const VALID_CHARS = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
 export const CODE_LENGTH = 4;
 export const MAX_ROOMS = 100;
 export const DEFAULT_ROOM_EXPIRY_MS = 60_000;
+export const MAX_BUFFERED_ICE = 20;
 
 const PORT = parseInt(process.env.PORT ?? '8080', 10);
 
@@ -126,7 +127,9 @@ export function createServer(
             send(other, { type: 'ice', candidate: msg.candidate });
           } else if (ws === room.creator) {
             // Host ICE arrived before joiner — buffer for flush on join
-            room.pendingIceForJoiner.push(msg.candidate);
+            if (room.pendingIceForJoiner.length < MAX_BUFFERED_ICE) {
+              room.pendingIceForJoiner.push(msg.candidate);
+            }
           }
           break;
         }
