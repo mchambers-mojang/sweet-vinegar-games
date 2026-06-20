@@ -99,6 +99,7 @@ func advance(_inputs: Dictionary = {}) -> void:
 	for _sub in range(SUBSTEPS):
 		_integrate_substep(SUBSTEPS)
 		_detect_and_resolve()
+	_apply_angular_damping()
 	_clamp_speed()
 	_check_zones()
 	_tick_timer()
@@ -177,18 +178,25 @@ func _integrate_substep(substeps: int) -> void:
 			var sub_damping: int = b.damping / substeps if substeps > 1 else b.damping
 			var keep: int = FP.ONE - sub_damping
 			b.velocity = FP.FPVec2.scale(b.velocity, keep)
-		# Polygon rotation + angular damping
+		# Polygon rotation (advance by angular_velocity / substeps)
 		if b.shape == SimBody.Shape.POLYGON and b.angular_velocity != 0:
-			# Cap angular velocity at ~1.5 rotations/sec (FP_TWO_PI / 30 * 1.5 ≈ 20588)
-			const MAX_ANGULAR: int = 20588
-			b.angular_velocity = clampi(b.angular_velocity, -MAX_ANGULAR, MAX_ANGULAR)
 			b.rotation = (b.rotation + b.angular_velocity / substeps) % FP_TWO_PI
-			# Angular damping: reduce spin ~12.5% per full tick, distributed across substeps
-			var damp_factor: int = FP.ONE - (FP.ONE >> 3) / substeps
-			b.angular_velocity = FP.mul(b.angular_velocity, damp_factor)
-			# Kill tiny residual spin
-			if absi(b.angular_velocity) < 32:
-				b.angular_velocity = 0
+			if b.rotation < 0:
+				b.rotation += FP_TWO_PI
+
+
+## Apply angular velocity cap and damping once per full tick (not per substep).
+func _apply_angular_damping() -> void:
+	const MAX_ANGULAR: int = 20588  # ~1.5 rot/sec
+	for id: int in _bodies:
+		var b: SimBody = _bodies[id]
+		if b.shape != SimBody.Shape.POLYGON or b.angular_velocity == 0:
+			continue
+		b.angular_velocity = clampi(b.angular_velocity, -MAX_ANGULAR, MAX_ANGULAR)
+		# Gentle damping: ~5% per tick for natural spin-down
+		b.angular_velocity = FP.mul(b.angular_velocity, FP.ONE - (FP.ONE / 20))
+		if absi(b.angular_velocity) < 64:
+			b.angular_velocity = 0
 
 # ---------------------------------------------------------------------------
 # 2 & 3. Collision detection + impulse resolution
