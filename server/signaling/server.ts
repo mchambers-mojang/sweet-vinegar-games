@@ -13,6 +13,8 @@ export interface Room {
   creator: WebSocket;
   joiner?: WebSocket;
   timer: ReturnType<typeof setTimeout> | null;
+  pendingIceForJoiner: object[];  // ICE from host before joiner arrives
+  pendingIceForCreator: object[];  // ICE from joiner before peer_joined delivered
 }
 
 export function generateCode(existing: Map<string, unknown>): string {
@@ -74,7 +76,7 @@ export function createServer(
           }
           const code = generateCode(rooms);
           const timer = setTimeout(() => deleteRoom(code), roomExpiryMs);
-          rooms.set(code, { code, creatorSdp: msg.sdp, creator: ws, timer });
+          rooms.set(code, { code, creatorSdp: msg.sdp, creator: ws, timer, pendingIceForJoiner: [], pendingIceForCreator: [] });
           myRoomCodes.add(code);
           send(ws, { type: 'room_created', code });
           break;
@@ -98,6 +100,11 @@ export function createServer(
           myRoomCodes.add(msg.code as string);
           // Send creator's offer to joiner so they can create an answer
           send(ws, { type: 'room_joined', sdp: room.creatorSdp });
+          // Flush any ICE candidates from host that arrived before joiner
+          for (const ice of room.pendingIceForJoiner) {
+            send(ws, { type: 'ice', candidate: ice });
+          }
+          room.pendingIceForJoiner = [];
           // If joiner included an answer SDP, forward it to creator immediately
           if (typeof msg.sdp === 'string' && msg.sdp) {
             send(room.creator, { type: 'peer_joined', sdp: msg.sdp });
@@ -118,6 +125,13 @@ export function createServer(
           const other = ws === room.creator ? room.joiner : room.creator;
           if (other) {
             send(other, { type: 'ice', candidate: msg.candidate });
+          } else {
+            // Buffer ICE for the peer that hasn't joined yet
+            if (ws === room.creator) {
+              room.pendingIceForJoiner.push(msg.candidate);
+            } else {
+              room.pendingIceForCreator.push(msg.candidate);
+            }
           }
           break;
         }

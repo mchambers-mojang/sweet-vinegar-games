@@ -300,17 +300,22 @@ func _poll_rtc() -> void:
 		return
 	_rtc.poll()
 
-	# Check input DataChannel state
+	# Check if both channels are open before emitting connected
+	var input_open: bool = _input_channel != null and _input_channel.get_ready_state() == WebRTCDataChannel.STATE_OPEN
+	var sync_open: bool = _sync_channel != null and _sync_channel.get_ready_state() == WebRTCDataChannel.STATE_OPEN
+
+	if input_open and sync_open:
+		if _state != State.CONNECTED:
+			_state = State.CONNECTED
+			connected.emit()
+			# Signaling no longer needed
+			if _ws != null:
+				_ws.close()
+				_ws = null
+
 	if _input_channel != null:
 		match _input_channel.get_ready_state():
 			WebRTCDataChannel.STATE_OPEN:
-				if _state != State.CONNECTED:
-					_state = State.CONNECTED
-					connected.emit()
-					# Signaling no longer needed
-					if _ws != null:
-						_ws.close()
-						_ws = null
 				# Read incoming input packets
 				while _input_channel.get_available_packet_count() > 0:
 					var pkt := _input_channel.get_packet()
@@ -322,7 +327,7 @@ func _poll_rtc() -> void:
 					disconnected.emit()
 
 	# Check sync DataChannel for control messages
-	if _sync_channel != null and _sync_channel.get_ready_state() == WebRTCDataChannel.STATE_OPEN:
+	if sync_open:
 		while _sync_channel.get_available_packet_count() > 0:
 			var pkt := _sync_channel.get_packet()
 			if pkt.size() >= 1 and pkt[0] == 0x01:
