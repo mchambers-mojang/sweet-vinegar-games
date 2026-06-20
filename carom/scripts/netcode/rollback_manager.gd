@@ -11,6 +11,8 @@ var _sim: SimWorld = null
 var _needs_rollback_flag: bool = false
 var _is_replaying: bool = false
 var _last_confirmed_remote_input: int = 0
+var _static_walls: Array = []
+var _static_zones: Array = []
 
 
 func initialize(sim: SimWorld) -> void:
@@ -19,21 +21,22 @@ func initialize(sim: SimWorld) -> void:
 	_needs_rollback_flag = false
 	_is_replaying = false
 	_last_confirmed_remote_input = 0
+	_static_walls = _sim._walls.duplicate()
+	_static_zones = _sim._zones.duplicate()
 	_snapshots = []
 	_snapshots.resize(ROLLBACK_BUFFER)
 	_input_buffer = []
 	_input_buffer.resize(ROLLBACK_BUFFER)
 
 
-func advance_frame(local_input: int, remote_input: int) -> void:
+func advance_frame(local_input: int, remote_input: int, confirmed: bool) -> void:
 	if _sim == null:
 		return
 
 	_store_snapshot(_current_frame, _capture_state())
 
 	var predicted_remote_input: int = _predict_remote_input(_current_frame)
-	var remote_confirmed: bool = _current_frame == 0 or remote_input != predicted_remote_input
-	if remote_confirmed:
+	if confirmed:
 		_last_confirmed_remote_input = remote_input
 
 	_store_input_entry(_current_frame, {
@@ -41,7 +44,7 @@ func advance_frame(local_input: int, remote_input: int) -> void:
 		local_input = local_input,
 		remote_input = remote_input,
 		predicted_remote_input = predicted_remote_input,
-		remote_confirmed = remote_confirmed,
+		remote_confirmed = confirmed,
 		mispredicted = false,
 	})
 
@@ -214,13 +217,29 @@ func _get_input_entry(frame: int) -> Dictionary:
 
 
 func _capture_state() -> Dictionary:
-	if _sim.has_method("get_state"):
+	if _supports_custom_state_api():
 		return (_sim.call("get_state") as Dictionary).duplicate(true)
 	return (_sim.get_body_state() as Dictionary).duplicate(true)
 
 
 func _apply_state(state: Dictionary) -> void:
-	if _sim.has_method("set_state"):
+	if _supports_custom_state_api():
 		_sim.call("set_state", state.duplicate(true))
 		return
 	_sim.set_body_state(state.duplicate(true))
+	_restore_static_geometry()
+
+
+func _supports_custom_state_api() -> bool:
+	if _sim == null:
+		return false
+	return _sim.has_method("get_state") and _sim.has_method("set_state")
+
+
+func _restore_static_geometry() -> void:
+	if _sim == null:
+		return
+	for wall: Variant in _static_walls:
+		_sim.add_wall(wall)
+	for zone: Variant in _static_zones:
+		_sim.add_zone(zone)

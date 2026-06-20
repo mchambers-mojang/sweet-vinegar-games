@@ -7,25 +7,30 @@ class MockSimWorld extends SimWorld:
 	var total: int = 0
 
 	func advance(inputs: Dictionary = {}) -> void:
+		var world_factor: int = 10 if _walls.size() == 1 and _zones.size() == 1 else 1
 		total += int(inputs.get("local_input", 0)) * 2
 		total += int(inputs.get("remote_input", 0)) * 3
-		total += 1
-
-	func get_state() -> Dictionary:
-		return {total = total}
-
-	func set_state(state: Dictionary) -> void:
-		total = state.get("total", 0)
+		total += world_factor
 
 	func get_body_state() -> Dictionary:
-		return get_state()
+		return {total = total}
 
 	func set_body_state(state: Dictionary) -> void:
-		set_state(state)
+		total = state.get("total", 0)
+		_walls = []
+		_zones = []
+
+	func add_wall(wall: Variant) -> void:
+		_walls.append(wall)
+
+	func add_zone(zone: Variant) -> void:
+		_zones.append(zone)
 
 
 func _make_manager_and_sim() -> Dictionary:
 	var sim: MockSimWorld = MockSimWorld.new()
+	sim.add_wall({"id": "static_wall"})
+	sim.add_zone({"id": "static_zone"})
 	var manager = RollbackManagerScript.new()
 	manager.initialize(sim)
 	return {
@@ -37,7 +42,7 @@ func _make_manager_and_sim() -> Dictionary:
 func _simulate_total(local_inputs: Array[int], remote_inputs: Array[int]) -> int:
 	var total: int = 0
 	for i: int in range(local_inputs.size()):
-		total += local_inputs[i] * 2 + remote_inputs[i] * 3 + 1
+		total += local_inputs[i] * 2 + remote_inputs[i] * 3 + 10
 	return total
 
 
@@ -49,7 +54,7 @@ func test_normal_advance_no_rollback_needed() -> void:
 	var local_inputs: Array[int] = [0, 1, 0, 1, 0, 1, 0, 1, 0, 1]
 	var remote_inputs: Array[int] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 	for i: int in range(10):
-		manager.advance_frame(local_inputs[i], remote_inputs[i])
+		manager.advance_frame(local_inputs[i], remote_inputs[i], true)
 
 	assert_false(manager.needs_rollback())
 	assert_eq(manager.get_current_frame(), 10)
@@ -63,7 +68,7 @@ func test_late_input_rolls_back_and_replays() -> void:
 	var sim: MockSimWorld = ctx.sim
 
 	for _i in range(8):
-		manager.advance_frame(1, 0)
+		manager.advance_frame(1, 0, false)
 
 	manager.receive_remote_input(5, 2)
 	assert_true(manager.needs_rollback())
@@ -81,12 +86,12 @@ func test_prediction_correct_does_not_trigger_rollback() -> void:
 	var ctx: Dictionary = _make_manager_and_sim()
 	var manager = ctx.manager
 
-	manager.advance_frame(1, 4)
-	manager.advance_frame(1, 4)
-	manager.advance_frame(1, 4)
+	manager.advance_frame(1, 0, false)
+	manager.advance_frame(1, 0, false)
+	manager.advance_frame(1, 0, false)
 
-	manager.receive_remote_input(1, 4)
-	manager.receive_remote_input(2, 4)
+	manager.receive_remote_input(1, 0)
+	manager.receive_remote_input(2, 0)
 
 	assert_false(manager.needs_rollback())
 	assert_eq(manager.get_current_frame(), 3)
@@ -97,8 +102,9 @@ func test_multiple_rollbacks_in_sequence() -> void:
 	var manager = ctx.manager
 	var sim: MockSimWorld = ctx.sim
 
-	for _i in range(7):
-		manager.advance_frame(1, 1)
+	manager.advance_frame(1, 1, true)
+	for _i in range(6):
+		manager.advance_frame(1, 1, false)
 
 	manager.receive_remote_input(3, 2)
 	assert_true(manager.needs_rollback())
@@ -121,7 +127,7 @@ func test_ring_buffer_wraps_without_corruption() -> void:
 	var sim: MockSimWorld = ctx.sim
 
 	for _i in range(15):
-		manager.advance_frame(1, 1)
+		manager.advance_frame(1, 1, _i == 0)
 
 	manager.receive_remote_input(2, 9)
 	assert_false(manager.needs_rollback())
