@@ -81,10 +81,6 @@ export function createServer(
         }
 
         case 'join': {
-          if (typeof msg.sdp !== 'string' || !msg.sdp) {
-            send(ws, { type: 'error', message: 'Missing or empty sdp' });
-            return;
-          }
           const room = rooms.get(msg.code as string);
           if (!room) {
             send(ws, { type: 'error', message: 'Room not found' });
@@ -100,8 +96,12 @@ export function createServer(
           }
           room.joiner = ws;
           myRoomCodes.add(msg.code as string);
-          send(room.creator, { type: 'peer_joined', sdp: msg.sdp });
+          // Send creator's offer to joiner so they can create an answer
           send(ws, { type: 'room_joined', sdp: room.creatorSdp });
+          // If joiner included an answer SDP, forward it to creator immediately
+          if (typeof msg.sdp === 'string' && msg.sdp) {
+            send(room.creator, { type: 'peer_joined', sdp: msg.sdp });
+          }
           break;
         }
 
@@ -119,6 +119,25 @@ export function createServer(
           if (other) {
             send(other, { type: 'ice', candidate: msg.candidate });
           }
+          break;
+        }
+
+        case 'answer': {
+          // Joiner sends answer SDP after receiving the offer via room_joined
+          if (typeof msg.sdp !== 'string' || !msg.sdp) {
+            send(ws, { type: 'error', message: 'Missing or empty sdp' });
+            return;
+          }
+          const answerRoom = rooms.get(msg.code as string);
+          if (!answerRoom) {
+            send(ws, { type: 'error', message: 'Room not found' });
+            return;
+          }
+          if (ws !== answerRoom.joiner) {
+            send(ws, { type: 'error', message: 'Only the joiner can send an answer' });
+            return;
+          }
+          send(answerRoom.creator, { type: 'peer_joined', sdp: msg.sdp });
           break;
         }
 

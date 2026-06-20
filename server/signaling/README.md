@@ -67,19 +67,31 @@ All messages are JSON.
 ### Join a room (Client → Server)
 
 ```json
-{ "type": "join", "code": "ABCD", "sdp": "<answer SDP string>" }
+{ "type": "join", "code": "ABCD" }
+```
+
+SDP is optional on join. If omitted, the server registers the joiner and sends back the creator's offer so the joiner can create an answer.
+
+**Response to joiner:**
+
+```json
+{ "type": "room_joined", "sdp": "<creator's offer SDP>" }
+```
+
+If `sdp` was included in the join message, it is forwarded to the creator immediately as `peer_joined`.
+
+### Send answer SDP (Client → Server)
+
+After receiving `room_joined`, the joiner creates a WebRTC answer and sends it:
+
+```json
+{ "type": "answer", "code": "ABCD", "sdp": "<answer SDP string>" }
 ```
 
 **Response to creator:**
 
 ```json
 { "type": "peer_joined", "sdp": "<answer SDP>" }
-```
-
-**Response to joiner:**
-
-```json
-{ "type": "room_joined", "sdp": "<creator's offer SDP>" }
 ```
 
 ### Relay an ICE candidate (Client → Server)

@@ -31,9 +31,9 @@ var _sync_complete: bool = false
 var _sync_sent: bool = false
 var _sync_received: bool = false
 
-## Magic bytes to distinguish sync packets from input packets.
-## Sync packet: [0xFF, 0xFF, 0xFF, 0xFF] (impossible as input since aim uses top 10 bits)
-const SYNC_MAGIC: int = 0xFFFFFFFF
+## Sync packet uses reserved bits [19..16] set to 0xF, which is impossible
+## in valid inputs (reserved bits are always zero). Frame field = 0.
+const SYNC_MAGIC: int = 0x000F0000
 
 
 func _ready() -> void:
@@ -172,9 +172,14 @@ func _on_connection_failed(reason: String) -> void:
 
 ## Called by CaromNetwork for every received packet (both sync and input).
 func _on_remote_packet(frame: int, packed_input: int) -> void:
-	# Check for sync magic: SYNC_MAGIC decodes to frame=65535, and the
-	# packed input matches the sync sentinel value.
-	if not _sync_complete and frame == 65535 and packed_input == _unpack_sync_sentinel():
+	# Check for sync magic: SYNC_MAGIC 0x000F0000 decodes to frame=0,
+	# aim=0, fire=false, reload=false but with reserved bits set.
+	# The packed_input from decode will be 0 (aim=0, fire=false, reload=false).
+	# Detect sync by checking frame=0 and the raw reserved bits pattern.
+	if not _sync_complete and frame == 0 and packed_input == 0:
+		# Could be sync or a genuine zero-input at frame 0.
+		# Since both peers send sync before any real inputs, and real
+		# frame 0 inputs only arrive after sync completes, this is safe.
 		_sync_received = true
 		_check_sync_complete()
 		return
@@ -182,29 +187,13 @@ func _on_remote_packet(frame: int, packed_input: int) -> void:
 	if _rollback == null or not _sync_complete:
 		return
 
-	# Store as confirmed remote input
-	if frame >= _local_frame:
-		# Arrived ahead — buffer it for when we reach that frame
+	# Store as confirmed remote input (bounded to rollback window)
+	if frame >= _local_frame and frame < _local_frame + RollbackManager.ROLLBACK_BUFFER:
 		_confirmed_remote_inputs[frame] = packed_input
 	# Always inform rollback (handles past frames + misprediction detection)
 	_rollback.receive_remote_input(frame, packed_input)
 	if _rollback.needs_rollback():
 		_rollback.execute_rollback()
-
-
-## The sync magic decoded through InputCodec produces a specific packed value.
-## Pre-compute it so we can identify sync packets after decoding.
-func _unpack_sync_sentinel() -> int:
-	# SYNC_MAGIC = 0xFFFFFFFF as raw bytes → InputCodec.decode → pack_input
-	# aim_q = (0xFFFFFFFF >> 22) & 0x3FF = 1023
-	# fire = (0xFFFFFFFF >> 21) & 1 = 1
-	# reload = (0xFFFFFFFF >> 20) & 1 = 1
-	# frame = 0xFFFFFFFF & 0xFFFF = 65535
-	# aim_fp = 1023 * 411774 / 1023 = 411774
-	# pack_input(411774, true, true) = (411774 & 0xFFFF) << 16 | 2 | 1
-	# = (0x489E) << 16 | 3 = 0x489E0003
-	var aim_fp: int = 1023 * InputCodec.FP_TWO_PI / 1023  # = FP_TWO_PI = 411774
-	return InputCodec.pack_input(aim_fp, true, true)
 
 
 func _quantize_aim_to_fp(aim_rad: float) -> int:

@@ -153,8 +153,9 @@ func _poll_websocket() -> void:
 		# Waiting for offer to be created — it'll be sent in _on_session_description
 		pass
 	elif _state == State.JOINING and _room_code != "":
-		# We need the host's offer first, so just send join request
-		_ws_send({ "type": "join", "code": _room_code, "sdp": "" })
+		# Send join without SDP — server will reply with room_joined + host's offer.
+		# We'll create an answer after receiving the offer and send it via "answer".
+		_ws_send({ "type": "join", "code": _room_code })
 		_state = State.SIGNALING
 
 	# Read incoming messages
@@ -190,8 +191,7 @@ func _handle_signaling_message(msg: Dictionary) -> void:
 				_rtc.set_remote_description("offer", sdp)
 				_remote_description_set = true
 				_flush_ice_queue()
-				# Create answer (joiner must answer, not offer)
-					_rtc.create_answer()
+				_rtc.create_answer()
 
 		"ice":
 			var candidate: Dictionary = msg.get("candidate", {})
@@ -224,7 +224,8 @@ func _on_session_description(type: String, sdp: String) -> void:
 	if _is_host and type == "offer":
 		_ws_send({ "type": "create", "sdp": sdp })
 	elif not _is_host and type == "answer":
-		_ws_send({ "type": "join", "code": _room_code, "sdp": sdp })
+		# Send answer via dedicated message (joiner already joined the room)
+		_ws_send({ "type": "answer", "code": _room_code, "sdp": sdp })
 
 
 func _on_ice_candidate(media: String, index: int, candidate: String) -> void:

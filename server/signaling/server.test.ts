@@ -85,18 +85,41 @@ describe('Signaling Server', () => {
     ws.close();
   });
 
-  test('join without sdp → error', async () => {
+  test('join without sdp → room_joined with offer (two-phase flow)', async () => {
     const creator = await connect(port);
     creator.send(JSON.stringify({ type: 'create', sdp: 'offer-sdp' }));
     const { code } = await nextMessage(creator) as { code: string };
 
-    const ws = await connect(port);
-    ws.send(JSON.stringify({ type: 'join', code }));
-    const msg = await nextMessage(ws);
-    expect(msg.type).toBe('error');
-    expect(msg.message).toBe('Missing or empty sdp');
+    const joiner = await connect(port);
+    joiner.send(JSON.stringify({ type: 'join', code }));
+    const msg = await nextMessage(joiner);
+    // Joiner receives the offer so they can create an answer
+    expect(msg.type).toBe('room_joined');
+    expect(msg.sdp).toBe('offer-sdp');
     creator.close();
-    ws.close();
+    joiner.close();
+  });
+
+  test('answer relayed from joiner to creator', async () => {
+    const creator = await connect(port);
+    const joiner = await connect(port);
+
+    creator.send(JSON.stringify({ type: 'create', sdp: 'offer-sdp' }));
+    const { code } = await nextMessage(creator) as { code: string };
+
+    // Joiner joins without SDP, gets offer
+    joiner.send(JSON.stringify({ type: 'join', code }));
+    await nextMessage(joiner); // room_joined
+
+    // Joiner sends answer
+    const peerJoinedPromise = nextMessage(creator);
+    joiner.send(JSON.stringify({ type: 'answer', code, sdp: 'answer-sdp' }));
+    const peerJoined = await peerJoinedPromise;
+    expect(peerJoined.type).toBe('peer_joined');
+    expect(peerJoined.sdp).toBe('answer-sdp');
+
+    creator.close();
+    joiner.close();
   });
 
   test('ICE from non-member → error', async () => {
