@@ -41,6 +41,9 @@ var _sync_received: bool = false
 ## Use for local (same-machine) play where latency is zero.
 var lockstep: bool = false
 
+## Whether this instance is the host (needed for canonical tick order).
+var is_host_side: bool = false
+
 ## Buffered local input waiting to be sent (for lockstep when we need to
 ## re-send while waiting for remote).
 var _lockstep_pending_send: bool = false
@@ -124,25 +127,40 @@ func advance_with_input(aim_angle_rad: float, fire: bool, reload: bool) -> void:
 		if not _confirmed_remote_inputs.has(_local_frame):
 			return
 
-		# We have remote input — advance
-		var remote_input: int = _confirmed_remote_inputs[_local_frame]
+		# We have remote input — advance deterministically.
+		var remote_packed: int = _confirmed_remote_inputs[_local_frame]
 		_confirmed_remote_inputs.erase(_local_frame)
 		_lockstep_pending_send = false
 
-		var aim_fp: int = _quantize_aim_to_fp(_lockstep_pending_aim)
-		var local_packed: int = InputCodec.pack_input(aim_fp, _lockstep_pending_fire, _lockstep_pending_reload)
+		# Quantize local aim to match what the remote side will see.
+		var local_aim_fp: int = _quantize_aim_to_fp(_lockstep_pending_aim)
+		var local_packed: int = InputCodec.pack_input(local_aim_fp, _lockstep_pending_fire, _lockstep_pending_reload)
 
-		# Apply remote input to the remote turret
-		if _remote_input_provider != null:
-			var unpacked: Dictionary = InputCodec.unpack_input(remote_input)
-			_remote_input_provider.set_tick_input(
-				unpacked.aim,
-				unpacked.fire,
-				unpacked.reload,
-				_remote_turret.aim_arc_degrees
-			)
+		# Apply inputs to BOTH turrets using quantized values (deterministic).
+		# CRITICAL: Apply in canonical order (south first, then north) so that
+		# projectile body IDs are assigned identically on both sides.
+		var local_decoded: Dictionary = InputCodec.unpack_input(local_packed)
+		var remote_decoded: Dictionary = InputCodec.unpack_input(remote_packed)
 
-		_rollback.advance_frame(local_packed, remote_input, true)
+		const TICK_DT: float = 1.0 / 30.0
+
+		# Determine south/north turrets and their inputs
+		var south_turret: CaromTurret = _local_turret if is_host_side else _remote_turret
+		var north_turret: CaromTurret = _remote_turret if is_host_side else _local_turret
+		var south_input: Dictionary = local_decoded if is_host_side else remote_decoded
+		var north_input: Dictionary = remote_decoded if is_host_side else local_decoded
+
+		# South turret first (canonical order)
+		if south_turret != null:
+			var south_aim_deg: float = _fp_aim_to_offset_degrees(south_input.aim, south_turret.base_yaw_degrees, south_turret.aim_arc_degrees)
+			south_turret.apply_tick(south_aim_deg, south_input.fire, south_input.reload, TICK_DT)
+		# North turret second
+		if north_turret != null:
+			var north_aim_deg: float = _fp_aim_to_offset_degrees(north_input.aim, north_turret.base_yaw_degrees, north_turret.aim_arc_degrees)
+			north_turret.apply_tick(north_aim_deg, north_input.fire, north_input.reload, TICK_DT)
+
+		# Advance sim AFTER both turrets have fired (projectiles now registered)
+		_rollback.advance_frame(local_packed, remote_packed, true)
 		if _bridge != null:
 			_bridge.tick_external()
 		_local_frame += 1
@@ -309,6 +327,21 @@ func _quantize_aim_to_fp(aim_rad: float) -> int:
 		norm += TAU
 	var aim_q: int = clampi(roundi(norm / TAU * 1023), 0, 1023)
 	return aim_q * InputCodec.FP_TWO_PI / 1023
+
+
+## Convert a fixed-point aim value back to turret offset degrees.
+## aim_fp: FP 48.16 absolute angle (base_yaw + offset encoded together)
+## base_yaw_deg: the turret's base yaw in degrees
+## aim_arc: the turret's total arc in degrees
+func _fp_aim_to_offset_degrees(aim_fp: int, base_yaw_deg: float, aim_arc: float) -> float:
+	var aim_rad: float = float(aim_fp) / 65536.0  # FP 48.16 → float radians
+	var offset_deg: float = rad_to_deg(aim_rad) - base_yaw_deg
+	# Wrap to [-180, 180] range to handle 0°/360° boundary
+	while offset_deg > 180.0:
+		offset_deg -= 360.0
+	while offset_deg < -180.0:
+		offset_deg += 360.0
+	return clampf(offset_deg, -aim_arc * 0.5, aim_arc * 0.5)
 
 
 func _exit_tree() -> void:

@@ -140,6 +140,7 @@ func _setup_match() -> void:
 	arena.add_child(_multiplayer_ctrl)
 	var net_override: Node = CaromLocalNetwork.new() if _use_local_network else null
 	_multiplayer_ctrl.setup(_bridge, _local_turret, _remote_turret, net_override)
+	_multiplayer_ctrl.is_host_side = _is_host
 	if _use_local_network:
 		_multiplayer_ctrl.lockstep = true
 
@@ -197,6 +198,12 @@ func _spawn_multiplayer_entities() -> void:
 
 	_local_turret.configure(local_side, CaromTurret.ControlMode.HUMAN, local_yaw, Color(0.2, 0.6, 1.0))
 	_remote_turret.configure(remote_side, CaromTurret.ControlMode.HUMAN, remote_yaw, Color(1.0, 0.25, 0.2))
+
+	# In multiplayer, turret logic is driven by tick (not _process)
+	_local_turret.multiplayer_driven = true
+	_remote_turret.multiplayer_driven = true
+	# Remote turret has no local input — entirely driven by apply_tick
+	_remote_turret.input = null
 
 	# Store in setup for CaromMatchRound compatibility
 	setup.player_turret = _local_turret

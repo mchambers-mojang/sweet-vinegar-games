@@ -45,6 +45,14 @@ var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var _fired_this_tick: bool = false
 var _reload_started_this_tick: bool = false
 
+## When true, fire/reload are deferred to apply_tick() for determinism.
+## Aim input still flows freely in _process for responsiveness.
+var multiplayer_driven: bool = false
+
+## Pending fire/reload intent for next tick (set by input, consumed by _do_tick).
+var _pending_fire: bool = false
+var _pending_reload: bool = false
+
 ## Input provider (CaromHumanInput or CaromAI)
 var input: CaromTurretInput = null
 
@@ -106,7 +114,7 @@ func set_aim_projection_distance(distance: float) -> void:
 
 
 func _process(delta: float) -> void:
-	if _fire_cooldown_timer > 0.0:
+	if _fire_cooldown_timer > 0.0 and not multiplayer_driven:
 		_fire_cooldown_timer = maxf(0.0, _fire_cooldown_timer - delta)
 
 	if not is_active:
@@ -116,9 +124,22 @@ func _process(delta: float) -> void:
 	if input:
 		var state := _get_turret_state()
 		var commands := input.process(delta, state)
-		_apply_commands(commands)
+		if multiplayer_driven:
+			# Only apply aim; record fire/reload as pending for next tick
+			if commands.has("aim_target"):
+				aim_offset_degrees = clampf(
+					commands["aim_target"],
+					-aim_arc_degrees * 0.5,
+					aim_arc_degrees * 0.5
+				)
+			if commands.get("fire", false):
+				_pending_fire = true
+			if commands.get("start_reload", false):
+				_pending_reload = true
+		else:
+			_apply_commands(commands)
+			_process_reload(delta)
 
-	_process_reload(delta)
 	_update_rotation()
 
 
@@ -178,10 +199,43 @@ func cancel_reload() -> void:
 ## Poll and clear tick-level events. Returns {fired: bool, reloaded: bool}.
 ## Call once per sim tick in multiplayer to capture input for the network.
 func consume_tick_events() -> Dictionary:
-	var events := { fired = _fired_this_tick, reloaded = _reload_started_this_tick }
-	_fired_this_tick = false
-	_reload_started_this_tick = false
+	var events: Dictionary
+	if multiplayer_driven:
+		# In multiplayer, read from pending intent flags (set by _process input)
+		events = { fired = _pending_fire, reloaded = _pending_reload }
+		_pending_fire = false
+		_pending_reload = false
+	else:
+		events = { fired = _fired_this_tick, reloaded = _reload_started_this_tick }
+		_fired_this_tick = false
+		_reload_started_this_tick = false
 	return events
+
+
+## Apply one multiplayer tick with deterministic inputs. Call BEFORE sim advance.
+## aim_offset_deg: turret aim offset in degrees (derived from quantized value)
+## fire: true if player fired this tick
+## reload: true if player started reload this tick
+## tick_delta: fixed time step (e.g. 1/30)
+func apply_tick(aim_offset_deg: float, fire: bool, reload: bool, tick_delta: float) -> void:
+	# Apply aim
+	aim_offset_degrees = clampf(aim_offset_deg, -aim_arc_degrees * 0.5, aim_arc_degrees * 0.5)
+	_update_rotation()
+
+	# Process fire cooldown with fixed delta
+	if _fire_cooldown_timer > 0.0:
+		_fire_cooldown_timer = maxf(0.0, _fire_cooldown_timer - tick_delta)
+
+	# Fire
+	if fire:
+		try_fire()
+
+	# Reload
+	if reload and not is_reloading and current_ammo < clip_size:
+		start_reload()
+
+	# Process reload with fixed delta
+	_process_reload(tick_delta)
 
 
 func _get_turret_state() -> Dictionary:
