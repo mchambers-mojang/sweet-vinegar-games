@@ -27,6 +27,7 @@ var _server: TCPServer = null
 var _peer: StreamPeerTCP = null
 var _input_callback: Callable = Callable()
 var _port: int = DEFAULT_PORT
+var _recv_buffer: PackedByteArray = PackedByteArray()
 
 
 func _ready() -> void:
@@ -125,6 +126,8 @@ func _poll_server() -> void:
 	if _server.is_connection_available():
 		_peer = _server.take_connection()
 		if _peer != null:
+			# Poll to ensure the stream is ready for I/O
+			_peer.poll()
 			_server.stop()
 			_server = null
 			_state = State.CONNECTED
@@ -160,29 +163,38 @@ func _poll_data() -> void:
 		disconnected.emit()
 		return
 
-	while _peer.get_available_bytes() > 0:
-		var type_byte := _peer.get_u8()
+	# Read all available bytes into buffer
+	var avail := _peer.get_available_bytes()
+	if avail > 0:
+		var result := _peer.get_data(avail)
+		if result[0] == OK:
+			_recv_buffer.append_array(result[1])
+
+	# Process complete packets from buffer
+	while _recv_buffer.size() > 0:
+		var type_byte: int = _recv_buffer[0]
 		match type_byte:
 			PKT_INPUT:
-				if _peer.get_available_bytes() < 2:
+				# Need: type(1) + length(2) + data(N)
+				if _recv_buffer.size() < 3:
 					break
-				var len_lo := _peer.get_u8()
-				var len_hi := _peer.get_u8()
-				var data_len := len_lo | (len_hi << 8)
-				if _peer.get_available_bytes() < data_len:
+				var data_len: int = _recv_buffer[1] | (_recv_buffer[2] << 8)
+				var total_len: int = 3 + data_len
+				if _recv_buffer.size() < total_len:
 					break
-				var result := _peer.get_data(data_len)
-				if result[0] == OK and _input_callback.is_valid():
-					var raw: PackedByteArray = result[1]
+				var raw: PackedByteArray = _recv_buffer.slice(3, total_len)
+				_recv_buffer = _recv_buffer.slice(total_len)
+				if _input_callback.is_valid():
 					var decoded: Dictionary = InputCodec.decode(raw)
 					if not decoded.is_empty():
 						var packed_input: int = InputCodec.pack_input(decoded.aim, decoded.fire, decoded.reload)
 						_input_callback.call(decoded.frame, packed_input)
 			PKT_SYNC:
+				_recv_buffer = _recv_buffer.slice(1)
 				sync_received.emit()
 			_:
-				# Unknown packet type — skip
-				break
+				# Unknown — discard one byte and try again
+				_recv_buffer = _recv_buffer.slice(1)
 
 
 func _cleanup() -> void:
