@@ -14,7 +14,7 @@ extends Node
 signal connection_status_changed(status: String, message: String)
 signal match_ended(won: bool, your_score: int, their_score: int, forfeit: bool)
 
-enum Phase { IDLE, CONNECTING, SYNCING, COUNTDOWN, PLAYING, GAME_OVER }
+enum Phase { IDLE, CONNECTING, SYNCING, COUNTDOWN, PLAYING, DISCONNECTED, GAME_OVER }
 
 var phase: Phase = Phase.IDLE
 var _is_host: bool = false
@@ -43,6 +43,13 @@ const TICK_RATE: float = 1.0 / 30.0
 ## Match timer (driven by sim ticks).
 var _timer_sim: SimWorld = SimWorld.new()
 var _timer_accum: float = 0.0
+
+## Disconnect handling.
+const DISCONNECT_TIMEOUT: float = 10.0
+const SOFT_DISCONNECT_TIMEOUT: float = 3.0
+var _disconnect_timer: float = 0.0
+var _no_input_timer: float = 0.0
+var _last_remote_frame: int = -1
 
 
 func _ready() -> void:
@@ -251,13 +258,32 @@ func _on_match_started() -> void:
 
 func _on_match_disconnected() -> void:
 	if phase == Phase.PLAYING:
-		# Opponent disconnected mid-match — player wins by forfeit
-		phase = Phase.GAME_OVER
-		set_process(false)
-		match_ended.emit(true, _player_score, _opponent_score, true)
+		# Opponent disconnected mid-match — pause and start countdown
+		_enter_disconnect_state("Opponent disconnected")
+	elif phase == Phase.DISCONNECTED:
+		pass  # Already handling disconnect
 	elif phase != Phase.GAME_OVER:
 		phase = Phase.IDLE
 		connection_status_changed.emit("error", "Connection lost")
+
+
+func _enter_disconnect_state(message: String) -> void:
+	phase = Phase.DISCONNECTED
+	_disconnect_timer = DISCONNECT_TIMEOUT
+	hud.show_disconnect_overlay(message)
+	hud.update_disconnect_countdown(ceili(_disconnect_timer))
+
+
+func _process_disconnect(delta: float) -> void:
+	_disconnect_timer -= delta
+	var secs := ceili(_disconnect_timer)
+	hud.update_disconnect_countdown(secs)
+	if _disconnect_timer <= 0.0:
+		# Timeout — opponent forfeits
+		hud.hide_disconnect_overlay()
+		phase = Phase.GAME_OVER
+		set_process(false)
+		match_ended.emit(true, _player_score, _opponent_score, true)
 
 
 func _on_connection_failed(reason: String) -> void:
@@ -281,8 +307,21 @@ func _begin_play() -> void:
 # ---------------------------------------------------------------------------
 
 func _process(delta: float) -> void:
+	if phase == Phase.DISCONNECTED:
+		_process_disconnect(delta)
+		return
+
 	if phase != Phase.PLAYING:
 		return
+
+	# Soft-disconnect detection: if lockstep is stuck for too long, opponent is gone
+	if _use_local_network and _multiplayer_ctrl and _multiplayer_ctrl._lockstep_pending_send:
+		_no_input_timer += delta
+		if _no_input_timer >= SOFT_DISCONNECT_TIMEOUT:
+			_enter_disconnect_state("Opponent disconnected")
+			return
+	else:
+		_no_input_timer = 0.0
 
 	_tick_accum += delta
 

@@ -20,6 +20,8 @@ signal camera_mode_changed(mode: String)
 
 var _game_over_panel: Control = null
 var _pause_overlay: Control = null
+var _disconnect_overlay: Control = null
+var _disconnect_countdown_label: Label = null
 var _pause_button: Button = null
 var _debug_label: Label = null
 var _debug_visible: bool = false
@@ -367,6 +369,66 @@ func hide_pause_overlay() -> void:
 	if _pause_overlay:
 		_pause_overlay.queue_free()
 		_pause_overlay = null
+
+
+# --- Disconnect overlay ---
+
+func show_disconnect_overlay(message: String = "Opponent disconnected") -> void:
+	if _disconnect_overlay:
+		return
+
+	_disconnect_overlay = Control.new()
+	_disconnect_overlay.anchor_right = 1.0
+	_disconnect_overlay.anchor_bottom = 1.0
+	_disconnect_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+
+	var dimmer := ColorRect.new()
+	dimmer.anchor_right = 1.0
+	dimmer.anchor_bottom = 1.0
+	dimmer.color = Color(0.0, 0.0, 0.0, 0.7)
+	dimmer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_disconnect_overlay.add_child(dimmer)
+
+	var vbox := VBoxContainer.new()
+	vbox.anchor_left = 0.5
+	vbox.anchor_top = 0.5
+	vbox.anchor_right = 0.5
+	vbox.anchor_bottom = 0.5
+	vbox.offset_left = -120.0
+	vbox.offset_top = -60.0
+	vbox.offset_right = 120.0
+	vbox.offset_bottom = 60.0
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 12)
+	_disconnect_overlay.add_child(vbox)
+
+	var title_label := Label.new()
+	title_label.text = message
+	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title_label.add_theme_font_size_override("font_size", 24)
+	title_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.3))
+	vbox.add_child(title_label)
+
+	_disconnect_countdown_label = Label.new()
+	_disconnect_countdown_label.text = "Waiting to reconnect..."
+	_disconnect_countdown_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_disconnect_countdown_label.add_theme_font_size_override("font_size", 18)
+	_disconnect_countdown_label.add_theme_color_override("font_color", Color(0.8, 0.85, 0.9))
+	vbox.add_child(_disconnect_countdown_label)
+
+	_overlay_layer.add_child(_disconnect_overlay)
+
+
+func update_disconnect_countdown(seconds_remaining: int) -> void:
+	if _disconnect_countdown_label:
+		_disconnect_countdown_label.text = "Forfeit in %ds..." % seconds_remaining
+
+
+func hide_disconnect_overlay() -> void:
+	if _disconnect_overlay:
+		_disconnect_overlay.queue_free()
+		_disconnect_overlay = null
+		_disconnect_countdown_label = null
 
 
 func set_pause_button_visible(visible: bool) -> void:
