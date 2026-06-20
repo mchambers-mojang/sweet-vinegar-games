@@ -1,6 +1,7 @@
 // Carom signaling + matchmaking server
 // Handles WebRTC SDP/ICE relay and automatic player pairing.
 
+const http = require("http");
 const { WebSocketServer } = require("ws");
 
 const PORT = parseInt(process.env.PORT || "8080", 10);
@@ -204,7 +205,18 @@ function handleMessage(ws, msg) {
 }
 
 // --- Server startup ---
-const wss = new WebSocketServer({ port: PORT });
+const server = http.createServer((req, res) => {
+  // Health check endpoint for Azure App Service
+  if (req.url === "/" || req.url === "/health") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ status: "ok", clients: wss.clients.size, rooms: rooms.size, queue: matchQueue.length }));
+  } else {
+    res.writeHead(404);
+    res.end();
+  }
+});
+
+const wss = new WebSocketServer({ server });
 
 wss.on("connection", (ws) => {
   console.log(`[Server] Client connected (total: ${wss.clients.size})`);
@@ -235,4 +247,6 @@ setInterval(() => {
   }
 }, 30_000);
 
-console.log(`[Server] Carom signaling + matchmaking server listening on port ${PORT}`);
+server.listen(PORT, () => {
+  console.log(`[Server] Carom signaling + matchmaking server listening on port ${PORT}`);
+});
