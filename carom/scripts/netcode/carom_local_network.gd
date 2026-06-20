@@ -75,17 +75,15 @@ func join_room(_code: String) -> void:
 	print("[LocalNetwork] Joiner connecting to 127.0.0.1:%d" % _port)
 
 
-func send_input(frame: int, encoded: PackedByteArray) -> void:
+func send_input(_frame: int, encoded: PackedByteArray) -> void:
 	if _peer == null or _state != State.CONNECTED:
 		return
-	# Header: [type:1][frame:2][length:2][data:N]
+	# Header: [type:1][length:2][data:N]
 	var header := PackedByteArray()
-	header.resize(5)
+	header.resize(3)
 	header[0] = PKT_INPUT
-	header[1] = frame & 0xFF
-	header[2] = (frame >> 8) & 0xFF
-	header[3] = encoded.size() & 0xFF
-	header[4] = (encoded.size() >> 8) & 0xFF
+	header[1] = encoded.size() & 0xFF
+	header[2] = (encoded.size() >> 8) & 0xFF
 	_peer.put_data(header)
 	_peer.put_data(encoded)
 
@@ -166,19 +164,20 @@ func _poll_data() -> void:
 		var type_byte := _peer.get_u8()
 		match type_byte:
 			PKT_INPUT:
-				if _peer.get_available_bytes() < 4:
+				if _peer.get_available_bytes() < 2:
 					break
-				var frame_lo := _peer.get_u8()
-				var frame_hi := _peer.get_u8()
-				var frame := frame_lo | (frame_hi << 8)
 				var len_lo := _peer.get_u8()
 				var len_hi := _peer.get_u8()
 				var data_len := len_lo | (len_hi << 8)
 				if _peer.get_available_bytes() < data_len:
 					break
-				var data := _peer.get_data(data_len)
-				if data[0] == OK and _input_callback.is_valid():
-					_input_callback.call(frame, data[1])
+				var result := _peer.get_data(data_len)
+				if result[0] == OK and _input_callback.is_valid():
+					var raw: PackedByteArray = result[1]
+					var decoded: Dictionary = InputCodec.decode(raw)
+					if not decoded.is_empty():
+						var packed_input: int = InputCodec.pack_input(decoded.aim, decoded.fire, decoded.reload)
+						_input_callback.call(decoded.frame, packed_input)
 			PKT_SYNC:
 				sync_received.emit()
 			_:
