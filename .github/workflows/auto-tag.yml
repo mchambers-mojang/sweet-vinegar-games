@@ -161,10 +161,11 @@ jobs:
           printf 'export/android/debug_keystore = "%s/release.keystore"\n' "$HOME" >> $HOME/.config/godot/editor_settings-4.tres
           printf 'export/android/debug_keystore_user = "%s"\n' "$KEYSTORE_ALIAS" >> $HOME/.config/godot/editor_settings-4.tres
           printf 'export/android/debug_keystore_pass = "%s"\n' "$KEYSTORE_PASSWORD" >> $HOME/.config/godot/editor_settings-4.tres
-          printf 'export/android/keystore/release = "%s/release.keystore"\n' "$HOME" >> $HOME/.config/godot/editor_settings-4.tres
-          printf 'export/android/keystore/release_user = "%s"\n' "$KEYSTORE_ALIAS" >> $HOME/.config/godot/editor_settings-4.tres
-          printf 'export/android/keystore/release_password = "%s"\n' "$KEYSTORE_PASSWORD" >> $HOME/.config/godot/editor_settings-4.tres
           echo "Editor settings written"
+
+          # Inject release keystore into export_presets.cfg for --export-release
+          sed -i '/^\[preset\.0\.options\]/a keystore/release="'"$HOME"'/release.keystore"\nkeystore/release_user="'"$KEYSTORE_ALIAS"'"\nkeystore/release_password="'"$KEYSTORE_PASSWORD"'"' export_presets.cfg
+          echo "Release keystore injected into export_presets.cfg"
 
       - name: Import project
         run: |
