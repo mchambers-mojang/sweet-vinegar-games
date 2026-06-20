@@ -62,6 +62,7 @@ func _ensure_overlay() -> void:
 		return
 	var overlay_layer := get_parent().get_node_or_null(OVERLAY_LAYER_PATH) as Control
 	if overlay_layer == null:
+		push_warning("CaromOnlineFlow could not find overlay layer at %s" % OVERLAY_LAYER_PATH)
 		return
 	_overlay = CONNECTION_OVERLAY_SCENE.instantiate() as CaromConnectionOverlay
 	_overlay.name = "ConnectionOverlay"

@@ -26,15 +26,11 @@ func _ready() -> void:
 
 	_status_label.add_theme_font_size_override("font_size", 28)
 	_status_label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.85))
-	_status_label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.8))
-	_status_label.add_theme_constant_override("shadow_offset_x", 1)
-	_status_label.add_theme_constant_override("shadow_offset_y", 1)
+	_apply_label_shadow(_status_label)
 
 	_indicator_label.add_theme_font_size_override("font_size", 36)
 	_indicator_label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.85))
-	_indicator_label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.8))
-	_indicator_label.add_theme_constant_override("shadow_offset_x", 1)
-	_indicator_label.add_theme_constant_override("shadow_offset_y", 1)
+	_apply_label_shadow(_indicator_label)
 
 	_back_button.custom_minimum_size = Vector2(180.0, 48.0)
 	_back_button.pressed.connect(func() -> void:
@@ -51,10 +47,6 @@ func show_status(state: String, message: String = "") -> void:
 	var normalized_state := state.to_lower()
 	show()
 	_stop_indicator_tween()
-
-	if normalized_state == "playing":
-		hide()
-		return
 
 	_status_label.text = message if message != "" else _default_message(normalized_state)
 	_status_label.add_theme_color_override("font_color", _state_color(normalized_state))
@@ -87,6 +79,12 @@ func _apply_safe_area() -> void:
 	_margin.add_theme_constant_override("margin_top", int(insets["top"]))
 	_margin.add_theme_constant_override("margin_right", int(insets["right"]))
 	_margin.add_theme_constant_override("margin_bottom", int(insets["bottom"]))
+
+
+func _apply_label_shadow(label: Label) -> void:
+	label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.8))
+	label.add_theme_constant_override("shadow_offset_x", 1)
+	label.add_theme_constant_override("shadow_offset_y", 1)
 
 
 func _start_indicator_pulse() -> void:
