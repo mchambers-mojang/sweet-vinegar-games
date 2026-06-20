@@ -13,9 +13,16 @@ extends RefCounted
 ## FP.from_float(1.0/30.0) = round(65536/30) = 2185
 const DT: int = 2185
 
+## Tick rate: the sim advances 30 steps per real second.
+const TICKS_PER_SECOND: int = 30
+
 ## Maximum speed a body may reach (FP). Clamp applied after integration.
 ## Default: 30 units/tick  → 900 units/second at 30 Hz
-const DEFAULT_MAX_SPEED: int = 30 * FP.ONE
+const DEFAULT_MAX_SPEED: int = TICKS_PER_SECOND * FP.ONE
+
+## Match duration in ticks (30 ticks/sec × 180 sec = 3 minutes).
+## Tunable constant — adjust here to change match length.
+const MATCH_DURATION_TICKS: int = TICKS_PER_SECOND * 180
 
 ## Max int64 sentinel used to initialise a "smallest depth found so far" accumulator.
 const _MAX_INT: int = 0x7FFFFFFFFFFFFFFF
@@ -40,6 +47,15 @@ var max_speed: int = DEFAULT_MAX_SPEED
 ## Bodies that entered a zone during the last advance() call.
 ## Each entry is {body_id: int, zone_id: int}.
 var zone_events: Array = []
+
+## Ticks remaining until time expires. Counts down from MATCH_DURATION_TICKS.
+var _timer_ticks_remaining: int = MATCH_DURATION_TICKS
+
+## When true, the timer does not decrement (sudden-death play-until-next-goal).
+var sudden_death: bool = false
+
+## Set to true on the tick the timer first reaches 0. Stays true thereafter.
+var time_expired: bool = false
 
 ## Collision events recorded during the last advance() call.
 ## Each entry is {body_id: int, other_id: int, pos_x: int, pos_y: int}.
@@ -81,12 +97,18 @@ func advance(_inputs: Dictionary = {}) -> void:
 	_detect_and_resolve()
 	_clamp_speed()
 	_check_zones()
+	_tick_timer()
+
+
+## Returns the number of ticks remaining on the match timer.
+func get_timer_ticks_remaining() -> int:
+	return _timer_ticks_remaining
 
 # ---------------------------------------------------------------------------
 # Serialisation
 # ---------------------------------------------------------------------------
 
-## Returns a snapshot of body state, _next_id, and max_speed.
+## Returns a snapshot of body state, _next_id, max_speed, and timer state.
 ## Walls and zones are NOT included — they are static geometry that the
 ## caller is expected to re-add after calling set_body_state().
 ## Use this pair for rollback snapshots where geometry never changes.
@@ -98,6 +120,9 @@ func get_body_state() -> Dictionary:
 		bodies   = bodies_state,
 		next_id  = _next_id,
 		max_speed = max_speed,
+		timer_ticks_remaining = _timer_ticks_remaining,
+		sudden_death = sudden_death,
+		time_expired = time_expired,
 	}
 
 ## Restores body state from a snapshot produced by get_body_state().
@@ -113,6 +138,20 @@ func set_body_state(state: Dictionary) -> void:
 		_bodies[b.id] = b
 	_next_id  = state.next_id
 	max_speed = state.max_speed
+	_timer_ticks_remaining = state.get("timer_ticks_remaining", MATCH_DURATION_TICKS)
+	sudden_death = state.get("sudden_death", false)
+	time_expired = state.get("time_expired", false)
+
+# ---------------------------------------------------------------------------
+# Timer
+# ---------------------------------------------------------------------------
+
+func _tick_timer() -> void:
+	if sudden_death or time_expired:
+		return
+	_timer_ticks_remaining -= 1
+	if _timer_ticks_remaining == 0:
+		time_expired = true
 
 # ---------------------------------------------------------------------------
 # 1. Integration

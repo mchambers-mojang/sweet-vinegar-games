@@ -15,6 +15,7 @@ signal camera_mode_changed(mode: String)
 @onready var player_score_label: Label = %PlayerScoreLabel
 @onready var ai_score_label: Label = %AIScoreLabel
 @onready var status_label: Label = %StatusLabel
+@onready var _timer_label: Label = %TimerLabel
 @onready var _overlay_layer: Control = %OverlayLayer
 
 var _game_over_panel: Control = null
@@ -49,6 +50,25 @@ func update_scores(player_score: int, ai_score: int) -> void:
 
 func update_status(text: String) -> void:
 	status_label.text = text
+
+
+## Update the match-timer label.
+## `ticks_remaining` is the raw tick count from SimWorld; pass 0 with
+## `is_sudden_death = true` to switch the label to "SUDDEN DEATH" mode.
+## The final 10 seconds are highlighted in red as an urgency cue.
+func update_timer(ticks_remaining: int, is_sudden_death: bool) -> void:
+	if is_sudden_death:
+		_timer_label.text = "SUDDEN DEATH"
+		_timer_label.add_theme_color_override("font_color", Color(1.0, 0.3, 0.1))
+		return
+	var seconds: int = ticks_remaining / SimWorld.TICKS_PER_SECOND
+	var minutes: int = seconds / 60
+	var secs: int = seconds % 60
+	_timer_label.text = "%d:%02d" % [minutes, secs]
+	if seconds <= 10:
+		_timer_label.add_theme_color_override("font_color", Color(1.0, 0.2, 0.2))
+	else:
+		_timer_label.remove_theme_color_override("font_color")
 
 
 func update_player_ammo(current_ammo: int, max_ammo: int, is_reloading: bool) -> void:

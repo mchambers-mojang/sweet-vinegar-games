@@ -236,3 +236,79 @@ func test_score_changed_not_emitted_when_phase_not_playing() -> void:
 	)
 	s.on_goal_scored("player")
 	assert_eq(received.size(), 0, "score_changed must not emit when phase is not PLAYING")
+
+
+# ---------------------------------------------------------------------------
+# Time expiry
+# ---------------------------------------------------------------------------
+
+func test_time_expired_player_leading_player_wins() -> void:
+	var s := _make_state()
+	s.on_round_ready()
+	s.on_goal_scored("player")  # player leads 1-0
+	var result := s.on_time_expired()
+	assert_true(result.match_over)
+	assert_eq(result.winner, "Player")
+	assert_false(result.sudden_death)
+	assert_eq(s.phase, CaromMatchState.Phase.GAME_OVER)
+
+
+func test_time_expired_ai_leading_ai_wins() -> void:
+	var s := _make_state()
+	s.on_round_ready()
+	s.on_goal_scored("ai")  # ai leads 0-1
+	var result := s.on_time_expired()
+	assert_true(result.match_over)
+	assert_eq(result.winner, "AI")
+	assert_false(result.sudden_death)
+	assert_eq(s.phase, CaromMatchState.Phase.GAME_OVER)
+
+
+func test_time_expired_tied_enters_sudden_death() -> void:
+	var s := _make_state()
+	s.on_round_ready()
+	# Leave scores at 0-0 (tied)
+	var result := s.on_time_expired()
+	assert_false(result.match_over)
+	assert_eq(result.winner, "")
+	assert_true(result.sudden_death)
+	assert_true(s.is_sudden_death)
+	assert_eq(s.phase, CaromMatchState.Phase.PLAYING)
+
+
+func test_sudden_death_goal_ends_match_for_player() -> void:
+	var s := _make_state()
+	s.on_round_ready()
+	s.on_time_expired()  # tied → sudden death
+	var result := s.on_goal_scored("player")
+	assert_true(result.match_over)
+	assert_eq(result.winner, "Player")
+	assert_eq(s.phase, CaromMatchState.Phase.GAME_OVER)
+
+
+func test_sudden_death_goal_ends_match_for_ai() -> void:
+	var s := _make_state()
+	s.on_round_ready()
+	s.on_time_expired()  # tied → sudden death
+	var result := s.on_goal_scored("ai")
+	assert_true(result.match_over)
+	assert_eq(result.winner, "AI")
+	assert_eq(s.phase, CaromMatchState.Phase.GAME_OVER)
+
+
+func test_init_match_resets_sudden_death() -> void:
+	var s := _make_state()
+	s.on_round_ready()
+	s.on_time_expired()  # enters sudden death
+	assert_true(s.is_sudden_death)
+	s.init_match(1, 5)
+	assert_false(s.is_sudden_death, "init_match must reset sudden death flag")
+
+
+func test_time_expired_ignored_when_not_playing() -> void:
+	var s := _make_state()
+	# Phase is SETUP — on_time_expired should be a no-op
+	var result := s.on_time_expired()
+	assert_false(result.match_over)
+	assert_false(result.sudden_death)
+	assert_eq(s.phase, CaromMatchState.Phase.SETUP)
