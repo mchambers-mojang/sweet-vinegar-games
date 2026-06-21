@@ -239,11 +239,13 @@ function handleMessage(ws, msg) {
     case "offer": {
       const code = ws._roomCode;
       const room = rooms.get(code);
+      console.log(`[Offer] code=${code} room_exists=${!!room} is_host=${room ? ws === room.host : 'N/A'} has_joiner=${room ? !!room.joiner : 'N/A'} joiner_open=${room && room.joiner ? room.joiner.readyState === room.joiner.OPEN : 'N/A'}`);
       if (!room || ws !== room.host) return;
       room.hostSdp = data.sdp;
       // If joiner is already connected, send them the offer
       if (room.joiner) {
         send(room.joiner, { type: "room_joined", code, sdp: data.sdp || "" });
+        console.log(`[Offer] Relayed offer to joiner for room ${code}`);
       }
       break;
     }
@@ -266,7 +268,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({
       status: "ok",
-      version: 3,
+      version: 4,
       clients: wss.clients.size,
       rooms: rooms.size,
       queue: matchQueue.length,
