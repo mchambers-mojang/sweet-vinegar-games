@@ -39,6 +39,8 @@ var _remote_description_set: bool = false
 # Buffer local SDP until signaling WebSocket is open
 var _pending_local_sdp: Dictionary = {}  # { type: String, sdp: String }
 var _ws_open_handled: bool = false
+# TURN credentials received from signaling server
+var _ice_servers: Array = []
 
 
 func _ready() -> void:
@@ -159,9 +161,12 @@ func _process(_delta: float) -> void:
 
 func _setup_rtc() -> void:
 	_rtc = WebRTCPeerConnection.new()
-	var config: Dictionary = {
-		"iceServers": [{ "urls": ["stun:stun.l.google.com:19302"] }]
-	}
+	var ice_servers: Array = []
+	if _ice_servers.size() > 0:
+		ice_servers = _ice_servers
+	else:
+		ice_servers = [{ "urls": ["stun:stun.l.google.com:19302"] }]
+	var config: Dictionary = { "iceServers": ice_servers }
 	_rtc.initialize(config)
 	_rtc.session_description_created.connect(_on_session_description)
 	_rtc.ice_candidate_created.connect(_on_ice_candidate)
@@ -271,7 +276,11 @@ func _handle_signaling_message(msg: Dictionary) -> void:
 			_room_code = msg.get("code", "")
 			var role: String = msg.get("role", "")
 			_is_host = (role == "host")
-			print("[CaromNetwork] Matched! role=%s code=%s" % [role, _room_code])
+			# Use TURN credentials from server if provided
+			var servers: Variant = msg.get("iceServers", null)
+			if servers is Array and servers.size() > 0:
+				_ice_servers = servers
+			print("[CaromNetwork] Matched! role=%s code=%s turn=%s" % [role, _room_code, "yes" if _ice_servers.size() > 0 else "no"])
 			_setup_rtc()
 			if _is_host:
 				# Host creates the offer and sends it via "offer" message

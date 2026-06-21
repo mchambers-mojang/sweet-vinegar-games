@@ -5,6 +5,53 @@ const http = require("http");
 const { WebSocketServer } = require("ws");
 
 const PORT = parseInt(process.env.PORT || "8080", 10);
+const CLOUDFLARE_TURN_KEY_ID = process.env.CLOUDFLARE_TURN_KEY_ID || "";
+const CLOUDFLARE_TURN_API_TOKEN = process.env.CLOUDFLARE_TURN_API_TOKEN || "";
+
+// Cache TURN credentials (valid for 24h, refresh every 12h)
+let turnCredentialsCache = null;
+let turnCredentialsFetchedAt = 0;
+const TURN_CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
+
+async function getTurnCredentials() {
+  if (!CLOUDFLARE_TURN_KEY_ID || !CLOUDFLARE_TURN_API_TOKEN) {
+    console.warn("[TURN] No Cloudflare TURN credentials configured, using STUN only");
+    return null;
+  }
+
+  const now = Date.now();
+  if (turnCredentialsCache && (now - turnCredentialsFetchedAt) < TURN_CACHE_TTL_MS) {
+    return turnCredentialsCache;
+  }
+
+  try {
+    const res = await fetch(
+      `https://rtc.live.cloudflare.com/v1/turn/keys/${CLOUDFLARE_TURN_KEY_ID}/credentials/generate`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${CLOUDFLARE_TURN_API_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ ttl: 86400 }),
+      }
+    );
+
+    if (!res.ok) {
+      console.error(`[TURN] Cloudflare API error: ${res.status} ${res.statusText}`);
+      return turnCredentialsCache; // return stale cache if available
+    }
+
+    const data = await res.json();
+    turnCredentialsCache = data.iceServers;
+    turnCredentialsFetchedAt = now;
+    console.log("[TURN] Refreshed Cloudflare TURN credentials");
+    return turnCredentialsCache;
+  } catch (err) {
+    console.error(`[TURN] Failed to fetch credentials: ${err.message}`);
+    return turnCredentialsCache; // return stale cache if available
+  }
+}
 
 // --- Room storage ---
 // Each room: { code, host: ws, hostSdp, joiner: ws, ice: { host: [], joiner: [] } }
@@ -48,7 +95,7 @@ function cleanupRoomsFor(ws) {
 // --- Matchmaking ---
 // When two players are in the queue, pair them: first becomes host, second becomes joiner.
 // The server creates a room, tells the host to create an offer, and wires them together.
-function tryMatch() {
+async function tryMatch() {
   while (matchQueue.length >= 2) {
     const hostEntry = matchQueue.shift();
     const joinerEntry = matchQueue.shift();
@@ -79,10 +126,13 @@ function tryMatch() {
     joinerEntry.ws._roomCode = code;
     joinerEntry.ws._role = "joiner";
 
+    // Fetch TURN credentials to include in matched message
+    const iceServers = await getTurnCredentials();
+
     // Tell the host they've been matched — they should create an RTC offer
-    send(hostEntry.ws, { type: "matched", code, role: "host" });
+    send(hostEntry.ws, { type: "matched", code, role: "host", iceServers });
     // Tell the joiner to wait for the host's offer
-    send(joinerEntry.ws, { type: "matched", code, role: "joiner" });
+    send(joinerEntry.ws, { type: "matched", code, role: "joiner", iceServers });
 
     console.log(`[Match] Paired ${code}: host + joiner`);
   }
