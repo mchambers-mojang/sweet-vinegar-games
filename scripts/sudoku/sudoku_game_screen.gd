@@ -333,6 +333,10 @@ func _handle_number_first_cell_tap(index: int) -> void:
 	GameEvents.move_made.emit("sudoku", {
 		"elapsed_time": elapsed_time,
 		"event_type": "number_input",
+		"number": _selected_number,
+		"cell_index": index,
+		"notes_mode": notes_mode,
+	})
 	if notes_mode:
 		var pr := logic.toggle_pencil_mark(index, _selected_number)
 		if pr.valid:
@@ -434,7 +438,10 @@ func _place_or_note_number(number: int) -> void:
 	GameEvents.move_made.emit("sudoku", {
 		"elapsed_time": elapsed_time,
 		"event_type": "number_input",
-
+		"number": number,
+		"cell_index": index,
+		"notes_mode": notes_mode,
+	})
 	if notes_mode:
 		var pr := logic.toggle_pencil_mark(index, number)
 		if pr.valid:
