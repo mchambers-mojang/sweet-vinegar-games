@@ -270,6 +270,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({
       status: "ok",
+      version: 2,
       clients: wss.clients.size,
       rooms: rooms.size,
       queue: matchQueue.length,
