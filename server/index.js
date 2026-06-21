@@ -43,18 +43,14 @@ async function getTurnCredentials() {
     }
 
     const data = await res.json();
-    // Cloudflare returns credentials directly as {urls, username, credential}
-    // Wrap in array for iceServers format
-    if (data.iceServers) {
-      turnCredentialsCache = data.iceServers;
-    } else if (data.urls) {
-      turnCredentialsCache = [data];
-    } else {
-      console.error("[TURN] Unexpected response format:", JSON.stringify(data));
-      return turnCredentialsCache;
+    // Normalize to array of ICE server configs
+    let servers = data.iceServers || data;
+    if (!Array.isArray(servers)) {
+      servers = [servers];
     }
+    turnCredentialsCache = servers;
     turnCredentialsFetchedAt = now;
-    console.log("[TURN] Refreshed Cloudflare TURN credentials");
+    console.log("[TURN] Refreshed Cloudflare TURN credentials (%d servers)", servers.length);
     return turnCredentialsCache;
   } catch (err) {
     console.error(`[TURN] Failed to fetch credentials: ${err.message}`);
@@ -270,7 +266,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({
       status: "ok",
-      version: 2,
+      version: 3,
       clients: wss.clients.size,
       rooms: rooms.size,
       queue: matchQueue.length,
