@@ -259,7 +259,14 @@ const server = http.createServer((req, res) => {
   // Health check endpoint for Azure App Service
   if (req.url === "/" || req.url === "/health") {
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ status: "ok", clients: wss.clients.size, rooms: rooms.size, queue: matchQueue.length }));
+    res.end(JSON.stringify({
+      status: "ok",
+      clients: wss.clients.size,
+      rooms: rooms.size,
+      queue: matchQueue.length,
+      turn_configured: !!(CLOUDFLARE_TURN_KEY_ID && CLOUDFLARE_TURN_API_TOKEN),
+      turn_key_id_len: CLOUDFLARE_TURN_KEY_ID.length,
+    }));
   } else {
     res.writeHead(404);
     res.end();
