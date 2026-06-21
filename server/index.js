@@ -43,7 +43,16 @@ async function getTurnCredentials() {
     }
 
     const data = await res.json();
-    turnCredentialsCache = data.iceServers;
+    // Cloudflare returns credentials directly as {urls, username, credential}
+    // Wrap in array for iceServers format
+    if (data.iceServers) {
+      turnCredentialsCache = data.iceServers;
+    } else if (data.urls) {
+      turnCredentialsCache = [data];
+    } else {
+      console.error("[TURN] Unexpected response format:", JSON.stringify(data));
+      return turnCredentialsCache;
+    }
     turnCredentialsFetchedAt = now;
     console.log("[TURN] Refreshed Cloudflare TURN credentials");
     return turnCredentialsCache;
