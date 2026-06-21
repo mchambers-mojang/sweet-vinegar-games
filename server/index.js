@@ -267,6 +267,14 @@ const server = http.createServer((req, res) => {
       turn_configured: !!(CLOUDFLARE_TURN_KEY_ID && CLOUDFLARE_TURN_API_TOKEN),
       turn_key_id_len: CLOUDFLARE_TURN_KEY_ID.length,
     }));
+  } else if (req.url === "/turn-test") {
+    getTurnCredentials().then((creds) => {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ has_creds: !!creds, count: creds ? creds.length : 0, creds }));
+    }).catch((err) => {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
+    });
   } else {
     res.writeHead(404);
     res.end();
