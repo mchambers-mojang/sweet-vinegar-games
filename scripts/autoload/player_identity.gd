@@ -35,6 +35,10 @@ var _sync_in_flight: bool = false
 var _http: HTTPRequest = null
 var _retry_timer: Timer = null
 var _retry_attempt: int = 0
+## Monotonically increasing counter; bumped on every sync_profile() call.
+## Used to detect mutations that arrived while a request was in-flight.
+var _local_version: int = 0
+var _sent_version: int = 0
 
 
 func _ready() -> void:
@@ -65,6 +69,7 @@ func complete_setup(name: String, visible: bool) -> void:
 func sync_profile() -> void:
 	if not is_setup_complete:
 		return
+	_local_version += 1
 	_retry_attempt = 0
 	_retry_timer.stop()
 	_pending_sync = true
@@ -76,6 +81,7 @@ func sync_profile() -> void:
 
 func _send_sync_request() -> void:
 	_sync_in_flight = true
+	_sent_version = _local_version
 	var body := JSON.stringify({
 		"device_id": device_id,
 		"display_name": display_name,
@@ -91,9 +97,13 @@ func _send_sync_request() -> void:
 func _on_sync_completed(result: int, response_code: int, _headers: PackedStringArray, _body: PackedByteArray) -> void:
 	_sync_in_flight = false
 	if result == HTTPRequest.RESULT_SUCCESS and response_code >= 200 and response_code < 300:
-		_pending_sync = false
-		_retry_attempt = 0
-		_save()
+		if _sent_version != _local_version:
+			# A mutation arrived while the request was in-flight; send the latest state.
+			sync_profile()
+		else:
+			_pending_sync = false
+			_retry_attempt = 0
+			_save()
 	elif _pending_sync:
 		_schedule_retry()
 
