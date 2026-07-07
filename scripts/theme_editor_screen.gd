@@ -176,8 +176,6 @@ func _add_color_row(label_text: String, default_color: Color) -> ColorPickerButt
 	picker.color = Color(default_color.r, default_color.g, default_color.b, 1.0)
 	picker.edit_alpha = false
 	picker.custom_minimum_size = Vector2(80, 36)
-	# PopupPanel defaults to transparent=true, making all backgrounds invisible
-	picker.get_popup().transparent = false
 	row.add_child(picker)
 
 	editor_content.add_child(row)
