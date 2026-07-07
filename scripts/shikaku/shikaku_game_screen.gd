@@ -321,6 +321,9 @@ func _on_back() -> void:
 
 func _handle_win() -> void:
 	GameEvents.game_ended.emit("shikaku", "win", elapsed_time)
+	# Leaderboard: submit completion time for board sizes with registered boards (5/7/10/14).
+	if grid_width in [5, 7, 10, 14]:
+		GameEvents.leaderboard_score_ready.emit("shikaku", str(grid_width), elapsed_time)
 	var completed := session.finish_replay("win", board.placed_rects.size(), elapsed_time, {
 		"width": grid_width,
 		"height": grid_height,
