@@ -26,15 +26,25 @@ var leaderboard_visible: bool = true
 ## True once the player has completed the first-boot name prompt.
 var is_setup_complete: bool = false
 
+## Exponential backoff retry delays in seconds (5s, 10s, 20s, 40s, …, capped at 5 min).
+const _RETRY_BASE_DELAY := 5.0
+const _RETRY_MAX_DELAY := 300.0
+
 var _pending_sync: bool = false
 var _sync_in_flight: bool = false
 var _http: HTTPRequest = null
+var _retry_timer: Timer = null
+var _retry_attempt: int = 0
 
 
 func _ready() -> void:
 	_http = HTTPRequest.new()
 	add_child(_http)
 	_http.request_completed.connect(_on_sync_completed)
+	_retry_timer = Timer.new()
+	_retry_timer.one_shot = true
+	_retry_timer.timeout.connect(_on_retry_timeout)
+	add_child(_retry_timer)
 	_load()
 	# Retry any queued sync from a previous offline session.
 	if is_setup_complete and _pending_sync:
@@ -55,6 +65,8 @@ func complete_setup(name: String, visible: bool) -> void:
 func sync_profile() -> void:
 	if not is_setup_complete:
 		return
+	_retry_attempt = 0
+	_retry_timer.stop()
 	_pending_sync = true
 	_save()
 	if _http == null or _sync_in_flight:
@@ -69,14 +81,38 @@ func sync_profile() -> void:
 	var err := _http.request(REST_BASE_URL + "/profile", headers, HTTPClient.METHOD_PUT, body)
 	if err != OK:
 		_sync_in_flight = false
-		# _pending_sync remains true; will retry on next launch.
+		_schedule_retry()
 
 
 func _on_sync_completed(result: int, response_code: int, _headers: PackedStringArray, _body: PackedByteArray) -> void:
 	_sync_in_flight = false
 	if result == HTTPRequest.RESULT_SUCCESS and response_code >= 200 and response_code < 300:
 		_pending_sync = false
+		_retry_attempt = 0
 		_save()
+	elif _pending_sync:
+		_schedule_retry()
+
+
+func _schedule_retry() -> void:
+	var delay := minf(_RETRY_BASE_DELAY * pow(2.0, _retry_attempt), _RETRY_MAX_DELAY)
+	_retry_attempt += 1
+	_retry_timer.start(delay)
+
+
+func _on_retry_timeout() -> void:
+	if _pending_sync and not _sync_in_flight:
+		_sync_in_flight = true
+		var body := JSON.stringify({
+			"device_id": device_id,
+			"display_name": display_name,
+			"visible": leaderboard_visible,
+		})
+		var headers := PackedStringArray(["Content-Type: application/json"])
+		var err := _http.request(REST_BASE_URL + "/profile", headers, HTTPClient.METHOD_PUT, body)
+		if err != OK:
+			_sync_in_flight = false
+			_schedule_retry()
 
 
 func _load() -> void:
