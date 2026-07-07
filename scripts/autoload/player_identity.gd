@@ -11,6 +11,9 @@ const DEVICE_ID_PATH := "user://device_id.txt"
 ## REST base URL derived from the signaling server (wss:// → https://).
 const REST_BASE_URL := "https://carom-signaling-dae9dadjh0h9aqgb.westus3-01.azurewebsites.net"
 
+## Maximum display name length enforced on client and server.
+const MAX_DISPLAY_NAME_LENGTH := 20
+
 ## Unique device identifier, generated once and persisted across launches.
 var device_id: String = ""
 
@@ -40,7 +43,7 @@ func _ready() -> void:
 
 ## Called by the name prompt screen to finalise first-boot setup.
 func complete_setup(name: String, visible: bool) -> void:
-	display_name = name.strip_edges().substr(0, 20)
+	display_name = name.strip_edges().substr(0, MAX_DISPLAY_NAME_LENGTH)
 	leaderboard_visible = visible
 	is_setup_complete = true
 	_pending_sync = true

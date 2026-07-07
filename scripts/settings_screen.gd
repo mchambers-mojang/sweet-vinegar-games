@@ -205,9 +205,9 @@ func _build_settings_ui() -> void:
 	_add_header("Leaderboards")
 
 	# Display name
-	_add_text_field("Display Name", PlayerIdentity.display_name, 20,
+	_add_text_field("Display Name", PlayerIdentity.display_name, PlayerIdentity.MAX_DISPLAY_NAME_LENGTH,
 		func(value: String) -> void:
-			var trimmed := value.strip_edges().substr(0, 20)
+			var trimmed := value.strip_edges().substr(0, PlayerIdentity.MAX_DISPLAY_NAME_LENGTH)
 			if trimmed == PlayerIdentity.display_name:
 				return
 			PlayerIdentity.display_name = trimmed

@@ -59,9 +59,9 @@ async function getTurnCredentials() {
 }
 
 // --- Profile store ---
-// In-memory profile store keyed by device_id.
+// In-memory profile cache keyed by device_id.
 // Replaced by persistent storage when the leaderboard server (#160) is integrated.
-const profiles = new Map();
+const profilesCache = new Map();
 
 
 // Each room: { code, host: ws, hostSdp, joiner: ws, ice: { host: [], joiner: [] } }
@@ -301,21 +301,21 @@ const server = http.createServer((req, res) => {
         return;
       }
       const deviceId = profile.device_id;
-      const displayName = profile.display_name;
+      const rawDisplayName = typeof profile.display_name === "string" ? profile.display_name : "";
+      const trimmedName = rawDisplayName.trim().substring(0, 20);
       if (!deviceId || typeof deviceId !== "string") {
         res.writeHead(400, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "device_id is required" }));
         return;
       }
-      if (!displayName || typeof displayName !== "string" || displayName.trim().length === 0) {
+      if (trimmedName.length === 0) {
         res.writeHead(400, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "display_name is required and must be non-empty" }));
         return;
       }
-      const trimmedName = displayName.trim().substring(0, 20);
       const visible = profile.visible !== false;
-      profiles.set(deviceId, { device_id: deviceId, display_name: trimmedName, visible });
-      console.log(`[Profile] Upserted profile for device ${deviceId.substring(0, 8)}...`);
+      profilesCache.set(deviceId, { device_id: deviceId, display_name: trimmedName, visible });
+      console.log(`[Profile] Saved profile for device ${deviceId.substring(0, 8)}...`);
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ status: "ok" }));
     });

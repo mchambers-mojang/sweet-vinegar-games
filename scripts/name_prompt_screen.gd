@@ -10,7 +10,7 @@ extends Control
 
 
 func _ready() -> void:
-	name_field.max_length = 20
+	name_field.max_length = PlayerIdentity.MAX_DISPLAY_NAME_LENGTH
 	name_field.text_changed.connect(_on_name_changed)
 	name_field.text_submitted.connect(func(_t: String) -> void: _on_continue())
 	visible_toggle.button_pressed = true
