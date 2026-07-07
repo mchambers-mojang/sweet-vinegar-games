@@ -4,6 +4,53 @@ extends GutTest
 ## Since viewers need full scene trees, we test the core logic patterns:
 ## speed cycling, frame advancement timing, frame indexing.
 
+const ReplayPlayerScript := preload("res://scripts/replays/replay_player.gd")
+const GameReplayAdapterScript := preload("res://scripts/replays/game_replay_adapter.gd")
+
+
+class MockReplayAdapter extends GameReplayAdapterScript:
+	var reset_count := 0
+	var applied_calls: Array[Dictionary] = []
+
+	func reset_to_state(_initial_state: Dictionary, _visual: Control) -> void:
+		reset_count += 1
+
+	func apply_frame(frame: Dictionary, _visual: Control, suppress_effects: bool = false) -> void:
+		applied_calls.append({
+			"seq": int(frame.get("seq", -1)),
+			"suppress_effects": suppress_effects,
+		})
+
+
+func _make_replay_player_for_scrub_test(frames: Array[Dictionary]) -> Node:
+	var player: Node = ReplayPlayerScript.new()
+	player.back_button = Button.new()
+	player.play_button = Button.new()
+	player.speed_button = Button.new()
+	player.step_back_button = Button.new()
+	player.scrub_bar = HSlider.new()
+	player.progress_label = Label.new()
+	player.info_label = Label.new()
+	player.adapter_container = Control.new()
+	player._adapter = MockReplayAdapter.new()
+	player._visual = Control.new()
+	player._initial_state = {}
+	player._frames = frames
+	return player
+
+
+func _free_replay_player_test_objects(player: Node) -> void:
+	player.back_button.free()
+	player.play_button.free()
+	player.speed_button.free()
+	player.step_back_button.free()
+	player.scrub_bar.free()
+	player.progress_label.free()
+	player.info_label.free()
+	player.adapter_container.free()
+	player._visual.free()
+	player.free()
+
 
 # --- Speed cycling logic (shared across all viewers) ---
 
@@ -166,3 +213,36 @@ func test_shikaku_frame_rectangle_removed() -> void:
 	}
 	assert_eq(frame["input_event"]["type"], "rectangle_removed")
 	assert_eq(frame["input_event"]["payload"]["index"], 2)
+
+
+# --- Replay scrub behavior ---
+
+func test_scrub_to_replays_intermediate_frames_with_suppressed_effects() -> void:
+	var frames: Array[Dictionary] = [
+		{"seq": 0, "input_event": {"type": "piece_placed", "payload": {}}},
+		{"seq": 1, "input_event": {"type": "piece_placed", "payload": {}}},
+		{"seq": 2, "input_event": {"type": "piece_placed", "payload": {}}},
+	]
+	var player: Node = _make_replay_player_for_scrub_test(frames)
+	var adapter := player._adapter as MockReplayAdapter
+
+	player.scrub_to(3)
+
+	assert_eq(adapter.reset_count, 1)
+	assert_eq(adapter.applied_calls.size(), 3)
+	assert_true(adapter.applied_calls[0]["suppress_effects"])
+	assert_true(adapter.applied_calls[1]["suppress_effects"])
+	assert_false(adapter.applied_calls[2]["suppress_effects"])
+	assert_eq(adapter.applied_calls[2]["seq"], 2)
+	_free_replay_player_test_objects(player)
+
+
+func test_scrub_to_zero_replays_no_frames() -> void:
+	var player: Node = _make_replay_player_for_scrub_test([{"seq": 0, "input_event": {}}])
+	var adapter := player._adapter as MockReplayAdapter
+
+	player.scrub_to(0)
+
+	assert_eq(adapter.reset_count, 1)
+	assert_eq(adapter.applied_calls.size(), 0)
+	_free_replay_player_test_objects(player)

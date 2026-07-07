@@ -140,7 +140,7 @@ func place_block(shape: Array, grid_col: int, grid_row: int, color: Color = Colo
 	queue_redraw()
 
 
-func check_and_clear() -> Dictionary:
+func check_and_clear(suppress_effects: bool = false) -> Dictionary:
 	var rows_to_clear: Array[int] = []
 	var cols_to_clear: Array[int] = []
 	var boxes_to_clear: Array[Vector2i] = []  # top-left of each 3x3 box
@@ -203,90 +203,102 @@ func check_and_clear() -> Dictionary:
 		_flash_cells.append(p)
 		_flash_saved_colors.append(cell_colors[p.y * GRID_SIZE + p.x])
 
-	# Spawn neon effects before clearing
-	if AppTheme.is_neon and PlatformSettings.particle_effects_enabled:
-		var cell_size := _get_cell_size()
-		var origin := _get_grid_origin()
+	if not suppress_effects:
+		# Spawn neon effects before clearing
+		if AppTheme.is_neon and PlatformSettings.particle_effects_enabled:
+			var cell_size := _get_cell_size()
+			var origin := _get_grid_origin()
 
-		# Glass shatter on each cleared cell
-		for i in _flash_cells.size():
-			var flash_cell_pos: Vector2i = _flash_cells[i]
-			var cell_rect := Rect2(
-				origin + Vector2(flash_cell_pos.x * cell_size, flash_cell_pos.y * cell_size),
-				Vector2(cell_size, cell_size)
+			# Glass shatter on each cleared cell
+			for i in _flash_cells.size():
+				var flash_cell_pos: Vector2i = _flash_cells[i]
+				var cell_rect := Rect2(
+					origin + Vector2(flash_cell_pos.x * cell_size, flash_cell_pos.y * cell_size),
+					Vector2(cell_size, cell_size)
+				)
+				var shard_color: Color = _flash_saved_colors[i] if i < _flash_saved_colors.size() else Color(0.0, 1.5, 1.5)
+				GlassShatter.create(self, cell_rect, shard_color, 4)
+
+			# Sweep effects on cleared rows
+			for r in rows_to_clear:
+				var row_rect := Rect2(
+					origin + Vector2(0, r * cell_size),
+					Vector2(GRID_SIZE * cell_size, cell_size)
+				)
+				NeonSweep.create(self, row_rect, true, Color(0.0, 2.0, 1.5))
+
+			# Sweep effects on cleared columns
+			for c in cols_to_clear:
+				var col_rect := Rect2(
+					origin + Vector2(c * cell_size, 0),
+					Vector2(cell_size, GRID_SIZE * cell_size)
+				)
+				NeonSweep.create(self, col_rect, false, Color(2.0, 0.3, 1.8))
+
+			# Burst on cleared boxes
+			for box_pos in boxes_to_clear:
+				var center := origin + Vector2(
+					(box_pos.x + BOX_SIZE / 2.0) * cell_size,
+					(box_pos.y + BOX_SIZE / 2.0) * cell_size
+				)
+				NeonBurst.create(self, center, Color(1.5, 0.2, 1.0), 24, 1.5)
+
+			# Shockwave from center of cleared area
+			var all_x := 0.0
+			var all_y := 0.0
+			for p in _flash_cells:
+				all_x += p.x + 0.5
+				all_y += p.y + 0.5
+			var clear_center := origin + Vector2(
+				(all_x / _flash_cells.size()) * cell_size,
+				(all_y / _flash_cells.size()) * cell_size
 			)
-			var shard_color: Color = _flash_saved_colors[i] if i < _flash_saved_colors.size() else Color(0.0, 1.5, 1.5)
-			GlassShatter.create(self, cell_rect, shard_color, 4)
+			NeonRing.create(self, clear_center, Color(0.0, 2.0, 1.5), cell_size * 5.0, 0.4)
 
-		# Sweep effects on cleared rows
-		for r in rows_to_clear:
-			var row_rect := Rect2(
-				origin + Vector2(0, r * cell_size),
-				Vector2(GRID_SIZE * cell_size, cell_size)
-			)
-			NeonSweep.create(self, row_rect, true, Color(0.0, 2.0, 1.5))
-
-		# Sweep effects on cleared columns
-		for c in cols_to_clear:
-			var col_rect := Rect2(
-				origin + Vector2(c * cell_size, 0),
-				Vector2(cell_size, GRID_SIZE * cell_size)
-			)
-			NeonSweep.create(self, col_rect, false, Color(2.0, 0.3, 1.8))
-
-		# Burst on cleared boxes
-		for box_pos in boxes_to_clear:
-			var center := origin + Vector2(
-				(box_pos.x + BOX_SIZE / 2.0) * cell_size,
-				(box_pos.y + BOX_SIZE / 2.0) * cell_size
-			)
-			NeonBurst.create(self, center, Color(1.5, 0.2, 1.0), 24, 1.5)
-
-		# Shockwave from center of cleared area
-		var all_x := 0.0
-		var all_y := 0.0
-		for p in _flash_cells:
-			all_x += p.x + 0.5
-			all_y += p.y + 0.5
-		var clear_center := origin + Vector2(
-			(all_x / _flash_cells.size()) * cell_size,
-			(all_y / _flash_cells.size()) * cell_size
-		)
-		NeonRing.create(self, clear_center, Color(0.0, 2.0, 1.5), cell_size * 5.0, 0.4)
-
-		# Screen shake
-		AppTheme.screen_shake(6.0, 0.2)
+			# Screen shake
+			AppTheme.screen_shake(6.0, 0.2)
 
 	# Clear grid state immediately so game-over checks see the updated board
 	for p in _flash_cells:
 		grid[p.y * GRID_SIZE + p.x] = 0
 		cell_colors[p.y * GRID_SIZE + p.x] = Color.TRANSPARENT
 
-	# Animate flash overlay
-	_flash_alpha = 1.0
-	_clear_anim_cells = _flash_cells.duplicate()
-	_clear_anim_colors = _flash_saved_colors.duplicate()
-	_clear_anim_delays.clear()
-	for pos in _clear_anim_cells:
-		_clear_anim_delays.append(_compute_clear_cell_delay(pos, rows_to_clear, cols_to_clear))
-	_clear_anim_elapsed = 0.0
-	is_clear_animating = true
-	var sweep_duration := _get_sweep_duration()
-	if _clear_anim_tween and _clear_anim_tween.is_running():
-		_clear_anim_tween.kill()
-	_clear_anim_tween = create_tween()
-	_clear_anim_tween.tween_method(_set_flash_alpha, 1.0, 0.0, CLEAR_FLASH_DURATION)
-	_clear_anim_tween.tween_method(_set_clear_anim_elapsed, 0.0, sweep_duration, sweep_duration)
-	_clear_anim_tween.tween_callback(func() -> void:
+	if suppress_effects:
+		if _clear_anim_tween and _clear_anim_tween.is_running():
+			_clear_anim_tween.kill()
 		_flash_cells.clear()
 		_clear_anim_cells.clear()
 		_clear_anim_colors.clear()
 		_clear_anim_delays.clear()
 		_clear_anim_elapsed = 0.0
 		is_clear_animating = false
-		queue_redraw()
-		clear_animation_finished.emit()
-	)
+		_flash_alpha = 0.0
+	else:
+		# Animate flash overlay
+		_flash_alpha = 1.0
+		_clear_anim_cells = _flash_cells.duplicate()
+		_clear_anim_colors = _flash_saved_colors.duplicate()
+		_clear_anim_delays.clear()
+		for pos in _clear_anim_cells:
+			_clear_anim_delays.append(_compute_clear_cell_delay(pos, rows_to_clear, cols_to_clear))
+		_clear_anim_elapsed = 0.0
+		is_clear_animating = true
+		var sweep_duration := _get_sweep_duration()
+		if _clear_anim_tween and _clear_anim_tween.is_running():
+			_clear_anim_tween.kill()
+		_clear_anim_tween = create_tween()
+		_clear_anim_tween.tween_method(_set_flash_alpha, 1.0, 0.0, CLEAR_FLASH_DURATION)
+		_clear_anim_tween.tween_method(_set_clear_anim_elapsed, 0.0, sweep_duration, sweep_duration)
+		_clear_anim_tween.tween_callback(func() -> void:
+			_flash_cells.clear()
+			_clear_anim_cells.clear()
+			_clear_anim_colors.clear()
+			_clear_anim_delays.clear()
+			_clear_anim_elapsed = 0.0
+			is_clear_animating = false
+			queue_redraw()
+			clear_animation_finished.emit()
+		)
 
 	queue_redraw()
 

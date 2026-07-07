@@ -78,7 +78,7 @@ The adapter interface:
 func setup_playback(initial_state: Dictionary) -> Control
 
 # Apply one frame to the board.
-func apply_frame(frame: Dictionary, visual: Control) -> void
+func apply_frame(frame: Dictionary, visual: Control, suppress_effects: bool = false) -> void
 
 # Reset the board to initial_state (enables backward scrubbing / replay-from-start).
 func reset_to_state(initial_state: Dictionary, visual: Control) -> void

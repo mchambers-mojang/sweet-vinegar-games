@@ -33,7 +33,7 @@ func should_include_frame(frame: Dictionary) -> bool:
 	return true
 
 
-func apply_frame(frame: Dictionary, visual: Control) -> void:
+func apply_frame(frame: Dictionary, visual: Control, suppress_effects: bool = false) -> void:
 	var board := visual as SudokuBoard
 	var input_event: Dictionary = frame.get("input_event", {})
 	var event_type := str(input_event.get("type", ""))
@@ -53,7 +53,8 @@ func apply_frame(frame: Dictionary, visual: Control) -> void:
 	if cell.is_given:
 		return
 	cell.set_value(number)
-	board.select_cell(index)
+	if not suppress_effects:
+		board.select_cell(index)
 
 
 func get_visual_event_types() -> Array[String]:

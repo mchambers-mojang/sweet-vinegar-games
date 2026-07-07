@@ -20,7 +20,7 @@ func reset_to_state(initial_state: Dictionary, visual: Control) -> void:
 	board.queue_redraw()
 
 
-func apply_frame(frame: Dictionary, visual: Control) -> void:
+func apply_frame(frame: Dictionary, visual: Control, suppress_effects: bool = false) -> void:
 	var board := visual as BlockudokuBoard
 	var input_event: Dictionary = frame.get("input_event", {})
 	var payload: Dictionary = input_event.get("payload", {})
@@ -39,7 +39,7 @@ func apply_frame(frame: Dictionary, visual: Control) -> void:
 		return
 
 	board.place_block(shape, grid_x, grid_y)
-	board.check_and_clear()
+	board.check_and_clear(suppress_effects)
 	board.queue_redraw()
 
 
