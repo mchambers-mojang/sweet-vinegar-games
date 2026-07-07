@@ -6,6 +6,8 @@ const AppThemeScript := preload("res://scripts/autoload/app_theme.gd")
 func make_app_theme() -> Node:
 	var app_theme := Node.new()
 	app_theme.set_script(AppThemeScript)
+	# These tests intentionally target popup helper methods directly and do not
+	# require full _ready() autoload setup.
 	return app_theme
 
 
