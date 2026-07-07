@@ -129,7 +129,7 @@ export function getLeaderboard(
   device_id: string
 ): { top: ScoreEntry[]; player_rank: number | null; player_score: number | null } {
   const config = BOARD_CONFIG[`${game}:${mode}`];
-  // Explicitly validate sqlOrder to ensure only safe literals reach the SQL string
+  // config.sort is typed 'asc'|'desc'; map to SQL literals for use in the template string
   const sqlOrder: 'ASC' | 'DESC' = config.sort === 'asc' ? 'ASC' : 'DESC';
 
   const top = db.prepare(`

@@ -90,6 +90,13 @@ const TEST_UUID = '550e8400-e29b-41d4-a716-446655440000';
 const TEST_UUID2 = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
 const TEST_UUID3 = 'c2ddde11-2e2d-6001-dd8f-8dd1df502c33';
 
+/** Seeds Alice (100s), Bob (200s), Carol invisible (50s) into sudoku:easy */
+async function seedSudokuEasyScores(port: number): Promise<void> {
+  await httpRequest({ method: 'POST', port, path: '/scores', body: { device_id: TEST_UUID, game: 'sudoku', mode: 'easy', value: 100 } });
+  await httpRequest({ method: 'POST', port, path: '/scores', body: { device_id: TEST_UUID2, game: 'sudoku', mode: 'easy', value: 200 } });
+  await httpRequest({ method: 'POST', port, path: '/scores', body: { device_id: TEST_UUID3, game: 'sudoku', mode: 'easy', value: 50 } });
+}
+
 describe('Signaling Server', () => {
   let wss: WebSocketServer;
   let httpServer: http.Server;
@@ -636,9 +643,7 @@ describe('Leaderboard Endpoint', () => {
 
   test('GET /leaderboard returns top visible players and requester rank', async () => {
     // Alice: 100s, Bob: 200s, Carol (invisible): 50s
-    await httpRequest({ method: 'POST', port, path: '/scores', body: { device_id: TEST_UUID, game: 'sudoku', mode: 'easy', value: 100 } });
-    await httpRequest({ method: 'POST', port, path: '/scores', body: { device_id: TEST_UUID2, game: 'sudoku', mode: 'easy', value: 200 } });
-    await httpRequest({ method: 'POST', port, path: '/scores', body: { device_id: TEST_UUID3, game: 'sudoku', mode: 'easy', value: 50 } });
+    await seedSudokuEasyScores(port);
 
     const res = await httpRequest({ method: 'GET', port, path: `/leaderboard?game=sudoku&mode=easy&device_id=${TEST_UUID}` });
     expect(res.status).toBe(200);
@@ -656,9 +661,7 @@ describe('Leaderboard Endpoint', () => {
   });
 
   test('GET /leaderboard invisible player can see their own rank', async () => {
-    await httpRequest({ method: 'POST', port, path: '/scores', body: { device_id: TEST_UUID, game: 'sudoku', mode: 'easy', value: 100 } });
-    await httpRequest({ method: 'POST', port, path: '/scores', body: { device_id: TEST_UUID2, game: 'sudoku', mode: 'easy', value: 200 } });
-    await httpRequest({ method: 'POST', port, path: '/scores', body: { device_id: TEST_UUID3, game: 'sudoku', mode: 'easy', value: 50 } });
+    await seedSudokuEasyScores(port);
 
     const res = await httpRequest({ method: 'GET', port, path: `/leaderboard?game=sudoku&mode=easy&device_id=${TEST_UUID3}` });
     const body = res.body as Record<string, unknown>;
@@ -682,9 +685,7 @@ describe('Leaderboard Endpoint', () => {
   });
 
   test('GET /leaderboard top ranks are dense (no gaps from invisible players)', async () => {
-    await httpRequest({ method: 'POST', port, path: '/scores', body: { device_id: TEST_UUID, game: 'sudoku', mode: 'easy', value: 100 } });
-    await httpRequest({ method: 'POST', port, path: '/scores', body: { device_id: TEST_UUID2, game: 'sudoku', mode: 'easy', value: 200 } });
-    await httpRequest({ method: 'POST', port, path: '/scores', body: { device_id: TEST_UUID3, game: 'sudoku', mode: 'easy', value: 50 } });
+    await seedSudokuEasyScores(port);
 
     const res = await httpRequest({ method: 'GET', port, path: `/leaderboard?game=sudoku&mode=easy&device_id=${TEST_UUID}` });
     const top = (res.body as Record<string, unknown>).top as Array<Record<string, unknown>>;
