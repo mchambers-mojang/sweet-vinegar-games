@@ -14,6 +14,7 @@ const PORT = parseInt(process.env.PORT ?? '8080', 10);
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PROFILE_PATH_RE = /^\/profile\/([^/]+)$/;
+const SCORES_PATH_RE = /^\/scores(\?.*)?$/;
 const LEADERBOARD_PATH_RE = /^\/leaderboard(\?.*)?$/;
 
 export interface ServerBundle {
@@ -46,6 +47,41 @@ function send(ws: WebSocket, data: object): void {
   }
 }
 
+function parseJsonBody(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  onSuccess: (payload: Record<string, unknown>) => void
+): void {
+  const chunks: Buffer[] = [];
+  let bodyBytes = 0;
+  let tooLarge = false;
+  req.on('data', (chunk: Buffer) => {
+    if (tooLarge) return;
+    if (bodyBytes + chunk.length > MAX_BODY_BYTES) {
+      tooLarge = true;
+      res.writeHead(413, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Payload too large' }));
+      req.destroy();
+      return;
+    }
+    bodyBytes += chunk.length;
+    chunks.push(chunk);
+  });
+  req.on('end', () => {
+    if (tooLarge) return;
+    const body = Buffer.concat(chunks).toString();
+    let payload: Record<string, unknown>;
+    try {
+      payload = JSON.parse(body) as Record<string, unknown>;
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Invalid JSON' }));
+      return;
+    }
+    onSuccess(payload);
+  });
+}
+
 export function createServer(
   port: number,
   options: { roomExpiryMs?: number; db?: Database.Database } = {}
@@ -67,33 +103,7 @@ export function createServer(
 
     // PUT /profile
     if (req.method === 'PUT' && url === '/profile') {
-      const chunks: Buffer[] = [];
-      let bodyBytes = 0;
-      let tooLarge = false;
-      req.on('data', (chunk: Buffer) => {
-        if (tooLarge) return;
-        if (bodyBytes + chunk.length > MAX_BODY_BYTES) {
-          tooLarge = true;
-          res.writeHead(413, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Payload too large' }));
-          req.destroy();
-          return;
-        }
-        bodyBytes += chunk.length;
-        chunks.push(chunk);
-      });
-      req.on('end', () => {
-        if (tooLarge) return;
-        const body = Buffer.concat(chunks).toString();
-        let payload: Record<string, unknown>;
-        try {
-          payload = JSON.parse(body) as Record<string, unknown>;
-        } catch {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Invalid JSON' }));
-          return;
-        }
-
+      parseJsonBody(req, res, (payload) => {
         const { device_id, display_name, visible } = payload;
 
         if (typeof device_id !== 'string' || !UUID_RE.test(device_id)) {
@@ -153,34 +163,8 @@ export function createServer(
     }
 
     // POST /scores
-    if (req.method === 'POST' && (url === '/scores' || url.startsWith('/scores?'))) {
-      const chunks: Buffer[] = [];
-      let bodyBytes = 0;
-      let tooLarge = false;
-      req.on('data', (chunk: Buffer) => {
-        if (tooLarge) return;
-        if (bodyBytes + chunk.length > MAX_BODY_BYTES) {
-          tooLarge = true;
-          res.writeHead(413, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Payload too large' }));
-          req.destroy();
-          return;
-        }
-        bodyBytes += chunk.length;
-        chunks.push(chunk);
-      });
-      req.on('end', () => {
-        if (tooLarge) return;
-        const body = Buffer.concat(chunks).toString();
-        let payload: Record<string, unknown>;
-        try {
-          payload = JSON.parse(body) as Record<string, unknown>;
-        } catch {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Invalid JSON' }));
-          return;
-        }
-
+    if (req.method === 'POST' && SCORES_PATH_RE.test(url)) {
+      parseJsonBody(req, res, (payload) => {
         const { device_id, game, mode, value } = payload;
 
         if (typeof device_id !== 'string' || !UUID_RE.test(device_id)) {
