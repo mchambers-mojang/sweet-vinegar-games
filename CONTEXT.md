@@ -35,6 +35,10 @@ The Platform's ability to save and restore a Game's in-progress state across sce
 **Replay**:
 A recorded sequence of player actions (not video) that can re-simulate a play session. Each Game defines its own action vocabulary (e.g., cell placements for puzzles, shot angle + timing for Carom). Stored and managed by the Platform's ReplayManager.
 
+**Replay Adapter**:
+A per-Game class that knows how to apply a single recorded frame to a visual representation. Implements `apply_frame(frame, visual, suppress_effects)` and `reset_to_state(state, visual)`. The Platform's ReplayPlayer drives the adapter; the adapter owns the Game-specific rendering logic.
+_Avoid_: Replay controller (that's the player/scrubber), replay renderer
+
 ## Carom
 
 _Design principle: Carom is a **real-physics game**. All motion — Projectile travel, Puck deflection, wall bounces — is resolved by the physics engine (RigidBody3D collisions), never faked with tweens, animations, or scripted movement._
