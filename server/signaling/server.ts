@@ -65,9 +65,25 @@ export function createServer(
 
     // PUT /profile
     if (req.method === 'PUT' && url === '/profile') {
-      let body = '';
-      req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+      const MAX_BODY_BYTES = 4096;
+      const chunks: Buffer[] = [];
+      let bodyBytes = 0;
+      let tooLarge = false;
+      req.on('data', (chunk: Buffer) => {
+        if (tooLarge) return;
+        if (bodyBytes + chunk.length > MAX_BODY_BYTES) {
+          tooLarge = true;
+          res.writeHead(413, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Payload too large' }));
+          req.destroy();
+          return;
+        }
+        bodyBytes += chunk.length;
+        chunks.push(chunk);
+      });
       req.on('end', () => {
+        if (tooLarge) return;
+        const body = Buffer.concat(chunks).toString();
         let payload: Record<string, unknown>;
         try {
           payload = JSON.parse(body) as Record<string, unknown>;

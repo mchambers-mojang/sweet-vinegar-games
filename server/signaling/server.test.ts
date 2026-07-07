@@ -393,6 +393,14 @@ describe('Profile Endpoints', () => {
     expect(res.status).toBe(400);
   });
 
+  test('PUT /profile returns 413 for body exceeding 4KB', async () => {
+    const res = await httpRequest({
+      method: 'PUT', port, path: '/profile',
+      body: { device_id: TEST_UUID, display_name: 'A'.repeat(20), visible: true, junk: 'x'.repeat(4096) },
+    });
+    expect(res.status).toBe(413);
+  });
+
   test('PUT /profile accepts display_name of exactly 20 chars', async () => {
     const res = await httpRequest({
       method: 'PUT', port, path: '/profile',
