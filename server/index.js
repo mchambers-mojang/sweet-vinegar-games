@@ -58,7 +58,12 @@ async function getTurnCredentials() {
   }
 }
 
-// --- Room storage ---
+// --- Profile store ---
+// In-memory profile cache keyed by device_id.
+// Replaced by persistent storage when the leaderboard server (#160) is integrated.
+const profilesCache = new Map();
+
+
 // Each room: { code, host: ws, hostSdp, joiner: ws, ice: { host: [], joiner: [] } }
 const rooms = new Map();
 
@@ -282,6 +287,37 @@ const server = http.createServer((req, res) => {
     }).catch((err) => {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: err.message }));
+    });
+  } else if (req.url === "/profile" && req.method === "PUT") {
+    let body = "";
+    req.on("data", (chunk) => { body += chunk.toString(); });
+    req.on("end", () => {
+      let profile;
+      try {
+        profile = JSON.parse(body);
+      } catch {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Invalid JSON" }));
+        return;
+      }
+      const deviceId = profile.device_id;
+      const rawDisplayName = typeof profile.display_name === "string" ? profile.display_name : "";
+      const trimmedName = rawDisplayName.trim().substring(0, 20);
+      if (!deviceId || typeof deviceId !== "string") {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "device_id is required" }));
+        return;
+      }
+      if (trimmedName.length === 0) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "display_name is required and must be non-empty" }));
+        return;
+      }
+      const visible = profile.visible !== false;
+      profilesCache.set(deviceId, { device_id: deviceId, display_name: trimmedName, visible });
+      console.log(`[Profile] Saved profile for device ${deviceId.substring(0, 8)}...`);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ status: "ok" }));
     });
   } else {
     res.writeHead(404);

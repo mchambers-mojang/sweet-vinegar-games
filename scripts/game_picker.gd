@@ -22,6 +22,11 @@ var _carom_touch_taps: Array[float] = []
 
 
 func _ready() -> void:
+	# Redirect to first-boot name prompt before showing the Hub.
+	if not PlayerIdentity.is_setup_complete:
+		SceneTransition.transition_to(Scenes.NAME_PROMPT)
+		return
+
 	sudoku_button.pressed.connect(func() -> void:
 		SceneTransition.transition_to(Scenes.SUDOKU_MENU)
 	)

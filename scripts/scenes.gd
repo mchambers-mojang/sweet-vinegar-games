@@ -2,6 +2,7 @@ class_name Scenes
 
 # Main navigation
 const GAME_PICKER := "res://scenes/game_picker.tscn"
+const NAME_PROMPT := "res://scenes/name_prompt.tscn"
 const SETTINGS := "res://scenes/settings.tscn"
 const THEME_EDITOR := "res://scenes/theme_editor.tscn"
 const ACHIEVEMENTS := "res://scenes/achievements.tscn"
