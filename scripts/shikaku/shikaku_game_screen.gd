@@ -2,6 +2,8 @@ extends GameScreen
 
 ## Shikaku game screen — board, timer, controls
 
+const TimeFormat := preload("res://scripts/utils/time_format.gd")
+
 const SIZE_NAMES := {5: "5×5", 7: "7×7", 8: "8×8", 10: "10×10", 12: "12×12", 15: "15×15"}
 
 # Game state
@@ -381,7 +383,7 @@ func _show_new_best_indicator() -> void:
 func _show_win_dialog() -> void:
 	var dialog := AcceptDialog.new()
 	dialog.title = "Congratulations!"
-	dialog.dialog_text = "You solved the %s puzzle\nin %s!" % [SIZE_NAMES.get(grid_width, ""), _format_time(elapsed_time)]
+	dialog.dialog_text = "You solved the %s puzzle\nin %s!" % [SIZE_NAMES.get(grid_width, ""), TimeFormat.format_time(elapsed_time, true)]
 	if logic.hints_used > 0:
 		dialog.dialog_text += "\nHints used: %d" % logic.hints_used
 	dialog.ok_button_text = "Play Again"

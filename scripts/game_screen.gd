@@ -1,6 +1,8 @@
 extends Control
 class_name GameScreen
 
+const TimeFormat := preload("res://scripts/utils/time_format.gd")
+
 ## Base class for all Game Screens in the Collection.
 ## Handles the shared lifecycle ceremony: crash reporting, settings navigation,
 ## theme, safe area, help button, session persistence, replay, and analytics.
@@ -188,7 +190,7 @@ func _process(delta: float) -> void:
 		elapsed_time += delta
 		if timer_label:
 			if PlatformSettings.show_timer:
-				timer_label.text = _format_time(elapsed_time)
+				timer_label.text = TimeFormat.format_time(elapsed_time)
 				timer_label.visible = true
 			else:
 				timer_label.visible = false
@@ -310,14 +312,6 @@ func _setup_help_button() -> void:
 
 func _find_settings_button() -> Button:
 	return get_node_or_null("%SettingsButton") as Button
-
-
-# --- Utilities ---
-
-func _format_time(seconds: float) -> String:
-	var mins := int(seconds) / 60
-	var secs := int(seconds) % 60
-	return "%d:%02d" % [mins, secs]
 
 
 func _create_session_seed() -> int:
