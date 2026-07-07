@@ -99,7 +99,9 @@ func _on_sync_completed(result: int, response_code: int, _headers: PackedStringA
 	if result == HTTPRequest.RESULT_SUCCESS and response_code >= 200 and response_code < 300:
 		if _sent_version != _local_version:
 			# A mutation arrived while the request was in-flight; send the latest state.
-			sync_profile()
+			# Call _send_sync_request() directly — _retry_attempt and _pending_sync were
+			# already updated by the sync_profile() call that bumped _local_version.
+			_send_sync_request()
 		else:
 			_pending_sync = false
 			_retry_attempt = 0
