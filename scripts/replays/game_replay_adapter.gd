@@ -15,7 +15,8 @@ func setup_playback(initial_state: Dictionary) -> Control:
 
 
 ## Apply a single frame's action to the visual.
-func apply_frame(frame: Dictionary, visual: Control) -> void:
+## suppress_effects=true should skip non-stateful visual side effects (shake, particles, etc.).
+func apply_frame(frame: Dictionary, visual: Control, suppress_effects: bool = false) -> void:
 	pass
 
 

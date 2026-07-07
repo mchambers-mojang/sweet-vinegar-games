@@ -26,7 +26,7 @@ func reset_to_state(initial_state: Dictionary, visual: Control) -> void:
 	board.queue_redraw()
 
 
-func apply_frame(frame: Dictionary, visual: Control) -> void:
+func apply_frame(frame: Dictionary, visual: Control, _suppress_effects: bool = false) -> void:
 	var board := visual as ShikakuBoard
 	var input_event: Dictionary = frame.get("input_event", {})
 	var event_type := str(input_event.get("type", ""))

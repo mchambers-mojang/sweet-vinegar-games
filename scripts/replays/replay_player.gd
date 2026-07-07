@@ -119,8 +119,10 @@ func scrub_to(target_frame: int) -> void:
 	_playing = false
 	set_process(false)
 	_adapter.reset_to_state(_initial_state, _visual)
-	for i in range(target_frame):
-		_adapter.apply_frame(_frames[i], _visual)
+	for i in range(maxi(target_frame - 1, 0)):
+		_adapter.apply_frame(_frames[i], _visual, true)
+	if target_frame > 0:
+		_adapter.apply_frame(_frames[target_frame - 1], _visual, false)
 	_current_frame = target_frame
 	_update_ui()
 
