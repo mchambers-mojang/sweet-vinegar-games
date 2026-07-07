@@ -266,12 +266,7 @@ func check_and_clear(suppress_effects: bool = false) -> Dictionary:
 	if suppress_effects:
 		if _clear_anim_tween and _clear_anim_tween.is_running():
 			_clear_anim_tween.kill()
-		_flash_cells.clear()
-		_clear_anim_cells.clear()
-		_clear_anim_colors.clear()
-		_clear_anim_delays.clear()
-		_clear_anim_elapsed = 0.0
-		is_clear_animating = false
+		_reset_clear_animation_state()
 		_flash_alpha = 0.0
 	else:
 		# Animate flash overlay
@@ -290,12 +285,7 @@ func check_and_clear(suppress_effects: bool = false) -> Dictionary:
 		_clear_anim_tween.tween_method(_set_flash_alpha, 1.0, 0.0, CLEAR_FLASH_DURATION)
 		_clear_anim_tween.tween_method(_set_clear_anim_elapsed, 0.0, sweep_duration, sweep_duration)
 		_clear_anim_tween.tween_callback(func() -> void:
-			_flash_cells.clear()
-			_clear_anim_cells.clear()
-			_clear_anim_colors.clear()
-			_clear_anim_delays.clear()
-			_clear_anim_elapsed = 0.0
-			is_clear_animating = false
+			_reset_clear_animation_state()
 			queue_redraw()
 			clear_animation_finished.emit()
 		)
@@ -315,6 +305,15 @@ func _set_flash_alpha(alpha: float) -> void:
 func _set_clear_anim_elapsed(elapsed: float) -> void:
 	_clear_anim_elapsed = elapsed
 	queue_redraw()
+
+
+func _reset_clear_animation_state() -> void:
+	_flash_cells.clear()
+	_clear_anim_cells.clear()
+	_clear_anim_colors.clear()
+	_clear_anim_delays.clear()
+	_clear_anim_elapsed = 0.0
+	is_clear_animating = false
 
 
 func _compute_clear_cell_delay(p: Vector2i, rows_to_clear: Array[int], cols_to_clear: Array[int]) -> float:
