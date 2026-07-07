@@ -34,6 +34,8 @@ func _submit(game_id: String, mode: String, value: float) -> void:
 	_pending.append(http)
 	http.request_completed.connect(_on_request_done.bind(http))
 
+	# The server resolves display_name from the stored profile via device_id;
+	# it does not need display_name in the score POST body.
 	var body := JSON.stringify({
 		"device_id": PlayerIdentity.device_id,
 		"game": game_id,

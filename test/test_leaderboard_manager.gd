@@ -11,17 +11,32 @@ const ManagerScript := preload("res://scripts/autoload/leaderboard_manager.gd")
 
 
 # ============================================================
-# Helpers
+# Setup / teardown
 # ============================================================
 
 var manager: Node
 
+# Saved PlayerIdentity state, restored after each test.
+var _saved_setup_complete: bool
+var _saved_display_name: String
+var _saved_device_id: String
 
-func _setup_manager() -> void:
+
+func before_each() -> void:
+	_saved_setup_complete = PlayerIdentity.is_setup_complete
+	_saved_display_name = PlayerIdentity.display_name
+	_saved_device_id = PlayerIdentity.device_id
+
 	manager = Node.new()
 	manager.set_script(ManagerScript)
 	add_child_autofree(manager)
 	manager._pending = [] as Array[HTTPRequest]
+
+
+func after_each() -> void:
+	PlayerIdentity.is_setup_complete = _saved_setup_complete
+	PlayerIdentity.display_name = _saved_display_name
+	PlayerIdentity.device_id = _saved_device_id
 
 
 # ============================================================
@@ -29,11 +44,6 @@ func _setup_manager() -> void:
 # ============================================================
 
 func test_no_submit_when_setup_incomplete() -> void:
-	_setup_manager()
-	var original_complete := PlayerIdentity.is_setup_complete
-	var original_name := PlayerIdentity.display_name
-	var original_id := PlayerIdentity.device_id
-
 	PlayerIdentity.is_setup_complete = false
 	PlayerIdentity.display_name = "TestPlayer"
 	PlayerIdentity.device_id = "00000000-0000-0000-0000-000000000001"
@@ -42,17 +52,8 @@ func test_no_submit_when_setup_incomplete() -> void:
 	# No HTTPRequest should have been created
 	assert_eq(manager._pending.size(), 0)
 
-	PlayerIdentity.is_setup_complete = original_complete
-	PlayerIdentity.display_name = original_name
-	PlayerIdentity.device_id = original_id
-
 
 func test_no_submit_when_display_name_empty() -> void:
-	_setup_manager()
-	var original_complete := PlayerIdentity.is_setup_complete
-	var original_name := PlayerIdentity.display_name
-	var original_id := PlayerIdentity.device_id
-
 	PlayerIdentity.is_setup_complete = true
 	PlayerIdentity.display_name = ""
 	PlayerIdentity.device_id = "00000000-0000-0000-0000-000000000001"
@@ -60,17 +61,8 @@ func test_no_submit_when_display_name_empty() -> void:
 	manager._on_leaderboard_score_ready("shikaku", "10", 60.0)
 	assert_eq(manager._pending.size(), 0)
 
-	PlayerIdentity.is_setup_complete = original_complete
-	PlayerIdentity.display_name = original_name
-	PlayerIdentity.device_id = original_id
-
 
 func test_no_submit_when_device_id_empty() -> void:
-	_setup_manager()
-	var original_complete := PlayerIdentity.is_setup_complete
-	var original_name := PlayerIdentity.display_name
-	var original_id := PlayerIdentity.device_id
-
 	PlayerIdentity.is_setup_complete = true
 	PlayerIdentity.display_name = "TestPlayer"
 	PlayerIdentity.device_id = ""
@@ -78,17 +70,8 @@ func test_no_submit_when_device_id_empty() -> void:
 	manager._on_leaderboard_score_ready("blockudoku", "standard", 1500.0)
 	assert_eq(manager._pending.size(), 0)
 
-	PlayerIdentity.is_setup_complete = original_complete
-	PlayerIdentity.display_name = original_name
-	PlayerIdentity.device_id = original_id
-
 
 func test_submit_creates_http_request_when_profile_complete() -> void:
-	_setup_manager()
-	var original_complete := PlayerIdentity.is_setup_complete
-	var original_name := PlayerIdentity.display_name
-	var original_id := PlayerIdentity.device_id
-
 	PlayerIdentity.is_setup_complete = true
 	PlayerIdentity.display_name = "TestPlayer"
 	PlayerIdentity.device_id = "00000000-0000-0000-0000-000000000001"
@@ -97,20 +80,16 @@ func test_submit_creates_http_request_when_profile_complete() -> void:
 	# One HTTPRequest should have been added to _pending
 	assert_eq(manager._pending.size(), 1)
 
-	PlayerIdentity.is_setup_complete = original_complete
-	PlayerIdentity.display_name = original_name
-	PlayerIdentity.device_id = original_id
-
 
 # ============================================================
 # Cleanup helper
 # ============================================================
 
 func test_cleanup_removes_from_pending() -> void:
-	_setup_manager()
 	var http := HTTPRequest.new()
 	manager.add_child(http)
 	manager._pending.append(http)
 
 	manager._cleanup(http)
 	assert_eq(manager._pending.size(), 0)
+
