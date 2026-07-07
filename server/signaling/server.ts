@@ -55,6 +55,12 @@ function parseJsonBody(
   const chunks: Buffer[] = [];
   let bodyBytes = 0;
   let tooLarge = false;
+  req.on('error', () => {
+    if (!res.writableEnded) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Request error' }));
+    }
+  });
   req.on('data', (chunk: Buffer) => {
     if (tooLarge) return;
     if (bodyBytes + chunk.length > MAX_BODY_BYTES) {
@@ -95,7 +101,7 @@ function resolveGameMode(
   const config = BOARD_CONFIG[configKey];
   if (!config) {
     res.writeHead(400, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: `Unknown game:mode combination: ${configKey}` }));
+    res.end(JSON.stringify({ error: 'Invalid game or mode' }));
     return null;
   }
   return config;
