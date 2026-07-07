@@ -15,6 +15,7 @@ var ui_theme: Theme
 var _glow_layer: CanvasLayer
 var _world_env: WorldEnvironment
 var _environment: Environment
+var _shake_tween: Tween
 
 ## ThemePalette instance — single owner of palette truth.
 ## ThemeEditorScreen and other callers may read this to use the ThemePalette API.
@@ -156,15 +157,25 @@ func screen_shake(intensity: float = 4.0, duration: float = 0.15) -> void:
 	var viewport := get_viewport()
 	if not viewport:
 		return
-	var original := viewport.canvas_transform
-	var tween := create_tween()
-	tween.tween_method(func(t: float) -> void:
+	clear_screen_shake()
+	_shake_tween = create_tween()
+	_shake_tween.tween_method(func(t: float) -> void:
 		var shake := Vector2(randf_range(-intensity, intensity), randf_range(-intensity, intensity)) * (1.0 - t)
-		viewport.canvas_transform = Transform2D(0, shake) * original
+		viewport.canvas_transform = Transform2D(0, shake)
 	, 0.0, 1.0, duration)
-	tween.tween_callback(func() -> void:
-		viewport.canvas_transform = original
+	_shake_tween.tween_callback(func() -> void:
+		viewport.canvas_transform = Transform2D.IDENTITY
+		_shake_tween = null
 	)
+
+
+func clear_screen_shake() -> void:
+	if _shake_tween:
+		_shake_tween.kill()
+	_shake_tween = null
+	var viewport := get_viewport()
+	if viewport:
+		viewport.canvas_transform = Transform2D.IDENTITY
 
 
 func set_dark(dark: bool) -> void:

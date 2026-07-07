@@ -113,3 +113,30 @@ func test_auto_apply_safe_area_respects_opt_out_meta() -> void:
 
 	get_tree().root.remove_child(scene_root)
 	scene_root.queue_free()
+
+
+func test_apply_to_scene_root_unaffected_by_canvas_transform() -> void:
+	var viewport := get_viewport()
+	viewport.canvas_transform = Transform2D(0, Vector2(80, 40))
+
+	var scene_root := Control.new()
+	add_child_autofree(scene_root)
+	var margin := MarginContainer.new()
+	margin.name = "MarginContainer"
+	scene_root.add_child(margin)
+
+	var result: bool = SafeAreaManager.apply_to_scene_root(scene_root)
+	assert_true(result)
+
+	var insets := SafeAreaManager.get_insets()
+	assert_eq(
+		margin.get_theme_constant("margin_top"),
+		insets["top"],
+		"safe area should continue using margin constants regardless of canvas transform"
+	)
+	assert_eq(
+		viewport.canvas_transform,
+		Transform2D(0, Vector2(80, 40)),
+		"safe area application should not modify viewport canvas transform"
+	)
+	viewport.canvas_transform = Transform2D.IDENTITY

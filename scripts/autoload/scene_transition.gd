@@ -39,6 +39,7 @@ func transition_to(scene_path: String) -> void:
 func transition_with_callback(callback: Callable) -> void:
 	if _transitioning:
 		return
+	AppTheme.clear_screen_shake()
 	_transitioning = true
 	_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	_overlay.color = _get_fade_color(0.0)
