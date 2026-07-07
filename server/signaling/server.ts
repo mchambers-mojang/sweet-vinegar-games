@@ -1,4 +1,7 @@
+import * as http from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
+import Database from 'better-sqlite3';
+import { DEFAULT_DB_PATH, openDb, upsertPlayer, getPlayer } from './db';
 
 export const VALID_CHARS = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
 export const CODE_LENGTH = 4;
@@ -7,6 +10,14 @@ export const DEFAULT_ROOM_EXPIRY_MS = 60_000;
 export const MAX_BUFFERED_ICE = 20;
 
 const PORT = parseInt(process.env.PORT ?? '8080', 10);
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const PROFILE_PATH_RE = /^\/profile\/([^/]+)$/;
+
+export interface ServerBundle {
+  wss: WebSocketServer;
+  httpServer: http.Server;
+}
 
 export interface Room {
   code: string;
@@ -35,9 +46,10 @@ function send(ws: WebSocket, data: object): void {
 
 export function createServer(
   port: number,
-  options: { roomExpiryMs?: number } = {}
-): WebSocketServer {
+  options: { roomExpiryMs?: number; db?: Database.Database } = {}
+): ServerBundle {
   const roomExpiryMs = options.roomExpiryMs ?? DEFAULT_ROOM_EXPIRY_MS;
+  const db = options.db ?? openDb(DEFAULT_DB_PATH);
   const rooms = new Map<string, Room>();
 
   function deleteRoom(code: string): void {
@@ -48,7 +60,102 @@ export function createServer(
     }
   }
 
-  const wss = new WebSocketServer({ port, maxPayload: 16384 });
+  const httpServer = http.createServer((req, res) => {
+    const url = req.url ?? '/';
+
+    // PUT /profile
+    if (req.method === 'PUT' && url === '/profile') {
+      const MAX_BODY_BYTES = 4096;
+      const chunks: Buffer[] = [];
+      let bodyBytes = 0;
+      let tooLarge = false;
+      req.on('data', (chunk: Buffer) => {
+        if (tooLarge) return;
+        if (bodyBytes + chunk.length > MAX_BODY_BYTES) {
+          tooLarge = true;
+          res.writeHead(413, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Payload too large' }));
+          req.destroy();
+          return;
+        }
+        bodyBytes += chunk.length;
+        chunks.push(chunk);
+      });
+      req.on('end', () => {
+        if (tooLarge) return;
+        const body = Buffer.concat(chunks).toString();
+        let payload: Record<string, unknown>;
+        try {
+          payload = JSON.parse(body) as Record<string, unknown>;
+        } catch {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Invalid JSON' }));
+          return;
+        }
+
+        const { device_id, display_name, visible } = payload;
+
+        if (typeof device_id !== 'string' || !UUID_RE.test(device_id)) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'device_id must be a valid UUID' }));
+          return;
+        }
+
+        if (typeof display_name !== 'string') {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'display_name must be a string' }));
+          return;
+        }
+        const trimmed = display_name.trim();
+        if (trimmed.length === 0 || trimmed.length > 20) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'display_name must be a non-empty string of at most 20 characters' }));
+          return;
+        }
+
+        if (visible !== undefined && typeof visible !== 'boolean') {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'visible must be a boolean' }));
+          return;
+        }
+        const visibleInt = visible === false ? 0 : 1;
+
+        upsertPlayer(db, device_id, trimmed, visibleInt);
+        res.writeHead(204);
+        res.end();
+      });
+      return;
+    }
+
+    // GET /profile/:device_id
+    const profileMatch = PROFILE_PATH_RE.exec(url);
+    if (req.method === 'GET' && profileMatch) {
+      const device_id = profileMatch[1];
+      if (!UUID_RE.test(device_id)) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'device_id must be a valid UUID' }));
+        return;
+      }
+      const profile = getPlayer(db, device_id);
+      if (!profile) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Profile not found' }));
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        display_name: profile.display_name,
+        visible: profile.visible === 1,
+        created_at: profile.created_at,
+      }));
+      return;
+    }
+
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Not found' }));
+  });
+
+  const wss = new WebSocketServer({ server: httpServer, maxPayload: 16384 });
 
   wss.on('connection', (ws: WebSocket) => {
     // Track all rooms this connection owns so every room is cleaned up on disconnect,
@@ -128,7 +235,7 @@ export function createServer(
           } else if (ws === room.creator) {
             // Host ICE arrived before joiner — buffer for flush on join
             if (room.pendingIceForJoiner.length < MAX_BUFFERED_ICE) {
-              room.pendingIceForJoiner.push(msg.candidate);
+              room.pendingIceForJoiner.push(msg.candidate as object);
             }
           }
           break;
@@ -165,12 +272,13 @@ export function createServer(
     });
   });
 
-  return wss;
+  httpServer.listen(port);
+  return { wss, httpServer };
 }
 
 if (require.main === module) {
-  const server = createServer(PORT);
-  server.on('listening', () => {
+  const { httpServer } = createServer(PORT);
+  httpServer.on('listening', () => {
     console.log(`Signaling server listening on port ${PORT}`);
   });
 }
