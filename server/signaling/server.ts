@@ -8,6 +8,7 @@ export const CODE_LENGTH = 4;
 export const MAX_ROOMS = 100;
 export const DEFAULT_ROOM_EXPIRY_MS = 60_000;
 export const MAX_BUFFERED_ICE = 20;
+export const MAX_BODY_BYTES = 4096;
 
 const PORT = parseInt(process.env.PORT ?? '8080', 10);
 
@@ -66,7 +67,6 @@ export function createServer(
 
     // PUT /profile
     if (req.method === 'PUT' && url === '/profile') {
-      const MAX_BODY_BYTES = 4096;
       const chunks: Buffer[] = [];
       let bodyBytes = 0;
       let tooLarge = false;
@@ -153,8 +153,7 @@ export function createServer(
     }
 
     // POST /scores
-    if (req.method === 'POST' && url.startsWith('/scores') && !url.startsWith('/scores/')) {
-      const MAX_BODY_BYTES = 4096;
+    if (req.method === 'POST' && (url === '/scores' || url.startsWith('/scores?'))) {
       const chunks: Buffer[] = [];
       let bodyBytes = 0;
       let tooLarge = false;

@@ -129,7 +129,8 @@ export function getLeaderboard(
   device_id: string
 ): { top: ScoreEntry[]; player_rank: number | null; player_score: number | null } {
   const config = BOARD_CONFIG[`${game}:${mode}`];
-  const order = config.sort === 'asc' ? 'ASC' : 'DESC';
+  // Explicitly validate order to ensure only safe literals reach the SQL string
+  const order: 'ASC' | 'DESC' = config.sort === 'asc' ? 'ASC' : 'DESC';
 
   const top = db.prepare(`
     SELECT s.device_id, p.display_name, s.value,
