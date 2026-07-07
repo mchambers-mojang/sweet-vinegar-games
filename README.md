@@ -1,13 +1,27 @@
 # Sweet Vinegar Games
 
-An AI game-making side project for private use. A mobile puzzle game collection featuring Sudoku and Shikaku, built with Godot 4.6.
+A multi-game collection built with Godot 4.6, published on iOS, Android, and Windows.
 
-Replay system draft details: `docs/replay-system.md`
+## Games
 
-## Analytics
+### Sudoku
+Classic number puzzle with pencil marks, cell coloring, difficulty tiers, error modes, and undo/redo.
 
-The project includes a local-first `AnalyticsManager` autoload that records gameplay/settings events to `user://analytics_events.json` using a bounded rolling window, with a pluggable sink interface for future remote providers.
-## Crash reporting
+### Shikaku
+Rectangle-partitioning puzzle with multiple grid sizes and timed play.
 
-Crash and runtime error reports are written to `user://crash_logs/` (rolling history, newest 15). Reports include timestamp, scene, device/OS info, memory usage, recent user actions, and registered game/replay state hooks.
-`Ctrl+Shift+C` copies the latest crash report JSON to clipboard for sharing during debugging.
+### Blockudoku
+Block-placement puzzle combining Sudoku grid logic with Tetris-style pieces. Line and region clears with combo scoring.
+
+### Carom
+A physics-driven 3D arena game. Two turrets fire projectiles to push pucks into the opponent's goal. Features AI opponents (4 difficulty tiers), replays, and online multiplayer via WebRTC.
+
+## Platform Features
+
+- **Themes** — Light, Dark, Neon, and a custom theme editor
+- **Replays** — Input-based recording with scrubbing and playback for all games
+- **Achievements** — Cross-game achievement system with per-game milestones
+- **Haptics & Effects** — Screen shake, particles, device haptics (all toggleable)
+- **Save/Resume** — Mid-game persistence across all puzzle games
+- **Analytics** — Local-first event recording with pluggable sinks
+- **Crash Reporting** — On-device crash logs with clipboard export
