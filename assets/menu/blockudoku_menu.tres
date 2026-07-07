@@ -35,3 +35,5 @@ game_rules = {
 "drag_offset": 1,
 "rotation_mode": false
 }
+leaderboard_modes = PackedStringArray("standard")
+leaderboard_is_time_based = false

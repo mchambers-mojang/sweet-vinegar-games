@@ -24,3 +24,5 @@ abandon_stat_prefix = "abandoned_s"
 abandon_stat_default = 10
 title_color_key = ""
 game_rules = {}
+leaderboard_modes = PackedStringArray("5", "7", "", "10", "", "")
+leaderboard_is_time_based = true

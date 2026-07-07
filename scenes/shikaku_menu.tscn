@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/components/base_menu.tscn" id="1"]
 [ext_resource type="Script" path="res://scripts/shikaku/shikaku_menu.gd" id="2"]
+[ext_resource type="PackedScene" path="res://scenes/components/leaderboard_panel.tscn" id="3"]
 
 [node name="ShikakuMenu" instance=ExtResource("1")]
 script = ExtResource("2")
@@ -33,3 +34,6 @@ popup/item_4/id = 4
 popup/item_5/text = "15×15"
 popup/item_5/id = 5
 selected = 3
+
+[node name="LeaderboardPanel" parent="MarginContainer/VBoxContainer" index=8 instance=ExtResource("3")]
+layout_mode = 2

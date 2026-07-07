@@ -100,3 +100,15 @@ extends Resource
 ## The registry ignores duplicate registrations, so this is safe to call
 ## on every menu visit.
 @export var game_rules: Dictionary = {}
+
+# --- Leaderboard ---
+
+## Server mode strings, indexed to match the option dropdown.
+## Empty string at a given index means no leaderboard for that option.
+## For games with no option dropdown (e.g. Blockudoku), provide one entry.
+## e.g. for Sudoku: PackedStringArray("easy", "medium", "hard", "expert", "")
+@export var leaderboard_modes: PackedStringArray = PackedStringArray()
+
+## True for time-based leaderboards (values are seconds; display as MM:SS.cc).
+## False for score-based leaderboards (plain integers, descending).
+@export var leaderboard_is_time_based: bool = true
