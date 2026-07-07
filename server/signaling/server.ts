@@ -1,7 +1,7 @@
 import * as http from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import Database from 'better-sqlite3';
-import { DEFAULT_DB_PATH, openDb, upsertPlayer, getPlayer, BOARD_CONFIG, upsertScore, getLeaderboard } from './db';
+import { DEFAULT_DB_PATH, openDb, upsertPlayer, getPlayer, BOARD_CONFIG, BoardConfigEntry, upsertScore, getLeaderboard } from './db';
 
 export const VALID_CHARS = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
 export const CODE_LENGTH = 4;
@@ -80,6 +80,25 @@ function parseJsonBody(
     }
     onSuccess(payload);
   });
+}
+
+/**
+ * Validates that game and mode refer to a known BOARD_CONFIG entry.
+ * Returns the config on success, or writes a 400 response and returns null.
+ */
+function resolveGameMode(
+  res: http.ServerResponse,
+  game: string,
+  mode: string
+): BoardConfigEntry | null {
+  const configKey = `${game}:${mode}`;
+  const config = BOARD_CONFIG[configKey];
+  if (!config) {
+    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: `Unknown game:mode combination: ${configKey}` }));
+    return null;
+  }
+  return config;
 }
 
 export function createServer(
@@ -185,13 +204,8 @@ export function createServer(
           return;
         }
 
-        const configKey = `${game}:${mode}`;
-        const config = BOARD_CONFIG[configKey];
-        if (!config) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: `Unknown game:mode combination: ${configKey}` }));
-          return;
-        }
+        const config = resolveGameMode(res, game, mode);
+        if (!config) return;
 
         if (typeof value !== 'number' || !isFinite(value)) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -251,12 +265,7 @@ export function createServer(
         return;
       }
 
-      const configKey = `${game}:${mode}`;
-      if (!BOARD_CONFIG[configKey]) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: `Unknown game:mode combination: ${configKey}` }));
-        return;
-      }
+      if (!resolveGameMode(res, game, mode)) return;
 
       const result = getLeaderboard(db, game, mode, device_id);
       res.writeHead(200, { 'Content-Type': 'application/json' });

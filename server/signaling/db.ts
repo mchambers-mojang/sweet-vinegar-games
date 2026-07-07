@@ -129,23 +129,23 @@ export function getLeaderboard(
   device_id: string
 ): { top: ScoreEntry[]; player_rank: number | null; player_score: number | null } {
   const config = BOARD_CONFIG[`${game}:${mode}`];
-  // Explicitly validate order to ensure only safe literals reach the SQL string
-  const order: 'ASC' | 'DESC' = config.sort === 'asc' ? 'ASC' : 'DESC';
+  // Explicitly validate sqlOrder to ensure only safe literals reach the SQL string
+  const sqlOrder: 'ASC' | 'DESC' = config.sort === 'asc' ? 'ASC' : 'DESC';
 
   const top = db.prepare(`
     SELECT s.device_id, p.display_name, s.value,
-      DENSE_RANK() OVER (ORDER BY s.value ${order}) AS rank
+      DENSE_RANK() OVER (ORDER BY s.value ${sqlOrder}) AS rank
     FROM scores s
     JOIN players p ON s.device_id = p.device_id
     WHERE s.game = ? AND s.mode = ? AND p.visible = 1
-    ORDER BY s.value ${order}
+    ORDER BY s.value ${sqlOrder}
     LIMIT 10
   `).all(game, mode) as ScoreEntry[];
 
   const playerRow = db.prepare(`
     WITH all_ranked AS (
       SELECT device_id, value,
-        DENSE_RANK() OVER (ORDER BY value ${order}) AS rank
+        DENSE_RANK() OVER (ORDER BY value ${sqlOrder}) AS rank
       FROM scores
       WHERE game = ? AND mode = ?
     )
