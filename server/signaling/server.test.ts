@@ -4,7 +4,7 @@ import Database from 'better-sqlite3';
 import { createServer } from './server';
 import { openDb } from './db';
 
-const _msgQueues = new WeakMap<WebSocket, {
+const messageQueues = new WeakMap<WebSocket, {
   queue: Record<string, unknown>[];
   resolvers: Array<(msg: Record<string, unknown>) => void>;
 }>();
@@ -13,7 +13,7 @@ function connect(port: number): Promise<WebSocket> {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`ws://localhost:${port}`);
     const state = { queue: [] as Record<string, unknown>[], resolvers: [] as Array<(msg: Record<string, unknown>) => void> };
-    _msgQueues.set(ws, state);
+    messageQueues.set(ws, state);
     ws.on('message', (data: Buffer) => {
       const msg = JSON.parse(data.toString()) as Record<string, unknown>;
       if (state.resolvers.length > 0) {
@@ -28,7 +28,7 @@ function connect(port: number): Promise<WebSocket> {
 }
 
 function nextMessage(ws: WebSocket): Promise<Record<string, unknown>> {
-  const state = _msgQueues.get(ws);
+  const state = messageQueues.get(ws);
   if (!state) throw new Error('WebSocket not registered');
   return new Promise((resolve) => {
     if (state.queue.length > 0) {

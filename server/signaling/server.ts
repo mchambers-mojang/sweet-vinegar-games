@@ -87,7 +87,7 @@ export function createServer(
 
         if (typeof display_name !== 'string') {
           res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'display_name must be a non-empty string of at most 20 characters' }));
+          res.end(JSON.stringify({ error: 'display_name must be a string' }));
           return;
         }
         const trimmed = display_name.trim();
@@ -97,7 +97,12 @@ export function createServer(
           return;
         }
 
-        const visibleInt = visible === undefined ? 1 : (visible ? 1 : 0);
+        if (visible !== undefined && typeof visible !== 'boolean') {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'visible must be a boolean' }));
+          return;
+        }
+        const visibleInt = visible === false ? 0 : 1;
 
         upsertPlayer(db, device_id, trimmed, visibleInt);
         res.writeHead(204);
