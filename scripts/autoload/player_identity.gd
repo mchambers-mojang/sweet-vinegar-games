@@ -71,6 +71,10 @@ func sync_profile() -> void:
 	_save()
 	if _http == null or _sync_in_flight:
 		return
+	_send_sync_request()
+
+
+func _send_sync_request() -> void:
 	_sync_in_flight = true
 	var body := JSON.stringify({
 		"device_id": device_id,
@@ -102,17 +106,7 @@ func _schedule_retry() -> void:
 
 func _on_retry_timeout() -> void:
 	if _pending_sync and not _sync_in_flight:
-		_sync_in_flight = true
-		var body := JSON.stringify({
-			"device_id": device_id,
-			"display_name": display_name,
-			"visible": leaderboard_visible,
-		})
-		var headers := PackedStringArray(["Content-Type: application/json"])
-		var err := _http.request(REST_BASE_URL + "/profile", headers, HTTPClient.METHOD_PUT, body)
-		if err != OK:
-			_sync_in_flight = false
-			_schedule_retry()
+		_send_sync_request()
 
 
 func _load() -> void:
