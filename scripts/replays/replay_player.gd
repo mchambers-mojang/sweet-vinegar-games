@@ -4,6 +4,8 @@ extends PanelContainer
 ## Drives game-specific replay rendering through a GameReplayAdapter.
 ## Handles play/pause, speed cycling, and backward scrubbing for all games.
 
+const TimeFormat := preload("res://scripts/utils/time_format.gd")
+
 @onready var back_button: Button = %BackButton
 @onready var play_button: Button = %PlayButton
 @onready var speed_button: Button = %SpeedButton
@@ -151,7 +153,10 @@ func _process(delta: float) -> void:
 
 func _update_ui() -> void:
 	var total := _frames.size()
-	progress_label.text = "%d / %d" % [_current_frame, total]
+	progress_label.text = "%s / %s" % [
+		TimeFormat.format_time(_get_current_time_seconds(), true),
+		TimeFormat.format_time(_get_total_time_seconds(), true),
+	]
 	play_button.text = ""
 	AppTheme.apply_icon(play_button, "pause" if _playing else "play")
 	info_label.text = "Move %d" % _current_frame
@@ -160,6 +165,19 @@ func _update_ui() -> void:
 	scrub_bar.max_value = max(total, 1)
 	scrub_bar.value = _current_frame
 	_scrub_updating = false
+
+
+func _get_current_time_seconds() -> float:
+	if _current_frame <= 0:
+		return 0.0
+	if _current_frame >= _frames.size():
+		return _get_total_time_seconds()
+	return float(_frames[_current_frame - 1].get("tick", 0)) / 1000.0
+
+
+func _get_total_time_seconds() -> float:
+	var footer: Dictionary = _replay.get("footer", {})
+	return float(footer.get("duration", 0.0))
 
 
 func _create_adapter(game_mode: String) -> GameReplayAdapter:

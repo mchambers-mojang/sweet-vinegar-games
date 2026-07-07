@@ -2,6 +2,8 @@ extends Control
 
 ## Statistics display screen
 
+const TimeFormat := preload("res://scripts/utils/time_format.gd")
+
 @onready var back_button: Button = %BackButton
 @onready var stats_list: VBoxContainer = %StatsList
 
@@ -38,12 +40,12 @@ func _build_stats_ui() -> void:
 
 		var best_ms: int = GameStatsManager.get_counter("sudoku", "best_d%d" % d)
 		var best: float = float(best_ms) / 1000.0 if best_ms > 0 else -1.0
-		_add_stat_row("Best Time", _format_time(best) if best >= 0 else "--")
+		_add_stat_row("Best Time", TimeFormat.format_time(best, true) if best >= 0 else "--")
 
 		# Average from history
 		var history: Array = _get_time_history_for_difficulty(d)
 		var avg: float = _compute_average(history)
-		_add_stat_row("Average Time", _format_time(avg) if avg >= 0 else "--")
+		_add_stat_row("Average Time", TimeFormat.format_time(avg, true) if avg >= 0 else "--")
 
 		if not history.is_empty():
 			_add_time_graph(history)
@@ -114,12 +116,6 @@ func _add_time_graph(times: Array) -> void:
 	graph.mouse_filter = Control.MOUSE_FILTER_PASS
 	stats_list.add_child(graph)
 	graph.set_times(times)
-
-
-func _format_time(seconds: float) -> String:
-	var mins := int(seconds) / 60
-	var secs := int(seconds) % 60
-	return "%d:%02d" % [mins, secs]
 
 
 func _apply_theme() -> void:

@@ -2,6 +2,8 @@ extends GameScreen
 
 ## Blockudoku game screen — board, score, block tray, drag-to-place
 
+const TimeFormat := preload("res://scripts/utils/time_format.gd")
+
 const BLOCKS_PER_SET := 3
 const ROTATE_TAP_DISTANCE_THRESHOLD := 12.0
 const COMBO_PULSE_BASE_SCALE := 1.02
@@ -600,7 +602,7 @@ func _stop_shatter() -> void:
 func _show_game_over_dialog() -> void:
 	var dialog := AcceptDialog.new()
 	dialog.title = "Game Over"
-	dialog.dialog_text = "Score: %d\nTurns: %d" % [logic.score, logic.turns]
+	dialog.dialog_text = "Score: %d\nTurns: %d\nTime: %s" % [logic.score, logic.turns, TimeFormat.format_time(elapsed_time, true)]
 	dialog.ok_button_text = "Play Again"
 	dialog.add_button("Menu", true, "menu")
 	dialog.add_button("Save Replay", true, "bookmark")

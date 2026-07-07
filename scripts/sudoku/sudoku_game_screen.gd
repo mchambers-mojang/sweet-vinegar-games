@@ -2,6 +2,8 @@ extends GameScreen
 
 ## Main game screen — orchestrates board UI, feeds input to SudokuLogic, dispatches side effects
 
+const TimeFormat := preload("res://scripts/utils/time_format.gd")
+
 # Pure game-rule logic — no UI, no autoloads
 var logic: SudokuLogic = null
 
@@ -883,7 +885,7 @@ func _show_fail_dialog() -> void:
 func _show_win_dialog() -> void:
 	var dialog := AcceptDialog.new()
 	dialog.title = "Congratulations!"
-	var time_text := _format_time(elapsed_time)
+	var time_text := TimeFormat.format_time(elapsed_time, true)
 	dialog.dialog_text = "You solved the %s puzzle in %s!" % [DIFFICULTY_NAMES[difficulty], time_text]
 	if logic.hints_used > 0:
 		dialog.dialog_text += "\nHints used: %d" % logic.hints_used
@@ -1167,5 +1169,3 @@ func _get_best_time(diff: int) -> float:
 	if best_ms == 0:
 		return -1.0
 	return float(best_ms) / 1000.0
-
-

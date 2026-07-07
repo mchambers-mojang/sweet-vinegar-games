@@ -1,5 +1,7 @@
 extends Control
 
+const TimeFormat := preload("res://scripts/utils/time_format.gd")
+
 ## Replay collection viewer — browse, bookmark, delete, and (future) play back replays.
 
 @onready var back_button: Button = %BackButton
@@ -107,7 +109,7 @@ func _add_replay_row(replay: Dictionary) -> void:
 
 	var details := Label.new()
 	details.mouse_filter = Control.MOUSE_FILTER_PASS
-	var time_str := _format_time(duration)
+	var time_str := TimeFormat.format_time(duration, true)
 	var date_str := _format_date(timestamp)
 	details.text = "Score: %d  |  %s  |  %s" % [score, time_str, date_str]
 	details.add_theme_font_size_override("font_size", 13)
@@ -155,12 +157,6 @@ func _add_replay_row(replay: Dictionary) -> void:
 		_build_ui()
 	)
 	btn_row.add_child(delete_btn)
-
-
-func _format_time(seconds: float) -> String:
-	var mins := int(seconds) / 60
-	var secs := int(seconds) % 60
-	return "%d:%02d" % [mins, secs]
 
 
 func _format_date(unix_time: int) -> String:
