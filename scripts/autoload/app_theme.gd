@@ -386,14 +386,15 @@ func _force_popup_opacity_recursive(node: Node) -> void:
 func _force_popup_opacity(node: Node) -> void:
 	if node is OptionButton:
 		var option := node as OptionButton
-		var popup := option.get_popup()
-		if popup:
-			popup.transparent = false
+		_set_popup_non_transparent(option.get_popup())
 	elif node is ColorPickerButton:
 		var picker := node as ColorPickerButton
-		var popup := picker.get_popup()
-		if popup:
-			popup.transparent = false
+		_set_popup_non_transparent(picker.get_popup())
+
+
+func _set_popup_non_transparent(popup: Popup) -> void:
+	if popup:
+		popup.transparent = false
 
 
 func _try_apply_icon(button: Button) -> void:
