@@ -10,9 +10,11 @@
     "test": "jest"
   },
   "dependencies": {
+    "better-sqlite3": "^12.11.1",
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/jest": "^29.5.14",
     "@types/node": "^22.15.0",
     "@types/ws": "^8.5.14",
