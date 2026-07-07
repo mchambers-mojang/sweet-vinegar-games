@@ -6,7 +6,7 @@ extends RefCounted
 
 signal changed
 
-var _sound_enabled: bool = true
+var _sound_enabled: bool = false
 var _haptic_enabled: bool = true
 var _screen_shake_enabled: bool = true
 var _shockwave_enabled: bool = true

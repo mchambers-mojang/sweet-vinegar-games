@@ -11,9 +11,9 @@ func _make_feedback() -> FeedbackSettings:
 
 # --- Default values ---
 
-func test_default_sound_enabled_is_true() -> void:
+func test_default_sound_enabled_is_false() -> void:
 	var f := _make_feedback()
-	assert_true(f.sound_enabled)
+	assert_false(f.sound_enabled)
 
 
 func test_default_haptic_enabled_is_true() -> void:
@@ -154,7 +154,7 @@ func test_load_from_missing_keys_uses_defaults() -> void:
 	# No keys set — defaults should be preserved
 	var f := _make_feedback()
 	f.load_from(config)
-	assert_true(f.sound_enabled)
+	assert_false(f.sound_enabled)
 	assert_true(f.haptic_enabled)
 	assert_true(f.screen_shake_enabled)
 	assert_true(f.shockwave_enabled)
