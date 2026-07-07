@@ -37,6 +37,7 @@ DragEffect="*res://scripts/effects/drag_effect.gd"
 DebugOverlay="*res://scripts/autoload/debug_overlay.gd"
 GameSaveManager="*res://scripts/autoload/game_save_manager.gd"
 GameStatsManager="*res://scripts/autoload/game_stats_manager.gd"
+PlayerIdentity="*res://scripts/autoload/player_identity.gd"
 
 [debug]
 

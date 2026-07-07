@@ -201,6 +201,26 @@ func _build_settings_ui() -> void:
 			PlatformSettings.save_settings()
 	)
 
+	_add_separator()
+	_add_header("Leaderboards")
+
+	# Display name
+	_add_text_field("Display Name", PlayerIdentity.display_name, 20,
+		func(value: String) -> void:
+			var trimmed := value.strip_edges().substr(0, 20)
+			if trimmed == PlayerIdentity.display_name:
+				return
+			PlayerIdentity.display_name = trimmed
+			PlayerIdentity.sync_profile()
+	)
+
+	# Visibility toggle
+	_add_toggle("Show on Leaderboards", PlayerIdentity.leaderboard_visible,
+		func(value: bool) -> void:
+			PlayerIdentity.leaderboard_visible = value
+			PlayerIdentity.sync_profile()
+	)
+
 
 func _add_toggle(label_text: String, initial: bool, callback: Callable) -> void:
 	var row := HBoxContainer.new()
@@ -264,6 +284,28 @@ func _add_button(label_text: String, callback: Callable) -> void:
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn.pressed.connect(callback)
 	settings_list.add_child(btn)
+
+
+func _add_text_field(label_text: String, initial: String, max_length: int, callback: Callable) -> void:
+	var row := HBoxContainer.new()
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.mouse_filter = Control.MOUSE_FILTER_PASS
+
+	var label := Label.new()
+	label.text = label_text
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.mouse_filter = Control.MOUSE_FILTER_PASS
+	row.add_child(label)
+
+	var field := LineEdit.new()
+	field.text = initial
+	field.max_length = max_length
+	field.custom_minimum_size = Vector2(140, 0)
+	field.text_submitted.connect(callback)
+	field.focus_exited.connect(func() -> void: callback.call(field.text))
+	row.add_child(field)
+
+	settings_list.add_child(row)
 
 
 func _apply_theme() -> void:
