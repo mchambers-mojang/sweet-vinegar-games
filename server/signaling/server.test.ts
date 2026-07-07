@@ -88,6 +88,14 @@ async function makeServer(options?: { roomExpiryMs?: number }): Promise<ServerHa
 
 const TEST_UUID = '550e8400-e29b-41d4-a716-446655440000';
 const TEST_UUID2 = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
+const TEST_UUID3 = 'c2ddde11-2e2d-6001-dd8f-8dd1df502c33';
+
+/** Seeds Alice (100s), Bob (200s), Carol invisible (50s) into sudoku:easy */
+async function seedSudokuEasyScores(port: number): Promise<void> {
+  await httpRequest({ method: 'POST', port, path: '/scores', body: { device_id: TEST_UUID, game: 'sudoku', mode: 'easy', value: 100 } });
+  await httpRequest({ method: 'POST', port, path: '/scores', body: { device_id: TEST_UUID2, game: 'sudoku', mode: 'easy', value: 200 } });
+  await httpRequest({ method: 'POST', port, path: '/scores', body: { device_id: TEST_UUID3, game: 'sudoku', mode: 'easy', value: 50 } });
+}
 
 describe('Signaling Server', () => {
   let wss: WebSocketServer;
@@ -454,3 +462,271 @@ describe('Profile Endpoints', () => {
     expect((r2.body as Record<string, unknown>).visible).toBe(false);
   });
 });
+
+describe('Score Endpoints', () => {
+  let wss: WebSocketServer;
+  let httpServer: http.Server;
+  let port: number;
+
+  beforeEach(async () => {
+    ({ wss, httpServer, port } = await makeServer());
+    // Seed a player profile for use in score tests
+    await httpRequest({
+      method: 'PUT', port, path: '/profile',
+      body: { device_id: TEST_UUID, display_name: 'Alice', visible: true },
+    });
+  });
+
+  afterEach((done) => {
+    wss.close(() => httpServer.close(done));
+  });
+
+  test('POST /scores accepts a valid asc (time-based) score', async () => {
+    const res = await httpRequest({
+      method: 'POST', port, path: '/scores',
+      body: { device_id: TEST_UUID, game: 'sudoku', mode: 'easy', value: 120 },
+    });
+    expect(res.status).toBe(200);
+    const body = res.body as Record<string, unknown>;
+    expect(body.accepted).toBe(true);
+    expect(body.personal_best).toBe(120);
+  });
+
+  test('POST /scores accepts a valid desc (score-based) score', async () => {
+    const res = await httpRequest({
+      method: 'POST', port, path: '/scores',
+      body: { device_id: TEST_UUID, game: 'blockudoku', mode: 'standard', value: 5000 },
+    });
+    expect(res.status).toBe(200);
+    const body = res.body as Record<string, unknown>;
+    expect(body.accepted).toBe(true);
+    expect(body.personal_best).toBe(5000);
+  });
+
+  test('POST /scores upserts only when new value is better (asc: lower is better)', async () => {
+    await httpRequest({
+      method: 'POST', port, path: '/scores',
+      body: { device_id: TEST_UUID, game: 'sudoku', mode: 'easy', value: 300 },
+    });
+    // Better (lower) time — should be accepted
+    const better = await httpRequest({
+      method: 'POST', port, path: '/scores',
+      body: { device_id: TEST_UUID, game: 'sudoku', mode: 'easy', value: 200 },
+    });
+    expect((better.body as Record<string, unknown>).accepted).toBe(true);
+    expect((better.body as Record<string, unknown>).personal_best).toBe(200);
+
+    // Worse (higher) time — should be rejected
+    const worse = await httpRequest({
+      method: 'POST', port, path: '/scores',
+      body: { device_id: TEST_UUID, game: 'sudoku', mode: 'easy', value: 250 },
+    });
+    expect((worse.body as Record<string, unknown>).accepted).toBe(false);
+    expect((worse.body as Record<string, unknown>).personal_best).toBe(200);
+  });
+
+  test('POST /scores upserts only when new value is better (desc: higher is better)', async () => {
+    await httpRequest({
+      method: 'POST', port, path: '/scores',
+      body: { device_id: TEST_UUID, game: 'blockudoku', mode: 'standard', value: 3000 },
+    });
+    // Better (higher) score — accepted
+    const better = await httpRequest({
+      method: 'POST', port, path: '/scores',
+      body: { device_id: TEST_UUID, game: 'blockudoku', mode: 'standard', value: 5000 },
+    });
+    expect((better.body as Record<string, unknown>).accepted).toBe(true);
+    expect((better.body as Record<string, unknown>).personal_best).toBe(5000);
+
+    // Worse (lower) score — rejected
+    const worse = await httpRequest({
+      method: 'POST', port, path: '/scores',
+      body: { device_id: TEST_UUID, game: 'blockudoku', mode: 'standard', value: 4000 },
+    });
+    expect((worse.body as Record<string, unknown>).accepted).toBe(false);
+    expect((worse.body as Record<string, unknown>).personal_best).toBe(5000);
+  });
+
+  test('POST /scores rejects value below min bound', async () => {
+    // sudoku:easy min is 10
+    const res = await httpRequest({
+      method: 'POST', port, path: '/scores',
+      body: { device_id: TEST_UUID, game: 'sudoku', mode: 'easy', value: 5 },
+    });
+    expect(res.status).toBe(400);
+  });
+
+  test('POST /scores rejects value above max bound', async () => {
+    // sudoku:easy max is 7200
+    const res = await httpRequest({
+      method: 'POST', port, path: '/scores',
+      body: { device_id: TEST_UUID, game: 'sudoku', mode: 'easy', value: 7201 },
+    });
+    expect(res.status).toBe(400);
+  });
+
+  test('POST /scores accepts boundary values (min and max)', async () => {
+    const atMin = await httpRequest({
+      method: 'POST', port, path: '/scores',
+      body: { device_id: TEST_UUID, game: 'sudoku', mode: 'easy', value: 10 },
+    });
+    expect(atMin.status).toBe(200);
+
+    await httpRequest({
+      method: 'PUT', port, path: '/profile',
+      body: { device_id: TEST_UUID2, display_name: 'Bob', visible: true },
+    });
+    const atMax = await httpRequest({
+      method: 'POST', port, path: '/scores',
+      body: { device_id: TEST_UUID2, game: 'sudoku', mode: 'easy', value: 7200 },
+    });
+    expect(atMax.status).toBe(200);
+  });
+
+  test('POST /scores rejects unknown game:mode combo', async () => {
+    const res = await httpRequest({
+      method: 'POST', port, path: '/scores',
+      body: { device_id: TEST_UUID, game: 'sudoku', mode: 'nightmare', value: 100 },
+    });
+    expect(res.status).toBe(400);
+  });
+
+  test('POST /scores returns 404 for unknown device_id', async () => {
+    const res = await httpRequest({
+      method: 'POST', port, path: '/scores',
+      body: { device_id: TEST_UUID2, game: 'sudoku', mode: 'easy', value: 120 },
+    });
+    expect(res.status).toBe(404);
+  });
+
+  test('POST /scores rejects invalid device_id', async () => {
+    const res = await httpRequest({
+      method: 'POST', port, path: '/scores',
+      body: { device_id: 'not-a-uuid', game: 'sudoku', mode: 'easy', value: 120 },
+    });
+    expect(res.status).toBe(400);
+  });
+
+  test('POST /scores rejects missing game field', async () => {
+    const res = await httpRequest({
+      method: 'POST', port, path: '/scores',
+      body: { device_id: TEST_UUID, mode: 'easy', value: 120 },
+    });
+    expect(res.status).toBe(400);
+  });
+
+  test('POST /scores rejects non-number value', async () => {
+    const res = await httpRequest({
+      method: 'POST', port, path: '/scores',
+      body: { device_id: TEST_UUID, game: 'sudoku', mode: 'easy', value: 'fast' },
+    });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('Leaderboard Endpoint', () => {
+  let wss: WebSocketServer;
+  let httpServer: http.Server;
+  let port: number;
+
+  beforeEach(async () => {
+    ({ wss, httpServer, port } = await makeServer());
+    // Seed three players
+    await httpRequest({ method: 'PUT', port, path: '/profile', body: { device_id: TEST_UUID, display_name: 'Alice', visible: true } });
+    await httpRequest({ method: 'PUT', port, path: '/profile', body: { device_id: TEST_UUID2, display_name: 'Bob', visible: true } });
+    await httpRequest({ method: 'PUT', port, path: '/profile', body: { device_id: TEST_UUID3, display_name: 'Carol', visible: false } });
+  });
+
+  afterEach((done) => {
+    wss.close(() => httpServer.close(done));
+  });
+
+  test('GET /leaderboard returns top visible players and requester rank', async () => {
+    // Alice: 100s, Bob: 200s, Carol (invisible): 50s
+    await seedSudokuEasyScores(port);
+
+    const res = await httpRequest({ method: 'GET', port, path: `/leaderboard?game=sudoku&mode=easy&device_id=${TEST_UUID}` });
+    expect(res.status).toBe(200);
+    const body = res.body as Record<string, unknown>;
+
+    // Top 10 should only contain visible players (Alice and Bob)
+    const top = body.top as Array<Record<string, unknown>>;
+    expect(top.length).toBe(2);
+    expect(top[0].display_name).toBe('Alice');   // 100s is better (lower) than Bob's 200s
+    expect(top[1].display_name).toBe('Bob');
+
+    // Alice is querying — she's rank 2 overall (Carol has 50s which is better)
+    expect(body.player_rank).toBe(2);
+    expect(body.player_score).toBe(100);
+  });
+
+  test('GET /leaderboard invisible player can see their own rank', async () => {
+    await seedSudokuEasyScores(port);
+
+    const res = await httpRequest({ method: 'GET', port, path: `/leaderboard?game=sudoku&mode=easy&device_id=${TEST_UUID3}` });
+    const body = res.body as Record<string, unknown>;
+
+    // Carol (invisible) is rank 1 overall (50s is lowest/best)
+    expect(body.player_rank).toBe(1);
+    expect(body.player_score).toBe(50);
+
+    // Top should still only show visible players (Alice, Bob)
+    const top = body.top as Array<Record<string, unknown>>;
+    expect(top.every((e) => e.display_name !== 'Carol')).toBe(true);
+  });
+
+  test('GET /leaderboard returns null rank/score when requester has no score', async () => {
+    await httpRequest({ method: 'POST', port, path: '/scores', body: { device_id: TEST_UUID2, game: 'sudoku', mode: 'easy', value: 200 } });
+
+    const res = await httpRequest({ method: 'GET', port, path: `/leaderboard?game=sudoku&mode=easy&device_id=${TEST_UUID}` });
+    const body = res.body as Record<string, unknown>;
+    expect(body.player_rank).toBeNull();
+    expect(body.player_score).toBeNull();
+  });
+
+  test('GET /leaderboard top ranks are dense (no gaps from invisible players)', async () => {
+    await seedSudokuEasyScores(port);
+
+    const res = await httpRequest({ method: 'GET', port, path: `/leaderboard?game=sudoku&mode=easy&device_id=${TEST_UUID}` });
+    const top = (res.body as Record<string, unknown>).top as Array<Record<string, unknown>>;
+
+    // Top visible ranks should be 1, 2 (not 2, 3 skipping the invisible rank 1)
+    expect(top[0].rank).toBe(1);
+    expect(top[1].rank).toBe(2);
+  });
+
+  test('GET /leaderboard returns 400 for missing game param', async () => {
+    const res = await httpRequest({ method: 'GET', port, path: `/leaderboard?mode=easy&device_id=${TEST_UUID}` });
+    expect(res.status).toBe(400);
+  });
+
+  test('GET /leaderboard returns 400 for missing mode param', async () => {
+    const res = await httpRequest({ method: 'GET', port, path: `/leaderboard?game=sudoku&device_id=${TEST_UUID}` });
+    expect(res.status).toBe(400);
+  });
+
+  test('GET /leaderboard returns 400 for missing device_id param', async () => {
+    const res = await httpRequest({ method: 'GET', port, path: '/leaderboard?game=sudoku&mode=easy' });
+    expect(res.status).toBe(400);
+  });
+
+  test('GET /leaderboard returns 400 for unknown game:mode', async () => {
+    const res = await httpRequest({ method: 'GET', port, path: `/leaderboard?game=sudoku&mode=nightmare&device_id=${TEST_UUID}` });
+    expect(res.status).toBe(400);
+  });
+
+  test('GET /leaderboard returns 400 for invalid device_id', async () => {
+    const res = await httpRequest({ method: 'GET', port, path: '/leaderboard?game=sudoku&mode=easy&device_id=not-a-uuid' });
+    expect(res.status).toBe(400);
+  });
+
+  test('GET /leaderboard returns empty top when no scores submitted', async () => {
+    const res = await httpRequest({ method: 'GET', port, path: `/leaderboard?game=sudoku&mode=easy&device_id=${TEST_UUID}` });
+    expect(res.status).toBe(200);
+    const body = res.body as Record<string, unknown>;
+    expect((body.top as unknown[]).length).toBe(0);
+    expect(body.player_rank).toBeNull();
+    expect(body.player_score).toBeNull();
+  });
+});
+
