@@ -38,6 +38,8 @@ var _retry_attempt: int = 0
 ## Monotonically increasing counter; bumped on every sync_profile() call.
 ## Used to detect mutations that arrived while a request was in-flight.
 var _local_version: int = 0
+## Version number captured when the current in-flight request was sent.
+## Compared against _local_version in _on_sync_completed to detect stale responses.
 var _sent_version: int = 0
 
 
@@ -99,8 +101,9 @@ func _on_sync_completed(result: int, response_code: int, _headers: PackedStringA
 	if result == HTTPRequest.RESULT_SUCCESS and response_code >= 200 and response_code < 300:
 		if _sent_version != _local_version:
 			# A mutation arrived while the request was in-flight; send the latest state.
-			# Call _send_sync_request() directly — _retry_attempt and _pending_sync were
-			# already updated by the sync_profile() call that bumped _local_version.
+			# _send_sync_request() is called directly (not sync_profile()) to avoid bumping
+			# _local_version again. This is not recursive — it fires one HTTP request per
+			# completion, so each re-send requires a full network round-trip.
 			_send_sync_request()
 		else:
 			_pending_sync = false
