@@ -46,7 +46,8 @@ func refresh(game_id: String, mode: String, is_time_based: bool) -> void:
 	# Serve from cache when fresh
 	if _cache.has(key):
 		var entry: Dictionary = _cache[key]
-		if Time.get_unix_time_from_system() - float(entry.get("time", 0.0)) < CACHE_TTL:
+		var cache_time := float(entry.get("time", 0.0))
+		if Time.get_unix_time_from_system() - cache_time < CACHE_TTL:
 			_show_data(entry.get("data", {}))
 			return
 
@@ -79,7 +80,7 @@ func _on_request_completed(
 		_show_error()
 		return
 	_cache[_current_key] = {
-		"time": Time.get_unix_time_from_system(),
+		"time": float(Time.get_unix_time_from_system()),
 		"data": parsed,
 	}
 	_show_data(parsed)
@@ -138,7 +139,8 @@ func _make_row(entry: Dictionary, is_player: bool) -> Control:
 	hbox.add_theme_constant_override("separation", 6)
 
 	var rank_lbl := Label.new()
-	rank_lbl.text = "#%-3d" % int(entry.get("rank", 0))
+	var raw_rank = entry.get("rank", 0)
+	rank_lbl.text = "#%-3d" % (int(raw_rank) if raw_rank is float or raw_rank is int else 0)
 	rank_lbl.custom_minimum_size = Vector2(40, 0)
 	rank_lbl.add_theme_font_size_override("font_size", 13)
 	hbox.add_child(rank_lbl)
@@ -165,6 +167,8 @@ func _make_row(entry: Dictionary, is_player: bool) -> Control:
 
 func _format_value(value) -> String:
 	if value == null:
+		return "--"
+	if not (value is int or value is float):
 		return "--"
 	if _is_time_based:
 		return TimeFormat.format_time(float(value), true)

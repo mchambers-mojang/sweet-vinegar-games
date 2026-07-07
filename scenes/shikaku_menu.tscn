@@ -36,4 +36,5 @@ popup/item_5/id = 5
 selected = 3
 
 [node name="LeaderboardPanel" parent="MarginContainer/VBoxContainer" index=8 instance=ExtResource("3")]
+unique_name_in_owner = true
 layout_mode = 2

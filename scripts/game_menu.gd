@@ -93,7 +93,7 @@ func _on_menu_ready() -> void:
 func _setup_leaderboard() -> void:
 	if not config or config.leaderboard_modes.is_empty():
 		return
-	var panel := find_child("LeaderboardPanel", true, false) as LeaderboardPanel
+	var panel := get_node_or_null("%LeaderboardPanel") as LeaderboardPanel
 	if not panel:
 		return
 	# Initial fetch for the current selection
