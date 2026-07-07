@@ -202,3 +202,7 @@ func vibrate_error() -> void:
 
 func vibrate_success() -> void:
 	_haptic.vibrate_success()
+
+
+func vibrate_stop() -> void:
+	_haptic.stop()

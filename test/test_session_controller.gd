@@ -159,6 +159,9 @@ class MockHaptic:
 	func vibrate_success() -> void:
 		calls.append("vibrate_success")
 
+	func stop() -> void:
+		calls.append("stop")
+
 
 # ---------------------------------------------------------------------------
 # Test fixtures
@@ -433,3 +436,8 @@ func test_vibrate_error_delegates() -> void:
 func test_vibrate_success_delegates() -> void:
 	session.vibrate_success()
 	assert_true(haptic.calls.has("vibrate_success"))
+
+
+func test_vibrate_stop_delegates() -> void:
+	session.vibrate_stop()
+	assert_true(haptic.calls.has("stop"))

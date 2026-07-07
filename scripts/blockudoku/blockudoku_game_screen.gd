@@ -306,6 +306,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 	if not _dragging:
 		return
 	_dragging = false
+	session.vibrate_stop()
 	DragEffect.unsuppress()
 
 	# Reset tray panel visual
