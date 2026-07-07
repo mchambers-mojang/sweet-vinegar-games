@@ -74,6 +74,7 @@ func _ready() -> void:
 	get_tree().node_removed.connect(_on_node_removed)
 	# Scan buttons already in the tree (main scene loads before node_added connects)
 	call_deferred("_scan_existing_buttons")
+	call_deferred("_scan_existing_popup_controls")
 	_setup_glow()
 
 
@@ -91,6 +92,7 @@ func _on_palette_changed() -> void:
 	_rebuild_ui_theme()
 	theme_changed.emit(is_dark)
 	_retint_icon_buttons()
+	_scan_existing_popup_controls()
 	# Sync PlatformSettings.dark_mode and persist it when the mode changed.
 	# The guard in _apply_theme_setting() prevents a settings_changed re-entry loop.
 	if PlatformSettings.dark_mode != palette._mode:
@@ -370,6 +372,7 @@ func _scan_node_recursive(node: Node) -> void:
 
 
 func _on_node_added(node: Node) -> void:
+	_force_popup_opacity_recursive(node)
 	if node is Button:
 		_try_apply_icon(node as Button)
 
@@ -377,6 +380,30 @@ func _on_node_added(node: Node) -> void:
 func _on_node_removed(node: Node) -> void:
 	if node is Button:
 		_icon_buttons.erase(node as Button)
+
+
+func _scan_existing_popup_controls() -> void:
+	var root := get_tree().root
+	if root:
+		_force_popup_opacity_recursive(root)
+
+
+func _force_popup_opacity_recursive(node: Node) -> void:
+	_force_popup_opacity(node)
+	for child in node.get_children():
+		_force_popup_opacity_recursive(child)
+
+
+func _force_popup_opacity(node: Node) -> void:
+	if node is OptionButton:
+		_ensure_popup_opaque((node as OptionButton).get_popup())
+	elif node is ColorPickerButton:
+		_ensure_popup_opaque((node as ColorPickerButton).get_popup())
+
+
+func _ensure_popup_opaque(popup: Popup) -> void:
+	if popup:
+		popup.transparent = false
 
 
 func _try_apply_icon(button: Button) -> void:
