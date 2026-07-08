@@ -80,7 +80,7 @@ func _on_request_completed(
 		_show_error()
 		return
 	_cache[_current_key] = {
-		"time": float(Time.get_unix_time_from_system()),
+		"time": Time.get_unix_time_from_system(),
 		"data": parsed,
 	}
 	_show_data(parsed)
@@ -140,7 +140,7 @@ func _make_row(entry: Dictionary, is_player: bool) -> Control:
 
 	var rank_lbl := Label.new()
 	var raw_rank = entry.get("rank", 0)
-	rank_lbl.text = "#%-3d" % (int(raw_rank) if raw_rank is float or raw_rank is int else 0)
+	rank_lbl.text = "#%-3d" % int(raw_rank)
 	rank_lbl.custom_minimum_size = Vector2(40, 0)
 	rank_lbl.add_theme_font_size_override("font_size", 13)
 	hbox.add_child(rank_lbl)
