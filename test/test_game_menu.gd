@@ -417,10 +417,10 @@ func test_shikaku_config_leaderboard_modes() -> void:
 	assert_eq(cfg.leaderboard_modes.size(), 6)
 	assert_eq(cfg.leaderboard_modes[0], "5")
 	assert_eq(cfg.leaderboard_modes[1], "7")
-	assert_eq(cfg.leaderboard_modes[2], "")   # 8×8 — no server leaderboard
+	assert_eq(cfg.leaderboard_modes[2], "8")
 	assert_eq(cfg.leaderboard_modes[3], "10")
-	assert_eq(cfg.leaderboard_modes[4], "")   # 12×12 — no server leaderboard
-	assert_eq(cfg.leaderboard_modes[5], "")   # 15×15 — no server leaderboard
+	assert_eq(cfg.leaderboard_modes[4], "12")
+	assert_eq(cfg.leaderboard_modes[5], "15")
 	assert_true(cfg.leaderboard_is_time_based)
 
 

@@ -24,8 +24,10 @@ export const BOARD_CONFIG: Record<string, BoardConfigEntry> = {
   'sudoku:expert':        { sort: 'asc',  min: 60,  max: 7200   },
   'shikaku:5':            { sort: 'asc',  min: 3,   max: 3600   },
   'shikaku:7':            { sort: 'asc',  min: 5,   max: 3600   },
+  'shikaku:8':            { sort: 'asc',  min: 8,   max: 3600   },
   'shikaku:10':           { sort: 'asc',  min: 10,  max: 3600   },
-  'shikaku:14':           { sort: 'asc',  min: 20,  max: 3600   },
+  'shikaku:12':           { sort: 'asc',  min: 15,  max: 3600   },
+  'shikaku:15':           { sort: 'asc',  min: 20,  max: 3600   },
   'blockudoku:standard':  { sort: 'desc', min: 0,   max: 999999 },
 };
 

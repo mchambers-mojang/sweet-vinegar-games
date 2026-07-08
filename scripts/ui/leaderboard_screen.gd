@@ -198,11 +198,10 @@ func _create_entry_row(rank: int, display_name: String, value: float, is_player:
 	value_label.add_theme_font_size_override("font_size", 15)
 	row.add_child(value_label)
 
-	if is_player:
-		var highlight := AppTheme.get_color("accent")
-		rank_label.add_theme_color_override("font_color", highlight)
-		name_label.add_theme_color_override("font_color", highlight)
-		value_label.add_theme_color_override("font_color", highlight)
+	var color := AppTheme.get_color("accent") if is_player else AppTheme.get_color("label_text")
+	rank_label.add_theme_color_override("font_color", color)
+	name_label.add_theme_color_override("font_color", color)
+	value_label.add_theme_color_override("font_color", color)
 
 	return row
 
@@ -219,8 +218,8 @@ func _apply_theme() -> void:
 	add_theme_stylebox_override("panel", style)
 
 	if _title_label:
-		_title_label.add_theme_color_override("font_color", AppTheme.get_color("foreground"))
+		_title_label.add_theme_color_override("font_color", AppTheme.get_color("label_text"))
 	if _status_label:
-		_status_label.add_theme_color_override("font_color", AppTheme.get_color("foreground"))
+		_status_label.add_theme_color_override("font_color", AppTheme.get_color("label_text"))
 	if _player_label:
-		_player_label.add_theme_color_override("font_color", AppTheme.get_color("accent"))
+		_player_label.add_theme_color_override("font_color", AppTheme.get_color("label_text"))
