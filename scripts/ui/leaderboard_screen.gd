@@ -202,7 +202,7 @@ func _create_entry_row(rank: int, display_name: String, value: float, is_player:
 	value_label.add_theme_font_size_override("font_size", 15)
 	row.add_child(value_label)
 
-	var color := AppTheme.get_color("accent") if is_player else AppTheme.get_color("button_text")
+	var color := AppTheme.get_color("text_placed") if is_player else AppTheme.get_color("text_given")
 	rank_label.add_theme_color_override("font_color", color)
 	name_label.add_theme_color_override("font_color", color)
 	value_label.add_theme_color_override("font_color", color)
@@ -222,8 +222,8 @@ func _apply_theme() -> void:
 	add_theme_stylebox_override("panel", style)
 
 	if _title_label:
-		_title_label.add_theme_color_override("font_color", AppTheme.get_color("button_text"))
+		_title_label.add_theme_color_override("font_color", AppTheme.get_color("text_given"))
 	if _status_label:
-		_status_label.add_theme_color_override("font_color", AppTheme.get_color("button_text"))
+		_status_label.add_theme_color_override("font_color", AppTheme.get_color("text_given"))
 	if _player_label:
-		_player_label.add_theme_color_override("font_color", AppTheme.get_color("button_text"))
+		_player_label.add_theme_color_override("font_color", AppTheme.get_color("text_given"))
