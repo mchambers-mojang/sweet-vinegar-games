@@ -730,3 +730,65 @@ describe('Leaderboard Endpoint', () => {
   });
 });
 
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { isMountPoint, JOURNAL_MODE } from './db';
+
+/** Returns the mount-point warning messages captured from stderr during fn(). */
+function captureMountPointWarnings(fn: () => void): string[] {
+  const stderrSpy = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
+  try {
+    fn();
+    return (stderrSpy.mock.calls as unknown[][])
+      .map((args) => String(args[0]))
+      .filter((msg) => msg.includes('is not a mount point'));
+  } finally {
+    stderrSpy.mockRestore();
+  }
+}
+
+describe('openDb — mount point validation', () => {
+  test('isMountPoint returns false for a regular subdirectory', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'svtest-'));
+    try {
+      expect(isMountPoint(tmp)).toBe(false);
+    } finally {
+      fs.rmSync(tmp, { recursive: true });
+    }
+  });
+
+  test('isMountPoint returns false when directory does not exist', () => {
+    expect(isMountPoint('/nonexistent/path/xyz')).toBe(false);
+  });
+
+  test('openDb with :memory: does not write a mount warning to stderr', () => {
+    const warnings = captureMountPointWarnings(() => {
+      const db = openDb(':memory:');
+      db.close();
+    });
+    expect(warnings.length).toBe(0);
+  });
+
+  test('openDb with a regular filesystem path writes a mount warning to stderr', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'svtest-'));
+    const dbPath = path.join(tmp, 'test.db');
+    let warnings: string[];
+    try {
+      warnings = captureMountPointWarnings(() => {
+        const db = openDb(dbPath);
+        db.close();
+      });
+    } finally {
+      fs.rmSync(tmp, { recursive: true });
+    }
+    expect(warnings.length).toBeGreaterThan(0);
+    expect(warnings[0]).toContain(tmp);
+  });
+
+  test('JOURNAL_MODE is a valid SQLite journal mode', () => {
+    const valid = ['DELETE', 'TRUNCATE', 'PERSIST', 'MEMORY', 'WAL', 'OFF'];
+    expect(valid).toContain(JOURNAL_MODE);
+  });
+});
+

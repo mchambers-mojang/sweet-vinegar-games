@@ -2,7 +2,31 @@ import Database from 'better-sqlite3';
 import * as fs from 'fs';
 import * as path from 'path';
 
-export const DEFAULT_DB_PATH = '/home/data/vinegar.db';
+export const DEFAULT_DB_PATH = process.env.DB_PATH ?? '/home/data/vinegar.db';
+
+const VALID_JOURNAL_MODES = ['DELETE', 'TRUNCATE', 'PERSIST', 'MEMORY', 'WAL', 'OFF'] as const;
+type JournalMode = typeof VALID_JOURNAL_MODES[number];
+
+function resolveJournalMode(): JournalMode {
+  const raw = (process.env.SQLITE_JOURNAL_MODE ?? 'WAL').toUpperCase();
+  if ((VALID_JOURNAL_MODES as readonly string[]).includes(raw)) return raw as JournalMode;
+  process.stderr.write(`[WARNING] Unknown SQLITE_JOURNAL_MODE="${raw}"; falling back to WAL. Valid modes: DELETE, TRUNCATE, PERSIST, MEMORY, WAL, OFF.\n`);
+  return 'WAL';
+}
+
+export const JOURNAL_MODE: JournalMode = resolveJournalMode();
+
+/**
+ * Returns true when dir resides on a different block device than its parent —
+ * a reliable proxy for "this is a real mount point" on Linux.
+ */
+export function isMountPoint(dir: string): boolean {
+  try {
+    return fs.statSync(dir).dev !== fs.statSync(path.dirname(dir)).dev;
+  } catch {
+    return false;
+  }
+}
 
 export interface PlayerProfile {
   device_id: string;
@@ -44,8 +68,15 @@ export function openDb(dbPath: string): Database.Database {
     fs.mkdirSync(dir, { recursive: true });
   }
 
+  if (dbPath !== ':memory:' && !isMountPoint(dir)) {
+    process.stderr.write(
+      `[WARNING] "${dir}" is not a mount point. On Azure App Service, mount an Azure Files ` +
+      `share at "${dir}" to prevent data loss on redeploy.\n`
+    );
+  }
+
   const db = new Database(dbPath);
-  db.pragma('journal_mode = WAL');
+  db.pragma(`journal_mode = ${JOURNAL_MODE}`);
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS players (
