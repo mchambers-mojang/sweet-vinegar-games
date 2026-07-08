@@ -2,8 +2,6 @@ extends GameScreen
 
 ## Main game screen — orchestrates board UI, feeds input to SudokuLogic, dispatches side effects
 
-const TimeFormat := preload("res://scripts/utils/time_format.gd")
-
 # Pure game-rule logic — no UI, no autoloads
 var logic: SudokuLogic = null
 

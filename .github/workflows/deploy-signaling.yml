@@ -19,12 +19,22 @@ jobs:
           node-version: '22'
 
       - name: Install dependencies
-        working-directory: server
-        run: npm install --production
+        working-directory: server/signaling
+        run: npm ci
+
+      - name: Build TypeScript
+        working-directory: server/signaling
+        run: npm run build
+
+      - name: Install production dependencies
+        working-directory: server/signaling
+        run: |
+          rm -rf node_modules
+          npm ci --omit=dev
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
           app-name: carom-signaling
           publish-profile: ${{ secrets.AZURE_SIGNALING_PUBLISH_PROFILE }}
-          package: server
+          package: server/signaling

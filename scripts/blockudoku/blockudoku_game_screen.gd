@@ -2,7 +2,6 @@ extends GameScreen
 
 ## Blockudoku game screen — board, score, block tray, drag-to-place
 
-const TimeFormat := preload("res://scripts/utils/time_format.gd")
 
 const BLOCKS_PER_SET := 3
 const ROTATE_TAP_DISTANCE_THRESHOLD := 12.0

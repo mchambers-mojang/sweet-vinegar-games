@@ -9,6 +9,7 @@ var _overlay: ColorRect
 var _tween: Tween
 const FADE_DURATION := 0.15
 var _transitioning := false
+var _initial_fade_pending := true
 
 
 func _ready() -> void:
@@ -22,7 +23,7 @@ func _ready() -> void:
 	AppTheme.theme_changed.connect(func(_d: bool) -> void: _update_overlay_color())
 	# Fade in after the first scene has had time to render
 	get_tree().process_frame.connect(func() -> void:
-		get_tree().process_frame.connect(_fade_in, CONNECT_ONE_SHOT)
+		get_tree().process_frame.connect(_initial_fade_in, CONNECT_ONE_SHOT)
 	, CONNECT_ONE_SHOT)
 
 
@@ -57,6 +58,14 @@ func transition_with_callback(callback: Callable) -> void:
 			get_tree().process_frame.connect(_fade_in, CONNECT_ONE_SHOT)
 		, CONNECT_ONE_SHOT)
 	)
+
+
+## Initial fade-in from _ready — skipped if a transition already started (e.g., first-boot redirect).
+func _initial_fade_in() -> void:
+	_initial_fade_pending = false
+	if _transitioning:
+		return
+	_fade_in()
 
 
 func _fade_in() -> void:
