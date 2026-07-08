@@ -71,13 +71,15 @@ persistent Azure Files share so data survives redeploys.
    - **Mount path**: `/data`
 3. Save and restart the App Service.
 
-The `DB_PATH` environment variable defaults to `/data/vinegar.db` inside the
-container image, so no extra app setting is needed once the mount is in place.
+The container image sets `DB_PATH=/data/vinegar.db` via the Dockerfile `ENV` declaration,
+so no extra app setting is needed once the mount is in place.
 To override the path, add a `DB_PATH` app setting pointing to the desired file
 path on the mounted share (e.g. `/data/prod/vinegar.db`).
 
-> **Local override:** set `DB_PATH=/some/local/path/vinegar.db` to store the
-> database anywhere on the host when running outside Docker.
+> **Non-containerised deployments:** when running outside Docker, `DB_PATH` must
+> be set explicitly or the server falls back to `/home/data/vinegar.db`.
+> **Local override (Docker):** pass `-e DB_PATH=/some/path/vinegar.db` to `docker run`
+> to store the database at a custom path inside a mounted volume.
 
 ## WebSocket API
 
