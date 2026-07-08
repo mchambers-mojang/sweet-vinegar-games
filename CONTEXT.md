@@ -98,3 +98,13 @@ A lightweight WebSocket service that introduces two peers by exchanging connecti
 **Room Code**:
 A short alphanumeric code (4 characters) that identifies a pending match. One player creates a room, shares the code out-of-band, the other player joins with it.
 
+## Theme Colors
+
+**text_primary**:
+The main text color for UI outside of game-specific screens. Maps to the accent color in neon/custom themes and near-black/white in light/dark themes. Use for headings, labels, and data display.
+_Legacy alias_: `text_given` (Sudoku-specific: "given numbers")
+
+**text_secondary**:
+A contrasting text color for differentiation or emphasis. Maps to the secondary color in neon/custom themes. Use sparingly for highlights or alternate-state text.
+_Legacy alias_: `text_placed` (Sudoku-specific: "player-placed numbers")
+
