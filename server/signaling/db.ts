@@ -10,7 +10,7 @@ type JournalMode = typeof VALID_JOURNAL_MODES[number];
 function resolveJournalMode(): JournalMode {
   const raw = (process.env.SQLITE_JOURNAL_MODE ?? 'WAL').toUpperCase();
   if ((VALID_JOURNAL_MODES as readonly string[]).includes(raw)) return raw as JournalMode;
-  process.stderr.write(`[WARNING] Unknown SQLITE_JOURNAL_MODE="${raw}"; falling back to WAL.\n`);
+  process.stderr.write(`[WARNING] Unknown SQLITE_JOURNAL_MODE="${raw}"; falling back to WAL. Valid modes: DELETE, TRUNCATE, PERSIST, MEMORY, WAL, OFF.\n`);
   return 'WAL';
 }
 

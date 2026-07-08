@@ -736,7 +736,7 @@ import * as path from 'path';
 import { isMountPoint, JOURNAL_MODE } from './db';
 
 /** Returns the mount-point warning messages captured from stderr during fn(). */
-function captureMountWarnings(fn: () => void): string[] {
+function captureMountPointWarnings(fn: () => void): string[] {
   const stderrSpy = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
   try {
     fn();
@@ -763,7 +763,7 @@ describe('openDb — mount point validation', () => {
   });
 
   test('openDb with :memory: does not write a mount warning to stderr', () => {
-    const warnings = captureMountWarnings(() => {
+    const warnings = captureMountPointWarnings(() => {
       const db = openDb(':memory:');
       db.close();
     });
@@ -775,7 +775,7 @@ describe('openDb — mount point validation', () => {
     const dbPath = path.join(tmp, 'test.db');
     let warnings: string[];
     try {
-      warnings = captureMountWarnings(() => {
+      warnings = captureMountPointWarnings(() => {
         const db = openDb(dbPath);
         db.close();
       });
