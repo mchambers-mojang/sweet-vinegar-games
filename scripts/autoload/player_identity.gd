@@ -169,6 +169,31 @@ func save_local() -> void:
 	_save()
 
 
+## Deletes all server-side scores for this device. Optionally enables the
+## opt-out kill switch (stop_tracking=true) and purges the profile from the server.
+## The callback receives true on success, false on failure.
+func delete_all_scores(stop_tracking: bool, callback: Callable) -> void:
+	if device_id.is_empty():
+		callback.call(false)
+		return
+	var purge_query := "?purge_profile=true" if stop_tracking else ""
+	var url := REST_BASE_URL + "/scores/" + device_id + purge_query
+	var http := HTTPRequest.new()
+	add_child(http)
+	http.request_completed.connect(func(result: int, response_code: int, _headers: PackedStringArray, _body: PackedByteArray) -> void:
+		http.queue_free()
+		var success := result == HTTPRequest.RESULT_SUCCESS and response_code == 204
+		if success and stop_tracking:
+			leaderboard_data_enabled = false
+			_save()
+		callback.call(success)
+	)
+	var err := http.request(url, PackedStringArray(), HTTPClient.METHOD_DELETE)
+	if err != OK:
+		http.queue_free()
+		callback.call(false)
+
+
 func _save_device_id() -> void:
 	var file := FileAccess.open(DEVICE_ID_PATH, FileAccess.WRITE)
 	if file:
