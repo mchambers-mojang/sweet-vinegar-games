@@ -159,21 +159,6 @@ jobs:
             echo "WARNING: Could not find Info.plist to patch"
           fi
 
-      - name: Bump build number
-        run: |
-          PROJ_DIR=$(find build/ios -name "*.xcodeproj" -print -quit | xargs dirname)
-          PLIST="$PROJ_DIR/${EXPORT_NAME}-Info.plist"
-          if [ ! -f "$PLIST" ]; then
-            PLIST=$(find build/ios -name "*Info.plist" -print -quit)
-          fi
-          if [ -f "$PLIST" ]; then
-            echo "Setting CFBundleVersion to ${{ github.run_number }}"
-            /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ github.run_number }}" "$PLIST"
-          else
-            echo "ERROR: Could not find Info.plist to set build number"
-            exit 1
-          fi
-
       - name: Build with xcodebuild
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
