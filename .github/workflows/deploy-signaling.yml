@@ -38,3 +38,4 @@ jobs:
           app-name: carom-signaling
           publish-profile: ${{ secrets.AZURE_SIGNALING_PUBLISH_PROFILE }}
           package: server/signaling
+          startup-command: 'node dist/server.js'
