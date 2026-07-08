@@ -74,16 +74,19 @@ func _on_menu_ready() -> void:
 	# Register game rules defaults (no-op on subsequent calls)
 	if not config.game_rules.is_empty():
 		GameRulesRegistry.register_rules(config.game_id, config.game_rules)
-	# Apply default selection on the option dropdown (if present)
+	# Apply saved or default selection on the option dropdown (if present)
 	if not config.option_button_unique_name.is_empty():
 		var opt_btn := get_node_or_null("%" + config.option_button_unique_name) as OptionButton
 		if opt_btn:
-			if config.option_default_index < opt_btn.item_count:
-				opt_btn.selected = config.option_default_index
+			var saved_idx := _load_last_option_index()
+			var idx := saved_idx if saved_idx >= 0 and saved_idx < opt_btn.item_count else config.option_default_index
+			if idx < opt_btn.item_count:
+				opt_btn.selected = idx
 			else:
 				push_warning("MenuConfig: option_default_index %d is out of bounds (item_count=%d) for %s" % [
 					config.option_default_index, opt_btn.item_count, config.game_id
 				])
+			opt_btn.item_selected.connect(_on_option_changed)
 	# Leaderboard button is wired in _ready() via _setup_leaderboard_button()
 
 
@@ -396,3 +399,25 @@ func _get_button(property_name: String) -> Button:
 		if val is Button:
 			return val
 	return null
+
+
+# --- Last-used option persistence ---
+
+const _PREFS_PATH := "user://settings.cfg"
+
+func _on_option_changed(index: int) -> void:
+	if not config:
+		return
+	var cfg := ConfigFile.new()
+	cfg.load(_PREFS_PATH)
+	cfg.set_value("last_mode", config.game_id, index)
+	cfg.save(_PREFS_PATH)
+
+
+func _load_last_option_index() -> int:
+	if not config:
+		return -1
+	var cfg := ConfigFile.new()
+	if cfg.load(_PREFS_PATH) != OK:
+		return -1
+	return cfg.get_value("last_mode", config.game_id, -1)
