@@ -48,6 +48,37 @@ docker run -p 8080:8080 carom-signaling
 docker run -p 3000:3000 -e PORT=3000 carom-signaling
 ```
 
+**Persistent database (local volume):**
+
+```bash
+docker run -p 8080:8080 -v signaling-data:/data carom-signaling
+```
+
+## Database Persistence (Azure App Service)
+
+The server stores leaderboard data in a SQLite database. On Azure App Service the
+container filesystem is **ephemeral** — the database path must be mapped to a
+persistent Azure Files share so data survives redeploys.
+
+### Configure an Azure Files mount
+
+1. In the Azure Portal, open your App Service → **Configuration** → **Path mappings**.
+2. Click **New Azure Storage Mount** and fill in:
+   - **Name**: `data`
+   - **Configuration options**: Azure Files
+   - **Storage account**: your storage account
+   - **Storage container**: your file share (e.g. `signaling-data`)
+   - **Mount path**: `/data`
+3. Save and restart the App Service.
+
+The `DB_PATH` environment variable defaults to `/data/vinegar.db` inside the
+container image, so no extra app setting is needed once the mount is in place.
+To override the path, add a `DB_PATH` app setting pointing to the desired file
+path on the mounted share (e.g. `/data/prod/vinegar.db`).
+
+> **Local override:** set `DB_PATH=/some/local/path/vinegar.db` to store the
+> database anywhere on the host when running outside Docker.
+
 ## WebSocket API
 
 All messages are JSON.

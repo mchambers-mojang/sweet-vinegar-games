@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import * as fs from 'fs';
 import * as path from 'path';
 
-export const DEFAULT_DB_PATH = '/home/data/vinegar.db';
+export const DEFAULT_DB_PATH = process.env.DB_PATH ?? '/home/data/vinegar.db';
 
 export interface PlayerProfile {
   device_id: string;
