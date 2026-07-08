@@ -735,22 +735,21 @@ import * as os from 'os';
 import * as path from 'path';
 import { isMountPoint, JOURNAL_MODE } from './db';
 
+/** Returns the mount-point warning messages captured from stderr during fn(). */
+function captureMountWarnings(fn: () => void): string[] {
+  const stderrSpy = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
+  try {
+    fn();
+    return (stderrSpy.mock.calls as unknown[][])
+      .map((args) => String(args[0]))
+      .filter((msg) => msg.includes('is not a mount point'));
+  } finally {
+    stderrSpy.mockRestore();
+  }
+}
+
 describe('openDb — mount point validation', () => {
   test('isMountPoint returns false for a regular subdirectory', () => {
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'svtest-'));
-    try {
-      expect(isMountPoint(tmp)).toBe(false);
-    } finally {
-      fs.rmSync(tmp, { recursive: true });
-    }
-  });
-
-  test('isMountPoint returns true for the filesystem root', () => {
-    // The root directory is always its own mount point (dev === its own dev).
-    // On Linux, / has no parent with a different device, so comparing / to /
-    // returns false by our logic, but we can verify that a well-known mount
-    // like /proc (present in Linux containers) is detected when it exists.
-    // The test that is always reliable: a fresh tmpdir is NOT a mount point.
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'svtest-'));
     try {
       expect(isMountPoint(tmp)).toBe(false);
@@ -764,35 +763,27 @@ describe('openDb — mount point validation', () => {
   });
 
   test('openDb with :memory: does not write a mount warning to stderr', () => {
-    const stderrSpy = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    try {
+    const warnings = captureMountWarnings(() => {
       const db = openDb(':memory:');
       db.close();
-      const mountWarnings = (stderrSpy.mock.calls as unknown[][])
-        .map((args) => String(args[0]))
-        .filter((msg) => msg.includes('is not a mount point'));
-      expect(mountWarnings.length).toBe(0);
-    } finally {
-      stderrSpy.mockRestore();
-    }
+    });
+    expect(warnings.length).toBe(0);
   });
 
   test('openDb with a regular filesystem path writes a mount warning to stderr', () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'svtest-'));
     const dbPath = path.join(tmp, 'test.db');
-    const stderrSpy = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    let warnings: string[];
     try {
-      const db = openDb(dbPath);
-      db.close();
-      const mountWarnings = (stderrSpy.mock.calls as unknown[][])
-        .map((args) => String(args[0]))
-        .filter((msg) => msg.includes('is not a mount point'));
-      expect(mountWarnings.length).toBeGreaterThan(0);
-      expect(mountWarnings[0]).toContain(tmp);
+      warnings = captureMountWarnings(() => {
+        const db = openDb(dbPath);
+        db.close();
+      });
     } finally {
-      stderrSpy.mockRestore();
       fs.rmSync(tmp, { recursive: true });
     }
+    expect(warnings.length).toBeGreaterThan(0);
+    expect(warnings[0]).toContain(tmp);
   });
 
   test('JOURNAL_MODE is a valid SQLite journal mode', () => {
