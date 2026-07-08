@@ -13,5 +13,8 @@ COPY --from=builder /app/dist ./dist
 EXPOSE 8080
 ENV PORT=8080
 ENV DB_PATH=/data/vinegar.db
+# Azure Files uses SMB, which lacks the mmap/shared-memory primitives that WAL requires.
+# DELETE journal mode is safe on network filesystems.
+ENV SQLITE_JOURNAL_MODE=DELETE
 VOLUME ["/data"]
 CMD ["node", "dist/server.js"]

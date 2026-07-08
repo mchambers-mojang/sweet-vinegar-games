@@ -71,15 +71,31 @@ persistent Azure Files share so data survives redeploys.
    - **Mount path**: `/data`
 3. Save and restart the App Service.
 
-The container image sets `DB_PATH=/data/vinegar.db` via the Dockerfile `ENV` declaration,
-so no extra app setting is needed once the mount is in place.
-To override the path, add a `DB_PATH` app setting pointing to the desired file
-path on the mounted share (e.g. `/data/prod/vinegar.db`).
+The container image sets `DB_PATH=/data/vinegar.db` and `SQLITE_JOURNAL_MODE=DELETE`
+via the Dockerfile `ENV` declarations, so no extra app settings are needed once the
+mount is in place.
+
+> **Why `SQLITE_JOURNAL_MODE=DELETE`?**
+> Azure Files shares use SMB, which does not support the `mmap`/shared-memory
+> primitives that SQLite's WAL mode requires. Using WAL on a SMB mount can cause
+> silent corruption or `database is locked` errors. `DELETE` journal mode is
+> compatible with network filesystems.
+
+To override either value, add a `DB_PATH` or `SQLITE_JOURNAL_MODE` app setting.
+For example, to store the database in a subdirectory of the share:
+`DB_PATH=/data/prod/vinegar.db`
+
+> **Mount validation:** if the server starts and the Azure Files share is not
+> attached, the server logs a warning to stderr:
+> `[WARNING] "/data" is not a mount point. ...`
+> This indicates data will be lost on redeploy. Check the App Service Path Mapping
+> configuration if you see this warning.
 
 > **Non-containerised deployments:** when running outside Docker, `DB_PATH` must
 > be set explicitly or the server falls back to `/home/data/vinegar.db`.
-> **Local override (Docker):** pass `-e DB_PATH=/some/path/vinegar.db` to `docker run`
-> to store the database at a custom path inside a mounted volume.
+> Set `SQLITE_JOURNAL_MODE=WAL` for local filesystem paths where WAL is safe.
+> **Local override (Docker):** pass `-e DB_PATH=...` and `-e SQLITE_JOURNAL_MODE=...`
+> to `docker run` to override paths and journal mode.
 
 ## WebSocket API
 
