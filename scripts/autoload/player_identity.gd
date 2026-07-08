@@ -1,8 +1,10 @@
 extends Node
 
-## Player identity manager — device UUID, display name, leaderboard visibility.
+## Player identity manager — device UUID, display name, leaderboard visibility,
+## and score data transmission preference.
 ## Persists identity to user://player_identity.cfg and device UUID to user://device_id.txt.
 ## Syncs profile to the server via PUT /profile on boot and on settings changes.
+## leaderboard_data_enabled is local-only and is never synced to the server.
 ## Offline-safe: queues the sync and retries on the next successful connection.
 
 const SAVE_PATH := "user://player_identity.cfg"
@@ -22,6 +24,10 @@ var display_name: String = ""
 
 ## Whether this device's scores appear on public leaderboards.
 var leaderboard_visible: bool = true
+
+## Kill switch: when false, LeaderboardManager will not POST any score data.
+## Persisted locally only — never sent to the server.
+var leaderboard_data_enabled: bool = true
 
 ## True once the player has completed the first-boot name prompt.
 var is_setup_complete: bool = false
@@ -141,6 +147,7 @@ func _load() -> void:
 		return
 	display_name = config.get_value("profile", "display_name", "")
 	leaderboard_visible = config.get_value("profile", "visible", true)
+	leaderboard_data_enabled = config.get_value("profile", "data_enabled", true)
 	is_setup_complete = config.get_value("profile", "setup_complete", false)
 	_pending_sync = config.get_value("profile", "pending_sync", false)
 
@@ -150,9 +157,16 @@ func _save() -> void:
 	config.load(SAVE_PATH)
 	config.set_value("profile", "display_name", display_name)
 	config.set_value("profile", "visible", leaderboard_visible)
+	config.set_value("profile", "data_enabled", leaderboard_data_enabled)
 	config.set_value("profile", "setup_complete", is_setup_complete)
 	config.set_value("profile", "pending_sync", _pending_sync)
 	config.save(SAVE_PATH)
+
+
+## Persists local-only settings (e.g. leaderboard_data_enabled) without triggering
+## a server sync. Use sync_profile() when server-visible fields change.
+func save_local() -> void:
+	_save()
 
 
 func _save_device_id() -> void:

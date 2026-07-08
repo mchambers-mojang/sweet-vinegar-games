@@ -3,8 +3,9 @@ extends Node
 ## Platform leaderboard manager — auto-submits scores to the server on game completion.
 ## Subscribes to GameEvents.leaderboard_score_ready; submission is fire-and-forget.
 ## Requires a registered player profile (is_setup_complete + non-empty device_id and
-## display_name). Silently drops on network failure — scores are personal bests and
-## will be resubmitted the next time the player beats their record.
+## display_name) and leaderboard_data_enabled must be true. Silently drops on network
+## failure — scores are personal bests and will be resubmitted the next time the player
+## beats their record.
 
 ## REST base URL shared with PlayerIdentity.
 const REST_BASE_URL := "https://carom-signaling-dae9dadjh0h9aqgb.westus3-01.azurewebsites.net"
@@ -19,6 +20,8 @@ func _ready() -> void:
 
 ## Checks profile eligibility and posts the score to the server.
 func _on_leaderboard_score_ready(game_id: String, mode: String, value: float) -> void:
+	if not PlayerIdentity.leaderboard_data_enabled:
+		return
 	if not PlayerIdentity.is_setup_complete:
 		return
 	if PlayerIdentity.device_id.is_empty():
