@@ -324,12 +324,13 @@ func _add_text_field(label_text: String, initial: String, max_length: int, callb
 
 func _show_delete_confirm_dialog() -> void:
 	var dialog := ConfirmationDialog.new()
-	dialog.title = "Delete All Leaderboard Data"
-	dialog.dialog_text = "This will permanently delete all your scores from the server.\n\nThis cannot be undone."
+	dialog.title = "Delete Leaderboard Data"
+	dialog.dialog_text = "Permanently delete all your scores\nfrom the server?\n\nThis cannot be undone."
 	dialog.ok_button_text = "Delete"
 	dialog.cancel_button_text = "Cancel"
-	dialog.min_size = Vector2i(320, 0)
+	dialog.min_size = Vector2i(280, 0)
 	add_child(dialog)
+	dialog.get_label().horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	dialog.confirmed.connect(func() -> void:
 		dialog.queue_free()
 		_show_delete_mode_dialog()
@@ -340,13 +341,14 @@ func _show_delete_confirm_dialog() -> void:
 
 func _show_delete_mode_dialog() -> void:
 	var dialog := AcceptDialog.new()
-	dialog.title = "How would you like to proceed?"
-	dialog.dialog_text = "Stop Tracking: disables score submission and deletes all your scores from the server.\n\nClean Slate: deletes all your scores from the server but keeps score submission enabled."
+	dialog.title = "Continue tracking?"
+	dialog.dialog_text = "Stop Tracking\nDelete scores and stop submitting.\n\nClean Slate\nDelete scores but keep submitting."
 	dialog.ok_button_text = "Stop Tracking"
 	dialog.add_button("Clean Slate", true, "clean_slate")
 	dialog.add_button("Cancel", true, "cancel")
-	dialog.min_size = Vector2i(320, 0)
+	dialog.min_size = Vector2i(280, 0)
 	add_child(dialog)
+	dialog.get_label().horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	dialog.confirmed.connect(func() -> void:
 		dialog.queue_free()
 		_perform_delete(true)
@@ -371,17 +373,18 @@ func _perform_delete(stop_tracking: bool) -> void:
 func _show_delete_result_dialog(success: bool, stop_tracking: bool) -> void:
 	var dialog := AcceptDialog.new()
 	if success:
-		dialog.title = "Data Deleted"
+		dialog.title = "Done"
 		if stop_tracking:
-			dialog.dialog_text = "All your leaderboard data has been deleted and score submission has been disabled."
+			dialog.dialog_text = "Scores deleted.\nSubmission disabled."
 		else:
-			dialog.dialog_text = "All your leaderboard data has been deleted. Score submission remains enabled."
+			dialog.dialog_text = "Scores deleted.\nSubmission remains active."
 	else:
-		dialog.title = "Delete Failed"
-		dialog.dialog_text = "Could not delete your leaderboard data. Please check your connection and try again."
+		dialog.title = "Failed"
+		dialog.dialog_text = "Could not delete your data.\nCheck your connection and try again."
 	dialog.ok_button_text = "OK"
-	dialog.min_size = Vector2i(320, 0)
+	dialog.min_size = Vector2i(280, 0)
 	add_child(dialog)
+	dialog.get_label().horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	dialog.confirmed.connect(func() -> void:
 		dialog.queue_free()
 		if success:
