@@ -29,11 +29,15 @@ var _inflight_key: String = ""
 
 
 func _ready() -> void:
+	theme = AppTheme.get_theme_resource()
 	_http.request_completed.connect(_on_request_completed)
 	_back_button.pressed.connect(_on_back_pressed)
 	_mode_dropdown.item_selected.connect(_on_mode_selected)
 	_apply_theme()
-	AppTheme.theme_changed.connect(func(_d: bool) -> void: _apply_theme())
+	AppTheme.theme_changed.connect(func(_d: bool) -> void:
+		theme = AppTheme.get_theme_resource()
+		_apply_theme()
+	)
 
 
 ## Called by the Game Menu after instantiation.
@@ -198,7 +202,7 @@ func _create_entry_row(rank: int, display_name: String, value: float, is_player:
 	value_label.add_theme_font_size_override("font_size", 15)
 	row.add_child(value_label)
 
-	var color := AppTheme.get_color("accent") if is_player else AppTheme.get_color("label_text")
+	var color := AppTheme.get_color("accent") if is_player else AppTheme.get_color("button_text")
 	rank_label.add_theme_color_override("font_color", color)
 	name_label.add_theme_color_override("font_color", color)
 	value_label.add_theme_color_override("font_color", color)
@@ -218,8 +222,8 @@ func _apply_theme() -> void:
 	add_theme_stylebox_override("panel", style)
 
 	if _title_label:
-		_title_label.add_theme_color_override("font_color", AppTheme.get_color("label_text"))
+		_title_label.add_theme_color_override("font_color", AppTheme.get_color("button_text"))
 	if _status_label:
-		_status_label.add_theme_color_override("font_color", AppTheme.get_color("label_text"))
+		_status_label.add_theme_color_override("font_color", AppTheme.get_color("button_text"))
 	if _player_label:
-		_player_label.add_theme_color_override("font_color", AppTheme.get_color("label_text"))
+		_player_label.add_theme_color_override("font_color", AppTheme.get_color("button_text"))
