@@ -20,12 +20,14 @@ var manager: Node
 var _saved_setup_complete: bool
 var _saved_display_name: String
 var _saved_device_id: String
+var _saved_data_enabled: bool
 
 
 func before_each() -> void:
 	_saved_setup_complete = PlayerIdentity.is_setup_complete
 	_saved_display_name = PlayerIdentity.display_name
 	_saved_device_id = PlayerIdentity.device_id
+	_saved_data_enabled = PlayerIdentity.leaderboard_data_enabled
 
 	manager = Node.new()
 	manager.set_script(ManagerScript)
@@ -37,6 +39,7 @@ func after_each() -> void:
 	PlayerIdentity.is_setup_complete = _saved_setup_complete
 	PlayerIdentity.display_name = _saved_display_name
 	PlayerIdentity.device_id = _saved_device_id
+	PlayerIdentity.leaderboard_data_enabled = _saved_data_enabled
 
 
 # ============================================================
@@ -75,10 +78,22 @@ func test_submit_creates_http_request_when_profile_complete() -> void:
 	PlayerIdentity.is_setup_complete = true
 	PlayerIdentity.display_name = "TestPlayer"
 	PlayerIdentity.device_id = "00000000-0000-0000-0000-000000000001"
+	PlayerIdentity.leaderboard_data_enabled = true
 
 	manager._on_leaderboard_score_ready("sudoku", "medium", 200.0)
 	# One HTTPRequest should have been added to _pending
 	assert_eq(manager._pending.size(), 1)
+
+
+func test_no_submit_when_data_disabled() -> void:
+	PlayerIdentity.is_setup_complete = true
+	PlayerIdentity.display_name = "TestPlayer"
+	PlayerIdentity.device_id = "00000000-0000-0000-0000-000000000001"
+	PlayerIdentity.leaderboard_data_enabled = false
+
+	manager._on_leaderboard_score_ready("sudoku", "easy", 120.0)
+	# Kill switch must prevent any network request
+	assert_eq(manager._pending.size(), 0)
 
 
 # ============================================================

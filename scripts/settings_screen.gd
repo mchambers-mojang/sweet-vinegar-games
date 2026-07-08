@@ -223,6 +223,13 @@ func _build_settings_ui() -> void:
 			PlayerIdentity.sync_profile()
 	)
 
+	# Data transmission kill switch — local-only, never synced to server
+	_add_toggle("Submit Scores to Server", PlayerIdentity.leaderboard_data_enabled,
+		func(value: bool) -> void:
+			PlayerIdentity.leaderboard_data_enabled = value
+			PlayerIdentity.save_local()
+	)
+
 
 func _add_toggle(label_text: String, initial: bool, callback: Callable) -> void:
 	var row := HBoxContainer.new()
