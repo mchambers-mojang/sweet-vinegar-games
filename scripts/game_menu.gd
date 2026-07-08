@@ -84,37 +84,61 @@ func _on_menu_ready() -> void:
 				push_warning("MenuConfig: option_default_index %d is out of bounds (item_count=%d) for %s" % [
 					config.option_default_index, opt_btn.item_count, config.game_id
 				])
-	# Set up the leaderboard panel (if present and configured)
-	_setup_leaderboard()
+	# Leaderboard button is wired in _ready() via _setup_leaderboard_button()
 
 
-## Sets up the LeaderboardPanel child (if present) based on the config.
-## Initial fetch is triggered immediately; re-fetches when the option changes.
-func _setup_leaderboard() -> void:
+## Adds a "Leaderboard" button below stats (if leaderboard modes are configured).
+func _setup_leaderboard_button(stats_btn: Button) -> void:
 	if not config or config.leaderboard_modes.is_empty():
 		return
-	var panel := get_node_or_null("%LeaderboardPanel") as LeaderboardPanel
-	if not panel:
-		return
-	# Initial fetch for the current selection
-	var idx := _get_current_option_index()
-	panel.refresh(config.game_id, _get_leaderboard_mode(idx), config.leaderboard_is_time_based)
-	# Re-fetch whenever the option changes
+	# Collect only non-empty modes and their labels from the option dropdown
+	var modes: PackedStringArray = PackedStringArray()
+	var labels: PackedStringArray = PackedStringArray()
+	var opt_btn: OptionButton = null
 	if not config.option_button_unique_name.is_empty():
-		var opt_btn := get_node_or_null("%" + config.option_button_unique_name) as OptionButton
-		if opt_btn:
-			opt_btn.item_selected.connect(func(new_idx: int) -> void:
-				panel.refresh(config.game_id, _get_leaderboard_mode(new_idx), config.leaderboard_is_time_based)
-			)
-
-
-## Returns the server mode string for a given option index, or "" if none.
-func _get_leaderboard_mode(option_index: int) -> String:
-	if not config or config.leaderboard_modes.is_empty():
-		return ""
-	if option_index < 0 or option_index >= config.leaderboard_modes.size():
-		return ""
-	return config.leaderboard_modes[option_index]
+		opt_btn = get_node_or_null("%" + config.option_button_unique_name) as OptionButton
+	for i in range(config.leaderboard_modes.size()):
+		var m: String = config.leaderboard_modes[i]
+		if m.is_empty():
+			continue
+		modes.append(m)
+		if opt_btn and i < opt_btn.item_count:
+			labels.append(opt_btn.get_item_text(i))
+		else:
+			labels.append(m.capitalize())
+	if modes.is_empty():
+		return
+	# Create button
+	var btn := Button.new()
+	btn.text = "Leaderboard"
+	btn.custom_minimum_size = Vector2(0, 50)
+	btn.pressed.connect(func() -> void:
+		# Determine which mode index to pre-select
+		var current_opt_idx := _get_current_option_index()
+		var selected_lb_idx := 0
+		# Map the option dropdown index to our filtered modes list
+		if current_opt_idx >= 0 and current_opt_idx < config.leaderboard_modes.size():
+			var current_mode: String = config.leaderboard_modes[current_opt_idx]
+			for j in range(modes.size()):
+				if modes[j] == current_mode:
+					selected_lb_idx = j
+					break
+		var return_path := _get_menu_scene_path()
+		SceneTransition.transition_with_callback(func() -> void:
+			var screen: Node = load(Scenes.LEADERBOARD).instantiate()
+			get_tree().root.add_child(screen)
+			screen.setup(config.game_id, modes, labels, config.leaderboard_is_time_based, selected_lb_idx, return_path)
+			queue_free()
+		)
+	)
+	# Place below stats button
+	if stats_btn:
+		stats_btn.get_parent().add_child(btn)
+		stats_btn.get_parent().move_child(btn, stats_btn.get_index() + 1)
+	else:
+		var vbox := find_child("VBoxContainer", true, false)
+		if vbox:
+			vbox.add_child(btn)
 
 
 ## Called when starting a new game.
@@ -215,6 +239,9 @@ func _ready() -> void:
 		)
 	elif stats_btn:
 		stats_btn.visible = false
+
+	# Leaderboard button (shown only when config has leaderboard modes)
+	_setup_leaderboard_button(stats_btn)
 
 	# Save/continue flow
 	if continue_btn:

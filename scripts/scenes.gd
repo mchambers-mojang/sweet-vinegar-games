@@ -8,6 +8,7 @@ const THEME_EDITOR := "res://scenes/theme_editor.tscn"
 const ACHIEVEMENTS := "res://scenes/achievements.tscn"
 const REPLAYS := "res://scenes/replays.tscn"
 const REPLAY_VIEWER := "res://scenes/replay_viewer.tscn"
+const LEADERBOARD := "res://scenes/leaderboard_screen.tscn"
 
 # Sudoku
 const SUDOKU_MENU := "res://scenes/main_menu.tscn"

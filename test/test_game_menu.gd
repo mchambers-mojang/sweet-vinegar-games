@@ -398,51 +398,6 @@ func test_menu_config_stores_leaderboard_is_time_based_false() -> void:
 
 
 # ---------------------------------------------------------------------------
-# GameMenu._get_leaderboard_mode
-# ---------------------------------------------------------------------------
-
-func test_get_leaderboard_mode_no_config_returns_empty() -> void:
-	var menu := GameMenuScript.new()
-	assert_eq(menu._get_leaderboard_mode(0), "")
-	menu.free()
-
-
-func test_get_leaderboard_mode_empty_modes_returns_empty() -> void:
-	var menu := GameMenuScript.new()
-	menu.config = MenuConfigScript.new()
-	# leaderboard_modes is empty by default
-	assert_eq(menu._get_leaderboard_mode(0), "")
-	menu.free()
-
-
-func test_get_leaderboard_mode_valid_index() -> void:
-	var menu := GameMenuScript.new()
-	menu.config = MenuConfigScript.new()
-	menu.config.leaderboard_modes = PackedStringArray(["easy", "medium", "hard"])
-	assert_eq(menu._get_leaderboard_mode(0), "easy")
-	assert_eq(menu._get_leaderboard_mode(1), "medium")
-	assert_eq(menu._get_leaderboard_mode(2), "hard")
-	menu.free()
-
-
-func test_get_leaderboard_mode_out_of_bounds_returns_empty() -> void:
-	var menu := GameMenuScript.new()
-	menu.config = MenuConfigScript.new()
-	menu.config.leaderboard_modes = PackedStringArray(["easy", "medium"])
-	assert_eq(menu._get_leaderboard_mode(5), "")
-	assert_eq(menu._get_leaderboard_mode(-1), "")
-	menu.free()
-
-
-func test_get_leaderboard_mode_empty_string_entry() -> void:
-	var menu := GameMenuScript.new()
-	menu.config = MenuConfigScript.new()
-	menu.config.leaderboard_modes = PackedStringArray(["easy", "medium", "", "expert"])
-	assert_eq(menu._get_leaderboard_mode(2), "")
-	menu.free()
-
-
-# ---------------------------------------------------------------------------
 # Leaderboard config in .tres files
 # ---------------------------------------------------------------------------
 
@@ -474,20 +429,4 @@ func test_blockudoku_config_leaderboard_modes() -> void:
 	assert_eq(cfg.leaderboard_modes.size(), 1)
 	assert_eq(cfg.leaderboard_modes[0], "standard")
 	assert_false(cfg.leaderboard_is_time_based)
-
-
-func test_sudoku_get_leaderboard_mode_via_config() -> void:
-	var menu := GameMenuScript.new()
-	menu.config = preload("res://assets/menu/sudoku_menu.tres")
-	assert_eq(menu._get_leaderboard_mode(0), "easy")
-	assert_eq(menu._get_leaderboard_mode(2), "hard")
-	assert_eq(menu._get_leaderboard_mode(4), "")
-	menu.free()
-
-
-func test_blockudoku_get_leaderboard_mode_via_config() -> void:
-	var menu := GameMenuScript.new()
-	menu.config = preload("res://assets/menu/blockudoku_menu.tres")
-	assert_eq(menu._get_leaderboard_mode(0), "standard")
-	menu.free()
 

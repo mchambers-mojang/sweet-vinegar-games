@@ -1,15 +1,10 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/components/base_menu.tscn" id="1"]
 [ext_resource type="Script" path="res://scripts/blockudoku/blockudoku_menu.gd" id="2"]
-[ext_resource type="PackedScene" path="res://scenes/components/leaderboard_panel.tscn" id="3"]
 
 [node name="BlockudokuMenu" instance=ExtResource("1")]
 script = ExtResource("2")
 
 [node name="MarginContainer/VBoxContainer/TitleLabel" parent="."]
 text = "Blockudoku"
-
-[node name="LeaderboardPanel" parent="MarginContainer/VBoxContainer" index=7 instance=ExtResource("3")]
-unique_name_in_owner = true
-layout_mode = 2
