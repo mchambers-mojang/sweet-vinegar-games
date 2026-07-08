@@ -341,7 +341,7 @@ func _show_delete_confirm_dialog() -> void:
 func _show_delete_mode_dialog() -> void:
 	var dialog := AcceptDialog.new()
 	dialog.title = "How would you like to proceed?"
-	dialog.dialog_text = "Stop Tracking: disables score submission and deletes all server data.\n\nClean Slate: deletes all server data but keeps score submission enabled."
+	dialog.dialog_text = "Stop Tracking: disables score submission and deletes all your scores from the server.\n\nClean Slate: deletes all your scores from the server but keeps score submission enabled."
 	dialog.ok_button_text = "Stop Tracking"
 	dialog.add_button("Clean Slate", true, "clean_slate")
 	dialog.add_button("Cancel", true, "cancel")

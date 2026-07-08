@@ -176,8 +176,8 @@ func delete_all_scores(stop_tracking: bool, callback: Callable) -> void:
 	if device_id.is_empty():
 		callback.call(false)
 		return
-	var purge_flag := "?purge_profile=true" if stop_tracking else ""
-	var url := REST_BASE_URL + "/scores/" + device_id + purge_flag
+	var purge_query := "?purge_profile=true" if stop_tracking else ""
+	var url := REST_BASE_URL + "/scores/" + device_id + purge_query
 	var http := HTTPRequest.new()
 	add_child(http)
 	http.request_completed.connect(func(result: int, response_code: int, _headers: PackedStringArray, _body: PackedByteArray) -> void:

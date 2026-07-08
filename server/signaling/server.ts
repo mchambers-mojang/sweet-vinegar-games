@@ -15,7 +15,7 @@ const PORT = parseInt(process.env.PORT ?? '8080', 10);
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PROFILE_PATH_RE = /^\/profile\/([^/]+)$/;
 const SCORES_PATH_RE = /^\/scores(\?.*)?$/;
-const SCORES_DEVICE_PATH_RE = /^\/scores\/([^/?]+)/;
+const SCORES_DEVICE_PATH_RE = /^\/scores\/([^/?]+)(\?.*)?$/;
 const LEADERBOARD_PATH_RE = /^\/leaderboard(\?.*)?$/;
 
 export interface ServerBundle {
