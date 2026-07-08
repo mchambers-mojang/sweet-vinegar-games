@@ -70,6 +70,20 @@ func test_score_changed_signal_emits_correct_params() -> void:
 	assert_eq(received.get("new_score"), 250)
 
 
+func test_leaderboard_score_ready_signal_emits_correct_params() -> void:
+	var received := {}
+	var conn := func(game_id: String, mode: String, value: float) -> void:
+		received["game_id"] = game_id
+		received["mode"] = mode
+		received["value"] = value
+	GameEvents.leaderboard_score_ready.connect(conn)
+	GameEvents.leaderboard_score_ready.emit("sudoku", "hard", 95.5)
+	GameEvents.leaderboard_score_ready.disconnect(conn)
+	assert_eq(received.get("game_id"), "sudoku")
+	assert_eq(received.get("mode"), "hard")
+	assert_almost_eq(received.get("value") as float, 95.5, 0.001)
+
+
 # ============================================================
 # AnalyticsManager — GameEvents handler methods
 # ============================================================

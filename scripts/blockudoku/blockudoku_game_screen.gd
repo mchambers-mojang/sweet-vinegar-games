@@ -505,6 +505,8 @@ func _pulse_board_for_combo(combo: int) -> void:
 
 func _handle_game_over() -> void:
 	GameEvents.game_ended.emit("blockudoku", "game_over", elapsed_time)
+	# Leaderboard: submit final score (blockudoku has one board: standard, higher = better).
+	GameEvents.leaderboard_score_ready.emit("blockudoku", "standard", float(logic.score))
 	logic.is_game_over = true
 	var completed: Dictionary = session.finish_replay("game_over", logic.score, elapsed_time, {
 		"turns": logic.turns,

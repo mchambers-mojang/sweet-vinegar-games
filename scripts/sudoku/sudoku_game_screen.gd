@@ -1105,6 +1105,9 @@ func _is_board_locked() -> bool:
 
 func _log_game_over_analytics(won: bool) -> void:
 	GameEvents.game_ended.emit("sudoku", "win" if won else "game_over", elapsed_time)
+	# Leaderboard: submit completion time for easy/medium/hard/expert (indices 0-3).
+	if won and difficulty <= 3:
+		GameEvents.leaderboard_score_ready.emit("sudoku", DIFFICULTY_NAMES[difficulty].to_lower(), elapsed_time)
 	session.log_event("game_over", {
 		"game": "sudoku",
 		"won": won,
