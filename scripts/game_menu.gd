@@ -84,6 +84,37 @@ func _on_menu_ready() -> void:
 				push_warning("MenuConfig: option_default_index %d is out of bounds (item_count=%d) for %s" % [
 					config.option_default_index, opt_btn.item_count, config.game_id
 				])
+	# Set up the leaderboard panel (if present and configured)
+	_setup_leaderboard()
+
+
+## Sets up the LeaderboardPanel child (if present) based on the config.
+## Initial fetch is triggered immediately; re-fetches when the option changes.
+func _setup_leaderboard() -> void:
+	if not config or config.leaderboard_modes.is_empty():
+		return
+	var panel := get_node_or_null("%LeaderboardPanel") as LeaderboardPanel
+	if not panel:
+		return
+	# Initial fetch for the current selection
+	var idx := _get_current_option_index()
+	panel.refresh(config.game_id, _get_leaderboard_mode(idx), config.leaderboard_is_time_based)
+	# Re-fetch whenever the option changes
+	if not config.option_button_unique_name.is_empty():
+		var opt_btn := get_node_or_null("%" + config.option_button_unique_name) as OptionButton
+		if opt_btn:
+			opt_btn.item_selected.connect(func(new_idx: int) -> void:
+				panel.refresh(config.game_id, _get_leaderboard_mode(new_idx), config.leaderboard_is_time_based)
+			)
+
+
+## Returns the server mode string for a given option index, or "" if none.
+func _get_leaderboard_mode(option_index: int) -> String:
+	if not config or config.leaderboard_modes.is_empty():
+		return ""
+	if option_index < 0 or option_index >= config.leaderboard_modes.size():
+		return ""
+	return config.leaderboard_modes[option_index]
 
 
 ## Called when starting a new game.
