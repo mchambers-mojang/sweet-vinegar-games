@@ -30,6 +30,8 @@ var _colors: Dictionary = {
 	"text_placed": Color(0.2, 0.4, 0.8),
 	"text_error": Color(0.9, 0.2, 0.2),
 	"text_pencil": Color(0.5, 0.5, 0.5),
+	"text_primary": Color(0.1, 0.1, 0.1),
+	"text_secondary": Color(0.2, 0.4, 0.8),
 	"button_bg": Color(0.92, 0.92, 0.92),
 	"button_bg_hover": Color(0.85, 0.88, 0.95),
 	"button_bg_pressed": Color(0.78, 0.82, 0.92),
@@ -70,6 +72,8 @@ var _dark_colors: Dictionary = {
 	"text_placed": Color(0.5, 0.7, 1.0),
 	"text_error": Color(1.0, 0.4, 0.4),
 	"text_pencil": Color(0.6, 0.6, 0.65),
+	"text_primary": Color(0.9, 0.9, 0.9),
+	"text_secondary": Color(0.5, 0.7, 1.0),
 	"button_bg": Color(0.22, 0.22, 0.27),
 	"button_bg_hover": Color(0.28, 0.28, 0.35),
 	"button_bg_pressed": Color(0.18, 0.18, 0.22),
@@ -95,6 +99,8 @@ var _neon_colors: Dictionary = {
 	"text_placed": Color(2.0, 0.3, 1.8),            # HDR hot pink — blooms
 	"text_error": Color(2.0, 0.0, 0.2),             # HDR red — blooms
 	"text_pencil": Color(0.2, 0.15, 0.5),
+	"text_primary": Color(0.0, 2.0, 1.6),           # HDR cyan — same as text_given
+	"text_secondary": Color(2.0, 0.3, 1.8),         # HDR hot pink — same as text_placed
 	"button_bg": Color(0.08, 0.06, 0.18),
 	"button_bg_hover": Color(0.12, 0.08, 0.28),
 	"button_bg_pressed": Color(0.06, 0.04, 0.14),
@@ -247,6 +253,8 @@ static func build_custom(bg: Color, accent: Color, secondary: Color, error: Colo
 		"text_placed": secondary,
 		"text_error": error,
 		"text_pencil": s30,
+		"text_primary": accent,
+		"text_secondary": secondary,
 		"button_bg": btn_bg,
 		"button_bg_hover": btn_hover,
 		"button_bg_pressed": btn_pressed,
