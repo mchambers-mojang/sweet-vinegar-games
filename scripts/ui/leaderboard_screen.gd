@@ -202,7 +202,7 @@ func _create_entry_row(rank: int, display_name: String, value: float, is_player:
 	value_label.add_theme_font_size_override("font_size", 15)
 	row.add_child(value_label)
 
-	var color := AppTheme.get_color("text_secondary") if is_player else AppTheme.get_color("text_primary")
+	var color := AppTheme.get_color("text_primary")
 	rank_label.add_theme_color_override("font_color", color)
 	name_label.add_theme_color_override("font_color", color)
 	value_label.add_theme_color_override("font_color", color)
