@@ -224,7 +224,7 @@ func _build_settings_ui() -> void:
 	)
 
 	# Data transmission kill switch — local-only, never synced to server
-	_add_toggle("Submit Score Data", PlayerIdentity.leaderboard_data_enabled,
+	_add_toggle("Submit Scores to Server", PlayerIdentity.leaderboard_data_enabled,
 		func(value: bool) -> void:
 			PlayerIdentity.leaderboard_data_enabled = value
 			PlayerIdentity.save_local()
