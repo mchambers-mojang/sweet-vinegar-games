@@ -1,7 +1,7 @@
 import * as http from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import Database from 'better-sqlite3';
-import { DEFAULT_DB_PATH, openDb, upsertPlayer, getPlayer, BOARD_CONFIG, BoardConfigEntry, upsertScore, getLeaderboard } from './db';
+import { DEFAULT_DB_PATH, openDb, upsertPlayer, getPlayer, BOARD_CONFIG, BoardConfigEntry, upsertScore, getLeaderboard, deletePlayerScores } from './db';
 
 export const VALID_CHARS = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
 export const CODE_LENGTH = 4;
@@ -15,6 +15,7 @@ const PORT = parseInt(process.env.PORT ?? '8080', 10);
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PROFILE_PATH_RE = /^\/profile\/([^/]+)$/;
 const SCORES_PATH_RE = /^\/scores(\?.*)?$/;
+const SCORES_DEVICE_PATH_RE = /^\/scores\/([^/?]+)/;
 const LEADERBOARD_PATH_RE = /^\/leaderboard(\?.*)?$/;
 
 export interface ServerBundle {
@@ -236,6 +237,29 @@ export function createServer(
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(result));
       });
+      return;
+    }
+
+    // DELETE /scores/:device_id — remove all scores for a player
+    const scoresDeviceMatch = SCORES_DEVICE_PATH_RE.exec(url);
+    if (req.method === 'DELETE' && scoresDeviceMatch) {
+      const device_id = scoresDeviceMatch[1];
+      if (!UUID_RE.test(device_id)) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'device_id must be a valid UUID' }));
+        return;
+      }
+      if (!getPlayer(db, device_id)) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Player profile not found' }));
+        return;
+      }
+      const queryString = url.includes('?') ? url.slice(url.indexOf('?') + 1) : '';
+      const params = new URLSearchParams(queryString);
+      const purgeProfile = params.get('purge_profile') === 'true';
+      deletePlayerScores(db, device_id, purgeProfile);
+      res.writeHead(204);
+      res.end();
       return;
     }
 

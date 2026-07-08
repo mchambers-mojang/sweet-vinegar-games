@@ -230,6 +230,11 @@ func _build_settings_ui() -> void:
 			PlayerIdentity.save_local()
 	)
 
+	# Destructive action: purge all server-side leaderboard data
+	_add_button("Delete All Leaderboard Data...", func() -> void:
+		_show_delete_confirm_dialog()
+	)
+
 
 func _add_toggle(label_text: String, initial: bool, callback: Callable) -> void:
 	var row := HBoxContainer.new()
@@ -315,6 +320,73 @@ func _add_text_field(label_text: String, initial: String, max_length: int, callb
 	row.add_child(field)
 
 	settings_list.add_child(row)
+
+
+func _show_delete_confirm_dialog() -> void:
+	var dialog := ConfirmationDialog.new()
+	dialog.title = "Delete All Leaderboard Data"
+	dialog.dialog_text = "This will permanently delete all your scores from the server.\n\nThis cannot be undone."
+	dialog.ok_button_text = "Delete"
+	dialog.cancel_button_text = "Cancel"
+	dialog.min_size = Vector2i(320, 0)
+	add_child(dialog)
+	dialog.confirmed.connect(func() -> void:
+		dialog.queue_free()
+		_show_delete_mode_dialog()
+	)
+	dialog.canceled.connect(func() -> void: dialog.queue_free())
+	dialog.popup_centered()
+
+
+func _show_delete_mode_dialog() -> void:
+	var dialog := AcceptDialog.new()
+	dialog.title = "How would you like to proceed?"
+	dialog.dialog_text = "Stop Tracking: disables score submission and deletes all server data.\n\nClean Slate: deletes all server data but keeps score submission enabled."
+	dialog.ok_button_text = "Stop Tracking"
+	dialog.add_button("Clean Slate", true, "clean_slate")
+	dialog.add_button("Cancel", true, "cancel")
+	dialog.min_size = Vector2i(320, 0)
+	add_child(dialog)
+	dialog.confirmed.connect(func() -> void:
+		dialog.queue_free()
+		_perform_delete(true)
+	)
+	dialog.custom_action.connect(func(action: StringName) -> void:
+		if action == "clean_slate":
+			dialog.queue_free()
+			_perform_delete(false)
+		elif action == "cancel":
+			dialog.queue_free()
+	)
+	dialog.popup_centered()
+
+
+func _perform_delete(stop_tracking: bool) -> void:
+	PlayerIdentity.delete_all_scores(stop_tracking, func(success: bool) -> void:
+		_show_delete_result_dialog(success, stop_tracking)
+	)
+
+
+func _show_delete_result_dialog(success: bool, stop_tracking: bool) -> void:
+	var dialog := AcceptDialog.new()
+	if success:
+		dialog.title = "Data Deleted"
+		if stop_tracking:
+			dialog.dialog_text = "All your leaderboard data has been deleted and score submission has been disabled."
+		else:
+			dialog.dialog_text = "All your leaderboard data has been deleted. Score submission remains enabled."
+	else:
+		dialog.title = "Delete Failed"
+		dialog.dialog_text = "Could not delete your leaderboard data. Please check your connection and try again."
+	dialog.ok_button_text = "OK"
+	dialog.min_size = Vector2i(320, 0)
+	add_child(dialog)
+	dialog.confirmed.connect(func() -> void:
+		dialog.queue_free()
+		if success:
+			_build_settings_ui()
+	)
+	dialog.popup_centered()
 
 
 func _apply_theme() -> void:

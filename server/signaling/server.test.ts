@@ -624,6 +624,72 @@ describe('Score Endpoints', () => {
   });
 });
 
+describe('Delete Scores Endpoint', () => {
+  let wss: WebSocketServer;
+  let httpServer: http.Server;
+  let port: number;
+
+  beforeEach(async () => {
+    ({ wss, httpServer, port } = await makeServer());
+    await httpRequest({ method: 'PUT', port, path: '/profile', body: { device_id: TEST_UUID, display_name: 'Alice', visible: true } });
+    await httpRequest({ method: 'PUT', port, path: '/profile', body: { device_id: TEST_UUID2, display_name: 'Bob', visible: true } });
+    await httpRequest({ method: 'POST', port, path: '/scores', body: { device_id: TEST_UUID, game: 'sudoku', mode: 'easy', value: 100 } });
+    await httpRequest({ method: 'POST', port, path: '/scores', body: { device_id: TEST_UUID, game: 'sudoku', mode: 'medium', value: 200 } });
+    await httpRequest({ method: 'POST', port, path: '/scores', body: { device_id: TEST_UUID2, game: 'sudoku', mode: 'easy', value: 150 } });
+  });
+
+  afterEach((done) => {
+    wss.close(() => httpServer.close(done));
+  });
+
+  test('DELETE /scores/:device_id removes all scores for that player', async () => {
+    const res = await httpRequest({ method: 'DELETE', port, path: `/scores/${TEST_UUID}` });
+    expect(res.status).toBe(204);
+
+    // Alice's scores are gone — leaderboard should only show Bob
+    const lb = await httpRequest({ method: 'GET', port, path: `/leaderboard?game=sudoku&mode=easy&device_id=${TEST_UUID}` });
+    const body = lb.body as Record<string, unknown>;
+    const top = body.top as Array<Record<string, unknown>>;
+    expect(top.length).toBe(1);
+    expect(top[0].display_name).toBe('Bob');
+    expect(body.player_rank).toBeNull();
+    expect(body.player_score).toBeNull();
+  });
+
+  test('DELETE /scores/:device_id leaves other players\' scores intact', async () => {
+    await httpRequest({ method: 'DELETE', port, path: `/scores/${TEST_UUID}` });
+
+    const lb = await httpRequest({ method: 'GET', port, path: `/leaderboard?game=sudoku&mode=easy&device_id=${TEST_UUID2}` });
+    const body = lb.body as Record<string, unknown>;
+    expect(body.player_score).toBe(150);
+  });
+
+  test('DELETE /scores/:device_id with purge_profile=true also removes the player profile', async () => {
+    const res = await httpRequest({ method: 'DELETE', port, path: `/scores/${TEST_UUID}?purge_profile=true` });
+    expect(res.status).toBe(204);
+
+    const profile = await httpRequest({ method: 'GET', port, path: `/profile/${TEST_UUID}` });
+    expect(profile.status).toBe(404);
+  });
+
+  test('DELETE /scores/:device_id without purge_profile leaves the player profile', async () => {
+    await httpRequest({ method: 'DELETE', port, path: `/scores/${TEST_UUID}` });
+
+    const profile = await httpRequest({ method: 'GET', port, path: `/profile/${TEST_UUID}` });
+    expect(profile.status).toBe(200);
+  });
+
+  test('DELETE /scores/:device_id returns 404 for unknown device_id', async () => {
+    const res = await httpRequest({ method: 'DELETE', port, path: `/scores/${TEST_UUID3}` });
+    expect(res.status).toBe(404);
+  });
+
+  test('DELETE /scores/:device_id returns 400 for invalid device_id', async () => {
+    const res = await httpRequest({ method: 'DELETE', port, path: '/scores/not-a-uuid' });
+    expect(res.status).toBe(400);
+  });
+});
+
 describe('Leaderboard Endpoint', () => {
   let wss: WebSocketServer;
   let httpServer: http.Server;

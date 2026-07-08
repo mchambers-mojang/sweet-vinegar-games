@@ -124,6 +124,17 @@ export function upsertScore(
   return { accepted: true, personal_best: value };
 }
 
+export function deletePlayerScores(
+  db: Database.Database,
+  device_id: string,
+  deleteProfile: boolean = false
+): void {
+  db.prepare('DELETE FROM scores WHERE device_id = ?').run(device_id);
+  if (deleteProfile) {
+    db.prepare('DELETE FROM players WHERE device_id = ?').run(device_id);
+  }
+}
+
 export function getLeaderboard(
   db: Database.Database,
   game: string,
