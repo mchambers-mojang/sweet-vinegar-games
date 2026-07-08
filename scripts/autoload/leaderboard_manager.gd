@@ -50,12 +50,15 @@ func _submit(game_id: String, mode: String, value: float) -> void:
 
 func _on_request_done(
 	_result: int,
-	_response_code: int,
+	response_code: int,
 	_headers: PackedStringArray,
 	_body: PackedByteArray,
 	http: HTTPRequest
 ) -> void:
-	# Fire-and-forget — all outcomes (success, offline, server error) are silently dropped.
+	# If the server rejected because our profile is missing (e.g. DB was wiped on
+	# redeploy), trigger a profile re-sync so subsequent scores go through.
+	if response_code == 404 and PlayerIdentity.is_setup_complete:
+		PlayerIdentity.sync_profile()
 	_cleanup(http)
 
 

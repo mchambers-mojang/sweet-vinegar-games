@@ -64,6 +64,7 @@ func complete_setup(name: String, visible: bool) -> void:
 	is_setup_complete = true
 	_pending_sync = true
 	_save()
+	sync_profile()
 
 
 ## Sync the current profile to the server.
