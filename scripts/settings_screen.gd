@@ -358,6 +358,7 @@ func _show_delete_mode_dialog() -> void:
 		elif action == "cancel":
 			dialog.queue_free()
 	)
+	dialog.canceled.connect(func() -> void: dialog.queue_free())
 	dialog.popup_centered()
 
 
