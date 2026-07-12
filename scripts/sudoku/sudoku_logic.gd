@@ -25,8 +25,16 @@ var strikes: int = 0
 var is_failed: bool = false
 var is_completed: bool = false
 var hints_used: int = 0
-var undo_stack: Array[Dictionary] = []
-var redo_stack: Array[Dictionary] = []
+
+var _undo_stack: UndoStack = UndoStack.new()
+
+var undo_stack: Array[Dictionary]:
+	get:
+		return _undo_stack.get_undo_entries()
+
+var redo_stack: Array[Dictionary]:
+	get:
+		return _undo_stack.get_redo_entries()
 
 
 ## Returned by place_number().  Carries everything the orchestrator needs to
@@ -133,8 +141,7 @@ func init_from_save(data: Dictionary) -> void:
 		if idx >= 0 and idx < GRID_CELLS:
 			colors[idx] = Color.from_string(str(colors_dict[key]), Color.TRANSPARENT)
 
-	undo_stack.clear()
-	redo_stack.clear()
+	_undo_stack.clear()
 
 
 ## Serialise all game-rule state. Caller adds UI fields (elapsed_time, random_seed …).
@@ -201,7 +208,7 @@ func place_number(cell_index: int, number: int) -> PlaceResult:
 	current_grid[cell_index] = number
 	pencil_marks[cell_index] = []
 	colors[cell_index] = Color.TRANSPARENT
-	redo_stack.clear()
+	_undo_stack.clear_redo()
 	result.placed = true
 
 	if auto_remove_pencil_marks:
@@ -228,7 +235,7 @@ func toggle_pencil_mark(cell_index: int, number: int) -> PencilResult:
 		return result  # Given cell
 
 	_push_undo(cell_index)
-	redo_stack.clear()
+	_undo_stack.clear_redo()
 	result.valid = true
 
 	var marks: Array = pencil_marks[cell_index]
@@ -263,7 +270,7 @@ func erase_cell(cell_index: int) -> EraseResult:
 	_push_undo(cell_index)
 	current_grid[cell_index] = 0
 	pencil_marks[cell_index] = []
-	redo_stack.clear()
+	_undo_stack.clear_redo()
 	result.success = true
 
 	return result
@@ -284,7 +291,7 @@ func use_hint(cell_index: int) -> HintResult:
 	pencil_marks[cell_index] = []
 	colors[cell_index] = Color.TRANSPARENT
 	hints_used += 1
-	redo_stack.clear()
+	_undo_stack.clear_redo()
 	result.success = true
 
 	if auto_remove_pencil_marks:
@@ -302,13 +309,14 @@ func use_hint(cell_index: int) -> HintResult:
 ## Revert the most recent undoable action. Returns the restored cell state.
 func undo() -> UndoRedoResult:
 	var result := UndoRedoResult.new()
-	if undo_stack.is_empty():
+	if not _undo_stack.can_undo():
 		return result
 
-	var state: Dictionary = undo_stack.pop_back()
+	var state: Dictionary = _undo_stack.undo()
 	var index: int = state["index"]
 
-	redo_stack.append(_capture_cell_state(index))
+	# Replace the auto-moved redo entry with the current state (captured before restore).
+	_undo_stack.replace_redo_top(_capture_cell_state(index))
 
 	current_grid[index] = state["value"]
 	pencil_marks[index] = (state["pencil_marks"] as Array).duplicate()
@@ -326,13 +334,14 @@ func undo() -> UndoRedoResult:
 ## Re-apply a previously undone action. Returns the restored cell state.
 func redo() -> UndoRedoResult:
 	var result := UndoRedoResult.new()
-	if redo_stack.is_empty():
+	if not _undo_stack.can_redo():
 		return result
 
-	var state: Dictionary = redo_stack.pop_back()
+	var state: Dictionary = _undo_stack.redo()
 	var index: int = state["index"]
 
-	undo_stack.append(_capture_cell_state(index))
+	# Replace the auto-moved undo entry with the current state (captured before restore).
+	_undo_stack.replace_undo_top(_capture_cell_state(index))
 
 	current_grid[index] = state["value"]
 	pencil_marks[index] = (state["pencil_marks"] as Array).duplicate()
@@ -353,7 +362,7 @@ func set_cell_color(cell_index: int, color: Color) -> void:
 		return
 	_push_undo(cell_index)
 	colors[cell_index] = color
-	redo_stack.clear()
+	_undo_stack.clear_redo()
 
 
 ## Place the correct answer without pushing an undo entry (cheat / auto-solve).
@@ -373,7 +382,7 @@ func apply_cheat_place(cell_index: int) -> PlaceResult:
 	current_grid[cell_index] = solution[cell_index]
 	pencil_marks[cell_index] = []
 	colors[cell_index] = Color.TRANSPARENT
-	redo_stack.clear()
+	_undo_stack.clear_redo()
 
 	if auto_remove_pencil_marks:
 		result.pencil_marks_removed = _remove_pencil_marks_for_number(cell_index, solution[cell_index])
@@ -431,8 +440,7 @@ func _setup_from_arrays(diff: int, p_puzzle: Array, p_solution: Array) -> void:
 	is_failed = false
 	is_completed = false
 	hints_used = 0
-	undo_stack.clear()
-	redo_stack.clear()
+	_undo_stack.clear()
 
 
 func _init_pencil_marks() -> void:
@@ -450,7 +458,7 @@ func _init_colors() -> void:
 
 
 func _push_undo(cell_index: int) -> void:
-	undo_stack.append(_capture_cell_state(cell_index))
+	_undo_stack.push(_capture_cell_state(cell_index))
 
 
 func _capture_cell_state(cell_index: int) -> Dictionary:
