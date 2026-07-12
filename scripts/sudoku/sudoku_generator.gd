@@ -124,22 +124,33 @@ func _generate_full_grid(rng: RandomNumberGenerator, constraints: Array = []) ->
 	# Spatial transformations (row/column/band/stack shuffles) can violate
 	# positional constraints (e.g. Anti-Knight). If so, fall back to brute-force
 	# on an empty grid and re-apply a random digit relabelling for variety.
-	if not constraints.is_empty() and not SudokuSolver._is_complete_grid_valid(grid, constraints):
+	if not constraints.is_empty() and not SudokuSolver.is_complete_grid_valid(grid, constraints):
 		var empty: Array[int] = []
 		empty.resize(81)
 		empty.fill(0)
 		var solutions := SudokuSolver.solve_brute_force(empty, 1, constraints)
 		if not solutions.is_empty():
-			grid = solutions[0]
-			# Digit relabelling is a bijection on values, so it preserves constraint
-			# validity (same-value neighbours stay same-value; the layout is unchanged).
+			var base_solution: Array[int] = solutions[0]
+			# Try a random digit relabelling for variety. Value-sensitive
+			# constraints (e.g. cage sums) are not invariant under arbitrary
+			# bijections, so we validate each attempt and retry up to 8 times.
+			# If no relabelling satisfies the constraints, use the raw solution.
 			var relabel_digits := [1, 2, 3, 4, 5, 6, 7, 8, 9]
-			_shuffle_array(relabel_digits, rng)
-			var relabel_map := {}
-			for i in 9:
-				relabel_map[i + 1] = relabel_digits[i]
-			for i in 81:
-				grid[i] = relabel_map[grid[i]]
+			var found_relabel := false
+			for _r in 8:
+				_shuffle_array(relabel_digits, rng)
+				var relabel_map := {}
+				for i in 9:
+					relabel_map[i + 1] = relabel_digits[i]
+				var candidate: Array[int] = base_solution.duplicate()
+				for i in 81:
+					candidate[i] = relabel_map[candidate[i]]
+				if SudokuSolver.is_complete_grid_valid(candidate, constraints):
+					grid = candidate
+					found_relabel = true
+					break
+			if not found_relabel:
+				grid = base_solution
 		# If brute-force also fails the constraints are unsatisfiable; return
 		# the best-effort transformed grid so generation can still proceed.
 

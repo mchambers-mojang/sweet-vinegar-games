@@ -76,6 +76,18 @@ static func get_candidates(grid: Array[int], index: int, constraints: Array = []
 
 ## Brute-force solve using backtracking with MRV heuristic. Returns number of solutions found (stops at max_solutions).
 static func solve_brute_force(grid: Array[int], max_solutions: int = 2, constraints: Array = []) -> Array[Array]:
+	# Validate any pre-filled cells (givens) before entering backtracking.
+	# A constraint-invalid given can never be part of a valid solution, so
+	# skip the entire search rather than enumerating all completions.
+	if not constraints.is_empty():
+		for i in 81:
+			if grid[i] != 0:
+				var val := grid[i]
+				grid[i] = 0
+				var ok := is_valid_placement(grid, i, val, constraints)
+				grid[i] = val
+				if not ok:
+					return []
 	var solutions: Array[Array] = []
 	var work := grid.duplicate()
 	_backtrack_mrv(work, solutions, max_solutions, constraints)
@@ -107,7 +119,7 @@ static func _find_mrv_cell(grid: Array[int], constraints: Array = []) -> int:
 ## Temporarily clears each cell to evaluate placement validity against the
 ## remaining grid, which is the same test the backtracking solver uses during fill.
 ## Always returns true when constraints is empty (standard Sudoku path).
-static func _is_complete_grid_valid(grid: Array[int], constraints: Array) -> bool:
+static func is_complete_grid_valid(grid: Array[int], constraints: Array) -> bool:
 	if constraints.is_empty():
 		return true
 	for i in 81:
@@ -130,7 +142,7 @@ static func _backtrack_mrv(grid: Array[int], solutions: Array[Array], max_soluti
 	if pos == -1:
 		# No empty cells - validate all filled cells (including givens) against
 		# constraints before recording this as a solution.
-		if _is_complete_grid_valid(grid, constraints):
+		if is_complete_grid_valid(grid, constraints):
 			solutions.append(grid.duplicate())
 		return
 	if pos == -2:
@@ -152,6 +164,17 @@ static func _backtrack_mrv(grid: Array[int], solutions: Array[Array], max_soluti
 ## after each placement; an empty array reproduces standard behaviour.
 func solve_logic(grid: Array[int], p_constraints: Array = []) -> bool:
 	techniques_used.clear()
+	# Validate any pre-filled cells (givens) against constraints before solving.
+	# An invalid given means no solution can exist.
+	if not p_constraints.is_empty():
+		for i in 81:
+			if grid[i] != 0:
+				var val := grid[i]
+				grid[i] = 0
+				var ok := is_valid_placement(grid, i, val, p_constraints)
+				grid[i] = val
+				if not ok:
+					return false
 	var candidates: Array[Array] = []
 	candidates.resize(81)
 	# Initialize candidates respecting any active constraints
@@ -168,7 +191,7 @@ func solve_logic(grid: Array[int], p_constraints: Array = []) -> bool:
 		# Naked singles
 		for i in 81:
 			if grid[i] == 0 and candidates[i].size() == 1:
-				var placed_val := candidates[i][0]
+				var placed_val: int = candidates[i][0]
 				grid[i] = placed_val
 				_update_candidates_after_placement(candidates, grid, i, placed_val, p_constraints)
 				candidates[i] = []
@@ -209,11 +232,11 @@ func solve_logic(grid: Array[int], p_constraints: Array = []) -> bool:
 			progress = true
 			continue
 
-	# Check if fully solved
+	# Check if fully solved and the completed grid satisfies all constraints
 	for i in 81:
 		if grid[i] == 0:
 			return false
-	return true
+	return is_complete_grid_valid(grid, p_constraints)
 
 
 ## Eliminate a value from candidates in the same row, column, and box

@@ -225,7 +225,7 @@ func test_solver_is_valid_placement_no_regression() -> void:
 
 
 # ---------------------------------------------------------------------------
-# 8. _is_complete_grid_valid — Issue 2 regression guard
+# 8. is_complete_grid_valid — Issue 2 regression guard
 # ---------------------------------------------------------------------------
 
 func test_is_complete_grid_valid_returns_true_for_no_constraints() -> void:
@@ -233,12 +233,12 @@ func test_is_complete_grid_valid_returns_true_for_no_constraints() -> void:
 	var grid: Array[int] = []
 	grid.resize(81)
 	grid.fill(1)
-	assert_true(SudokuSolver._is_complete_grid_valid(grid, []))
+	assert_true(SudokuSolver.is_complete_grid_valid(grid, []))
 
 
 func test_is_complete_grid_valid_passes_for_valid_solution() -> void:
 	# TEST_SOLUTION satisfies no custom constraint
-	assert_true(SudokuSolver._is_complete_grid_valid(TEST_SOLUTION.duplicate(), []))
+	assert_true(SudokuSolver.is_complete_grid_valid(TEST_SOLUTION.duplicate(), []))
 
 
 func test_is_complete_grid_valid_detects_constraint_violation() -> void:
@@ -246,7 +246,7 @@ func test_is_complete_grid_valid_detects_constraint_violation() -> void:
 	# should be detected as violating that constraint.
 	var c := BlockValueConstraint.new(0, TEST_SOLUTION[0])
 	var grid: Array[int] = TEST_SOLUTION.duplicate()
-	assert_false(SudokuSolver._is_complete_grid_valid(grid, [c]))
+	assert_false(SudokuSolver.is_complete_grid_valid(grid, [c]))
 
 
 func test_brute_force_rejects_given_that_violates_constraint() -> void:
@@ -279,4 +279,70 @@ func test_solve_logic_respects_constraints_in_candidate_init() -> void:
 	var solved := solver.solve_logic(grid, [c])
 	assert_true(solved, "logic solver should fill the single empty cell")
 	assert_eq(grid[2], 4, "cell 2 should be filled with the correct value")
+
+
+# ---------------------------------------------------------------------------
+# 10. Focused regression: value-sensitive relabeling (Issue 1 follow-up)
+# ---------------------------------------------------------------------------
+
+func test_full_grid_satisfies_constraints_after_relabeling() -> void:
+	# Use a constraint that blocks a specific value at a specific index.
+	# Most random relabelings will map a different digit there, potentially
+	# making the grid invalid. The generator must validate and retry or
+	# fall back to the raw brute-force solution — never returning an invalid grid.
+	var gen := SudokuGenerator.new()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 12345
+	var c := BlockValueConstraint.new(0, 1)  # block value 1 at index 0
+	var grid := gen._generate_full_grid(rng, [c])
+	assert_true(
+		SudokuSolver.is_complete_grid_valid(grid, [c]),
+		"_generate_full_grid must always return a constraint-valid grid"
+	)
+	assert_ne(grid[0], 1, "index 0 must not hold the blocked value 1")
+
+
+# ---------------------------------------------------------------------------
+# 11. Focused regression: early rejection of sparse invalid givens (Issue 2)
+# ---------------------------------------------------------------------------
+
+func test_brute_force_rejects_sparse_invalid_given_immediately() -> void:
+	# A sparse puzzle (80 empty cells) with one constraint-invalid given.
+	# Before the fix, the solver would enumerate all completions before
+	# rejecting. After the fix it must return [] without backtracking.
+	var puzzle: Array[int] = []
+	puzzle.resize(81)
+	puzzle.fill(0)
+	puzzle[0] = 5  # given that the constraint blocks
+	var c := BlockValueConstraint.new(0, 5)
+	var solutions := SudokuSolver.solve_brute_force(puzzle, 2, [c])
+	assert_eq(solutions.size(), 0,
+		"sparse puzzle with a constraint-invalid given must return no solutions")
+
+
+# ---------------------------------------------------------------------------
+# 12. Focused regression: solve_logic rejects constraint-invalid givens / completed grids (Issue 3)
+# ---------------------------------------------------------------------------
+
+func test_solve_logic_rejects_given_that_violates_constraint() -> void:
+	# Near-complete grid: one empty cell, but a pre-filled cell violates the constraint.
+	# solve_logic should return false immediately on the invalid given.
+	var grid: Array[int] = TEST_SOLUTION.duplicate()
+	grid[2] = 0  # leave one empty cell
+	var c := BlockValueConstraint.new(0, TEST_SOLUTION[0])  # given at index 0 is invalid
+	var solver := SudokuSolver.new()
+	var solved := solver.solve_logic(grid, [c])
+	assert_false(solved,
+		"solve_logic must return false when a given violates constraints")
+
+
+func test_solve_logic_rejects_completed_grid_with_constraint_violation() -> void:
+	# A fully filled grid (no empty cells) that violates a constraint should
+	# cause solve_logic to return false — it must validate givens at entry.
+	var grid: Array[int] = TEST_SOLUTION.duplicate()
+	var c := BlockValueConstraint.new(0, TEST_SOLUTION[0])
+	var solver := SudokuSolver.new()
+	var solved := solver.solve_logic(grid, [c])
+	assert_false(solved,
+		"solve_logic must return false for a completed grid that violates constraints")
 
