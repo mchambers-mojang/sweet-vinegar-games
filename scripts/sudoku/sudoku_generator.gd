@@ -26,6 +26,9 @@ const CLUE_TARGETS := {
 ## Max attempts before giving up on a difficulty and retrying
 const MAX_ATTEMPTS := 10
 
+## Max attempts to find a digit relabelling that satisfies active constraints
+const MAX_RELABEL_ATTEMPTS := 8
+
 
 ## Generate a puzzle of the requested difficulty.
 ## Returns a dictionary with "puzzle" (Array[int]) and "solution" (Array[int]).
@@ -137,7 +140,7 @@ func _generate_full_grid(rng: RandomNumberGenerator, constraints: Array = []) ->
 			# If no relabelling satisfies the constraints, use the raw solution.
 			var relabel_digits := [1, 2, 3, 4, 5, 6, 7, 8, 9]
 			var found_relabel := false
-			for _r in 8:
+			for _r in MAX_RELABEL_ATTEMPTS:
 				_shuffle_array(relabel_digits, rng)
 				var relabel_map := {}
 				for i in 9:
