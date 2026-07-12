@@ -17,10 +17,6 @@ class_name GameSaveAdapter extends RefCounted
 ##   adapter.save(state)
 ##   adapter.clear()
 
-## Current save-format version.  Bump this (and update _migrate()) in the
-## concrete subclass whenever an incompatible schema change is made.
-const SAVE_VERSION := 1
-
 ## Internal key used to stamp the version into each saved section.
 ## Stripped from Dictionaries returned to callers so they never see it.
 const VERSION_KEY := "_version"
@@ -30,6 +26,15 @@ const VERSION_KEY := "_version"
 ## Must be overridden in every concrete subclass.
 func _get_game_id() -> String:
 	return ""
+
+
+## Return the current save-format version for this adapter.
+## Override in a concrete subclass when bumping the schema version so that
+## _load_raw() and save() dispatch to the subclass value at runtime.
+## (GDScript constants are resolved at parse-time to the declaring class, so
+## a const on the base would not reflect a const on the subclass.)
+func _get_save_version() -> int:
+	return 1
 
 
 ## Returns true if there is any persisted data for this game.
@@ -61,7 +66,7 @@ func save(state: Dictionary) -> void:
 	var game_id := _get_game_id()
 	if config.has_section(game_id):
 		config.erase_section(game_id)
-	config.set_value(game_id, VERSION_KEY, SAVE_VERSION)
+	config.set_value(game_id, VERSION_KEY, _get_save_version())
 	for key in state.keys():
 		config.set_value(game_id, str(key), state[key])
 	config.save(GameSaveManager.save_path)
@@ -69,7 +74,7 @@ func save(state: Dictionary) -> void:
 
 ## Load and return the persisted game state.  Returns {} if none exists or
 ## if the save is corrupted beyond recovery.  Applies _migrate() when the
-## saved version is older than SAVE_VERSION.
+## saved version is older than _get_save_version().
 func restore() -> Dictionary:
 	return _load_raw()
 
@@ -129,6 +134,6 @@ func _load_raw() -> Dictionary:
 		data[key] = config.get_value(game_id, key)
 	var saved_version := int(data.get(VERSION_KEY, 0))
 	data.erase(VERSION_KEY)
-	if saved_version < SAVE_VERSION:
+	if saved_version < _get_save_version():
 		data = _migrate(data, saved_version)
 	return data
