@@ -305,12 +305,12 @@ func use_hint(cell_index: int) -> HintResult:
 func use_hint_auto(preferred_index: int) -> HintResult:
 	var index := -1
 	if preferred_index >= 0 and preferred_index < GRID_CELLS:
-		if puzzle[preferred_index] == 0 and current_grid[preferred_index] != solution[preferred_index]:
+		if _is_unsolved_editable(preferred_index):
 			index = preferred_index
 	if index < 0:
 		var candidates: Array[int] = []
 		for i in GRID_CELLS:
-			if puzzle[i] == 0 and current_grid[i] != solution[i]:
+			if _is_unsolved_editable(i):
 				candidates.append(i)
 		if candidates.is_empty():
 			return HintResult.new()
@@ -485,6 +485,10 @@ func _setup_from_arrays(diff: int, p_puzzle: Array, p_solution: Array) -> void:
 	hints_used = 0
 	undo_stack.clear()
 	redo_stack.clear()
+
+
+func _is_unsolved_editable(index: int) -> bool:
+	return puzzle[index] == 0 and current_grid[index] != solution[index]
 
 
 func _init_pencil_marks() -> void:

@@ -518,9 +518,11 @@ func _on_redo_pressed() -> void:
 
 
 ## Applies the visual side-effects of a logic.place_number() result to the given cell node.
+## Handles error flashing, revert animation, neon effects, success display, and win/fail
+## dialogs. Calls _update_number_completion() and board._update_highlighting() internally.
 ## play_success_sounds: whether to play placement sound + light haptic on a correct placement.
-## Returns true when the caller should stop further processing (invalid action or error state).
-## The caller is responsible for calling _save_current_state() after this returns.
+## Returns true when the caller should stop further processing (invalid or error), false on success.
+## The caller is always responsible for calling _save_current_state() after this returns.
 func _apply_single_place_result(result: SudokuLogic.PlaceResult, cell_node: SudokuCell, play_success_sounds: bool) -> bool:
 	if not result.valid:
 		return true
@@ -530,7 +532,6 @@ func _apply_single_place_result(result: SudokuLogic.PlaceResult, cell_node: Sudo
 		_play_error_feedback()
 		cell_node.set_value(result.number)
 		cell_node.set_error(true)
-		var revert_cell := cell_node
 		if AppTheme.is_neon:
 			var error_cell_rect := board.get_cell_rect(result.cell_index)
 			GlassShatter.create(board, error_cell_rect, Color(2.0, 0.0, 0.2), 10)
@@ -540,9 +541,9 @@ func _apply_single_place_result(result: SudokuLogic.PlaceResult, cell_node: Sudo
 		var revert_tween := create_tween()
 		revert_tween.tween_interval(0.4)
 		revert_tween.tween_callback(func() -> void:
-			revert_cell.value = 0
-			revert_cell.is_error = false
-			revert_cell.queue_redraw()
+			cell_node.value = 0
+			cell_node.is_error = false
+			cell_node.queue_redraw()
 		)
 		if result.game_failed:
 			_can_continue_after_failure = false
@@ -551,9 +552,7 @@ func _apply_single_place_result(result: SudokuLogic.PlaceResult, cell_node: Sudo
 			session.check_achievements()
 			_log_game_over_analytics(false)
 			_show_fail_dialog()
-		return true
-
-	if result.placed:
+	elif result.placed:
 		cell_node.set_value(result.number)
 		cell_node.set_error(false)
 		cell_node.set_cell_color(Color.TRANSPARENT)
@@ -567,12 +566,12 @@ func _apply_single_place_result(result: SudokuLogic.PlaceResult, cell_node: Sudo
 		for item in result.pencil_marks_removed:
 			board.cells[item["index"]].set_pencil_mark(item["number"], false)
 		_apply_unit_completion_effects(result.units_completed)
-		_update_number_completion()
-		board._update_highlighting()
 		if result.game_won:
 			_handle_win()
 
-	return false
+	_update_number_completion()
+	board._update_highlighting()
+	return result.strikes_added > 0
 
 
 func _handle_win() -> void:
