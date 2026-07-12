@@ -92,8 +92,9 @@ func test_game_registry_carom_entry_has_secret_tap_unlock() -> void:
 	assert_eq(carom_entry.unlock_rule, "secret_tap")
 
 
-func test_game_registry_non_carom_entries_have_no_unlock_rule() -> void:
+func test_game_registry_non_secret_entries_have_no_unlock_rule() -> void:
+	var expected_always_visible := ["sudoku", "shikaku", "blockudoku"]
 	for entry: GameEntry in GameRegistry.ENTRIES:
-		if entry.id != "carom":
+		if entry.id in expected_always_visible:
 			assert_eq(entry.unlock_rule, "", "Entry %s should have no unlock rule" % entry.id)
 

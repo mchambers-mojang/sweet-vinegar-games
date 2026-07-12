@@ -9,7 +9,3 @@ title = "Shikaku"
 menu_scene_path = "res://scenes/shikaku_menu.tscn"
 icon = ""
 unlock_rule = ""
-tap_mouse_count = 5
-tap_mouse_window_sec = 1.0
-tap_touch_count = 7
-tap_touch_window_sec = 0.6

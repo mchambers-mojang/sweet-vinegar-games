@@ -5,9 +5,10 @@ class_name GameRegistry
 ## The Hub (game_picker.gd) reads ENTRIES at startup and generates buttons
 ## dynamically — no edits to game_picker.gd are needed.
 
-const ENTRIES: Array = [
+static var ENTRIES: Array[GameEntry] = [
 	preload("res://assets/menu/sudoku_entry.tres"),
 	preload("res://assets/menu/shikaku_entry.tres"),
 	preload("res://assets/menu/blockudoku_entry.tres"),
 	preload("res://assets/menu/carom_entry.tres"),
 ]
+
