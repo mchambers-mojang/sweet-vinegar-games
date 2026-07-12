@@ -217,8 +217,9 @@ func _is_complete(grid: Array[int]) -> bool:
 
 
 func _filled_cells_are_valid(grid: Array[int]) -> bool:
-	# This mirrors SudokuSolver._are_filled_cells_valid so Killer validation can
-	# enforce both base Sudoku legality and the active cage constraint in one pass.
+	# This mirrors SudokuSolver._are_filled_cells_valid, but uses this solver's
+	# active cage constraint so Killer validation can enforce both base Sudoku
+	# legality and cage legality in one pass.
 	for index in 81:
 		var value := int(grid[index])
 		if value == 0:
