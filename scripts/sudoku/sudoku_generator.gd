@@ -38,7 +38,7 @@ func generate(difficulty: SudokuSolver.Difficulty, seed: int = -1, constraints: 
 	else:
 		rng.randomize()
 	for attempt in MAX_ATTEMPTS:
-		var full_grid := _generate_full_grid(rng)
+		var full_grid := _generate_full_grid(rng, constraints)
 		var puzzle := _remove_cells(full_grid, difficulty, rng, constraints)
 		if puzzle.is_empty():
 			continue
@@ -62,7 +62,7 @@ func generate(difficulty: SudokuSolver.Difficulty, seed: int = -1, constraints: 
 			}
 
 	# Fallback: return whatever we get closest to
-	var fallback_full_grid := _generate_full_grid(rng)
+	var fallback_full_grid := _generate_full_grid(rng, constraints)
 	var fallback_puzzle := _remove_cells(fallback_full_grid, difficulty, rng, constraints)
 	if fallback_puzzle.is_empty():
 		fallback_puzzle = _simple_remove(fallback_full_grid, CLUE_TARGETS[difficulty], rng, constraints)
@@ -75,8 +75,12 @@ func generate(difficulty: SudokuSolver.Difficulty, seed: int = -1, constraints: 
 	}
 
 
-## Generate a complete valid grid by transforming the seed
-func _generate_full_grid(rng: RandomNumberGenerator) -> Array[int]:
+## Generate a complete valid grid by transforming the seed.
+## When constraints are active, the transformation-based grid is validated
+## against them. Spatial constraints (e.g. Anti-Knight) may be violated by
+## row/column shuffles; if so, brute-force fills an empty grid instead and a
+## random digit relabelling is applied for variety.
+func _generate_full_grid(rng: RandomNumberGenerator, constraints: Array = []) -> Array[int]:
 	var grid: Array[int] = []
 	grid.assign(SEED_GRID.duplicate())
 
@@ -115,6 +119,29 @@ func _generate_full_grid(rng: RandomNumberGenerator) -> Array[int]:
 	var stack_order := [0, 1, 2]
 	_shuffle_array(stack_order, rng)
 	grid = _reorder_stacks(grid, stack_order)
+
+	# When constraints are active, verify the transformed grid satisfies them.
+	# Spatial transformations (row/column/band/stack shuffles) can violate
+	# positional constraints (e.g. Anti-Knight). If so, fall back to brute-force
+	# on an empty grid and re-apply a random digit relabelling for variety.
+	if not constraints.is_empty() and not SudokuSolver._is_complete_grid_valid(grid, constraints):
+		var empty: Array[int] = []
+		empty.resize(81)
+		empty.fill(0)
+		var solutions := SudokuSolver.solve_brute_force(empty, 1, constraints)
+		if not solutions.is_empty():
+			grid = solutions[0]
+			# Digit relabelling is a bijection on values, so it preserves constraint
+			# validity (same-value neighbours stay same-value; the layout is unchanged).
+			var relabel_digits := [1, 2, 3, 4, 5, 6, 7, 8, 9]
+			_shuffle_array(relabel_digits, rng)
+			var relabel_map := {}
+			for i in 9:
+				relabel_map[i + 1] = relabel_digits[i]
+			for i in 81:
+				grid[i] = relabel_map[grid[i]]
+		# If brute-force also fails the constraints are unsatisfiable; return
+		# the best-effort transformed grid so generation can still proceed.
 
 	return grid
 

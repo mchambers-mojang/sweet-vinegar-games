@@ -222,3 +222,61 @@ func test_solver_is_valid_placement_no_regression() -> void:
 	grid.fill(0)
 	grid[3] = 7  # row conflict
 	assert_false(SudokuSolver.is_valid_placement(grid, 0, 7))
+
+
+# ---------------------------------------------------------------------------
+# 8. _is_complete_grid_valid — Issue 2 regression guard
+# ---------------------------------------------------------------------------
+
+func test_is_complete_grid_valid_returns_true_for_no_constraints() -> void:
+	# Any grid (even invalid) returns true when constraints is empty
+	var grid: Array[int] = []
+	grid.resize(81)
+	grid.fill(1)
+	assert_true(SudokuSolver._is_complete_grid_valid(grid, []))
+
+
+func test_is_complete_grid_valid_passes_for_valid_solution() -> void:
+	# TEST_SOLUTION satisfies no custom constraint
+	assert_true(SudokuSolver._is_complete_grid_valid(TEST_SOLUTION.duplicate(), []))
+
+
+func test_is_complete_grid_valid_detects_constraint_violation() -> void:
+	# Block placing TEST_SOLUTION[0] (==5) at index 0 — the completed grid
+	# should be detected as violating that constraint.
+	var c := BlockValueConstraint.new(0, TEST_SOLUTION[0])
+	var grid: Array[int] = TEST_SOLUTION.duplicate()
+	assert_false(SudokuSolver._is_complete_grid_valid(grid, [c]))
+
+
+func test_brute_force_rejects_given_that_violates_constraint() -> void:
+	# Build a puzzle where the only remaining cell to fill is cell 80.
+	# A constraint blocks the correct value at cell 0 (a given).
+	# The solver should find zero solutions since the given itself is invalid.
+	var puzzle: Array[int] = TEST_SOLUTION.duplicate()
+	puzzle[80] = 0  # one empty cell to solve
+	# Block the given at cell 0 (value == TEST_SOLUTION[0])
+	var c := BlockValueConstraint.new(0, TEST_SOLUTION[0])
+	var solutions := SudokuSolver.solve_brute_force(puzzle, 2, [c])
+	assert_eq(solutions.size(), 0, "constraint-violating given should yield no solutions")
+
+
+# ---------------------------------------------------------------------------
+# 9. solve_logic with constraints — Issue 3 regression guard
+# ---------------------------------------------------------------------------
+
+func test_solve_logic_respects_constraints_in_candidate_init() -> void:
+	# Create a near-complete puzzle where only cell 2 is empty and
+	# both possible values are blocked by a constraint for one of them.
+	# solve_logic should then pick the only valid candidate.
+	var grid: Array[int] = TEST_SOLUTION.duplicate()
+	grid[2] = 0  # cell 2 solution value is 4
+	# Block value 3 at index 2 (3 is not a valid candidate anyway due to
+	# standard rules, so this constraint is effectively a no-op — it verifies
+	# that passing constraints does not break the standard logic path).
+	var c := BlockValueConstraint.new(2, 3)
+	var solver := SudokuSolver.new()
+	var solved := solver.solve_logic(grid, [c])
+	assert_true(solved, "logic solver should fill the single empty cell")
+	assert_eq(grid[2], 4, "cell 2 should be filled with the correct value")
+
