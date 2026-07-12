@@ -713,12 +713,9 @@ func _update_number_completion() -> void:
 		if i < _number_buttons.size():
 			var btn := _number_buttons[i]
 			var num := i + 1
-			var count := logic.count_number_placements(num)
-			btn.disabled = count >= 9
-			if count >= 9:
-				btn.modulate = Color(1, 1, 1, 0.3)
-			else:
-				btn.modulate = Color.WHITE
+			var complete := logic.count_number_placements(num) >= 9
+			btn.disabled = complete
+			btn.modulate = Color(1, 1, 1, 0.3) if complete else Color.WHITE
 
 
 func _update_strikes_display() -> void:
