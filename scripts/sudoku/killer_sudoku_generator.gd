@@ -71,9 +71,8 @@ func _minimize_givens(puzzle: Array[int], constraint, rng: RandomNumberGenerator
 	var indices := range(81)
 	_shuffle_array(indices, rng)
 	# `indices` is shuffled once above, then reused for each pass until stable
-	# because removing one clue can enable removing another clue that was still
-	# required earlier in the same pass. The loop stops as soon as a full pass
-	# removes nothing.
+	# because removing one clue can make another clue non-minimal later in the
+	# same sweep. The loop stops as soon as a full pass removes nothing.
 	var removed_any := true
 	while removed_any:
 		removed_any = false
