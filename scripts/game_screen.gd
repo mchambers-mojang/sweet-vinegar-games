@@ -323,11 +323,11 @@ func _save_current_state() -> void:
 func _on_settings_pressed() -> void:
 	var SettingsScreen := load("res://scripts/settings_screen.gd")
 	SettingsScreen.return_scene = _get_scene_path()
-	SceneTransition.transition_to(Scenes.SETTINGS)
+	SceneTransition.push(Scenes.SETTINGS)
 
 
 func navigate_to_menu(menu_scene: String) -> void:
-	SceneTransition.transition_to(menu_scene)
+	SceneTransition.navigate(menu_scene)
 
 
 # --- Help Button ---

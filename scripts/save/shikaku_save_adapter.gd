@@ -14,22 +14,11 @@ func get_grid_width() -> int:
 	return int(restore().get("width", 10))
 
 
-## Migration callable: upgrade save data from an older schema version.
-## Declared static so the Callable does not keep an instance alive unnecessarily.
-static func _migrate(data: Dictionary, _from_version: int) -> Dictionary:
+## Upgrade save data from an older schema version.
+func _migrate(data: Dictionary, _from_version: int) -> Dictionary:
 	# v0 → v1: no schema changes required; version stamp is added by
-	# GameSaveManager on the next save_game() call.
+	# the adapter on the next save() call.
 	return data
-
-
-# Registered once per class, not once per instance.
-static var _migrator_registered: bool = false
-
-func _init() -> void:
-	if _migrator_registered:
-		return
-	_migrator_registered = true
-	GameSaveManager.register_migrator("shikaku", ShikakuSaveAdapter._migrate)
 
 
 ## A valid shikaku save must have positive width and height dimensions and

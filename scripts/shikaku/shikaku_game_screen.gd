@@ -200,7 +200,7 @@ func _on_rectangle_placed(rect: Rect2i) -> void:
 			(rect.position.x + rect.size.x / 2.0) * cell_size,
 			(rect.position.y + rect.size.y / 2.0) * cell_size
 		)
-		NeonRing.create(board, center, Color(0.0, 1.5, 1.5), cell_size * 2.5, 0.25, 0.3)
+		EffectFactory.neon_ring(board, center, Color(0.0, 1.5, 1.5), cell_size * 2.5, 0.25, 0.3)
 	_update_button_states()
 	if result.game_won:
 		_handle_win()
@@ -319,7 +319,7 @@ func _on_back() -> void:
 		_stats.set_counter("general", "current_win_streak", 0)
 		_achievements.check_stats()
 	_save_current_state()
-	SceneTransition.transition_to(Scenes.SHIKAKU_MENU)
+	SceneTransition.navigate(Scenes.SHIKAKU_MENU)
 
 
 func _handle_win() -> void:
@@ -362,7 +362,7 @@ func _handle_win() -> void:
 			(board.grid_width / 2.0) * cell_size,
 			(board.grid_height / 2.0) * cell_size
 		)
-		NeonRing.create(board, center, Color(0.0, 2.0, 1.5), cell_size * 6.0, 0.5, 1.2)
+		EffectFactory.neon_ring(board, center, Color(0.0, 2.0, 1.5), cell_size * 6.0, 0.5, 1.2)
 		AppTheme.screen_shake(6.0, 0.2)
 	board.flash_all(Color(1.2, 1.1, 0.8), 0.4)
 	var timer := get_tree().create_timer(0.5)
@@ -407,7 +407,7 @@ func _show_win_dialog() -> void:
 	dialog.custom_action.connect(func(action: StringName) -> void:
 		if action == "menu":
 			dialog.queue_free()
-			SceneTransition.transition_to(Scenes.SHIKAKU_MENU)
+			SceneTransition.navigate(Scenes.SHIKAKU_MENU)
 		elif action == "bookmark":
 			var success := _storage.bookmark_latest_replay()
 			if success:
@@ -420,11 +420,8 @@ func _show_win_dialog() -> void:
 func _restart_same_game() -> void:
 	var w := grid_width
 	var h := grid_height
-	SceneTransition.transition_with_callback(func() -> void:
-		var game_scene: Node = load(Scenes.SHIKAKU_GAME).instantiate()
-		get_tree().root.add_child(game_scene)
+	SceneTransition.navigate(Scenes.SHIKAKU_GAME, func(game_scene: Node) -> void:
 		game_scene.start_new_game(w, h)
-		queue_free()
 	)
 
 

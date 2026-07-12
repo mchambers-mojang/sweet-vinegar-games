@@ -2,14 +2,19 @@ extends CanvasLayer
 
 ## Fade-to-black scene transition overlay.
 ## Usage:
-##   SceneTransition.transition_to("res://scenes/main_menu.tscn")
-##   SceneTransition.transition_with_callback(func(): ... )
+##   SceneTransition.navigate("res://scenes/main_menu.tscn")
+##   SceneTransition.navigate("res://scenes/game.tscn", func(s): s.start_new_game())
+##   SceneTransition.push("res://scenes/settings.tscn")  # caller stays on stack
+##   SceneTransition.pop()                               # restores previous scene
 
 var _overlay: ColorRect
 var _tween: Tween
 const FADE_DURATION := 0.15
 var _transitioning := false
 var _initial_fade_pending := true
+
+## Navigation stack — Node instances held alive off the scene tree.
+var _nav_stack: Array[Node] = []
 
 
 func _ready() -> void:
@@ -27,17 +32,27 @@ func _ready() -> void:
 	, CONNECT_ONE_SHOT)
 
 
-## Fade out, change scene, fade in.
-func transition_to(scene_path: String) -> void:
-	transition_with_callback(func() -> void:
-		get_tree().change_scene_to_file(scene_path)
-	)
+## Navigate to target_path, fully replacing the current scene.
+## SceneTransition always owns instantiation and scene lifecycle.
+## The optional setup Callable receives the new scene instance before add_child,
+## so any metadata set there is visible to _ready() on the new scene.
+## Clears the navigation stack, freeing any stacked scenes.
+func navigate(target_path: String, setup: Callable = Callable()) -> void:
+	_do_navigate(func() -> Node: return load(target_path).instantiate(), setup, true)
 
 
-## Fade out, run a callback (for manual instantiate patterns), fade in.
-## After the callback runs, the last non-autoload child of root is set as
-## current_scene so that future change_scene_to_file calls free it properly.
-func transition_with_callback(callback: Callable) -> void:
+## Push the current scene onto the navigation stack and navigate to target_path.
+## The displaced scene is kept alive off the scene tree and restored by pop().
+func push(target_path: String) -> void:
+	_do_navigate(func() -> Node: return load(target_path).instantiate(), Callable(), false)
+
+
+## Return to the previous scene on the navigation stack.
+## Frees the current scene and re-attaches the scene at the top of the stack.
+func pop() -> void:
+	if _nav_stack.is_empty():
+		push_warning("SceneTransition.pop() called with an empty navigation stack")
+		return
 	if _transitioning:
 		return
 	AppTheme.clear_screen_shake()
@@ -47,13 +62,16 @@ func transition_with_callback(callback: Callable) -> void:
 	_overlay.color = _get_fade_color(0.0)
 	if _tween and _tween.is_valid():
 		_tween.kill()
-	# Fade to background color
 	_tween = create_tween()
 	_tween.tween_property(_overlay, "color:a", 1.0, FADE_DURATION)
 	_tween.tween_callback(func() -> void:
-		callback.call()
-		_update_current_scene()
-		# Wait two frames so the new scene fully initialises and renders behind the overlay
+		var current := get_tree().current_scene
+		var previous: Node = _nav_stack.pop_back()
+		get_tree().root.add_child(previous)
+		get_tree().current_scene = previous
+		if current:
+			current.queue_free()
+		# Wait two frames so the restored scene fully renders behind the overlay
 		get_tree().process_frame.connect(func() -> void:
 			get_tree().process_frame.connect(_fade_in, CONNECT_ONE_SHOT)
 		, CONNECT_ONE_SHOT)
@@ -99,15 +117,42 @@ func _update_overlay_color() -> void:
 	_overlay.color = _get_fade_color(a)
 
 
-## Set the last non-autoload child of root as current_scene so
-## change_scene_to_file properly frees it on the next transition.
-func _update_current_scene() -> void:
-	var root := get_tree().root
-	for i in range(root.get_child_count() - 1, -1, -1):
-		var child := root.get_child(i)
-		if child is CanvasLayer:
-			continue
-		if child == self:
-			continue
-		get_tree().current_scene = child
+## Internal: fade out, swap scenes, fade in.
+## factory creates the new scene Node; setup (optional) is called with the new
+## Node before add_child so that metadata is visible to _ready(); free_old
+## controls whether the old scene is freed (navigate) or pushed onto the
+## navigation stack (push).
+func _do_navigate(factory: Callable, setup: Callable, free_old: bool) -> void:
+	if _transitioning:
 		return
+	AppTheme.clear_screen_shake()
+	_transitioning = true
+	HapticManager.stop()
+	_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	_overlay.color = _get_fade_color(0.0)
+	if _tween and _tween.is_valid():
+		_tween.kill()
+	_tween = create_tween()
+	_tween.tween_property(_overlay, "color:a", 1.0, FADE_DURATION)
+	_tween.tween_callback(func() -> void:
+		var old_scene := get_tree().current_scene
+		var new_scene: Node = factory.call()
+		if setup.is_valid():
+			setup.call(new_scene)
+		get_tree().root.add_child(new_scene)
+		get_tree().current_scene = new_scene
+		if free_old:
+			for stacked in _nav_stack:
+				stacked.queue_free()
+			_nav_stack.clear()
+			if old_scene:
+				old_scene.queue_free()
+		else:
+			if old_scene:
+				get_tree().root.remove_child(old_scene)
+				_nav_stack.push_back(old_scene)
+		# Wait two frames so the new scene fully initialises and renders behind the overlay
+		get_tree().process_frame.connect(func() -> void:
+			get_tree().process_frame.connect(_fade_in, CONNECT_ONE_SHOT)
+		, CONNECT_ONE_SHOT)
+	)
