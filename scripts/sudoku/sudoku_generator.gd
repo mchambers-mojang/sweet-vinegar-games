@@ -70,8 +70,9 @@ func generate(difficulty: SudokuSolver.Difficulty, seed: int = -1, constraints: 
 		fallback_full_grid = _generate_full_grid(rng)
 	else:
 		fallback_full_grid = _generate_full_grid_constrained(rng, constraints)
-		# _generate_full_grid_constrained always succeeds for satisfiable constraints, but
-		# guard defensively — if it somehow fails there is nothing valid to return.
+		# _generate_full_grid_constrained returns empty only when constraints are
+		# unsatisfiable.  Anti-Knight on a 9x9 grid always has solutions, so this
+		# branch is a last-resort guard against future constraint types.
 		if fallback_full_grid.is_empty():
 			return {}
 	var fallback_puzzle := _remove_cells_constrained(fallback_full_grid, difficulty, rng, constraints)
@@ -252,8 +253,11 @@ func _simple_remove_constrained(full_grid: Array[int], target_clues: int, rng: R
 
 
 ## Generate a complete valid grid that satisfies extra constraints by randomised
-## constraint-aware backtracking.  Returns an empty array only if the constraints
-## are unsatisfiable (which is never true for Anti-Knight on a 9x9 grid).
+## constraint-aware backtracking.  Returns an empty array when backtracking
+## exhausts all options — possible only if constraints are unsatisfiable, which
+## is not the case for Anti-Knight Sudoku on a 9x9 grid.
+## [param rng] Source of randomness used to shuffle digit order at each cell.
+## [param constraints] Array of SudokuConstraint objects to satisfy alongside standard rules.
 func _generate_full_grid_constrained(rng: RandomNumberGenerator, constraints: Array) -> Array[int]:
 	var grid: Array[int] = []
 	grid.resize(81)
@@ -265,6 +269,11 @@ func _generate_full_grid_constrained(rng: RandomNumberGenerator, constraints: Ar
 
 ## Recursively fill grid from cell pos onward, trying digits in a shuffled order
 ## so every call with a fresh rng state produces a distinct random grid.
+## Returns true when every cell is filled without violating any constraint.
+## [param grid] The 81-cell working grid (modified in-place; caller owns the array).
+## [param pos] Index of the first unfilled cell to attempt; cells before pos are fixed.
+## [param rng] Source of randomness; consumed as digits are shuffled at each step.
+## [param constraints] Array of SudokuConstraint objects applied alongside standard rules.
 func _backtrack_fill(grid: Array[int], pos: int, rng: RandomNumberGenerator, constraints: Array) -> bool:
 	while pos < 81 and grid[pos] != 0:
 		pos += 1
