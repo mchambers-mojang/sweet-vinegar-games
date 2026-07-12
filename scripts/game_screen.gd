@@ -13,14 +13,48 @@ const TimeFormat := preload("res://scripts/utils/time_format.gd")
 ## implement the hooks below.
 ##
 ## All platform-service autoload calls (replay, crash, analytics, stats, save,
-## sound, haptics) go through `session` (a SessionController) rather than
-## directly to the autoloads. This keeps game screens to UI + input only and
-## makes the lifecycle testable without a scene tree.
+## sound, haptics) go through protected dependency variables rather than
+## directly to the autoloads. Pass mock objects to _init() for unit testing —
+## no scene tree needed.
 
 
-# --- Session orchestration ---
+# --- Injected dependencies (default to global autoloads) ---
+# _recorder and _storage both default to ReplaySystem (merged autoload).
+# _sound and _haptic both default to FeedbackManager (merged autoload).
+# They remain separate parameters so unit tests can inject fine-grained mocks
+# for recording behaviour vs. persistence, and sound vs. haptic, independently.
 
-var session: SessionController = null
+var _recorder: Object
+var _storage: Object
+var _crash: Object
+var _analytics: Object
+var _achievements: Object
+var _saves: Object
+var _stats: Object
+var _sound: Object
+var _haptic: Object
+
+
+func _init(
+	p_recorder: Object = null,
+	p_storage: Object = null,
+	p_crash: Object = null,
+	p_analytics: Object = null,
+	p_achievements: Object = null,
+	p_saves: Object = null,
+	p_stats: Object = null,
+	p_sound: Object = null,
+	p_haptic: Object = null
+) -> void:
+	_recorder = p_recorder if p_recorder != null else ReplaySystem
+	_storage = p_storage if p_storage != null else ReplaySystem
+	_crash = p_crash if p_crash != null else CrashCollector
+	_analytics = p_analytics if p_analytics != null else AnalyticsManager
+	_achievements = p_achievements if p_achievements != null else AchievementEngine
+	_saves = p_saves if p_saves != null else GameSaveManager
+	_stats = p_stats if p_stats != null else GameStatsManager
+	_sound = p_sound if p_sound != null else FeedbackManager
+	_haptic = p_haptic if p_haptic != null else FeedbackManager
 
 
 # --- Session state (owned by base) ---
@@ -55,6 +89,14 @@ func _serialize_state() -> Dictionary:
 
 ## Restore game state from a saved Dictionary.
 func _deserialize_state(_data: Dictionary) -> void:
+	pass
+
+
+## Start a new game with the provided launch parameters.
+## Called by GameMenu after the scene is added to the tree.
+## Subclasses implement this to extract the relevant fields from params
+## (e.g. params.option_value for difficulty or grid size) and call begin_session().
+func launch(_params: LaunchParams) -> void:
 	pass
 
 
@@ -156,11 +198,10 @@ func _get_difficulty() -> int:
 func _ready() -> void:
 	# Cache the save adapter (null for games not yet using the adapter contract)
 	_save_adapter = _get_save_adapter()
-	session = SessionController.new()
 
 	# Crash reporting
-	session.register_crash_state(_get_crash_state)
-	session.register_user_action("%s_screen_opened" % _get_game_id())
+	_crash.register_state_provider(_get_crash_state)
+	_crash.register_user_action("%s_screen_opened" % _get_game_id())
 
 	# Settings button
 	var settings_btn := _find_settings_button()
@@ -182,7 +223,7 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
-	session.unregister_crash_state(_get_crash_state)
+	_crash.unregister_state_provider(_get_crash_state)
 
 
 func _process(delta: float) -> void:
@@ -210,32 +251,32 @@ func begin_session(saved_data: Dictionary = {}) -> void:
 		random_seed = int(saved_data.get("random_seed", 0))
 		elapsed_time = saved_data.get("elapsed_time", 0.0)
 		replay_id = str(saved_data.get("replay_id", ""))
-		session.register_user_action(
+		_crash.register_user_action(
 				game_id + "_resume_game",
 				_get_resume_crash_params(saved_data))
 	else:
 		random_seed = _create_session_seed()
 		elapsed_time = 0.0
 		replay_id = ""
-		session.register_user_action(
+		_crash.register_user_action(
 				game_id + "_start_new_game",
 				_get_start_crash_params())
 
 	# _setup_game() runs here so game state (board, seed derivation for legacy
-	# saves) is fully initialised before session.start_replay() below.
+	# saves) is fully initialised before _recorder.start_session() below.
 	_setup_game(saved_data)
 
-	if not is_resuming or not session.has_active_replay():
-		replay_id = session.start_replay(
+	if not is_resuming or not _recorder.has_active_session():
+		replay_id = _recorder.start_session(
 				game_id, random_seed, _get_initial_state(), _get_settings_snapshot())
 
 	if not is_resuming:
 		_increment_stats()
-		session.increment_stats_counter("general", "games_played")
+		_stats.increment_counter("general", "games_played")
 		GameEvents.game_started.emit(game_id, _get_difficulty(), _get_analytics_params())
 
-	session.track_achievement("general.game_started.%s" % game_id)
-	session.check_achievements()
+	_achievements.track("general.game_started.%s" % game_id)
+	_achievements.check_stats()
 	_save_current_state()
 
 
@@ -247,14 +288,14 @@ func save_progress() -> void:
 	if _save_adapter:
 		_save_adapter.save(_serialize_state())
 	else:
-		session.save_progress(_get_game_id(), _serialize_state())
+		_saves.save_game(_get_game_id(), _serialize_state())
 
 
 func clear_save() -> void:
 	if _save_adapter:
 		_save_adapter.clear()
 	else:
-		session.clear_save(_get_game_id())
+		_saves.clear_save(_get_game_id())
 
 
 func _try_auto_resume() -> void:
@@ -264,8 +305,8 @@ func _try_auto_resume() -> void:
 		var data := _save_adapter.restore_if_resumable()
 		if not data.is_empty():
 			_deserialize_state(data)
-	elif session.has_saved_game(_get_game_id()):
-		var data := session.load_game(_get_game_id())
+	elif _saves.has_saved_game(_get_game_id()):
+		var data := _saves.load_game(_get_game_id())
 		if not data.is_empty():
 			_deserialize_state(data)
 
@@ -274,7 +315,7 @@ func _try_auto_resume() -> void:
 ## Defined here so subclasses do not need to repeat the two-line body.
 func _save_current_state() -> void:
 	save_progress()
-	session.flush_replay()
+	_recorder.flush_active_replay()
 
 
 # --- Navigation ---

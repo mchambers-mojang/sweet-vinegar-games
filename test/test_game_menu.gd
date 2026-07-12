@@ -278,8 +278,6 @@ func test_sudoku_config_tres_is_valid() -> void:
 	assert_true(cfg.has_save_support)
 	assert_eq(cfg.option_button_unique_name, "DifficultyButton")
 	assert_eq(cfg.option_default_index, 1)
-	assert_true(cfg.start_game_passes_option)
-	assert_false(cfg.start_game_passes_option_twice)
 	assert_eq(cfg.abandon_stat_prefix, "abandoned_d")
 	assert_eq(cfg.abandon_stat_save_key, "difficulty")
 	assert_eq(cfg.title_color_key, "text_given")
@@ -297,8 +295,6 @@ func test_shikaku_config_tres_is_valid() -> void:
 	assert_eq(cfg.option_values.size(), 6)
 	assert_eq(cfg.option_values[0], 5)
 	assert_eq(cfg.option_values[3], 10)
-	assert_true(cfg.start_game_passes_option)
-	assert_true(cfg.start_game_passes_option_twice)
 	assert_eq(cfg.abandon_stat_prefix, "abandoned_s")
 	assert_eq(cfg.abandon_stat_save_key, "width")
 	assert_eq(cfg.abandon_stat_default, 10)
@@ -313,9 +309,6 @@ func test_carom_config_tres_is_valid() -> void:
 	assert_eq(cfg.start_button_unique_name, "NewGameButton")
 	assert_eq(cfg.option_button_unique_name, "DifficultyButton")
 	assert_eq(cfg.option_default_index, 1)
-	assert_eq(cfg.start_game_meta_key, "carom_difficulty")
-	assert_eq(cfg.start_game_method, "")
-	assert_false(cfg.start_game_passes_option)
 
 
 func test_blockudoku_config_tres_is_valid() -> void:
@@ -325,8 +318,6 @@ func test_blockudoku_config_tres_is_valid() -> void:
 	assert_eq(cfg.display_name, "Blockudoku")
 	assert_true(cfg.has_save_support)
 	assert_eq(cfg.option_button_unique_name, "")
-	assert_false(cfg.start_game_passes_option)
-	assert_eq(cfg.start_game_method, "start_new_game")
 	assert_false(cfg.game_rules.is_empty())
 	assert_true(cfg.game_rules.get("pentominoes", false))
 
@@ -429,4 +420,55 @@ func test_blockudoku_config_leaderboard_modes() -> void:
 	assert_eq(cfg.leaderboard_modes.size(), 1)
 	assert_eq(cfg.leaderboard_modes[0], "standard")
 	assert_false(cfg.leaderboard_is_time_based)
+
+
+# ---------------------------------------------------------------------------
+# LaunchParams — defaults and property assignment
+# ---------------------------------------------------------------------------
+
+const LaunchParamsScript := preload("res://scripts/menu/launch_params.gd")
+
+
+func test_launch_params_default_option_value_is_zero() -> void:
+	var p := LaunchParamsScript.new()
+	assert_eq(p.option_value, 0)
+
+
+func test_launch_params_default_online_is_false() -> void:
+	var p := LaunchParamsScript.new()
+	assert_false(p.online)
+
+
+func test_launch_params_stores_option_value() -> void:
+	var p := LaunchParamsScript.new()
+	p.option_value = 3
+	assert_eq(p.option_value, 3)
+
+
+func test_launch_params_stores_online_true() -> void:
+	var p := LaunchParamsScript.new()
+	p.online = true
+	assert_true(p.online)
+
+
+# ---------------------------------------------------------------------------
+# MenuConfig.build_launch_params — option value is propagated
+# ---------------------------------------------------------------------------
+
+func test_build_launch_params_sets_option_value() -> void:
+	var cfg := MenuConfigScript.new()
+	var p := cfg.build_launch_params(5)
+	assert_eq(p.option_value, 5)
+
+
+func test_build_launch_params_zero_when_no_option() -> void:
+	var cfg := MenuConfigScript.new()
+	var p := cfg.build_launch_params(0)
+	assert_eq(p.option_value, 0)
+
+
+func test_build_launch_params_online_is_false_by_default() -> void:
+	var cfg := MenuConfigScript.new()
+	var p := cfg.build_launch_params(2)
+	assert_false(p.online)
 

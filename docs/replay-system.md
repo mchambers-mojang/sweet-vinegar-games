@@ -52,10 +52,6 @@ The active (in-progress) replay is snapshotted to `user://active_replay.json` fo
 
 The standalone scripts `scripts/replays/replay_recorder.gd` and `scripts/replays/replay_storage.gd` are retained (not as autoloads) so that unit tests can preload and instantiate them independently without scene-tree or filesystem side effects.
 
-### ReplayManager (facade)
-
-`scripts/autoload/replay_manager.gd` is a thin facade that delegates to `ReplaySystem`. It exists for backward compatibility. New callers should use `ReplaySystem` directly.
-
 ### ReplayPlayer (playback engine)
 
 `scripts/replays/replay_player.gd` is a generic playback engine attached to `scenes/replay_viewer.tscn`. It:

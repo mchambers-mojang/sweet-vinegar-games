@@ -60,11 +60,9 @@ func _ready() -> void:
 	colors = palette._colors
 	palette.palette_changed.connect(_on_palette_changed)
 	ui_theme = Theme.new()
-	# Unconditional initial build: call set_mode() directly so palette_changed
-	# fires regardless of whether palette._mode already equals dark_mode.
-	# _apply_theme_setting() guards against re-entry for subsequent calls only.
-	palette.set_mode(PlatformSettings.dark_mode)
-	PlatformSettings.settings_changed.connect(_apply_theme_setting)
+	# Apply the mode loaded from settings — palette.load() (called above) sets
+	# palette._mode from the config file; set_mode() now activates the color set.
+	palette.set_mode(palette.get_mode())
 
 	for key in ICON_PATHS:
 		var tex := load(ICON_PATHS[key]) as Texture2D
@@ -78,14 +76,6 @@ func _ready() -> void:
 	_setup_glow()
 
 
-func _apply_theme_setting() -> void:
-	# Guard: if PlatformSettings.dark_mode already matches the active palette mode
-	# (e.g. after _on_palette_changed just synced it), skip the redundant rebuild.
-	if PlatformSettings.dark_mode == palette._mode:
-		return
-	palette.set_mode(PlatformSettings.dark_mode)
-
-
 func _on_palette_changed() -> void:
 	is_dark = palette.is_dark
 	is_neon = palette.is_neon
@@ -93,11 +83,8 @@ func _on_palette_changed() -> void:
 	theme_changed.emit(is_dark)
 	_retint_icon_buttons()
 	_scan_existing_popup_controls()
-	# Sync PlatformSettings.dark_mode and persist it when the mode changed.
-	# The guard in _apply_theme_setting() prevents a settings_changed re-entry loop.
-	if PlatformSettings.dark_mode != palette._mode:
-		PlatformSettings.dark_mode = palette._mode
-		PlatformSettings.save_settings()
+	# Persist mode and custom palette data — ThemePalette is the sole owner.
+	palette.save()
 	_update_glow()
 
 
