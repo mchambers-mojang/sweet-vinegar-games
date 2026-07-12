@@ -91,7 +91,7 @@ func test_glass_shatter_skips_child_when_particles_disabled() -> void:
 
 # --- Pure effect classes bypass gating ---
 
-func test_neon_burst_create_always_spawns_regardless_of_settings() -> void:
+func test_neon_burst_create_bypasses_gating() -> void:
 	PlatformSettings.particle_effects_enabled = false
 	var parent := Node2D.new()
 	add_child_autofree(parent)
@@ -99,7 +99,7 @@ func test_neon_burst_create_always_spawns_regardless_of_settings() -> void:
 	assert_eq(parent.get_child_count(), 1, "NeonBurst.create() should always spawn — gating lives in EffectFactory")
 
 
-func test_neon_sweep_create_always_spawns_regardless_of_settings() -> void:
+func test_neon_sweep_create_bypasses_gating() -> void:
 	PlatformSettings.particle_effects_enabled = false
 	var parent := Node2D.new()
 	add_child_autofree(parent)
@@ -107,7 +107,7 @@ func test_neon_sweep_create_always_spawns_regardless_of_settings() -> void:
 	assert_eq(parent.get_child_count(), 1, "NeonSweep.create() should always spawn — gating lives in EffectFactory")
 
 
-func test_glass_shatter_create_always_spawns_regardless_of_settings() -> void:
+func test_glass_shatter_create_bypasses_gating() -> void:
 	PlatformSettings.particle_effects_enabled = false
 	var parent := Node2D.new()
 	add_child_autofree(parent)
@@ -115,7 +115,7 @@ func test_glass_shatter_create_always_spawns_regardless_of_settings() -> void:
 	assert_eq(parent.get_child_count(), 1, "GlassShatter.create() should always spawn — gating lives in EffectFactory")
 
 
-func test_neon_ring_create_always_spawns_regardless_of_settings() -> void:
+func test_neon_ring_create_bypasses_gating() -> void:
 	PlatformSettings.shockwave_enabled = false
 	var parent := Node2D.new()
 	add_child_autofree(parent)
