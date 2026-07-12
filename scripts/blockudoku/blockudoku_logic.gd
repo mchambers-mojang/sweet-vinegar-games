@@ -24,11 +24,8 @@ var blocks_placed_this_set: int = 0
 
 # Undo/redo history — owned here so all games store history in the logic layer.
 var _undo_stack: UndoStack = UndoStack.new()
-<<<<<<< HEAD
 # Pending "before" snapshot waiting for commit_move(); cleared on invalid paths.
 var _pending_undo_before: Dictionary = {}
-=======
->>>>>>> origin/main
 
 
 ## Result returned by try_place().  Carries everything the orchestrator needs
@@ -82,10 +79,7 @@ func reset() -> void:
 	available_blocks = []
 	blocks_placed_this_set = 0
 	_undo_stack.clear()
-<<<<<<< HEAD
 	_pending_undo_before = {}
-=======
->>>>>>> origin/main
 
 
 # ---------------------------------------------------------------------------
@@ -317,34 +311,6 @@ func can_redo() -> bool:
 	return _undo_stack.can_redo()
 
 
-<<<<<<< HEAD
-=======
-## Record a before/after move pair in the undo stack (clears redo history).
-func push_move(before: Dictionary, after: Dictionary) -> void:
-	_undo_stack.push({"before": before, "after": after})
-
-
-## Pop the most recent move for undo; returns the "before" state to restore.
-## Returns an empty dict if there is nothing to undo.
-func undo_move() -> Dictionary:
-	var entry := _undo_stack.undo()
-	return entry.get("before", {})
-
-
-## Pop the most recent undone move for redo; returns the "after" state to restore.
-## Returns an empty dict if there is nothing to redo.
-func redo_move() -> Dictionary:
-	var entry := _undo_stack.redo()
-	return entry.get("after", {})
-
-
-## Clear only the redo history (e.g. when a game-over path invalidates redo
-## without recording a new undo entry).
-func clear_redo() -> void:
-	_undo_stack.clear_redo()
-
-
->>>>>>> origin/main
 ## Clear both undo and redo history (e.g. on new game or resume).
 func clear_undo_history() -> void:
 	_undo_stack.clear()
