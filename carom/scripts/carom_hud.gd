@@ -473,7 +473,7 @@ func update_debug_overlay(debug_info: Dictionary) -> void:
 		var touch: Dictionary = debug_info["touch"]
 		_touch_debug_draw.update_touch_state(
 			touch.get("active_touches", {}),
-			touch.get("total_input", Vector2.ZERO),
+			touch.get("total_input", 0.0),
 			touch.get("last_fire", false)
 		)
 
