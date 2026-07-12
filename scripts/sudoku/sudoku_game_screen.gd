@@ -68,6 +68,7 @@ var _color_buttons: Array[Button] = []
 var _last_color_press_time: float = 0.0
 var _last_color_pressed: Color = Color.TRANSPARENT
 const DOUBLE_CLICK_TIME := 0.4
+const CONSTRAINT_CONFLICT_FLASH_DURATION := 0.6
 var _multi_selected_color: Color = Color.TRANSPARENT  # Active multi-selection color
 var _last_cell_press_time: float = 0.0
 var _last_cell_pressed: int = -1
@@ -726,7 +727,7 @@ func _flash_constraint_conflicts(conflict_indices: Array[int]) -> void:
 	for idx in conflict_indices:
 		board.cells[idx].set_error(true)
 	var tween := create_tween()
-	tween.tween_interval(0.6)
+	tween.tween_interval(CONSTRAINT_CONFLICT_FLASH_DURATION)
 	tween.tween_callback(func() -> void:
 		for idx in conflict_indices:
 			if idx >= 0 and idx < board.cells.size():

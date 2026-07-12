@@ -93,12 +93,9 @@ static func _find_mrv_cell(grid: Array[int], constraints: Array = []) -> int:
 			continue
 		var count := 0
 		for v in range(1, 10):
-			if constraints.is_empty():
-				if is_valid_placement(grid, i, v):
-					count += 1
-			else:
-				if is_valid_placement_constrained(grid, i, v, constraints):
-					count += 1
+			var valid := is_valid_placement_constrained(grid, i, v, constraints) if not constraints.is_empty() else is_valid_placement(grid, i, v)
+			if valid:
+				count += 1
 		if count == 0:
 			return -2  # Dead end — no candidates
 		if count < best_count:
@@ -122,22 +119,20 @@ static func _backtrack_mrv(grid: Array[int], solutions: Array[Array], max_soluti
 		# Dead end
 		return
 
+	# Get candidates using whichever validation path is appropriate, then backtrack.
+	var candidates: Array[int] = []
 	if constraints.is_empty():
-		var candidates := get_candidates(grid, pos)
-		for val in candidates:
-			grid[pos] = val
-			_backtrack_mrv(grid, solutions, max_solutions, constraints)
-			grid[pos] = 0
-			if solutions.size() >= max_solutions:
-				return
+		candidates = get_candidates(grid, pos)
 	else:
-		for val in range(1, 10):
-			if is_valid_placement_constrained(grid, pos, val, constraints):
-				grid[pos] = val
-				_backtrack_mrv(grid, solutions, max_solutions, constraints)
-				grid[pos] = 0
-				if solutions.size() >= max_solutions:
-					return
+		for v in range(1, 10):
+			if is_valid_placement_constrained(grid, pos, v, constraints):
+				candidates.append(v)
+	for val in candidates:
+		grid[pos] = val
+		_backtrack_mrv(grid, solutions, max_solutions, constraints)
+		grid[pos] = 0
+		if solutions.size() >= max_solutions:
+			return
 
 
 ## Logic-based solve that tracks which techniques were needed.

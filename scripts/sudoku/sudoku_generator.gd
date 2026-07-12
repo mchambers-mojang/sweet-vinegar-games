@@ -176,7 +176,7 @@ func _remove_cells(full_grid: Array[int], target_difficulty: SudokuSolver.Diffic
 func _remove_cells_constrained(full_grid: Array[int], target_difficulty: SudokuSolver.Difficulty, rng: RandomNumberGenerator, constraints: Array) -> Array[int]:
 	var puzzle: Array[int] = []
 	puzzle.assign(full_grid.duplicate())
-	# Anti-knight puzzles are naturally harder at the same clue count; add a few extra
+	# Constrained puzzles are naturally harder at the same clue count; add a few extra
 	# clues to keep them playable at each tier.
 	var target_clues: int = CLUE_TARGETS[target_difficulty]
 	if not constraints.is_empty():

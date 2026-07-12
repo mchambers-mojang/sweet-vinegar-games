@@ -106,14 +106,13 @@ func _setup_leaderboard_button(stats_btn: Button) -> void:
 		var diff_idx := _get_current_option_index()
 		var selected_lb_idx := 0
 		if _rule_set_index == RULE_SET_ANTI_KNIGHT:
-			var base := config.leaderboard_modes.size() - 1  # offset past standard (Evil is empty)
-			# Count non-empty standard modes before landing on anti-knight offset
-			var non_empty := 0
+			# Count non-empty standard modes to find where anti-knight entries start
+			# in the combined modes list (empty slots like "evil" are excluded).
+			var standard_modes_count := 0
 			for m in config.leaderboard_modes:
 				if not m.is_empty():
-					non_empty += 1
-			var ak_offset := non_empty
-			selected_lb_idx = ak_offset + mini(diff_idx, ANTI_KNIGHT_MODES.size() - 1)
+					standard_modes_count += 1
+			selected_lb_idx = standard_modes_count + mini(diff_idx, ANTI_KNIGHT_MODES.size() - 1)
 		else:
 			# Map diff_idx to the non-empty standard modes index
 			var count := 0
