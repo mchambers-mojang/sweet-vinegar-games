@@ -275,7 +275,7 @@ func _on_redo() -> void:
 
 
 func _on_hint() -> void:
-	if logic.is_completed or logic.hints_used >= ShikakuLogic.MAX_HINTS_ALLOWED:
+	if not logic.can_hint():
 		return
 	var result: ShikakuLogic.HintResult = logic.use_hint()
 	if result.rect.is_empty():
@@ -305,7 +305,7 @@ func _on_pause() -> void:
 
 
 func _on_back() -> void:
-	var completed := session.finish_replay("abandoned", board.placed_rects.size(), elapsed_time, {
+	var completed := session.finish_replay("abandoned", logic.placed_rects.size(), elapsed_time, {
 		"width": grid_width,
 		"height": grid_height,
 	})
@@ -323,7 +323,7 @@ func _handle_win() -> void:
 	# Leaderboard: submit completion time for board sizes with registered boards (5/7/10/14).
 	if grid_width in [5, 7, 10, 14]:
 		GameEvents.leaderboard_score_ready.emit("shikaku", str(grid_width), elapsed_time)
-	var completed := session.finish_replay("win", board.placed_rects.size(), elapsed_time, {
+	var completed := session.finish_replay("win", logic.placed_rects.size(), elapsed_time, {
 		"width": grid_width,
 		"height": grid_height,
 		"hints_used": logic.hints_used,
@@ -425,9 +425,9 @@ func _restart_same_game() -> void:
 
 
 func _update_button_states() -> void:
-	undo_button.disabled = logic.is_completed or logic.undo_stack.is_empty()
-	redo_button.disabled = logic.is_completed or logic.redo_stack.is_empty()
-	hint_button.disabled = logic.is_completed or logic.hints_used >= ShikakuLogic.MAX_HINTS_ALLOWED
+	undo_button.disabled = not logic.can_undo()
+	redo_button.disabled = not logic.can_redo()
+	hint_button.disabled = not logic.can_hint()
 
 
 func _apply_theme() -> void:
@@ -437,27 +437,20 @@ func _apply_theme() -> void:
 
 
 func _cheat_place_one() -> void:
-	var sol: Array[Rect2i] = logic.solution
-	if sol.is_empty():
+	if logic.solution.is_empty():
 		_cheat_active = false
 		return
 	# Find a solution rect not already placed
-	for rect in sol:
-		var found := false
-		for pr in board.placed_rects:
-			if pr == rect:
-				found = true
-				break
-		if not found:
-			var result: ShikakuLogic.PlaceRectResult = logic.place_rectangle(rect.position.x, rect.position.y, rect.size.x, rect.size.y)
-			if not result.valid:
-				continue
-			board.add_rect(rect)
-			session.play_sound_place()
-			if result.game_won:
-				_handle_win()
-			_save_current_state()
-			return
+	for rect in logic.get_unplaced_solution_rects():
+		var result: ShikakuLogic.PlaceRectResult = logic.place_rectangle(rect.position.x, rect.position.y, rect.size.x, rect.size.y)
+		if not result.valid:
+			continue
+		board.add_rect(rect)
+		session.play_sound_place()
+		if result.game_won:
+			_handle_win()
+		_save_current_state()
+		return
 	_cheat_active = false
 
 

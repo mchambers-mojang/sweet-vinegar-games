@@ -180,6 +180,26 @@ func redo() -> UndoRedoResult:
 	return result
 
 
+func can_undo() -> bool:
+	return not is_completed and not undo_stack.is_empty()
+
+
+func can_redo() -> bool:
+	return not is_completed and not redo_stack.is_empty()
+
+
+func can_hint() -> bool:
+	return not is_completed and hints_used < MAX_HINTS_ALLOWED
+
+
+func get_unplaced_solution_rects() -> Array[Rect2i]:
+	var result: Array[Rect2i] = []
+	for rect in solution:
+		if not _has_rect(rect):
+			result.append(rect)
+	return result
+
+
 func is_fully_covered() -> bool:
 	if grid_width <= 0 or grid_height <= 0:
 		return false
