@@ -348,12 +348,10 @@ func _end_drag(screen_pos: Vector2) -> void:
 		_drag_shape = []
 		return
 
-	# Capture state before mutation so undo can restore it
-	var before_state := _capture_move_state()
-
-	# Attempt placement via the logic module (validates + mutates logic board_grid)
+	# Attempt placement via the logic module (validates + mutates logic board_grid).
+	# Pass the current board visual so the undo entry captures the "before" colour state.
 	var old_score := logic.score
-	var place_result := logic.try_place(_drag_block_index, grid_pos)
+	var place_result := logic.try_place(_drag_block_index, grid_pos, board.get_state())
 
 	if place_result.valid:
 		GameEvents.move_made.emit("blockudoku", {
@@ -445,26 +443,20 @@ func _end_drag(screen_pos: Vector2) -> void:
 		_check_for_new_best()
 		_update_score_display()
 
-		# Deal new blocks if needed
+		# Deal new blocks if needed; deal_blocks() now handles game-over detection.
 		if place_result.new_blocks_dealt:
 			_deal_new_blocks()
 
-		# Game-over check (logic.can_any_piece_fit() when we just dealt; otherwise use result flag)
-		logic.clear_redo()
-		var has_valid_move: bool
-		if place_result.new_blocks_dealt:
-			has_valid_move = logic.can_any_piece_fit()
-		else:
-			has_valid_move = not place_result.game_over
-
-		if not has_valid_move:
+		# Game-over is fully determined by logic (set by try_place or deal_blocks).
+		if logic.is_game_over:
 			if board.is_clear_animating:
 				# Wait for clear animation to finish before showing game over
 				await board.clear_animation_finished
 			_update_undo_redo_buttons()
 			_handle_game_over()
 		else:
-			logic.push_move(before_state, _capture_move_state())
+			# Finalise the undo entry now that board visual reflects the completed move.
+			logic.commit_move(board.get_state())
 			_update_undo_redo_buttons()
 			_save_current_state()
 	else:
@@ -713,23 +705,25 @@ func _update_score_display() -> void:
 
 
 func _on_undo_pressed() -> void:
-	if logic.is_game_over:
+	var result := logic.undo()
+	if not result.success:
 		return
-	if not logic.can_undo():
-		return
-	var before_state: Dictionary = logic.undo_move()
-	_apply_move_state(before_state)
+	if not result.board_visual.is_empty():
+		board.set_state(result.board_visual)
+	_build_tray()
+	_update_score_display()
 	_update_undo_redo_buttons()
 	_save_current_state()
 
 
 func _on_redo_pressed() -> void:
-	if logic.is_game_over:
+	var result := logic.redo()
+	if not result.success:
 		return
-	if not logic.can_redo():
-		return
-	var after_state: Dictionary = logic.redo_move()
-	_apply_move_state(after_state)
+	if not result.board_visual.is_empty():
+		board.set_state(result.board_visual)
+	_build_tray()
+	_update_score_display()
 	_update_undo_redo_buttons()
 	_save_current_state()
 
@@ -737,23 +731,6 @@ func _on_redo_pressed() -> void:
 func _update_undo_redo_buttons() -> void:
 	undo_button.disabled = logic.is_game_over or not logic.can_undo()
 	redo_button.disabled = logic.is_game_over or not logic.can_redo()
-
-
-func _capture_move_state() -> Dictionary:
-	return {
-		"logic_state": logic.get_state(),
-		"board_visual": board.get_state(),
-		"rng_state": _rng.state,
-	}
-
-
-func _apply_move_state(state: Dictionary) -> void:
-	logic.set_state(state.get("logic_state", {}))
-	board.set_state(state.get("board_visual", {}))
-	if state.has("rng_state"):
-		_rng.state = state.get("rng_state")
-	_build_tray()
-	_update_score_display()
 
 
 func _serialize_blocks(blocks: Array) -> Array:
