@@ -32,9 +32,7 @@ var _gear_button: Button = null
 var _current_camera_mode: String = CaromSettings.CAMERA_MODE_TOP_DOWN
 
 
-
-
-
+func _ready() -> void:
 	CaromSettings.ensure_loaded()
 	_current_camera_mode = CaromSettings.camera_mode
 	_create_reload_button()
