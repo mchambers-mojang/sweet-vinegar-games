@@ -56,6 +56,8 @@ func launch(params: LaunchParams) -> void:
 		var match_ctrl := get_node_or_null("MatchController") as CaromMatchController
 		if match_ctrl:
 			match_ctrl.start_match(params.option_value)
+		else:
+			push_warning("CaromArena.launch(): MatchController node not found — match will not start.")
 
 
 func _unhandled_key_input(event: InputEvent) -> void:

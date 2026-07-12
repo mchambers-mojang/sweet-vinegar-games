@@ -41,8 +41,9 @@ func _ready() -> void:
 	state.score_changed.connect(hud.update_scores)
 
 
-## Start the match at the given difficulty level.
-## Called by CaromArena.launch() after the scene is in the tree.
+## Start the match at the given difficulty level (1 = easy, 2 = medium, 3 = hard).
+## Must be called after the scene is in the tree (i.e. after _ready() has run).
+## Called by CaromArena.launch() for single-player matches.
 func start_match(difficulty: int) -> void:
 	state.difficulty = difficulty
 	_init_match()
