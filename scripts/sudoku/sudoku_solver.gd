@@ -491,10 +491,13 @@ func rate_difficulty() -> Difficulty:
 	return Difficulty.EVIL
 
 
-## Full solve and rate: solves a copy, checks uniqueness, rates difficulty
-func analyze(puzzle: Array[int]) -> void:
+## Full solve and rate: solves a copy, checks uniqueness, rates difficulty.
+## Pass constraints explicitly or set the instance constraints field before
+## calling.  The explicit parameter takes precedence when non-empty.
+func analyze(puzzle: Array[int], p_constraints: Array = []) -> void:
+	var active: Array = p_constraints if not p_constraints.is_empty() else constraints
 	# Check uniqueness with brute force (respects any active constraints)
-	var solutions := solve_brute_force(puzzle, 2, constraints)
+	var solutions := solve_brute_force(puzzle, 2, active)
 	is_unique = solutions.size() == 1
 	if is_unique:
 		solution = []

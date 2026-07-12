@@ -52,8 +52,7 @@ func generate(difficulty: SudokuSolver.Difficulty, seed: int = -1, constraints: 
 			}
 
 		var solver := SudokuSolver.new()
-		solver.constraints = constraints
-		solver.analyze(puzzle)
+		solver.analyze(puzzle, constraints)
 
 		if solver.is_unique:
 			return {
@@ -68,8 +67,7 @@ func generate(difficulty: SudokuSolver.Difficulty, seed: int = -1, constraints: 
 	if fallback_puzzle.is_empty():
 		fallback_puzzle = _simple_remove(fallback_full_grid, CLUE_TARGETS[difficulty], rng, constraints)
 	var fallback_solver := SudokuSolver.new()
-	fallback_solver.constraints = constraints
-	fallback_solver.analyze(fallback_puzzle)
+	fallback_solver.analyze(fallback_puzzle, constraints)
 	return {
 		"puzzle": fallback_puzzle,
 		"solution": fallback_solver.solution if fallback_solver.is_unique else fallback_full_grid,

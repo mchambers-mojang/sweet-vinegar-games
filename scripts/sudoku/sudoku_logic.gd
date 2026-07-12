@@ -15,6 +15,8 @@ var strict_mode: bool = false
 var auto_remove_pencil_marks: bool = true
 
 ## Active variant constraints evaluated during placement validation.
+## Set before calling init_new_game() to enable variant rules;
+## passed automatically to the generator and solver during game setup.
 ## An empty array (default) reproduces standard Sudoku behaviour exactly.
 var constraints: Array[SudokuConstraint] = []
 
