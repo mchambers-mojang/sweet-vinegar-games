@@ -217,15 +217,18 @@ func _is_complete(grid: Array[int]) -> bool:
 
 
 func _filled_cells_are_valid(grid: Array[int]) -> bool:
-	if not SudokuSolver._are_filled_cells_valid(grid):
-		return false
-	if constraint == null:
-		return true
 	for index in 81:
 		var value := int(grid[index])
 		if value == 0:
 			continue
 		grid[index] = 0
+		var sudoku_valid: bool = SudokuSolver.is_valid_placement(grid, index, value)
+		if not sudoku_valid:
+			grid[index] = value
+			return false
+		if constraint == null:
+			grid[index] = value
+			continue
 		var is_valid: bool = constraint.is_valid(grid, index, value)
 		grid[index] = value
 		if not is_valid:
