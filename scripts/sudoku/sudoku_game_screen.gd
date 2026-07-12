@@ -451,6 +451,7 @@ func _on_hint_pressed() -> void:
 	for item in result.pencil_marks_removed:
 		board.cells[item["index"]].set_pencil_mark(item["number"], false)
 	_apply_unit_completion_effects(result.units_completed)
+	_refresh_constraint_errors()
 	_update_number_completion()
 	board._update_highlighting()
 
@@ -673,9 +674,7 @@ func _apply_single_place_result(result: SudokuLogic.PlaceResult, cell_node: Sudo
 		for item in result.pencil_marks_removed:
 			board.cells[item["index"]].set_pencil_mark(item["number"], false)
 		_apply_unit_completion_effects(result.units_completed)
-		# Apply constraint conflict highlighting (free mode only)
-		if not result.conflict_indices.is_empty():
-			_refresh_constraint_errors()
+		_refresh_constraint_errors()
 		if result.game_won:
 			_handle_win()
 
@@ -859,9 +858,11 @@ func _show_win_dialog() -> void:
 
 
 func _restart_same_game() -> void:
-	var diff := difficulty
+	var params := LaunchParams.new()
+	params.option_value = difficulty
+	params.rule_set = rule_set
 	SceneTransition.navigate(Scenes.SUDOKU_GAME, func(game_scene: Node) -> void:
-		game_scene.start_new_game(diff)
+		game_scene.launch(params)
 	)
 
 
@@ -1016,6 +1017,7 @@ func _apply_number_to_multi_selection(number: int) -> void:
 	_clear_multi_selection()
 	_update_number_completion()
 	board._update_highlighting()
+	_refresh_constraint_errors()
 	if any_won:
 		_handle_win()
 	_save_current_state()

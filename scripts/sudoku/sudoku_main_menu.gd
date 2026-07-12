@@ -79,7 +79,7 @@ func _setup_leaderboard_button(stats_btn: Button) -> void:
 			selected_lb_idx = rule_idx * 4 + diff_idx
 		var return_path := _get_menu_scene_path()
 		SceneTransition.navigate(Scenes.LEADERBOARD, func(screen: Node) -> void:
-			screen.setup(LB_MODES, LB_LABELS, selected_lb_idx, return_path)
+			screen.setup("sudoku", LB_MODES, LB_LABELS, true, selected_lb_idx, return_path)
 		)
 	)
 	if stats_btn:

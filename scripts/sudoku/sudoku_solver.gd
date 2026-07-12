@@ -125,14 +125,14 @@ static func _backtrack_mrv(grid: Array[int], solutions: Array[Array], max_soluti
 
 ## Logic-based solve that tracks which techniques were needed.
 ## Returns true if the puzzle was fully solved using logic alone.
-func solve_logic(grid: Array[int]) -> bool:
+func solve_logic(grid: Array[int], constraints: Array = []) -> bool:
 	techniques_used.clear()
 	var candidates: Array[Array] = []
 	candidates.resize(81)
-	# Initialize candidates
+	# Initialize candidates (constraint-aware so variant rules are respected)
 	for i in 81:
 		if grid[i] == 0:
-			candidates[i] = get_candidates(grid, i)
+			candidates[i] = get_candidates(grid, i, constraints)
 		else:
 			candidates[i] = []
 
@@ -144,7 +144,7 @@ func solve_logic(grid: Array[int]) -> bool:
 		for i in 81:
 			if grid[i] == 0 and candidates[i].size() == 1:
 				grid[i] = candidates[i][0]
-				_eliminate_candidates(candidates, grid, i, grid[i])
+				_eliminate_candidates(candidates, grid, i, grid[i], constraints)
 				candidates[i] = []
 				progress = true
 				if not Technique.NAKED_SINGLE in techniques_used:
@@ -154,7 +154,7 @@ func solve_logic(grid: Array[int]) -> bool:
 			continue
 
 		# Hidden singles
-		if _apply_hidden_singles(grid, candidates):
+		if _apply_hidden_singles(grid, candidates, constraints):
 			progress = true
 			continue
 
@@ -190,8 +190,9 @@ func solve_logic(grid: Array[int]) -> bool:
 	return true
 
 
-## Eliminate a value from candidates in the same row, column, and box
-static func _eliminate_candidates(candidates: Array[Array], grid: Array[int], index: int, val: int) -> void:
+## Eliminate a value from candidates in the same row, column, box, and any
+## constraint-affected cells (for variant rules such as Anti-King / Anti-Knight).
+static func _eliminate_candidates(candidates: Array[Array], grid: Array[int], index: int, val: int, constraints: Array = []) -> void:
 	var row := index / 9
 	var col := index % 9
 	var box_row := (row / 3) * 3
@@ -204,9 +205,13 @@ static func _eliminate_candidates(candidates: Array[Array], grid: Array[int], in
 		var bc := box_col + i % 3
 		candidates[br * 9 + bc].erase(val)
 
+	for constraint in constraints:
+		for affected_idx in constraint.get_affected_indices(index):
+			candidates[affected_idx].erase(val)
+
 
 ## Hidden singles: a value can only go in one place in a row/col/box
-func _apply_hidden_singles(grid: Array[int], candidates: Array[Array]) -> bool:
+func _apply_hidden_singles(grid: Array[int], candidates: Array[Array], constraints: Array = []) -> bool:
 	var found := false
 	# Check each unit (row, col, box)
 	for unit in _get_all_units():
@@ -218,7 +223,7 @@ func _apply_hidden_singles(grid: Array[int], candidates: Array[Array]) -> bool:
 			if positions.size() == 1:
 				var idx := positions[0]
 				grid[idx] = val
-				_eliminate_candidates(candidates, grid, idx, val)
+				_eliminate_candidates(candidates, grid, idx, val, constraints)
 				candidates[idx] = []
 				found = true
 				if not Technique.HIDDEN_SINGLE in techniques_used:
@@ -498,9 +503,9 @@ func analyze(puzzle: Array[int], constraints: Array = []) -> void:
 		solution = []
 		solution.assign(solutions[0])
 
-	# Rate difficulty with logic solver (standard techniques only — the extra
-	# constraint just makes the puzzle easier so this gives a conservative rating)
+	# Rate difficulty with logic solver (constraint-aware so variant puzzles are
+	# rated on their actual logical difficulty, not the easier standard grid)
 	var work: Array[int] = []
 	work.assign(puzzle.duplicate())
-	solve_logic(work)
+	solve_logic(work, constraints)
 	difficulty = rate_difficulty()
