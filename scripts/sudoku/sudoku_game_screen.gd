@@ -1014,6 +1014,8 @@ func _apply_number_to_multi_selection(number: int) -> void:
 				for item in result.pencil_marks_removed:
 					board.cells[item["index"]].set_pencil_mark(item["number"], false)
 				_apply_unit_completion_effects(result.units_completed)
+				if result.constraint_conflicts.size() > 0:
+					_flash_constraint_conflicts(result.constraint_conflicts)
 				if result.game_won:
 					any_won = true
 
