@@ -22,6 +22,11 @@ var is_game_over: bool = false
 var available_blocks: Array[Array] = []
 var blocks_placed_this_set: int = 0
 
+# Undo / redo — each entry: {"before": {logic, visual}, "after": {logic, visual}}
+var undo_stack: Array[Dictionary] = []
+var redo_stack: Array[Dictionary] = []
+var _pending_undo_before: Dictionary = {}
+
 
 ## Result returned by try_place().  Carries everything the orchestrator needs
 ## to dispatch side effects and update UI — no rule logic belongs there.
@@ -35,15 +40,24 @@ class PlaceResult:
 	var combo: int = 0
 	var combo_bonus: int = 0
 	## True when all 3 blocks in the current set were placed; the orchestrator
-	## should call deal_blocks() with fresh shapes, then check can_any_piece_fit().
+	## should call deal_blocks() with fresh shapes, which will also check game_over.
 	var new_blocks_dealt: bool = false
-	## True when no remaining piece can be placed (computed only when
-	## new_blocks_dealt is false, because new shapes may open valid moves).
+	## True when no remaining piece can be placed (set when new_blocks_dealt is
+	## false; for the new_blocks_dealt case, game_over is set inside deal_blocks()).
 	var game_over: bool = false
 	## Array of Vector2i — positions of cells just placed (for visual effects)
 	var placed_cells: Array = []
 	## Array of Vector2i — positions of cells cleared (for visual effects)
 	var clear_cells: Array = []
+
+
+## Result returned by undo() and redo(). Carries what the orchestrator needs to
+## restore both logic state (already applied) and the board visual state.
+class UndoRedoResult:
+	var success: bool = false
+	## Opaque board visual state dict (from board.get_state()) captured before/after
+	## the move. The screen should pass it to board.set_state() to restore colours.
+	var board_visual: Dictionary = {}
 
 
 func _init(p_rotation_mode: bool = false) -> void:
@@ -64,6 +78,9 @@ func reset() -> void:
 	is_game_over = false
 	available_blocks = []
 	blocks_placed_this_set = 0
+	undo_stack.clear()
+	redo_stack.clear()
+	_pending_undo_before = {}
 
 
 # ---------------------------------------------------------------------------
@@ -72,7 +89,9 @@ func reset() -> void:
 
 ## Validate and execute a placement.  Returns result with all info needed to
 ## dispatch side effects.  State is mutated only on a valid placement.
-func try_place(block_index: int, grid_pos: Vector2i) -> PlaceResult:
+## board_visual_before is an opaque board.get_state() snapshot captured by the
+## screen before the move; it is stored in the undo entry and returned by undo().
+func try_place(block_index: int, grid_pos: Vector2i, board_visual_before: Dictionary = {}) -> PlaceResult:
 	var result := PlaceResult.new()
 
 	if block_index < 0 or block_index >= available_blocks.size():
@@ -82,6 +101,12 @@ func try_place(block_index: int, grid_pos: Vector2i) -> PlaceResult:
 		return result
 	if not can_place(shape, grid_pos.x, grid_pos.y):
 		return result
+
+	# Capture undo "before" snapshot before any mutation.
+	_pending_undo_before = {
+		"logic": get_state(),
+		"visual": board_visual_before,
+	}
 
 	result.valid = true
 	result.cells_placed = shape.size()
@@ -127,8 +152,8 @@ func try_place(block_index: int, grid_pos: Vector2i) -> PlaceResult:
 	# New set of blocks needed?
 	if blocks_placed_this_set >= BLOCKS_PER_SET:
 		result.new_blocks_dealt = true
-		# Game-over cannot be determined here: the orchestrator must call
-		# deal_blocks() with fresh shapes and then check can_any_piece_fit().
+		# Game-over is checked inside deal_blocks(); the orchestrator must call
+		# deal_blocks() with fresh shapes, then read logic.is_game_over.
 	else:
 		# Check game over with remaining pieces
 		if not _has_valid_move_for_remaining():
@@ -164,11 +189,68 @@ func try_rotate(block_index: int) -> Array:
 # Block dealing
 # ---------------------------------------------------------------------------
 
-## Replace available_blocks with the given shapes and reset blocks_placed_this_set.
-## Called by the orchestrator after PlaceResult.new_blocks_dealt == true.
+## Replace available_blocks with the given shapes, reset blocks_placed_this_set,
+## and check whether any of the new pieces can fit.  If none can, is_game_over is
+## set to true.  The orchestrator should read logic.is_game_over after calling
+## this instead of calling can_any_piece_fit() separately.
 func deal_blocks(new_shapes: Array[Array]) -> void:
 	available_blocks = new_shapes.duplicate(true)
 	blocks_placed_this_set = 0
+	if not _has_valid_move_for_remaining():
+		is_game_over = true
+
+
+# ---------------------------------------------------------------------------
+# Undo / redo
+# ---------------------------------------------------------------------------
+
+## Finalise an undo entry after a successful placement.  Call this once the
+## board visual has been updated (after board.place_block / board.check_and_clear)
+## and after deal_blocks() if new_blocks_dealt was true.  board_visual_after is
+## an opaque board.get_state() snapshot returned by redo().
+## If no pending before-state exists (invalid or rotation-only move) this is a no-op.
+func commit_move(board_visual_after: Dictionary = {}) -> void:
+	if _pending_undo_before.is_empty():
+		return
+	redo_stack.clear()
+	undo_stack.append({
+		"before": _pending_undo_before.duplicate(true),
+		"after": {
+			"logic": get_state(),
+			"visual": board_visual_after,
+		},
+	})
+	_pending_undo_before = {}
+
+
+## Revert the most recent committed move.  Logic state is restored immediately;
+## the board visual to restore is in result.board_visual.
+func undo() -> UndoRedoResult:
+	var result := UndoRedoResult.new()
+	if is_game_over or undo_stack.is_empty():
+		return result
+	var entry: Dictionary = undo_stack.pop_back()
+	redo_stack.append(entry)
+	var before: Dictionary = entry.get("before", {})
+	set_state(before.get("logic", {}))
+	result.success = true
+	result.board_visual = before.get("visual", {})
+	return result
+
+
+## Reapply the most recently undone move.  Logic state is restored immediately;
+## the board visual to restore is in result.board_visual.
+func redo() -> UndoRedoResult:
+	var result := UndoRedoResult.new()
+	if is_game_over or redo_stack.is_empty():
+		return result
+	var entry: Dictionary = redo_stack.pop_back()
+	undo_stack.append(entry)
+	var after: Dictionary = entry.get("after", {})
+	set_state(after.get("logic", {}))
+	result.success = true
+	result.board_visual = after.get("visual", {})
+	return result
 
 
 # ---------------------------------------------------------------------------

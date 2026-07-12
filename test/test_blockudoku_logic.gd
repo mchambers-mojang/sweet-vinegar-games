@@ -336,3 +336,158 @@ func test_rotation_mode_false_does_not_check_rotations() -> void:
 	assert_true(r.valid)
 	# rotation_mode=false: only tries original orientation of 3-wide H → can't fit → game over
 	assert_true(r.game_over, "Without rotation_mode, 3-wide H can't fit when diagonal blockers fill every 3-col window")
+
+
+# ---------------------------------------------------------------------------
+# 13. deal_blocks game-over detection
+# ---------------------------------------------------------------------------
+
+func test_deal_blocks_sets_game_over_when_new_pieces_cannot_fit() -> void:
+	# Fill the board with a checkerboard so no 2-cell piece fits
+	for r in 9:
+		for c in 9:
+			if (r + c) % 2 == 0:
+				logic.board_grid[r * 9 + c] = 1
+
+	var two_cell: Array[Array] = [[Vector2i(0, 0), Vector2i(1, 0)]]
+	logic.deal_blocks(two_cell)
+	assert_true(logic.is_game_over, "deal_blocks should set is_game_over when no new piece fits")
+
+
+func test_deal_blocks_does_not_set_game_over_when_pieces_fit() -> void:
+	# Empty board — single cell always fits
+	var single_cell: Array[Array] = [[Vector2i(0, 0)]]
+	logic.deal_blocks(single_cell)
+	assert_false(logic.is_game_over, "deal_blocks must not set is_game_over when pieces can still be placed")
+
+
+# ---------------------------------------------------------------------------
+# 14. Undo / redo
+# ---------------------------------------------------------------------------
+
+func test_undo_empty_stack_returns_failure() -> void:
+	var result := logic.undo()
+	assert_false(result.success, "undo on empty stack should return success=false")
+
+
+func test_redo_empty_stack_returns_failure() -> void:
+	var result := logic.redo()
+	assert_false(result.success, "redo on empty stack should return success=false")
+
+
+func test_commit_move_then_undo_restores_logic_state() -> void:
+	var score_before := logic.score
+	var turns_before := logic.turns
+	# Place a single cell and commit
+	logic.try_place(0, Vector2i(0, 0))
+	logic.commit_move()
+	assert_eq(logic.score, score_before + 1, "Score should increase after placement")
+	assert_eq(logic.undo_stack.size(), 1, "undo_stack should have one entry")
+
+	# Undo — logic state should be restored
+	var result := logic.undo()
+	assert_true(result.success, "undo should succeed after a committed move")
+	assert_eq(logic.score, score_before, "Score should be restored after undo")
+	assert_eq(logic.turns, turns_before, "Turns should be restored after undo")
+	assert_eq(logic.board_grid[0], 0, "Cell (0,0) should be empty after undo")
+
+
+func test_commit_move_then_undo_then_redo_restores_state() -> void:
+	logic.try_place(0, Vector2i(3, 3))
+	logic.commit_move()
+	var score_after := logic.score
+
+	logic.undo()
+	assert_eq(logic.board_grid[3 * 9 + 3], 0, "Cell should be empty after undo")
+
+	var redo_result := logic.redo()
+	assert_true(redo_result.success, "redo should succeed after one undo")
+	assert_eq(logic.score, score_after, "Score should be restored after redo")
+	assert_eq(logic.board_grid[3 * 9 + 3], 1, "Cell should be filled again after redo")
+
+
+func test_commit_move_clears_redo_stack() -> void:
+	# Build up undo+redo history: place, commit, undo, place again, commit
+	logic.try_place(0, Vector2i(0, 0))
+	logic.commit_move()
+	logic.undo()
+	assert_eq(logic.redo_stack.size(), 1, "redo_stack should have one entry after undo")
+
+	# New move clears redo
+	logic.try_place(0, Vector2i(5, 5))
+	logic.commit_move()
+	assert_eq(logic.redo_stack.size(), 0, "redo_stack should be cleared by commit_move")
+
+
+func test_undo_disabled_when_game_over() -> void:
+	# Set game-over by direct flag (simulating what happens after a bad deal)
+	logic.try_place(0, Vector2i(0, 0))
+	logic.commit_move()
+	logic.is_game_over = true
+
+	var result := logic.undo()
+	assert_false(result.success, "undo should not work when is_game_over is true")
+
+
+func test_undo_returns_board_visual_passed_to_try_place() -> void:
+	var fake_visual := {"grid": [1, 2, 3], "test_marker": "before"}
+	logic.try_place(0, Vector2i(0, 0), fake_visual)
+	logic.commit_move()
+
+	var result := logic.undo()
+	assert_true(result.success)
+	assert_eq(result.board_visual.get("test_marker", ""), "before",
+			"undo should return the board_visual that was passed to try_place")
+
+
+func test_redo_returns_board_visual_passed_to_commit_move() -> void:
+	logic.try_place(0, Vector2i(0, 0))
+	var fake_after := {"grid": [9, 8, 7], "test_marker": "after"}
+	logic.commit_move(fake_after)
+
+	logic.undo()
+	var result := logic.redo()
+	assert_true(result.success)
+	assert_eq(result.board_visual.get("test_marker", ""), "after",
+			"redo should return the board_visual that was passed to commit_move")
+
+
+func test_multiple_undos_restore_correct_states() -> void:
+	var score_0 := logic.score  # 0
+
+	# Move 1
+	logic.try_place(0, Vector2i(0, 0))
+	logic.commit_move()
+	var score_1 := logic.score  # 1
+
+	# Move 2
+	logic.try_place(1, Vector2i(1, 0))
+	logic.commit_move()
+	var score_2 := logic.score  # 2
+
+	# Undo move 2
+	logic.undo()
+	assert_eq(logic.score, score_1, "After first undo, score should be after move 1")
+
+	# Undo move 1
+	logic.undo()
+	assert_eq(logic.score, score_0, "After second undo, score should be initial")
+
+
+func test_invalid_placement_does_not_create_undo_entry() -> void:
+	# Place at an out-of-bounds position (single cell at row 9 would be invalid)
+	var shape_3h: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0)]
+	logic.available_blocks[0] = shape_3h
+	var result := logic.try_place(0, Vector2i(7, 0))  # 7+2=9 out of bounds
+	assert_false(result.valid)
+	assert_eq(logic.undo_stack.size(), 0, "Invalid placement must not create an undo entry")
+
+
+func test_reset_clears_undo_redo_stacks() -> void:
+	logic.try_place(0, Vector2i(0, 0))
+	logic.commit_move()
+	assert_eq(logic.undo_stack.size(), 1)
+
+	logic.reset()
+	assert_eq(logic.undo_stack.size(), 0, "reset() should clear undo_stack")
+	assert_eq(logic.redo_stack.size(), 0, "reset() should clear redo_stack")
