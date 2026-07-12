@@ -344,64 +344,10 @@ func _handle_number_first_cell_tap(index: int) -> void:
 			_haptic.vibrate_light()
 	else:
 		var result := logic.place_number(index, _selected_number)
-<<<<<<< HEAD
 		if _apply_single_place_result(result, cell, false):
-=======
-		if not result.valid:
-			return
-		if result.strikes_added > 0:
-			_update_strikes_display()
-			_play_error_feedback()
-			cell.set_value(_selected_number)
-			cell.set_error(true)
-			var revert_cell := cell
-
-			# Neon glass shatter + shockwave on error
-			if AppTheme.is_neon:
-				var error_cell_rect := board.get_cell_rect(index)
-				EffectFactory.glass_shatter(board, error_cell_rect, Color(2.0, 0.0, 0.2), 10)
-				var err_center := error_cell_rect.position + error_cell_rect.size / 2.0
-				EffectFactory.neon_ring(board, err_center, Color(2.0, 0.0, 0.2), error_cell_rect.size.x * 2.5, 0.2, 0.4)
-				AppTheme.screen_shake(5.0, 0.15)
-
-			var revert_tween := create_tween()
-			revert_tween.tween_interval(0.4)
-			revert_tween.tween_callback(func() -> void:
-				revert_cell.value = 0
-				revert_cell.is_error = false
-				revert_cell.queue_redraw()
-			)
-			if result.game_failed:
-				_can_continue_after_failure = false
-				_update_button_states()
-				_stats.set_counter("general", "current_win_streak", 0)
-				_achievements.check_stats()
-				_log_game_over_analytics(false)
-				_show_fail_dialog()
->>>>>>> origin/main
 			_save_current_state()
 			return
-<<<<<<< HEAD
-=======
-		if result.placed:
-			cell.set_value(result.number)
-			cell.set_error(false)
-			cell.set_cell_color(Color.TRANSPARENT)
 
-			# Neon burst on correct placement
-			if AppTheme.is_neon:
-				var placed_cell_rect := board.get_cell_rect(index)
-				var center := placed_cell_rect.position + placed_cell_rect.size / 2.0
-				EffectFactory.neon_burst(board, center, Color(0.0, 2.0, 1.6), 10, 0.8)
-
-			for item in result.pencil_marks_removed:
-				board.cells[item["index"]].set_pencil_mark(item["number"], false)
-			_apply_unit_completion_effects(result.units_completed)
-			_update_number_completion()
-			board._update_highlighting()
-			if result.game_won:
-				_handle_win()
->>>>>>> origin/main
 	_save_current_state()
 
 
@@ -454,71 +400,11 @@ func _place_or_note_number(number: int) -> void:
 			_haptic.vibrate_light()
 	else:
 		var result := logic.place_number(index, number)
-<<<<<<< HEAD
 		if _apply_single_place_result(result, cell, true):
-=======
-		if not result.valid:
-			return
-		if result.strikes_added > 0:
-			_update_strikes_display()
-			_play_error_feedback()
-			# Briefly flash the wrong number then revert
-			cell.set_value(number)
-			cell.set_error(true)
-			var revert_cell := cell
-
-			# Neon glass shatter + shockwave on error
-			if AppTheme.is_neon:
-				var error_cell_rect := board.get_cell_rect(index)
-				EffectFactory.glass_shatter(board, error_cell_rect, Color(2.0, 0.0, 0.2), 10)
-				var err_center := error_cell_rect.position + error_cell_rect.size / 2.0
-				EffectFactory.neon_ring(board, err_center, Color(2.0, 0.0, 0.2), error_cell_rect.size.x * 2.5, 0.2, 0.4)
-				AppTheme.screen_shake(5.0, 0.15)
-
-			var revert_tween := create_tween()
-			revert_tween.tween_interval(0.4)
-			revert_tween.tween_callback(func() -> void:
-				revert_cell.value = 0
-				revert_cell.is_error = false
-				revert_cell.queue_redraw()
-			)
-
-			if result.game_failed:
-				_can_continue_after_failure = false
-				_update_button_states()
-				_stats.set_counter("general", "current_win_streak", 0)
-				_achievements.check_stats()
-				_log_game_over_analytics(false)
-				_show_fail_dialog()
->>>>>>> origin/main
 			_save_current_state()
 			return
 
-<<<<<<< HEAD
-=======
-		if result.placed:
-			cell.set_value(result.number)
-			cell.set_error(false)
-			cell.set_cell_color(Color.TRANSPARENT)
-			_sound.play_place()
-			_haptic.vibrate_light()
 
-			# Neon burst on correct placement
-			if AppTheme.is_neon:
-				var placed_cell_rect := board.get_cell_rect(index)
-				var center := placed_cell_rect.position + placed_cell_rect.size / 2.0
-				EffectFactory.neon_burst(board, center, Color(0.0, 2.0, 1.6), 10, 0.8)
-
-			for item in result.pencil_marks_removed:
-				board.cells[item["index"]].set_pencil_mark(item["number"], false)
-			_apply_unit_completion_effects(result.units_completed)
-			_update_number_completion()
-			board._update_highlighting()
-
-			if result.game_won:
-				_handle_win()
-
->>>>>>> origin/main
 	_save_current_state()
 
 
@@ -542,26 +428,7 @@ func _on_hint_pressed() -> void:
 	board.selected_index = result.cell_index
 	_recorder.record_input(elapsed_time, "hint_pressed", {"index": result.cell_index, "value": result.number})
 
-<<<<<<< HEAD
 	var cell := board.cells[result.cell_index]
-=======
-	# Otherwise pick a random unsolved cell
-	if index < 0:
-		var empty_cells: Array[int] = []
-		for i in 81:
-			if logic.current_grid[i] == 0 or logic.current_grid[i] != logic.solution[i]:
-				empty_cells.append(i)
-		if empty_cells.is_empty():
-			return
-		empty_cells.shuffle()
-		index = empty_cells[0]
-
-	board.selected_index = index
-	_recorder.record_input(elapsed_time, "hint_pressed", {"index": index, "value": logic.solution[index]})
-
-	var result := logic.use_hint(index)
-	var cell := board.cells[index]
->>>>>>> origin/main
 	cell.set_value(result.number)
 	cell.set_error(false)
 	hint_button.disabled = true
