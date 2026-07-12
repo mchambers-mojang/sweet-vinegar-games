@@ -40,11 +40,12 @@ func _ready() -> void:
 	hud.camera_mode_changed.connect(_on_camera_mode_changed)
 	state.score_changed.connect(hud.update_scores)
 
-	state.difficulty = arena.get_meta("carom_difficulty", 1) as int
-	if arena.has_meta("carom_difficulty"):
-		arena.remove_meta("carom_difficulty")
 
-	call_deferred("_init_match")
+## Start the match at the given difficulty level.
+## Called by CaromArena.launch() after the scene is in the tree.
+func start_match(difficulty: int) -> void:
+	state.difficulty = difficulty
+	_init_match()
 
 
 var _is_paused: bool = false
