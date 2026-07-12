@@ -56,7 +56,7 @@ func _create_puzzle_with_minimal_givens(full_grid: Array[int], constraint, diffi
 
 	var seeded_puzzle := SudokuGenerator.new()._remove_cells(full_grid, difficulty, rng, [constraint])
 	if seeded_puzzle.is_empty():
-		seeded_puzzle.assign(full_grid.duplicate())
+		return []
 	return _minimize_givens(seeded_puzzle, constraint, rng)
 
 
@@ -84,7 +84,7 @@ func _minimize_givens(puzzle: Array[int], constraint, rng: RandomNumberGenerator
 		minimized[index] = 0
 		if not _is_acceptable_puzzle(minimized, constraint):
 			minimized[index] = backup
-	return minimized if _is_acceptable_puzzle(minimized, constraint) else []
+	return minimized
 
 
 func _is_acceptable_puzzle(puzzle: Array[int], constraint) -> bool:
