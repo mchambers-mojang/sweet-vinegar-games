@@ -23,7 +23,7 @@ func test_generation_pipeline_returns_unique_logic_solvable_puzzle() -> void:
 	assert_true(solver.solve_logic(puzzle.duplicate()))
 
 
-func test_pure_killer_is_attempted_first_when_zero_givens_are_unique() -> void:
+func test_pure_killer_puzzle_generated_when_cages_provide_uniqueness() -> void:
 	var full_grid: Array[int] = []
 	full_grid.assign(SudokuGenerator.SEED_GRID.duplicate())
 	var cages: Array = []
