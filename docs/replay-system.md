@@ -23,22 +23,22 @@ Each replay is stored as:
 
 ## Architecture
 
-### ReplayRecorder (session lifecycle)
+### ReplaySystem (unified autoload)
 
-`scripts/replays/replay_recorder.gd` is an autoload that owns the in-memory recording lifecycle. It exposes:
+`scripts/autoload/replay_system.gd` is the single autoload that owns both the recording lifecycle and file I/O. It merges the formerly separate `ReplayRecorder` and `ReplayStorage` modules. Internal seams are preserved in clearly delimited sections for unit testing.
+
+**Recorder section** (session lifecycle):
 
 - `start_session(game_mode, seed, initial_state, settings_snapshot)` → `String` — begin a recording session, returns replay_id
 - `has_active_session()` → `bool` — whether a session is in progress
 - `record_input(elapsed_time, event_type, payload)` — append a frame
-- `finish_session(outcome, final_score, duration, final_state)` → `Dictionary` — finalize and return the completed replay; caller must persist it via `ReplayStorage.save_replay()`
+- `finish_session(outcome, final_score, duration, final_state)` → `Dictionary` — finalize and return the completed replay; caller must persist it via `save_replay()`
 - `flush_active_replay()` — immediately flush the in-progress snapshot to disk
 - `get_crash_recovery_payload()` — crash reporter hook; returns the active in-progress replay
 
 The active (in-progress) replay is snapshotted to `user://active_replay.json` for crash recovery.
 
-### ReplayStorage (file I/O)
-
-`scripts/replays/replay_storage.gd` is an autoload that handles all persistence. It exposes:
+**Storage section** (file I/O):
 
 - `save_replay(replay)` → `String` — persist a completed replay dict; returns replay_id
 - `delete_replay(replay_id)` — remove from index and disk
@@ -48,15 +48,19 @@ The active (in-progress) replay is snapshotted to `user://active_replay.json` fo
 - `export_replay_code(replay_id)` / `import_replay_code(code)` — compact base64 payloads
 - `set_pending_playback(replay)` / `get_pending_playback()` — pass a replay between screens
 
+**Internal seams for unit testing:**
+
+The standalone scripts `scripts/replays/replay_recorder.gd` and `scripts/replays/replay_storage.gd` are retained (not as autoloads) so that unit tests can preload and instantiate them independently without scene-tree or filesystem side effects.
+
 ### ReplayManager (facade)
 
-`scripts/autoload/replay_manager.gd` is a thin facade that delegates to `ReplayRecorder` and `ReplayStorage`. It exists for backward compatibility. New callers should use the specific module directly.
+`scripts/autoload/replay_manager.gd` is a thin facade that delegates to `ReplaySystem`. It exists for backward compatibility. New callers should use `ReplaySystem` directly.
 
 ### ReplayPlayer (playback engine)
 
 `scripts/replays/replay_player.gd` is a generic playback engine attached to `scenes/replay_viewer.tscn`. It:
 
-- Reads the pending replay from `ReplayStorage`
+- Reads the pending replay from `ReplaySystem`
 - Selects a `GameReplayAdapter` based on `game_mode`
 - Drives play/pause, speed cycling (1×/2×/4×), and board reset via the adapter
 - All games use the single `replay_viewer.tscn` scene

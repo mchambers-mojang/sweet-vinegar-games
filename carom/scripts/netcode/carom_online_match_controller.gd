@@ -487,10 +487,10 @@ func _on_goal_scored(scoring_side: StringName, goal_puck: CaromPuck) -> void:
 
 	if local_scored:
 		_player_score += 1
-		HapticManager.vibrate_success()
+		FeedbackManager.vibrate_success()
 	else:
 		_opponent_score += 1
-		HapticManager.vibrate_error()
+		FeedbackManager.vibrate_error()
 
 	hud.update_scores(_player_score, _opponent_score)
 

@@ -149,9 +149,9 @@ func _on_goal_scored(scoring_side: StringName, goal_puck: CaromPuck) -> void:
 
 	# Haptic feedback for goals
 	if scorer == "player":
-		HapticManager.vibrate_success()
+		FeedbackManager.vibrate_success()
 	else:
-		HapticManager.vibrate_error()
+		FeedbackManager.vibrate_error()
 
 	_update_ammo_display()
 

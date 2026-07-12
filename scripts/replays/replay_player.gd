@@ -42,7 +42,7 @@ func _ready() -> void:
 	scrub_bar.value_changed.connect(_on_scrub_bar_value_changed)
 	set_process(false)
 
-	var replay := ReplayStorage.get_pending_playback()
+	var replay := ReplaySystem.get_pending_playback()
 	if not replay.is_empty():
 		_load_replay(replay)
 
