@@ -71,7 +71,7 @@ static func partition_with_rng(grid: Array[int], difficulty: int, rng: RandomNum
 					"sum": cage_sum,
 				})
 			return cages
-	return _build_row_fallback(grid, difficulty)
+	return _build_simple_row_partition(grid, difficulty)
 
 
 static func _pick_start_cell(available: Array[bool], rng: RandomNumberGenerator, min_neighbors: int = 1) -> int:
@@ -211,7 +211,7 @@ static func _all_cells_assigned(available: Array[bool]) -> bool:
 	return true
 
 
-static func _build_row_fallback(grid: Array[int], difficulty: int) -> Array:
+static func _build_simple_row_partition(grid: Array[int], difficulty: int) -> Array:
 	var patterns := {
 		SudokuSolver.Difficulty.EASY: [[3, 3, 3]],
 		SudokuSolver.Difficulty.MEDIUM: [[2, 3, 4], [4, 3, 2]],
