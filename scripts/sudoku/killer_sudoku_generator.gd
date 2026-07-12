@@ -60,7 +60,7 @@ func _create_puzzle_with_minimal_givens(full_grid: Array[int], constraint, diffi
 	return _minimize_givens(seeded_puzzle, constraint, rng)
 
 
-func _build_minimal_givens_puzzle(full_grid: Array[int], constraint, rng: RandomNumberGenerator) -> Array[int]:
+func _minimize_from_full_grid(full_grid: Array[int], constraint, rng: RandomNumberGenerator) -> Array[int]:
 	var puzzle: Array[int] = []
 	puzzle.resize(81)
 	puzzle.fill(0)
