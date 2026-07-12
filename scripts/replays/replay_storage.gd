@@ -10,6 +10,10 @@ const LEGACY_REPLAYS_PATH := "user://replays.json"
 const FORMAT_VERSION := 1
 const MAX_AUTO_REPLAYS := 20
 
+var replays_dir: String = REPLAYS_DIR
+var replays_index_path: String = REPLAYS_INDEX_PATH
+var legacy_replays_path: String = LEGACY_REPLAYS_PATH
+
 # Only metadata (header + footer + id + bookmarked) — no frames in memory
 var _replay_index: Array[Dictionary] = []
 var _pending_playback: Dictionary = {}
@@ -149,13 +153,14 @@ func _extract_metadata(replay: Dictionary) -> Dictionary:
 	return {
 		"id": replay.get("id", ""),
 		"bookmarked": replay.get("bookmarked", false),
+		"frame_count": replay.get("frames", []).size(),
 		"header": header,
 		"footer": footer,
 	}
 
 
 func _replay_file_path(replay_id: String) -> String:
-	return REPLAYS_DIR + replay_id + ".json"
+	return replays_dir + replay_id + ".json"
 
 
 func _save_replay_file(replay_id: String, replay: Dictionary) -> void:
@@ -192,16 +197,16 @@ func _delete_replay_file(replay_id: String) -> void:
 
 
 func _save_index() -> void:
-	var file := FileAccess.open(REPLAYS_INDEX_PATH, FileAccess.WRITE)
+	var file := FileAccess.open(replays_index_path, FileAccess.WRITE)
 	if file:
 		file.store_string(JSON.stringify(_replay_index))
 
 
 func _load_index() -> void:
 	_replay_index.clear()
-	if not FileAccess.file_exists(REPLAYS_INDEX_PATH):
+	if not FileAccess.file_exists(replays_index_path):
 		return
-	var file := FileAccess.open(REPLAYS_INDEX_PATH, FileAccess.READ)
+	var file := FileAccess.open(replays_index_path, FileAccess.READ)
 	if file == null:
 		return
 	var parsed = JSON.parse_string(file.get_as_text())
@@ -224,22 +229,22 @@ func _enforce_rolling_buffer() -> void:
 
 
 func _ensure_replays_dir() -> void:
-	if not DirAccess.dir_exists_absolute(REPLAYS_DIR):
-		DirAccess.make_dir_recursive_absolute(REPLAYS_DIR)
+	if not DirAccess.dir_exists_absolute(replays_dir):
+		DirAccess.make_dir_recursive_absolute(replays_dir)
 
 
 func _migrate_legacy_replays() -> void:
-	if not FileAccess.file_exists(LEGACY_REPLAYS_PATH):
+	if not FileAccess.file_exists(legacy_replays_path):
 		return
-	if FileAccess.file_exists(REPLAYS_INDEX_PATH):
-		DirAccess.remove_absolute(LEGACY_REPLAYS_PATH)
+	if FileAccess.file_exists(replays_index_path):
+		DirAccess.remove_absolute(legacy_replays_path)
 		return
-	var file := FileAccess.open(LEGACY_REPLAYS_PATH, FileAccess.READ)
+	var file := FileAccess.open(legacy_replays_path, FileAccess.READ)
 	if file == null:
 		return
 	var parsed = JSON.parse_string(file.get_as_text())
 	if not (parsed is Array):
-		DirAccess.remove_absolute(LEGACY_REPLAYS_PATH)
+		DirAccess.remove_absolute(legacy_replays_path)
 		return
 	for replay in parsed:
 		if not (replay is Dictionary):
@@ -250,4 +255,4 @@ func _migrate_legacy_replays() -> void:
 		_save_replay_file(replay_id, replay)
 		_replay_index.append(_extract_metadata(replay))
 	_save_index()
-	DirAccess.remove_absolute(LEGACY_REPLAYS_PATH)
+	DirAccess.remove_absolute(legacy_replays_path)

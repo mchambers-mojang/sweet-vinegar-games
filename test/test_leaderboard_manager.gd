@@ -7,7 +7,32 @@ extends GutTest
 ##   - Submission is skipped when profile is incomplete.
 ##   - Handler is called without errors when profile is complete.
 
-const ManagerScript := preload("res://scripts/autoload/leaderboard_manager.gd")
+const LeaderboardScreenScript := preload("res://scripts/ui/leaderboard_screen.gd")
+const BlockudokuScreenScript := preload("res://scripts/blockudoku/blockudoku_game_screen.gd")
+
+
+class MockStats:
+	var high_score: int
+
+	func _init(initial_high_score: int) -> void:
+		high_score = initial_high_score
+
+	func get_counter(_game_id: String, _counter_name: String) -> int:
+		return high_score
+
+	func set_counter(_game_id: String, _counter_name: String, value: int) -> void:
+		high_score = value
+
+
+class TestManager extends "res://scripts/autoload/leaderboard_manager.gd":
+	var submissions: Array[Dictionary] = []
+
+	func _submit(game_id: String, mode: String, value: float) -> void:
+		submissions.append({
+			"game_id": game_id,
+			"mode": mode,
+			"value": value,
+		})
 
 
 # ============================================================
@@ -29,8 +54,7 @@ func before_each() -> void:
 	_saved_device_id = PlayerIdentity.device_id
 	_saved_data_enabled = PlayerIdentity.leaderboard_data_enabled
 
-	manager = Node.new()
-	manager.set_script(ManagerScript)
+	manager = TestManager.new()
 	add_child_autofree(manager)
 	manager._pending = [] as Array[HTTPRequest]
 
@@ -52,8 +76,7 @@ func test_no_submit_when_setup_incomplete() -> void:
 	PlayerIdentity.device_id = "00000000-0000-0000-0000-000000000001"
 
 	manager._on_leaderboard_score_ready("sudoku", "easy", 120.0)
-	# No HTTPRequest should have been created
-	assert_eq(manager._pending.size(), 0)
+	assert_eq(manager.submissions.size(), 0)
 
 
 func test_no_submit_when_display_name_empty() -> void:
@@ -62,7 +85,7 @@ func test_no_submit_when_display_name_empty() -> void:
 	PlayerIdentity.device_id = "00000000-0000-0000-0000-000000000001"
 
 	manager._on_leaderboard_score_ready("shikaku", "10", 60.0)
-	assert_eq(manager._pending.size(), 0)
+	assert_eq(manager.submissions.size(), 0)
 
 
 func test_no_submit_when_device_id_empty() -> void:
@@ -71,7 +94,7 @@ func test_no_submit_when_device_id_empty() -> void:
 	PlayerIdentity.device_id = ""
 
 	manager._on_leaderboard_score_ready("blockudoku", "standard", 1500.0)
-	assert_eq(manager._pending.size(), 0)
+	assert_eq(manager.submissions.size(), 0)
 
 
 func test_submit_creates_http_request_when_profile_complete() -> void:
@@ -81,8 +104,11 @@ func test_submit_creates_http_request_when_profile_complete() -> void:
 	PlayerIdentity.leaderboard_data_enabled = true
 
 	manager._on_leaderboard_score_ready("sudoku", "medium", 200.0)
-	# One HTTPRequest should have been added to _pending
-	assert_eq(manager._pending.size(), 1)
+	assert_eq(manager.submissions, [{
+		"game_id": "sudoku",
+		"mode": "medium",
+		"value": 200.0,
+	}])
 
 
 func test_no_submit_when_data_disabled() -> void:
@@ -93,7 +119,7 @@ func test_no_submit_when_data_disabled() -> void:
 
 	manager._on_leaderboard_score_ready("sudoku", "easy", 120.0)
 	# Kill switch must prevent any network request
-	assert_eq(manager._pending.size(), 0)
+	assert_eq(manager.submissions.size(), 0)
 
 
 # ============================================================
@@ -108,3 +134,35 @@ func test_cleanup_removes_from_pending() -> void:
 	manager._cleanup(http)
 	assert_eq(manager._pending.size(), 0)
 
+
+func test_blockudoku_leaderboard_score_restores_local_personal_best() -> void:
+	var stats := MockStats.new(0)
+	var screen := LeaderboardScreenScript.new()
+	screen.set("_stats", stats)
+	screen.set("_game_id", "blockudoku")
+	screen.set("_current_mode", "standard")
+
+	screen.call("_sync_personal_best", 1200.0)
+
+	assert_eq(stats.high_score, 1200)
+	var game_screen: Node = BlockudokuScreenScript.new()
+	game_screen._stats = stats
+	game_screen.logic = BlockudokuLogic.new()
+	game_screen.logic.score = 3
+	game_screen._check_for_new_best()
+	assert_false(game_screen._new_best_shown, "First placement must not beat the synchronized personal best")
+	game_screen.free()
+	screen.free()
+
+
+func test_blockudoku_leaderboard_score_never_lowers_local_personal_best() -> void:
+	var stats := MockStats.new(1500)
+	var screen := LeaderboardScreenScript.new()
+	screen.set("_stats", stats)
+	screen.set("_game_id", "blockudoku")
+	screen.set("_current_mode", "standard")
+
+	screen.call("_sync_personal_best", 1200.0)
+
+	assert_eq(stats.high_score, 1500)
+	screen.free()

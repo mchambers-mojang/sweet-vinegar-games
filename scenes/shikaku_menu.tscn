@@ -6,9 +6,6 @@
 [node name="ShikakuMenu" instance=ExtResource("1")]
 script = ExtResource("2")
 
-[node name="MarginContainer/VBoxContainer/TitleLabel" parent="."]
-text = "Shikaku"
-
 [node name="SizeRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer" index=6]
 layout_mode = 2
 alignment = 1

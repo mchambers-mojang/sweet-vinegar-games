@@ -34,8 +34,7 @@ func _ready() -> void:
 
 ## Navigate to target_path, fully replacing the current scene.
 ## SceneTransition always owns instantiation and scene lifecycle.
-## The optional setup Callable receives the new scene instance before add_child,
-## so any metadata set there is visible to _ready() on the new scene.
+## The optional setup Callable receives the new scene after its _ready() runs.
 ## Clears the navigation stack, freeing any stacked scenes.
 func navigate(target_path: String, setup: Callable = Callable()) -> void:
 	_do_navigate(func() -> Node: return load(target_path).instantiate(), setup, true)
@@ -127,7 +126,7 @@ func _do_navigate(factory: Callable, setup: Callable, free_old: bool) -> void:
 		return
 	AppTheme.clear_screen_shake()
 	_transitioning = true
-	HapticManager.stop()
+	FeedbackManager.stop()
 	_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	_overlay.color = _get_fade_color(0.0)
 	if _tween and _tween.is_valid():
@@ -137,10 +136,7 @@ func _do_navigate(factory: Callable, setup: Callable, free_old: bool) -> void:
 	_tween.tween_callback(func() -> void:
 		var old_scene := get_tree().current_scene
 		var new_scene: Node = factory.call()
-		if setup.is_valid():
-			setup.call(new_scene)
-		get_tree().root.add_child(new_scene)
-		get_tree().current_scene = new_scene
+		_attach_scene(new_scene, setup)
 		if free_old:
 			for stacked in _nav_stack:
 				stacked.queue_free()
@@ -156,3 +152,13 @@ func _do_navigate(factory: Callable, setup: Callable, free_old: bool) -> void:
 			get_tree().process_frame.connect(_fade_in, CONNECT_ONE_SHOT)
 		, CONNECT_ONE_SHOT)
 	)
+
+
+func _attach_scene(new_scene: Node, setup: Callable) -> void:
+	var setup_on_ready := setup.is_valid() and not new_scene.is_node_ready()
+	if setup_on_ready:
+		new_scene.ready.connect(setup.bind(new_scene), CONNECT_ONE_SHOT)
+	get_tree().root.add_child(new_scene)
+	get_tree().current_scene = new_scene
+	if setup.is_valid() and not setup_on_ready:
+		setup.call(new_scene)

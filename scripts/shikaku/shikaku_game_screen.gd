@@ -309,7 +309,7 @@ func _on_pause() -> void:
 
 
 func _on_back() -> void:
-	var completed := _recorder.finish_session("abandoned", logic.placed_rects.size(), elapsed_time, {
+	var completed: Dictionary = _recorder.finish_session("abandoned", logic.placed_rects.size(), elapsed_time, {
 		"width": grid_width,
 		"height": grid_height,
 	})
@@ -327,7 +327,7 @@ func _handle_win() -> void:
 	# Leaderboard: submit completion time for board sizes with registered boards (5/7/10/14).
 	if grid_width in [5, 7, 10, 14]:
 		GameEvents.leaderboard_score_ready.emit("shikaku", str(grid_width), elapsed_time)
-	var completed := _recorder.finish_session("win", logic.placed_rects.size(), elapsed_time, {
+	var completed: Dictionary = _recorder.finish_session("win", logic.placed_rects.size(), elapsed_time, {
 		"width": grid_width,
 		"height": grid_height,
 		"hints_used": logic.hints_used,
@@ -409,7 +409,7 @@ func _show_win_dialog() -> void:
 			dialog.queue_free()
 			SceneTransition.navigate(Scenes.SHIKAKU_MENU)
 		elif action == "bookmark":
-			var success := _storage.bookmark_latest_replay()
+			var success: bool = _storage.bookmark_latest_replay()
 			if success:
 				dialog.dialog_text += "\n\n✓ Replay bookmarked!"
 			else:

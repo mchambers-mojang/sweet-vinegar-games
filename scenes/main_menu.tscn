@@ -6,10 +6,6 @@
 [node name="MainMenu" instance=ExtResource("1")]
 script = ExtResource("2")
 
-[node name="MarginContainer/VBoxContainer/TitleLabel" parent="."]
-unique_name_in_owner = true
-text = "Sudoku"
-
 [node name="DifficultyRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer" index=6]
 layout_mode = 2
 alignment = 1

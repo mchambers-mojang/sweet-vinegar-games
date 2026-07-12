@@ -7,8 +7,16 @@ extends GutTest
 
 const AnalyticsScript := preload("res://scripts/autoload/analytics_manager.gd")
 const CollectorScript := preload("res://scripts/autoload/crash_collector.gd")
+const EventsScript := preload("res://scripts/autoload/game_events.gd")
 const StatsScript := preload("res://scripts/autoload/game_stats_manager.gd")
 const RecorderScript := preload("res://scripts/replays/replay_recorder.gd")
+
+
+func _make_events() -> Node:
+	var events := Node.new()
+	events.set_script(EventsScript)
+	add_child_autofree(events)
+	return events
 
 
 # ============================================================
@@ -16,69 +24,74 @@ const RecorderScript := preload("res://scripts/replays/replay_recorder.gd")
 # ============================================================
 
 func test_game_started_signal_emits_correct_params() -> void:
+	var events := _make_events()
 	var received := {}
 	var conn := func(game_id: String, difficulty: int, rules: Dictionary) -> void:
 		received["game_id"] = game_id
 		received["difficulty"] = difficulty
 		received["rules"] = rules
-	GameEvents.game_started.connect(conn)
-	GameEvents.game_started.emit("blockudoku", -1, {"mode": "classic"})
-	GameEvents.game_started.disconnect(conn)
+	events.game_started.connect(conn)
+	events.game_started.emit("blockudoku", -1, {"mode": "classic"})
+	events.game_started.disconnect(conn)
 	assert_eq(received.get("game_id"), "blockudoku")
 	assert_eq(received.get("difficulty"), -1)
 	assert_eq(received.get("rules"), {"mode": "classic"})
 
 
 func test_game_ended_signal_emits_correct_params() -> void:
+	var events := _make_events()
 	var received := {}
 	var conn := func(game_id: String, outcome: String, duration: float) -> void:
 		received["game_id"] = game_id
 		received["outcome"] = outcome
 		received["duration"] = duration
-	GameEvents.game_ended.connect(conn)
-	GameEvents.game_ended.emit("sudoku", "win", 120.5)
-	GameEvents.game_ended.disconnect(conn)
+	events.game_ended.connect(conn)
+	events.game_ended.emit("sudoku", "win", 120.5)
+	events.game_ended.disconnect(conn)
 	assert_eq(received.get("game_id"), "sudoku")
 	assert_eq(received.get("outcome"), "win")
 	assert_almost_eq(received.get("duration") as float, 120.5, 0.001)
 
 
 func test_move_made_signal_emits_correct_params() -> void:
+	var events := _make_events()
 	var received := {}
 	var conn := func(game_id: String, move_data: Dictionary) -> void:
 		received["game_id"] = game_id
 		received["move_data"] = move_data
-	GameEvents.move_made.connect(conn)
-	GameEvents.move_made.emit("shikaku", {"elapsed_time": 3.0, "event_type": "rectangle_placed", "x": 0, "y": 0})
-	GameEvents.move_made.disconnect(conn)
+	events.move_made.connect(conn)
+	events.move_made.emit("shikaku", {"elapsed_time": 3.0, "event_type": "rectangle_placed", "x": 0, "y": 0})
+	events.move_made.disconnect(conn)
 	assert_eq(received.get("game_id"), "shikaku")
 	var md: Dictionary = received.get("move_data", {})
 	assert_eq(md.get("event_type"), "rectangle_placed")
 
 
 func test_score_changed_signal_emits_correct_params() -> void:
+	var events := _make_events()
 	var received := {}
 	var conn := func(game_id: String, old_score: int, new_score: int) -> void:
 		received["game_id"] = game_id
 		received["old_score"] = old_score
 		received["new_score"] = new_score
-	GameEvents.score_changed.connect(conn)
-	GameEvents.score_changed.emit("blockudoku", 100, 250)
-	GameEvents.score_changed.disconnect(conn)
+	events.score_changed.connect(conn)
+	events.score_changed.emit("blockudoku", 100, 250)
+	events.score_changed.disconnect(conn)
 	assert_eq(received.get("game_id"), "blockudoku")
 	assert_eq(received.get("old_score"), 100)
 	assert_eq(received.get("new_score"), 250)
 
 
 func test_leaderboard_score_ready_signal_emits_correct_params() -> void:
+	var events := _make_events()
 	var received := {}
 	var conn := func(game_id: String, mode: String, value: float) -> void:
 		received["game_id"] = game_id
 		received["mode"] = mode
 		received["value"] = value
-	GameEvents.leaderboard_score_ready.connect(conn)
-	GameEvents.leaderboard_score_ready.emit("sudoku", "hard", 95.5)
-	GameEvents.leaderboard_score_ready.disconnect(conn)
+	events.leaderboard_score_ready.connect(conn)
+	events.leaderboard_score_ready.emit("sudoku", "hard", 95.5)
+	events.leaderboard_score_ready.disconnect(conn)
 	assert_eq(received.get("game_id"), "sudoku")
 	assert_eq(received.get("mode"), "hard")
 	assert_almost_eq(received.get("value") as float, 95.5, 0.001)
@@ -157,11 +170,13 @@ func test_crash_collector_game_ended_handler_registers_action() -> void:
 # ============================================================
 
 var stats: Node
+const TEST_STATS_PATH := "user://test_game_events_stats.cfg"
 
 
 func _setup_stats() -> void:
 	stats = Node.new()
 	stats.set_script(StatsScript)
+	stats.save_path = TEST_STATS_PATH
 	add_child_autofree(stats)
 	stats._history_cache = {}
 	stats._counters_cache = {}
@@ -190,17 +205,26 @@ func test_stats_game_ended_handler_increments_game_over_outcome() -> void:
 # ============================================================
 
 var recorder: Node
+const TEST_ACTIVE_REPLAY_PATH := "user://test_game_events_replay_active.json"
 
 
 func _setup_recorder() -> void:
 	recorder = Node.new()
 	recorder.set_script(RecorderScript)
+	recorder.active_replay_path = TEST_ACTIVE_REPLAY_PATH
 	add_child_autofree(recorder)
 	recorder._active_replay = {}
 	recorder._id_rng = RandomNumberGenerator.new()
 	recorder._active_sequence = 0
 	recorder._save_timer = 0.0
 	recorder._dirty = false
+
+
+func after_each() -> void:
+	if FileAccess.file_exists(TEST_ACTIVE_REPLAY_PATH):
+		DirAccess.remove_absolute(TEST_ACTIVE_REPLAY_PATH)
+	if FileAccess.file_exists(TEST_STATS_PATH):
+		DirAccess.remove_absolute(TEST_STATS_PATH)
 
 
 func test_recorder_move_made_handler_records_input() -> void:

@@ -314,6 +314,7 @@ func _extract_metadata(replay: Dictionary) -> Dictionary:
 	return {
 		"id": replay.get("id", ""),
 		"bookmarked": replay.get("bookmarked", false),
+		"frame_count": replay.get("frames", []).size(),
 		"header": header,
 		"footer": footer,
 	}

@@ -306,7 +306,7 @@ func _try_auto_resume() -> void:
 		if not data.is_empty():
 			_deserialize_state(data)
 	elif _saves.has_saved_game(_get_game_id()):
-		var data := _saves.load_game(_get_game_id())
+		var data: Dictionary = _saves.load_game(_get_game_id())
 		if not data.is_empty():
 			_deserialize_state(data)
 

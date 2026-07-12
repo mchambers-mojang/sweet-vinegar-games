@@ -406,6 +406,42 @@ func test_commit_move_then_undo_then_redo_restores_state() -> void:
 	assert_eq(logic.board_grid[3 * 9 + 3], 1, "Cell should be filled again after redo")
 
 
+func test_undo_then_repeat_third_placement_redeals_same_blocks() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 90210
+
+	for i in 2:
+		var result := logic.try_place(i, Vector2i(i, 0), {}, {"rng_state": rng.state})
+		assert_true(result.valid)
+		logic.commit_move({}, {"rng_state": rng.state})
+
+	var first_result := logic.try_place(2, Vector2i(2, 0), {}, {"rng_state": rng.state})
+	assert_true(first_result.new_blocks_dealt)
+	var first_deal: Array[Array] = BlockudokuShapes.pick_random(3, rng)
+	logic.deal_blocks(first_deal)
+	logic.commit_move({}, {"rng_state": rng.state})
+	var rng_state_after_deal := rng.state
+
+	var undo_result := logic.undo()
+	assert_true(undo_result.success)
+	rng.state = int(undo_result.orchestrator_state["rng_state"])
+
+	var redo_result := logic.redo()
+	assert_true(redo_result.success)
+	rng.state = int(redo_result.orchestrator_state["rng_state"])
+	assert_eq(logic.available_blocks, first_deal, "Redo must restore the original next tray")
+	assert_eq(rng.state, rng_state_after_deal, "Redo must restore the post-deal RNG state")
+
+	undo_result = logic.undo()
+	assert_true(undo_result.success)
+	rng.state = int(undo_result.orchestrator_state["rng_state"])
+	var repeated_result := logic.try_place(2, Vector2i(2, 0), {}, {"rng_state": rng.state})
+	assert_true(repeated_result.new_blocks_dealt)
+	var repeated_deal: Array[Array] = BlockudokuShapes.pick_random(3, rng)
+
+	assert_eq(repeated_deal, first_deal, "Repeating an undone turn must produce the same next tray")
+
+
 func test_commit_move_clears_redo_stack() -> void:
 	# Build up undo+redo history: place, commit, undo, place again, commit
 	logic.try_place(0, Vector2i(0, 0))

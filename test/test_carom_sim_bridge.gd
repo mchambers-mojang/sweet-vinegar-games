@@ -155,9 +155,9 @@ func test_reset_puck_to_zeroes_velocity_and_sets_position() -> void:
 # ---------------------------------------------------------------------------
 
 func test_configure_sim_bridge_registers_pucks() -> void:
-	var result := _make_bridge_with_arena()
-	var bridge: CaromSimBridge = result.bridge
-	var arena: CaromArena = result.arena
+	var h := await _make_harness()
+	var bridge: CaromSimBridge = h.bridge
+	var arena: CaromArena = h.arena
 
 	var setup := arena.get_node("MatchSetup") as CaromMatchSetup
 	setup.spawn_entities(arena, arena.get_node("Actors"), 1)
