@@ -10,15 +10,15 @@ extends GameMenu
 ## Rule set ids indexed by RuleSetButton position.
 const RULE_SET_IDS: Array[String] = ["", "anti_knight", "anti_king"]
 
-## Labels shown in the leaderboard dropdown, grouped by rule set.
-const LB_MODES: Array[String] = [
+## Leaderboard mode ids and labels, grouped by rule set.
+const LB_MODES: PackedStringArray = [
 	"easy", "medium", "hard", "expert",
 	"sudoku_antiknight_easy", "sudoku_antiknight_medium",
 	"sudoku_antiknight_hard", "sudoku_antiknight_expert",
 	"sudoku_antiking_easy",   "sudoku_antiking_medium",
 	"sudoku_antiking_hard",   "sudoku_antiking_expert",
 ]
-const LB_LABELS: Array[String] = [
+const LB_LABELS: PackedStringArray = [
 	"Easy", "Medium", "Hard", "Expert",
 	"Anti-Knight Easy", "Anti-Knight Medium",
 	"Anti-Knight Hard", "Anti-Knight Expert",
