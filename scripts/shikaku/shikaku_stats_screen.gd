@@ -13,7 +13,7 @@ const SIZES := [5, 7, 8, 10, 12, 15]
 
 func _ready() -> void:
 	back_button.pressed.connect(func() -> void:
-		SceneTransition.transition_to(Scenes.SHIKAKU_MENU)
+		SceneTransition.navigate(Scenes.SHIKAKU_MENU)
 	)
 	_build_stats_ui()
 	_apply_theme()

@@ -24,36 +24,36 @@ var _carom_touch_taps: Array[float] = []
 func _ready() -> void:
 	# Redirect to first-boot name prompt before showing the Hub.
 	if not PlayerIdentity.is_setup_complete:
-		SceneTransition.transition_to(Scenes.NAME_PROMPT)
+		SceneTransition.navigate(Scenes.NAME_PROMPT)
 		return
 
 	sudoku_button.pressed.connect(func() -> void:
-		SceneTransition.transition_to(Scenes.SUDOKU_MENU)
+		SceneTransition.navigate(Scenes.SUDOKU_MENU)
 	)
 	shikaku_button.pressed.connect(func() -> void:
-		SceneTransition.transition_to(Scenes.SHIKAKU_MENU)
+		SceneTransition.navigate(Scenes.SHIKAKU_MENU)
 	)
 	blockudoku_button.pressed.connect(func() -> void:
-		SceneTransition.transition_to(Scenes.BLOCKUDOKU_MENU)
+		SceneTransition.navigate(Scenes.BLOCKUDOKU_MENU)
 	)
 	if carom_button:
 		carom_button.visible = false
 		carom_button.pressed.connect(func() -> void:
 			if ResourceLoader.exists(Scenes.CAROM_MENU):
-				SceneTransition.transition_to(Scenes.CAROM_MENU)
+				SceneTransition.navigate(Scenes.CAROM_MENU)
 			else:
 				push_warning("Carom menu scene is missing: %s" % Scenes.CAROM_MENU)
 		)
 	settings_button.pressed.connect(func() -> void:
 		var SettingsScreen := load("res://scripts/settings_screen.gd")
 		SettingsScreen.return_scene = Scenes.GAME_PICKER
-		SceneTransition.transition_to(Scenes.SETTINGS)
+		SceneTransition.push(Scenes.SETTINGS)
 	)
 	achievements_button.pressed.connect(func() -> void:
-		SceneTransition.transition_to(Scenes.ACHIEVEMENTS)
+		SceneTransition.navigate(Scenes.ACHIEVEMENTS)
 	)
 	replays_button.pressed.connect(func() -> void:
-		SceneTransition.transition_to(Scenes.REPLAYS)
+		SceneTransition.navigate(Scenes.REPLAYS)
 	)
 	# Hidden debug trigger: 7 rapid taps on the title area
 	title_label.mouse_filter = Control.MOUSE_FILTER_STOP

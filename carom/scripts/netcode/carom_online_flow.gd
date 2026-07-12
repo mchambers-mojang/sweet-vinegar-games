@@ -138,7 +138,7 @@ func _on_match_ended(won: bool, your_score: int, their_score: int, forfeit: bool
 	results.menu_requested.connect(func() -> void:
 		results.queue_free()
 		shutdown()
-		SceneTransition.transition_to(Scenes.CAROM_MENU)
+		SceneTransition.navigate(Scenes.CAROM_MENU)
 	)
 	results.rematch_requested.connect(func() -> void:
 		_match_ctrl.request_rematch()
@@ -180,7 +180,7 @@ func _on_back_requested() -> void:
 	if is_instance_valid(_overlay):
 		_overlay.hide()
 	flow_completed.emit()
-	SceneTransition.transition_to(Scenes.CAROM_MENU)
+	SceneTransition.navigate(Scenes.CAROM_MENU)
 
 
 func shutdown() -> void:

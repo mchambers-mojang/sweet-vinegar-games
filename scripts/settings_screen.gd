@@ -1,6 +1,10 @@
 extends Control
 
-## Settings screen
+## Settings screen.
+## Navigation back is handled by SceneTransition.pop() — the back button
+## restores whatever scene pushed into settings.
+## return_scene is set by the caller purely for context detection (which
+## game-specific settings sections to show); it is not used for navigation.
 
 static var return_scene: String = Scenes.SUDOKU_MENU
 
@@ -10,7 +14,7 @@ static var return_scene: String = Scenes.SUDOKU_MENU
 
 func _ready() -> void:
 	back_button.pressed.connect(func() -> void:
-		SceneTransition.transition_to(return_scene)
+		SceneTransition.pop()
 	)
 	_build_settings_ui()
 	_apply_theme()
@@ -153,7 +157,7 @@ func _build_settings_ui() -> void:
 
 	# Customize palette button
 	_add_button("Customize Palette...", func() -> void:
-		SceneTransition.transition_to(Scenes.THEME_EDITOR)
+		SceneTransition.push(Scenes.THEME_EDITOR)
 	)
 
 	# Timer

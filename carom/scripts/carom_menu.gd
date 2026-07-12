@@ -22,9 +22,6 @@ func _on_online_pressed() -> void:
 	# Launch the arena in online mode.
 	# The arena scene loads CaromOnlineMatchController instead of the
 	# normal CaromMatchController when "carom_online" meta is set.
-	SceneTransition.transition_with_callback(func() -> void:
-		var arena_scene: Node = load(Scenes.CAROM_ARENA).instantiate()
+	SceneTransition.navigate(Scenes.CAROM_ARENA, func(arena_scene: Node) -> void:
 		arena_scene.set_meta("carom_online", true)
-		get_tree().root.add_child(arena_scene)
-		queue_free()
 	)

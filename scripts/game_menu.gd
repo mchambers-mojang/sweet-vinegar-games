@@ -127,11 +127,8 @@ func _setup_leaderboard_button(stats_btn: Button) -> void:
 					selected_lb_idx = j
 					break
 		var return_path := _get_menu_scene_path()
-		SceneTransition.transition_with_callback(func() -> void:
-			var screen: Node = load(Scenes.LEADERBOARD).instantiate()
-			get_tree().root.add_child(screen)
+		SceneTransition.navigate(Scenes.LEADERBOARD, func(screen: Node) -> void:
 			screen.setup(config.game_id, modes, labels, config.leaderboard_is_time_based, selected_lb_idx, return_path)
-			queue_free()
 		)
 	)
 	# Place below stats button
@@ -151,11 +148,9 @@ func _start_game() -> void:
 	if not config:
 		return
 	var option_val := _get_current_option_value()
-	SceneTransition.transition_with_callback(func() -> void:
-		var game_scene: Node = load(config.game_scene_path).instantiate()
+	SceneTransition.navigate(config.game_scene_path, func(game_scene: Node) -> void:
 		if not config.start_game_meta_key.is_empty():
 			game_scene.set_meta(config.start_game_meta_key, option_val)
-		get_tree().root.add_child(game_scene)
 		if not config.start_game_method.is_empty():
 			if config.start_game_passes_option_twice:
 				game_scene.call(config.start_game_method, option_val, option_val)
@@ -163,7 +158,6 @@ func _start_game() -> void:
 				game_scene.call(config.start_game_method, option_val)
 			else:
 				game_scene.call(config.start_game_method)
-		queue_free()
 	)
 
 
@@ -173,11 +167,8 @@ func _start_game() -> void:
 func _resume_game(data: Dictionary) -> void:
 	if not config:
 		return
-	SceneTransition.transition_with_callback(func() -> void:
-		var game_scene: Node = load(config.game_scene_path).instantiate()
-		get_tree().root.add_child(game_scene)
+	SceneTransition.navigate(config.game_scene_path, func(game_scene: Node) -> void:
 		game_scene.resume_game(data)
-		queue_free()
 	)
 
 
@@ -226,19 +217,19 @@ func _ready() -> void:
 
 	if back_btn:
 		back_btn.pressed.connect(func() -> void:
-			SceneTransition.transition_to(Scenes.GAME_PICKER)
+			SceneTransition.navigate(Scenes.GAME_PICKER)
 		)
 
 	if settings_btn:
 		settings_btn.pressed.connect(func() -> void:
 			var SettingsScreen := load("res://scripts/settings_screen.gd")
 			SettingsScreen.return_scene = _get_menu_scene_path()
-			SceneTransition.transition_to(Scenes.SETTINGS)
+			SceneTransition.push(Scenes.SETTINGS)
 		)
 
 	if stats_btn and not _get_stats_scene_path().is_empty():
 		stats_btn.pressed.connect(func() -> void:
-			SceneTransition.transition_to(_get_stats_scene_path())
+			SceneTransition.navigate(_get_stats_scene_path())
 		)
 	elif stats_btn:
 		stats_btn.visible = false

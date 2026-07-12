@@ -216,5 +216,5 @@ func _switch_to_online_mode() -> void:
 	)
 	menu.cancelled.connect(func() -> void:
 		menu.queue_free()
-		SceneTransition.transition_to(Scenes.CAROM_MENU)
+		SceneTransition.navigate(Scenes.CAROM_MENU)
 	)
