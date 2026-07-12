@@ -25,7 +25,7 @@ func generate(difficulty: int, seed: int = -1) -> Dictionary:
 			continue
 
 		var constraint = KillerConstraintScript.new(cages)
-		var puzzle := _build_generation_puzzle(full_grid, constraint, difficulty, rng)
+		var puzzle := _create_puzzle_with_minimal_givens(full_grid, constraint, difficulty, rng)
 		if puzzle.is_empty():
 			continue
 
@@ -47,7 +47,7 @@ func generate(difficulty: int, seed: int = -1) -> Dictionary:
 	return last_result
 
 
-func _build_generation_puzzle(full_grid: Array[int], constraint, difficulty: int, rng: RandomNumberGenerator) -> Array[int]:
+func _create_puzzle_with_minimal_givens(full_grid: Array[int], constraint, difficulty: int, rng: RandomNumberGenerator) -> Array[int]:
 	var pure_killer: Array[int] = []
 	pure_killer.resize(81)
 	pure_killer.fill(0)
