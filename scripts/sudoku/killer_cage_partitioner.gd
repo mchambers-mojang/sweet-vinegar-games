@@ -4,6 +4,8 @@ extends RefCounted
 const GRID_CELLS := 81
 const MAX_ATTEMPTS := 40
 const MAX_SHAPE_CANDIDATES := 14
+const DEFAULT_EASY_CAGE_SIZE := 3
+const DEFAULT_EASY_CAGE_COUNT := GRID_CELLS / DEFAULT_EASY_CAGE_SIZE
 const DIFFICULTY_SIZE_WEIGHTS := {
 	SudokuSolver.Difficulty.EASY: {2: 6, 3: 4},
 	SudokuSolver.Difficulty.MEDIUM: {2: 4, 3: 4, 4: 2},
@@ -108,8 +110,8 @@ static func _build_target_sizes(difficulty: int, rng: RandomNumberGenerator) -> 
 		if remaining == 0:
 			return sizes
 	var fallback_sizes: Array[int] = []
-	for _i in 27:
-		fallback_sizes.append(3)
+	for _i in DEFAULT_EASY_CAGE_COUNT:
+		fallback_sizes.append(DEFAULT_EASY_CAGE_SIZE)
 	return fallback_sizes
 
 
@@ -233,4 +235,3 @@ static func _build_row_fallback(grid: Array[int], difficulty: int) -> Array:
 			})
 			col += int(size)
 	return cages
-
