@@ -4,6 +4,8 @@ extends RefCounted
 const GRID_CELLS := 81
 const MAX_ATTEMPTS := 40
 const MAX_SHAPE_CANDIDATES := 14
+const SHAPE_ATTEMPT_MULTIPLIER := 3
+const MAX_SIZE_BUILD_ATTEMPTS := 20
 const DEFAULT_EASY_CAGE_SIZE := 3
 const DEFAULT_EASY_CAGE_COUNT := GRID_CELLS / DEFAULT_EASY_CAGE_SIZE
 const DIFFICULTY_SIZE_WEIGHTS := {
@@ -36,7 +38,7 @@ static func partition_with_rng(grid: Array[int], difficulty: int, rng: RandomNum
 		var success := true
 		for target_size in target_sizes:
 			var placed := false
-			for _shape_attempt in MAX_SHAPE_CANDIDATES * 3:
+			for _shape_attempt in MAX_SHAPE_CANDIDATES * SHAPE_ATTEMPT_MULTIPLIER:
 				var start := _pick_start_cell(available, rng, int(target_size))
 				if start < 0:
 					success = false
@@ -96,7 +98,7 @@ static func _build_target_sizes(difficulty: int, rng: RandomNumberGenerator) -> 
 		allowed_sizes.append(int(size))
 	allowed_sizes.sort()
 	var fill_cache: Dictionary = {}
-	for _attempt in 20:
+	for _attempt in MAX_SIZE_BUILD_ATTEMPTS:
 		var sizes: Array[int] = []
 		var remaining := GRID_CELLS
 		while remaining > 0:
