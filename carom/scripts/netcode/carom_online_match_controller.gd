@@ -558,7 +558,7 @@ func _on_resume() -> void:
 
 func _on_menu() -> void:
 	shutdown()
-	SceneTransition.transition_to(Scenes.CAROM_MENU)
+	SceneTransition.navigate(Scenes.CAROM_MENU)
 
 
 func _on_camera_mode_changed(mode: String) -> void:

@@ -622,7 +622,7 @@ func _show_game_over_dialog() -> void:
 		if action == "menu":
 			_stop_shatter()
 			dialog.queue_free()
-			SceneTransition.transition_to(Scenes.BLOCKUDOKU_MENU)
+			SceneTransition.navigate(Scenes.BLOCKUDOKU_MENU)
 		elif action == "bookmark":
 			var success: bool = _storage.bookmark_latest_replay()
 			if success:
@@ -633,11 +633,8 @@ func _show_game_over_dialog() -> void:
 
 
 func _restart_game() -> void:
-	SceneTransition.transition_with_callback(func() -> void:
-		var game_scene: Node = load(Scenes.BLOCKUDOKU_GAME).instantiate()
-		get_tree().root.add_child(game_scene)
+	SceneTransition.navigate(Scenes.BLOCKUDOKU_GAME, func(game_scene: Node) -> void:
 		game_scene.start_new_game()
-		queue_free()
 	)
 
 
@@ -708,7 +705,7 @@ func _on_back() -> void:
 		_stats.set_counter("general", "current_win_streak", 0)
 		_achievements.check_stats()
 		_save_current_state()
-	SceneTransition.transition_to(Scenes.BLOCKUDOKU_MENU)
+	SceneTransition.navigate(Scenes.BLOCKUDOKU_MENU)
 
 
 func _update_score_display() -> void:

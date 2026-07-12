@@ -22,7 +22,7 @@ var _touch_taps: Dictionary = {}
 func _ready() -> void:
 	# Redirect to first-boot name prompt before showing the Hub.
 	if not PlayerIdentity.is_setup_complete:
-		SceneTransition.transition_to(Scenes.NAME_PROMPT)
+		SceneTransition.navigate(Scenes.NAME_PROMPT)
 		return
 
 	_build_game_buttons()
@@ -30,13 +30,13 @@ func _ready() -> void:
 	settings_button.pressed.connect(func() -> void:
 		var SettingsScreen := load("res://scripts/settings_screen.gd")
 		SettingsScreen.return_scene = Scenes.GAME_PICKER
-		SceneTransition.transition_to(Scenes.SETTINGS)
+		SceneTransition.push(Scenes.SETTINGS)
 	)
 	achievements_button.pressed.connect(func() -> void:
-		SceneTransition.transition_to(Scenes.ACHIEVEMENTS)
+		SceneTransition.navigate(Scenes.ACHIEVEMENTS)
 	)
 	replays_button.pressed.connect(func() -> void:
-		SceneTransition.transition_to(Scenes.REPLAYS)
+		SceneTransition.navigate(Scenes.REPLAYS)
 	)
 	# Hidden debug trigger: taps on the title area reveal secret entries.
 	title_label.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -56,7 +56,7 @@ func _build_game_buttons() -> void:
 		btn.visible = entry.unlock_rule != "secret_tap"
 		btn.pressed.connect(func() -> void:
 			if ResourceLoader.exists(entry.menu_scene_path):
-				SceneTransition.transition_to(entry.menu_scene_path)
+				SceneTransition.navigate(entry.menu_scene_path)
 			else:
 				push_warning("Game menu scene is missing: %s" % entry.menu_scene_path)
 		)

@@ -615,7 +615,7 @@ func _on_back_pressed() -> void:
 		_stats.set_counter("general", "current_win_streak", 0)
 		_achievements.check_stats()
 	_save_current_state()
-	SceneTransition.transition_to(Scenes.SUDOKU_MENU)
+	SceneTransition.navigate(Scenes.SUDOKU_MENU)
 
 
 func _on_undo_pressed() -> void:
@@ -880,7 +880,7 @@ func _show_fail_dialog() -> void:
 			})
 			_storage.save_replay(completed)
 			dialog.queue_free()
-			SceneTransition.transition_to(Scenes.SUDOKU_MENU)
+			SceneTransition.navigate(Scenes.SUDOKU_MENU)
 	)
 
 
@@ -904,7 +904,7 @@ func _show_win_dialog() -> void:
 	dialog.custom_action.connect(func(action: StringName) -> void:
 		if action == "menu":
 			dialog.queue_free()
-			SceneTransition.transition_to(Scenes.SUDOKU_MENU)
+			SceneTransition.navigate(Scenes.SUDOKU_MENU)
 		elif action == "bookmark":
 			var success: bool = _storage.bookmark_latest_replay()
 			if success:
@@ -916,11 +916,8 @@ func _show_win_dialog() -> void:
 
 func _restart_same_game() -> void:
 	var diff := difficulty
-	SceneTransition.transition_with_callback(func() -> void:
-		var game_scene: Node = load(Scenes.SUDOKU_GAME).instantiate()
-		get_tree().root.add_child(game_scene)
+	SceneTransition.navigate(Scenes.SUDOKU_GAME, func(game_scene: Node) -> void:
 		game_scene.start_new_game(diff)
-		queue_free()
 	)
 
 

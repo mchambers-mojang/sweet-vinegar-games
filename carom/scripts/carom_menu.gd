@@ -21,9 +21,6 @@ func _ready() -> void:
 func _on_online_pressed() -> void:
 	var params := LaunchParams.new()
 	params.online = true
-	SceneTransition.transition_with_callback(func() -> void:
-		var arena_scene: Node = load(Scenes.CAROM_ARENA).instantiate()
-		get_tree().root.add_child(arena_scene)
+	SceneTransition.navigate(Scenes.CAROM_ARENA, func(arena_scene: Node) -> void:
 		arena_scene.launch(params)
-		queue_free()
 	)

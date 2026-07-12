@@ -319,7 +319,7 @@ func _on_rematch() -> void:
 
 func _on_menu() -> void:
 	get_tree().paused = false
-	SceneTransition.transition_to(Scenes.CAROM_MENU)
+	SceneTransition.navigate(Scenes.CAROM_MENU)
 
 
 func _setup_effects() -> void:

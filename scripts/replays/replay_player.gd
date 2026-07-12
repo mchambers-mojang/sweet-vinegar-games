@@ -33,7 +33,7 @@ const FRAME_INTERVAL := 0.6
 
 func _ready() -> void:
 	back_button.pressed.connect(func() -> void:
-		SceneTransition.transition_to(Scenes.REPLAYS)
+		SceneTransition.navigate(Scenes.REPLAYS)
 	)
 	play_button.pressed.connect(_toggle_play)
 	speed_button.pressed.connect(_cycle_speed)
