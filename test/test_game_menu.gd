@@ -394,12 +394,16 @@ func test_menu_config_stores_leaderboard_is_time_based_false() -> void:
 
 func test_sudoku_config_leaderboard_modes() -> void:
 	var cfg: MenuConfig = preload("res://assets/menu/sudoku_menu.tres")
-	assert_eq(cfg.leaderboard_modes.size(), 5)
+	assert_eq(cfg.leaderboard_modes.size(), 9)
 	assert_eq(cfg.leaderboard_modes[0], "easy")
 	assert_eq(cfg.leaderboard_modes[1], "medium")
 	assert_eq(cfg.leaderboard_modes[2], "hard")
 	assert_eq(cfg.leaderboard_modes[3], "expert")
 	assert_eq(cfg.leaderboard_modes[4], "")  # evil — no server leaderboard
+	assert_eq(cfg.leaderboard_modes[5], "killer_easy")
+	assert_eq(cfg.leaderboard_modes[6], "killer_medium")
+	assert_eq(cfg.leaderboard_modes[7], "killer_hard")
+	assert_eq(cfg.leaderboard_modes[8], "killer_expert")
 	assert_true(cfg.leaderboard_is_time_based)
 
 

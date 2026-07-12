@@ -21,6 +21,10 @@ var is_multi_selected: bool = false    # Part of a multi-selection group
 var pencil_marks: Array[int] = []
 var cell_color: Color = Color.TRANSPARENT  # User-applied color coding
 
+## Killer Sudoku: target sum label shown in the top-left corner.
+## 0 = not a cage anchor; positive = display this sum.
+var cage_anchor_sum: int = 0
+
 var _bounce_tween: Tween
 var _flash_tween: Tween
 var _select_tween: Tween
@@ -282,6 +286,7 @@ func _draw() -> void:
 		draw_string(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, text_color)
 	elif pencil_marks.size() > 0:
 		var pencil_font := ThemeDB.fallback_font
+		# Shift pencil marks slightly right/down when a cage sum label is in the corner
 		var pencil_size := int(cell_size.y * 0.28)
 		var pencil_color: Color
 		if has_custom_color:
@@ -298,3 +303,16 @@ func _draw() -> void:
 			var px := pm_col * cell_w + (cell_w - pencil_text_size.x) / 2.0
 			var py := pm_row * cell_h + (cell_h + pencil_text_size.y * 0.7) / 2.0
 			draw_string(pencil_font, Vector2(px, py), pencil_text, HORIZONTAL_ALIGNMENT_LEFT, -1, pencil_size, pencil_color)
+
+	# Killer Sudoku: sum label in the top-left corner of the anchor cell
+	if cage_anchor_sum > 0:
+		var sum_font := ThemeDB.fallback_font
+		var sum_font_size := int(cell_size.y * 0.22)
+		var sum_text := str(cage_anchor_sum)
+		var sum_color: Color
+		if bg_color.get_luminance() > 0.55:
+			sum_color = Color(0.2, 0.2, 0.4, 0.85)
+		else:
+			sum_color = Color(0.85, 0.85, 1.0, 0.85)
+		draw_string(sum_font, Vector2(2.0, sum_font_size + 1.0), sum_text,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, sum_font_size, sum_color)

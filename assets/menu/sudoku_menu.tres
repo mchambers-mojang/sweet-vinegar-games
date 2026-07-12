@@ -25,5 +25,5 @@ game_rules = {
 "highlight_row_col_box": true,
 "auto_remove_pencil_marks": true
 }
-leaderboard_modes = PackedStringArray("easy", "medium", "hard", "expert", "")
+leaderboard_modes = PackedStringArray("easy", "medium", "hard", "expert", "", "killer_easy", "killer_medium", "killer_hard", "killer_expert")
 leaderboard_is_time_based = true

@@ -26,6 +26,12 @@ var is_failed: bool = false
 var is_completed: bool = false
 var hints_used: int = 0
 
+# Killer Sudoku state
+## True when this game uses killer cage constraints.
+var is_killer: bool = false
+## Cage definitions: Array of { "cells": Array[int], "sum": int, "anchor": int }
+var killer_cages: Array = []
+
 var _undo_stack: UndoStack = UndoStack.new()
 
 var undo_stack: Array[Dictionary]:
@@ -102,6 +108,16 @@ func init_new_game(diff: int, seed_value: int) -> void:
 	_setup_from_arrays(diff, result["puzzle"], result["solution"])
 
 
+## Initialise a Killer Sudoku game from pre-generated data produced by
+## KillerCageGenerator (run off the main thread).
+## data keys: "puzzle", "solution", "cages", "difficulty"
+func init_from_killer_data(data: Dictionary) -> void:
+	var diff := int(data.get("difficulty", 0))
+	_setup_from_arrays(diff, data.get("puzzle", []), data.get("solution", []))
+	killer_cages = (data.get("cages", []) as Array).duplicate(true)
+	is_killer = true
+
+
 ## Restore state from a save dictionary (same format as serialize()).
 func init_from_save(data: Dictionary) -> void:
 	difficulty = data.get("difficulty", 0)
@@ -141,6 +157,24 @@ func init_from_save(data: Dictionary) -> void:
 		if idx >= 0 and idx < GRID_CELLS:
 			colors[idx] = Color.from_string(str(colors_dict[key]), Color.TRANSPARENT)
 
+	# Killer cage data (optional — absent for standard games)
+	is_killer = data.get("is_killer", false)
+	killer_cages.clear()
+	if is_killer:
+		var raw_cages = data.get("killer_cages", [])
+		if raw_cages is Array:
+			for cage_raw in raw_cages:
+				if cage_raw is Dictionary:
+					var cage: Dictionary = {}
+					var raw_cells = cage_raw.get("cells", [])
+					var cells: Array[int] = []
+					for c in raw_cells:
+						cells.append(int(c))
+					cage["cells"] = cells
+					cage["sum"] = int(cage_raw.get("sum", 0))
+					cage["anchor"] = int(cage_raw.get("anchor", 0))
+					killer_cages.append(cage)
+
 	_undo_stack.clear()
 
 
@@ -158,7 +192,7 @@ func serialize() -> Dictionary:
 		if c != Color.TRANSPARENT:
 			colors_dict[str(i)] = c.to_html()
 
-	return {
+	var result := {
 		"puzzle": puzzle.duplicate(),
 		"solution": solution.duplicate(),
 		"current_grid": current_grid.duplicate(),
@@ -169,6 +203,20 @@ func serialize() -> Dictionary:
 		"is_failed": is_failed,
 		"hints_used": hints_used,
 	}
+
+	if is_killer:
+		result["is_killer"] = true
+		var cages_serialized: Array = []
+		for cage in killer_cages:
+			var d: Dictionary = cage as Dictionary
+			cages_serialized.append({
+				"cells": (d["cells"] as Array).duplicate(),
+				"sum": int(d["sum"]),
+				"anchor": int(d["anchor"]),
+			})
+		result["killer_cages"] = cages_serialized
+
+	return result
 
 
 # ---------------------------------------------------------------------------
@@ -492,6 +540,8 @@ func _setup_from_arrays(diff: int, p_puzzle: Array, p_solution: Array) -> void:
 	is_failed = false
 	is_completed = false
 	hints_used = 0
+	is_killer = false
+	killer_cages.clear()
 	_undo_stack.clear()
 
 

@@ -372,3 +372,50 @@ func test_use_hint_auto_fails_when_all_solved() -> void:
 		logic.current_grid[i] = logic.solution[i]
 	var result := logic.use_hint_auto(0)
 	assert_false(result.success, "use_hint_auto should return success=false when all cells are solved")
+
+
+# ---------------------------------------------------------------------------
+# Killer mode extensions
+# ---------------------------------------------------------------------------
+
+func test_init_from_killer_data_sets_fields() -> void:
+	var cage_data := {
+		"puzzle":     TEST_PUZZLE,
+		"solution":   TEST_SOLUTION,
+		"difficulty": 0,
+		"cages": [
+			{"cells": [0, 1, 2], "sum": 12, "anchor": 0},
+			{"cells": [3, 4],    "sum": 13, "anchor": 3},
+		],
+	}
+	var killer_logic := SudokuLogic.new(false, true)
+	killer_logic.init_from_killer_data(cage_data)
+	assert_true(killer_logic.is_killer, "is_killer should be true after init_from_killer_data")
+	assert_eq(killer_logic.killer_cages.size(), 2, "should have 2 cages")
+	assert_eq(int((killer_logic.killer_cages[0] as Dictionary)["sum"]), 12)
+	assert_eq(int((killer_logic.killer_cages[1] as Dictionary)["anchor"]), 3)
+
+
+func test_killer_serialize_deserialize_roundtrip() -> void:
+	logic.is_killer = true
+	logic.killer_cages = [
+		{"cells": [0, 1, 2], "sum": 12, "anchor": 0},
+		{"cells": [9, 10],   "sum": 13, "anchor": 9},
+	]
+
+	var saved: Dictionary = logic.serialize()
+	assert_true(saved.get("is_killer", false), "serialized data should include is_killer")
+	assert_eq((saved["killer_cages"] as Array).size(), 2)
+
+	var fresh := SudokuLogic.new(false, true)
+	fresh.init_from_save(saved)
+	assert_true(fresh.is_killer, "restored logic should be killer mode")
+	assert_eq(fresh.killer_cages.size(), 2)
+	assert_eq(int((fresh.killer_cages[0] as Dictionary)["sum"]), 12)
+	assert_eq(int((fresh.killer_cages[1] as Dictionary)["anchor"]), 9)
+
+
+func test_non_killer_serialize_omits_killer_fields() -> void:
+	var saved: Dictionary = logic.serialize()
+	assert_false(saved.get("is_killer", false), "non-killer saves should not include is_killer=true")
+	assert_false(saved.has("killer_cages"), "non-killer saves should not have killer_cages key")

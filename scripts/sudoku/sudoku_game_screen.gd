@@ -11,10 +11,23 @@ var _can_continue_after_failure: bool = false
 var is_paused: bool = false
 var notes_mode: bool = false
 
+# Killer Sudoku state
+## True when the current game is a Killer Sudoku.
+var is_killer: bool = false
+## Pre-generated killer data, set by the generation thread, consumed by _setup_game().
+var _pending_killer_data: Dictionary = {}
+## Background generation thread for Killer puzzles.
+var _killer_gen_thread: Thread = null
+## Cage constraint checker (nil for standard Sudoku).
+var _killer_constraint: KillerConstraint = null
+
 # Cheat auto-solve
 var _cheat_active: bool = false
 var _cheat_timer: float = 0.0
 const CHEAT_INTERVAL := 0.5
+
+# Killer option value offset (option_value ≥ KILLER_OFFSET → Killer mode)
+const KILLER_OFFSET := 5
 
 # Node references
 @onready var board: SudokuBoard = %Board
@@ -98,6 +111,8 @@ func _serialize_state() -> Dictionary:
 	state["can_continue_after_failure"] = _can_continue_after_failure
 	state["random_seed"] = random_seed
 	state["replay_id"] = replay_id
+	if is_killer:
+		state["is_killer"] = true
 	return state
 
 
@@ -140,6 +155,7 @@ func _on_game_screen_ready() -> void:
 
 func start_new_game(diff: int) -> void:
 	difficulty = diff
+	is_killer = false
 	_can_continue_after_failure = false
 	is_paused = false
 	notes_mode = false
@@ -147,15 +163,83 @@ func start_new_game(diff: int) -> void:
 
 
 func launch(params: LaunchParams) -> void:
-	start_new_game(params.option_value)
+	var opt_val := params.option_value
+	if opt_val >= KILLER_OFFSET:
+		# Killer Sudoku — generate in background thread then begin session
+		is_killer = true
+		difficulty = opt_val - KILLER_OFFSET
+		_can_continue_after_failure = false
+		is_paused = false
+		notes_mode = false
+		_show_generating_spinner(true)
+		_killer_gen_thread = Thread.new()
+		_killer_gen_thread.start(_run_killer_generation)
+	else:
+		start_new_game(opt_val)
 
 
 func resume_game(data: Dictionary) -> void:
+	is_killer = data.get("is_killer", false)
 	difficulty = data.get("difficulty", 0)
 	_can_continue_after_failure = data.get("can_continue_after_failure", false)
 	is_paused = false
 	notes_mode = false
 	begin_session(data)
+
+
+# ---------------------------------------------------------------------------
+# Killer generation (background thread)
+# ---------------------------------------------------------------------------
+
+## Runs in a background thread: generate a Sudoku puzzle then build cages.
+func _run_killer_generation() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var gen_seed := int(Time.get_ticks_usec()) ^ rng.randi()
+	var gen := SudokuGenerator.new()
+	var base_result: Dictionary = gen.generate(difficulty, gen_seed)
+	var cage_gen := KillerCageGenerator.new()
+	var cages: Array = cage_gen.generate(base_result["solution"], gen_seed)
+	_pending_killer_data = {
+		"puzzle":      base_result["puzzle"],
+		"solution":    base_result["solution"],
+		"cages":       cages,
+		"difficulty":  base_result["difficulty"],
+		"random_seed": gen_seed,
+	}
+	call_deferred("_on_killer_generation_complete")
+
+
+## Called on the main thread after killer generation finishes.
+func _on_killer_generation_complete() -> void:
+	if _killer_gen_thread:
+		_killer_gen_thread.wait_to_finish()
+		_killer_gen_thread = null
+	_show_generating_spinner(false)
+	begin_session()
+
+
+## Show or hide the "Generating…" overlay label.
+## Creates the label on first use so the game scene needs no extra node.
+func _show_generating_spinner(visible: bool) -> void:
+	var overlay := get_node_or_null("_GeneratingOverlay")
+	if overlay == null:
+		if not visible:
+			return
+		var lbl := Label.new()
+		lbl.name = "_GeneratingOverlay"
+		lbl.text = "Generating Killer puzzle…"
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		lbl.z_index = 10
+		var style := StyleBoxFlat.new()
+		style.bg_color = AppTheme.get_color("background")
+		style.bg_color.a = 0.85
+		lbl.add_theme_stylebox_override("panel", style)
+		add_child(lbl)
+		overlay = lbl
+	overlay.visible = visible
 
 
 # --- Session ceremony hooks ---
@@ -195,25 +279,66 @@ func _setup_game(saved_data: Dictionary) -> void:
 	var strict_mode: bool = GameRulesRegistry.get_rule("sudoku", "error_mode") == "strict"
 	var auto_remove: bool = GameRulesRegistry.get_rule("sudoku", "auto_remove_pencil_marks")
 	logic = SudokuLogic.new(strict_mode, auto_remove)
+	_killer_constraint = null
+
 	if saved_data.is_empty():
-		logic.init_new_game(difficulty, random_seed)
+		if is_killer and not _pending_killer_data.is_empty():
+			# Override random_seed with the one used during generation so replays are consistent
+			random_seed = int(_pending_killer_data.get("random_seed", random_seed))
+			logic.init_from_killer_data(_pending_killer_data)
+			_pending_killer_data = {}
+		else:
+			logic.init_new_game(difficulty, random_seed)
 		difficulty = logic.difficulty
-		difficulty_label.text = DIFFICULTY_NAMES[logic.difficulty]
+		difficulty_label.text = _get_difficulty_label(logic.difficulty)
 		board.load_puzzle(logic.puzzle)
+		if logic.is_killer and not logic.killer_cages.is_empty():
+			_setup_killer_constraint()
+			board.set_cages(logic.killer_cages)
 	else:
 		logic.init_from_save(saved_data)
+		is_killer = logic.is_killer
 		difficulty = logic.difficulty
 		# Legacy fallback: old saves had no random_seed field.
 		if random_seed == 0:
 			random_seed = _derive_seed_from_puzzle(logic.puzzle)
-		difficulty_label.text = DIFFICULTY_NAMES[logic.difficulty]
+		difficulty_label.text = _get_difficulty_label(logic.difficulty)
 		_load_board_from_logic()
+		if logic.is_killer and not logic.killer_cages.is_empty():
+			_setup_killer_constraint()
+			board.set_cages(logic.killer_cages)
+			_refresh_killer_errors()
 		if logic.is_failed and _is_board_locked():
 			# Re-show the fail dialog for failed saves so players can choose Continue/Menu.
 			call_deferred("_show_fail_dialog")
 	_update_strikes_display()
 	_update_button_states()
 	_update_number_completion()
+
+
+## Build and configure the KillerConstraint from the current logic's cage data.
+func _setup_killer_constraint() -> void:
+	_killer_constraint = KillerConstraint.new()
+	_killer_constraint.setup(logic.killer_cages)
+
+
+## Re-evaluate all cage constraint violations and update cell error flags.
+## Called after any digit placement / erase in killer mode.
+func _refresh_killer_errors() -> void:
+	if _killer_constraint == null or not _killer_constraint.is_active():
+		return
+	var error_cells := _killer_constraint.get_error_cells(logic.current_grid)
+	for i in 81:
+		board.cells[i].is_error = error_cells.has(i)
+		board.cells[i].queue_redraw()
+
+
+## Return a display string for the difficulty + mode.
+func _get_difficulty_label(diff: int) -> String:
+	var name := DIFFICULTY_NAMES[clampi(diff, 0, DIFFICULTY_NAMES.size() - 1)]
+	if is_killer:
+		return "Killer " + name
+	return name
 
 
 func _increment_stats() -> void:
@@ -439,6 +564,9 @@ func _on_hint_pressed() -> void:
 	_update_number_completion()
 	board._update_highlighting()
 
+	if is_killer and not result.game_won:
+		_refresh_killer_errors()
+
 	if result.game_won:
 		_handle_win()
 
@@ -467,6 +595,8 @@ func _on_erase_pressed() -> void:
 	_haptic.vibrate_light()
 	_update_number_completion()
 	board._update_highlighting()
+	if is_killer:
+		_refresh_killer_errors()
 	_save_current_state()
 
 
@@ -504,6 +634,8 @@ func _on_undo_pressed() -> void:
 	_update_button_states()
 	_update_number_completion()
 	board._update_highlighting()
+	if is_killer:
+		_refresh_killer_errors()
 	_save_current_state()
 
 
@@ -519,12 +651,9 @@ func _on_redo_pressed() -> void:
 	_update_button_states()
 	_update_number_completion()
 	board._update_highlighting()
-	_save_current_state()
-
-
-
-
-func _handle_win() -> void:
+	if is_killer:
+		_refresh_killer_errors()
+	_save_current_state()func _handle_win() -> void:
 	var won := not logic.is_failed
 	var completed: Dictionary = _recorder.finish_session("win" if won else "completed_after_failure", logic.count_filled_cells(), elapsed_time, {
 		"difficulty": difficulty,
@@ -654,6 +783,9 @@ func _apply_single_place_result(result: SudokuLogic.PlaceResult, cell_node: Sudo
 		for item in result.pencil_marks_removed:
 			board.cells[item["index"]].set_pencil_mark(item["number"], false)
 		_apply_unit_completion_effects(result.units_completed)
+		# Killer: re-evaluate cage constraint violations after a successful placement
+		if is_killer and not result.game_won:
+			_refresh_killer_errors()
 		if result.game_won:
 			_handle_win()
 
@@ -810,7 +942,7 @@ func _show_win_dialog() -> void:
 	var dialog := AcceptDialog.new()
 	dialog.title = "Congratulations!"
 	var time_text := TimeFormat.format_time(elapsed_time, true)
-	dialog.dialog_text = "You solved the %s puzzle in %s!" % [DIFFICULTY_NAMES[difficulty], time_text]
+	dialog.dialog_text = "You solved the %s puzzle in %s!" % [_get_difficulty_label(difficulty), time_text]
 	if logic.hints_used > 0:
 		dialog.dialog_text += "\nHints used: %d" % logic.hints_used
 	dialog.ok_button_text = "Play Again"
@@ -838,8 +970,11 @@ func _show_win_dialog() -> void:
 
 func _restart_same_game() -> void:
 	var diff := difficulty
+	var killer := is_killer
 	SceneTransition.navigate(Scenes.SUDOKU_GAME, func(game_scene: Node) -> void:
-		game_scene.start_new_game(diff)
+		var params := LaunchParams.new()
+		params.option_value = (KILLER_OFFSET + diff) if killer else diff
+		game_scene.launch(params)
 	)
 
 
@@ -994,6 +1129,8 @@ func _apply_number_to_multi_selection(number: int) -> void:
 	_clear_multi_selection()
 	_update_number_completion()
 	board._update_highlighting()
+	if is_killer:
+		_refresh_killer_errors()
 	if any_won:
 		_handle_win()
 	_save_current_state()
@@ -1026,13 +1163,19 @@ func _is_board_locked() -> bool:
 
 func _log_game_over_analytics(won: bool) -> void:
 	GameEvents.game_ended.emit("sudoku", "win" if won else "game_over", elapsed_time)
-	# Leaderboard: submit completion time for easy/medium/hard/expert (indices 0-3).
-	if won and difficulty <= 3:
-		GameEvents.leaderboard_score_ready.emit("sudoku", DIFFICULTY_NAMES[difficulty].to_lower(), elapsed_time)
+	if won:
+		if is_killer and difficulty <= 3:
+			# Killer leaderboard modes: killer_easy / killer_medium / killer_hard / killer_expert
+			var killer_mode := "killer_" + DIFFICULTY_NAMES[difficulty].to_lower()
+			GameEvents.leaderboard_score_ready.emit("sudoku", killer_mode, elapsed_time)
+		elif not is_killer and difficulty <= 3:
+			# Standard leaderboard modes: easy / medium / hard / expert
+			GameEvents.leaderboard_score_ready.emit("sudoku", DIFFICULTY_NAMES[difficulty].to_lower(), elapsed_time)
 	_analytics.log_event("game_over", {
 		"game": "sudoku",
 		"won": won,
 		"difficulty": difficulty,
+		"is_killer": is_killer,
 		"elapsed_time": elapsed_time,
 		"strikes": logic.strikes,
 		"hints_used": logic.hints_used,
