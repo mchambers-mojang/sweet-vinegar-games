@@ -34,8 +34,8 @@ func _ready() -> void:
 
 ## Navigate to target_path, fully replacing the current scene.
 ## SceneTransition always owns instantiation and scene lifecycle.
-## The optional setup Callable receives the new scene instance before it appears,
-## allowing callers to set metadata or invoke initialisation methods.
+## The optional setup Callable receives the new scene instance before add_child,
+## so any metadata set there is visible to _ready() on the new scene.
 ## Clears the navigation stack, freeing any stacked scenes.
 func navigate(target_path: String, setup: Callable = Callable()) -> void:
 	_do_navigate(func() -> Node: return load(target_path).instantiate(), setup, true)
@@ -119,8 +119,9 @@ func _update_overlay_color() -> void:
 
 ## Internal: fade out, swap scenes, fade in.
 ## factory creates the new scene Node; setup (optional) is called with the new
-## Node before fade-in; free_old controls whether the old scene is freed
-## (navigate) or pushed onto the navigation stack (push).
+## Node before add_child so that metadata is visible to _ready(); free_old
+## controls whether the old scene is freed (navigate) or pushed onto the
+## navigation stack (push).
 func _do_navigate(factory: Callable, setup: Callable, free_old: bool) -> void:
 	if _transitioning:
 		return
@@ -136,10 +137,10 @@ func _do_navigate(factory: Callable, setup: Callable, free_old: bool) -> void:
 	_tween.tween_callback(func() -> void:
 		var old_scene := get_tree().current_scene
 		var new_scene: Node = factory.call()
-		get_tree().root.add_child(new_scene)
-		get_tree().current_scene = new_scene
 		if setup.is_valid():
 			setup.call(new_scene)
+		get_tree().root.add_child(new_scene)
+		get_tree().current_scene = new_scene
 		if free_old:
 			for stacked in _nav_stack:
 				stacked.queue_free()
