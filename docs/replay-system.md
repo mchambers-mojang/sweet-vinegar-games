@@ -48,10 +48,6 @@ The active (in-progress) replay is snapshotted to `user://active_replay.json` fo
 - `export_replay_code(replay_id)` / `import_replay_code(code)` — compact base64 payloads
 - `set_pending_playback(replay)` / `get_pending_playback()` — pass a replay between screens
 
-### ReplayManager (facade)
-
-`scripts/autoload/replay_manager.gd` is a thin facade that delegates to `ReplayRecorder` and `ReplayStorage`. It exists for backward compatibility. New callers should use the specific module directly.
-
 ### ReplayPlayer (playback engine)
 
 `scripts/replays/replay_player.gd` is a generic playback engine attached to `scenes/replay_viewer.tscn`. It:

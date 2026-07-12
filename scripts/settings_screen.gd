@@ -132,7 +132,7 @@ func _build_settings_ui() -> void:
 
 	# Dark mode
 	var dark_idx := 0
-	match PlatformSettings.dark_mode:
+	match AppTheme.palette.get_mode():
 		"system": dark_idx = 0
 		"light": dark_idx = 1
 		"dark": dark_idx = 2
@@ -141,14 +141,13 @@ func _build_settings_ui() -> void:
 	_add_option_button("Theme", ["System", "Light", "Dark", "Neon", "Custom"], dark_idx,
 		func(idx: int) -> void:
 			match idx:
-				0: PlatformSettings.dark_mode = "system"
-				1: PlatformSettings.dark_mode = "light"
-				2: PlatformSettings.dark_mode = "dark"
-				3: PlatformSettings.dark_mode = "neon"
+				0: AppTheme.set_theme_mode("system")
+				1: AppTheme.set_theme_mode("light")
+				2: AppTheme.set_theme_mode("dark")
+				3: AppTheme.set_theme_mode("neon")
 				4:
 					AppTheme.palette.ensure_default_palette()
-					PlatformSettings.dark_mode = "custom"
-			PlatformSettings.save_settings()
+					AppTheme.set_theme_mode("custom")
 	)
 
 	# Customize palette button

@@ -1,15 +1,13 @@
 extends Node
 
-## Platform settings — dark mode, timer, sound, haptic, and effects.
-## Palette storage moved to ThemePalette (#84). All palette CRUD is now via AppTheme.palette.
+## Platform settings — timer, sound, haptic, and effects.
+## Theme mode (dark/light/neon/custom) is owned by ThemePalette — access via AppTheme.palette.
 
 signal settings_changed
 
 const SAVE_PATH := "user://settings.cfg"
-const VALID_DARK_MODES: Array[String] = ["system", "light", "dark", "neon", "custom"]
 
 ## Display settings
-var _dark_mode: String = "neon"
 var _show_timer: bool = true
 
 ## Feedback settings
@@ -18,13 +16,6 @@ var _haptic_enabled: bool = true
 var _screen_shake_enabled: bool = true
 var _shockwave_enabled: bool = true
 var _particle_effects_enabled: bool = true
-
-var dark_mode: String:
-	get:
-		return _dark_mode
-	set(value):
-		if value in VALID_DARK_MODES:
-			_dark_mode = value
 
 var show_timer: bool:
 	get:
@@ -95,7 +86,6 @@ func load_settings() -> void:
 
 
 func _save_to_config(config: ConfigFile) -> void:
-	config.set_value("display", "dark_mode", _dark_mode)
 	config.set_value("display", "show_timer", _show_timer)
 	config.set_value("feedback", "sound_enabled", _sound_enabled)
 	config.set_value("feedback", "haptic_enabled", _haptic_enabled)
@@ -105,7 +95,6 @@ func _save_to_config(config: ConfigFile) -> void:
 
 
 func _load_from_config(config: ConfigFile) -> void:
-	dark_mode = config.get_value("display", "dark_mode", _dark_mode)
 	show_timer = config.get_value("display", "show_timer", _show_timer)
 	sound_enabled = config.get_value("feedback", "sound_enabled", _sound_enabled)
 	haptic_enabled = config.get_value("feedback", "haptic_enabled", _haptic_enabled)
@@ -116,7 +105,6 @@ func _load_from_config(config: ConfigFile) -> void:
 
 func _snapshot() -> Dictionary:
 	return {
-		"dark_mode": dark_mode,
 		"show_timer": show_timer,
 		"sound_enabled": sound_enabled,
 		"haptic_enabled": haptic_enabled,
