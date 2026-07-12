@@ -77,6 +77,8 @@ static func get_candidates(grid: Array[int], index: int, p_constraints: Array = 
 static func solve_brute_force(grid: Array[int], max_solutions: int = 2, p_constraints: Array = []) -> Array[Array]:
 	var solutions: Array[Array] = []
 	var work := grid.duplicate()
+	if not _are_filled_cells_valid(work, p_constraints):
+		return solutions
 	_backtrack_mrv(work, solutions, max_solutions, p_constraints)
 	return solutions
 
@@ -109,7 +111,8 @@ static func _backtrack_mrv(grid: Array[int], solutions: Array[Array], max_soluti
 	var pos := _find_mrv_cell(grid, p_constraints)
 	if pos == -1:
 		# No empty cells — solved
-		solutions.append(grid.duplicate())
+		if _are_filled_cells_valid(grid, p_constraints):
+			solutions.append(grid.duplicate())
 		return
 	if pos == -2:
 		# Dead end
@@ -122,6 +125,19 @@ static func _backtrack_mrv(grid: Array[int], solutions: Array[Array], max_soluti
 		grid[pos] = 0
 		if solutions.size() >= max_solutions:
 			return
+
+
+static func _are_filled_cells_valid(grid: Array[int], p_constraints: Array = []) -> bool:
+	for index in 81:
+		var value := int(grid[index])
+		if value == 0:
+			continue
+		grid[index] = 0
+		var is_valid: bool = is_valid_placement(grid, index, value, p_constraints)
+		grid[index] = value
+		if not is_valid:
+			return false
+	return true
 
 
 ## Logic-based solve that tracks which techniques were needed.

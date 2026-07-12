@@ -46,6 +46,8 @@ static func partition_with_rng(grid: Array[int], difficulty: int, rng: RandomNum
 				var cells := _grow_shape(start, int(target_size), available, rng)
 				if cells.size() != int(target_size):
 					continue
+				if not _cage_digits_are_unique(cells, grid):
+					continue
 				for cell in cells:
 					available[cell] = false
 				if not _remaining_components_valid(available):
@@ -208,6 +210,16 @@ static func _all_cells_assigned(available: Array[bool]) -> bool:
 	for is_available in available:
 		if is_available:
 			return false
+	return true
+
+
+static func _cage_digits_are_unique(cells: Array[int], grid: Array[int]) -> bool:
+	var seen: Dictionary = {}
+	for cell in cells:
+		var digit := int(grid[cell])
+		if seen.has(digit):
+			return false
+		seen[digit] = true
 	return true
 
 
