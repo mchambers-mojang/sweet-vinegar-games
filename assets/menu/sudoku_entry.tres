@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="GameEntry" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/menu/game_entry.gd" id="1_sudoku"]
+
+[resource]
+script = ExtResource("1_sudoku")
+id = "sudoku"
+title = "Sudoku"
+menu_scene_path = "res://scenes/main_menu.tscn"
+icon = ""
+unlock_rule = ""
+tap_mouse_count = 5
+tap_mouse_window_sec = 1.0
+tap_touch_count = 7
+tap_touch_window_sec = 0.6
