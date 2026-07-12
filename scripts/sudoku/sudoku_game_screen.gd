@@ -191,20 +191,20 @@ func resume_game(data: Dictionary) -> void:
 # Killer generation (background thread)
 # ---------------------------------------------------------------------------
 
-## Runs in a background thread: generate a Sudoku puzzle then build cages.
+## Runs in a background thread: generate a complete Killer Sudoku puzzle with cages.
+## Uses KillerSudokuGenerator which prefers zero-given puzzles and falls back to
+## minimal givens when cage constraints alone cannot ensure uniqueness.
 func _run_killer_generation() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
 	var gen_seed := int(Time.get_ticks_usec()) ^ rng.randi()
-	var gen := SudokuGenerator.new()
-	var base_result: Dictionary = gen.generate(difficulty, gen_seed)
-	var cage_gen := KillerCageGenerator.new()
-	var cages: Array = cage_gen.generate(base_result["solution"], gen_seed)
+	var gen := KillerSudokuGenerator.new()
+	var result: Dictionary = gen.generate(difficulty, gen_seed)
 	_pending_killer_data = {
-		"puzzle":      base_result["puzzle"],
-		"solution":    base_result["solution"],
-		"cages":       cages,
-		"difficulty":  base_result["difficulty"],
+		"puzzle":      result.get("puzzle", []),
+		"solution":    result.get("solution", []),
+		"cages":       result.get("cages", []),
+		"difficulty":  result.get("difficulty", difficulty),
 		"random_seed": gen_seed,
 	}
 	call_deferred("_on_killer_generation_complete")
@@ -219,7 +219,7 @@ func _on_killer_generation_complete() -> void:
 	begin_session()
 
 
-## Show or hide the "Generating…" overlay label.
+## Show or hide the "Generating…" overlay label with animated cycling dots.
 ## Creates the label on first use so the game scene needs no extra node.
 func _show_generating_spinner(visible: bool) -> void:
 	var overlay := get_node_or_null("_GeneratingOverlay")
@@ -228,7 +228,7 @@ func _show_generating_spinner(visible: bool) -> void:
 			return
 		var lbl := Label.new()
 		lbl.name = "_GeneratingOverlay"
-		lbl.text = "Generating Killer puzzle…"
+		lbl.text = "Generating Killer puzzle"
 		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -239,6 +239,15 @@ func _show_generating_spinner(visible: bool) -> void:
 		lbl.add_theme_stylebox_override("panel", style)
 		add_child(lbl)
 		overlay = lbl
+		lbl.set_meta("dot_frame", 0)
+		var tween := create_tween().set_loops()
+		tween.tween_callback(func() -> void:
+			if is_instance_valid(lbl) and lbl.visible:
+				var frame: int = lbl.get_meta("dot_frame", 0)
+				frame = (frame + 1) % 4
+				lbl.set_meta("dot_frame", frame)
+				lbl.text = "Generating Killer puzzle" + ".".repeat(frame)
+		).set_delay(0.4)
 	overlay.visible = visible
 
 
@@ -318,16 +327,46 @@ func _setup_game(saved_data: Dictionary) -> void:
 
 ## Build and configure the KillerConstraint from the current logic's cage data.
 func _setup_killer_constraint() -> void:
-	_killer_constraint = KillerConstraint.new()
-	_killer_constraint.setup(logic.killer_cages)
+	_killer_constraint = KillerConstraint.new(logic.killer_cages)
 
 
 ## Re-evaluate all cage constraint violations and update cell error flags.
 ## Called after any digit placement / erase in killer mode.
 func _refresh_killer_errors() -> void:
-	if _killer_constraint == null or not _killer_constraint.is_active():
+	if _killer_constraint == null:
 		return
-	var error_cells := _killer_constraint.get_error_cells(logic.current_grid)
+	var error_cells: Dictionary = {}
+	var cages := _killer_constraint.get_cages()
+	for cage in cages:
+		var cells: Array = cage["cells"]
+		var target_sum: int = int(cage["sum"])
+		var digit_counts: Dictionary = {}
+		var total := 0
+		var all_filled := true
+		var filled_cells: Array[int] = []
+		for c in cells:
+			var v: int = logic.current_grid[int(c)]
+			if v == 0:
+				all_filled = false
+				continue
+			filled_cells.append(int(c))
+			total += v
+			digit_counts[v] = digit_counts.get(v, 0) + 1
+		# Flag duplicate digits
+		for c in filled_cells:
+			var v: int = logic.current_grid[c]
+			if digit_counts.get(v, 0) > 1:
+				error_cells[c] = true
+		# Flag wrong sum on a fully-filled cage (only when no duplicates present)
+		if all_filled and total != target_sum:
+			var has_dup := false
+			for c in cells:
+				if error_cells.has(int(c)):
+					has_dup = true
+					break
+			if not has_dup:
+				for c in cells:
+					error_cells[int(c)] = true
 	for i in 81:
 		board.cells[i].is_error = error_cells.has(i)
 		board.cells[i].queue_redraw()
@@ -653,7 +692,10 @@ func _on_redo_pressed() -> void:
 	board._update_highlighting()
 	if is_killer:
 		_refresh_killer_errors()
-	_save_current_state()func _handle_win() -> void:
+	_save_current_state()
+
+
+func _handle_win() -> void:
 	var won := not logic.is_failed
 	var completed: Dictionary = _recorder.finish_session("win" if won else "completed_after_failure", logic.count_filled_cells(), elapsed_time, {
 		"difficulty": difficulty,

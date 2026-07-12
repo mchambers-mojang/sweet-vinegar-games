@@ -1,95 +1,103 @@
 class_name KillerConstraint
-extends RefCounted
+extends "res://scripts/sudoku/sudoku_constraint.gd"
 
-## Validates killer cage constraints against the current grid state.
-##
-## Provides two types of violations:
-##   1. Duplicate digits within a cage
-##   2. A fully-filled cage whose digit sum does not match the cage target
-##
-## Strict/free mode is handled by the caller; this class only reports which
-## cells are in violation — it does not modify game state or add strikes.
+const GRID_CELLS := 81
 
-## Internal cage record built from the raw cage dictionaries.
-class CageInfo:
-	var cells: Array[int] = []
-	var target_sum: int = 0
-	var anchor: int = 0
-
-var _cages: Array[CageInfo] = []
-var _cell_to_cage: Array[int] = []  # cell_index → cage index (-1 = none)
+var _cages: Array = []
+var _index_to_cage: Dictionary = {}
 
 
-## Initialise from the cage array produced by KillerCageGenerator.
-## Each entry: { "cells": Array[int], "sum": int, "anchor": int }
-func setup(cage_dicts: Array) -> void:
+func _init(cages: Array = []) -> void:
+	_set_cages(cages)
+
+
+func _set_cages(cages: Array) -> void:
 	_cages.clear()
-	_cell_to_cage.resize(81)
-	_cell_to_cage.fill(-1)
+	_index_to_cage.clear()
+	for cage_data in cages:
+		var cells: Array[int] = []
+		for cell in cage_data.get("cells", []):
+			cells.append(int(cell))
+		cells.sort()
+		var cage := {
+			"cells": cells,
+			"sum": int(cage_data.get("sum", 0)),
+		}
+		_cages.append(cage)
+		for index in cells:
+			_index_to_cage[index] = _cages.size() - 1
 
-	for i in cage_dicts.size():
-		var d: Dictionary = cage_dicts[i]
-		var info := CageInfo.new()
-		for c in d.get("cells", []):
-			info.cells.append(int(c))
-		info.target_sum = int(d.get("sum", 0))
-		info.anchor = int(d.get("anchor", -1))
-		_cages.append(info)
 
-		for c in info.cells:
-			_cell_to_cage[c] = i
+func get_id() -> String:
+	return "killer"
 
 
-## Returns a Dictionary of cell indices → true for cells that are in violation.
-## current_grid: Array[int] of length 81, 0 = empty.
-## Violations:
-##   - Any cell in a cage that shares a digit with another cell in the same cage
-##   - All cells in a fully-filled cage whose sum ≠ the target
-func get_error_cells(current_grid: Array[int]) -> Dictionary:
-	var errors: Dictionary = {}
-
+func get_cages() -> Array:
+	var serialized: Array = []
 	for cage in _cages:
-		var filled: Array[int] = []
-		var digit_counts: Dictionary = {}
-		var total := 0
-		var all_filled := true
-
-		for c in cage.cells:
-			var v: int = current_grid[c]
-			if v == 0:
-				all_filled = false
-				continue
-			filled.append(c)
-			total += v
-			digit_counts[v] = digit_counts.get(v, 0) + 1
-
-		# Flag duplicate digits
-		for c in filled:
-			var v: int = current_grid[c]
-			if digit_counts.get(v, 0) > 1:
-				errors[c] = true
-
-		# Flag wrong sum on a fully filled cage (only if no digit duplicates)
-		if all_filled and total != cage.target_sum:
-			var has_dup := false
-			for c in cage.cells:
-				if errors.has(c):
-					has_dup = true
-					break
-			if not has_dup:
-				for c in cage.cells:
-					errors[c] = true
-
-	return errors
+		serialized.append({
+			"cells": (cage["cells"] as Array[int]).duplicate(),
+			"sum": cage["sum"],
+		})
+	return serialized
 
 
-## Returns the cage index for the given cell, or -1 if none.
-func get_cage_index(cell: int) -> int:
-	if cell < 0 or cell >= _cell_to_cage.size():
-		return -1
-	return _cell_to_cage[cell]
+func get_affected_indices(index: int) -> Array[int]:
+	var cage := get_cage_for_index(index)
+	if cage.is_empty():
+		return []
+	var affected: Array[int] = []
+	for other in cage["cells"]:
+		if other != index:
+			affected.append(other)
+	return affected
 
 
-## Returns true when at least one cage has been registered.
-func is_active() -> bool:
-	return not _cages.is_empty()
+func get_cage_for_index(index: int) -> Dictionary:
+	if not _index_to_cage.has(index):
+		return {}
+	return _cages[int(_index_to_cage[index])]
+
+
+func is_valid(grid: Array[int], index: int, value: int) -> bool:
+	var cage := get_cage_for_index(index)
+	if cage.is_empty():
+		return true
+
+	var used_digits: Array[int] = [value]
+	var sum_so_far := value
+	var empty_count := 0
+
+	for other in cage["cells"]:
+		if other == index:
+			continue
+		var digit := int(grid[other])
+		if digit == 0:
+			empty_count += 1
+			continue
+		if digit in used_digits:
+			return false
+		used_digits.append(digit)
+		sum_so_far += digit
+
+	var target_sum := int(cage["sum"])
+	if sum_so_far > target_sum:
+		return false
+	if empty_count == 0:
+		return sum_so_far == target_sum
+
+	var available_digits: Array[int] = []
+	for digit in range(1, 10):
+		if not digit in used_digits:
+			available_digits.append(digit)
+	if available_digits.size() < empty_count:
+		return false
+
+	var min_possible := 0
+	var max_possible := 0
+	for i in empty_count:
+		min_possible += available_digits[i]
+		max_possible += available_digits[available_digits.size() - 1 - i]
+
+	var remaining_sum := target_sum - sum_so_far
+	return remaining_sum >= min_possible and remaining_sum <= max_possible

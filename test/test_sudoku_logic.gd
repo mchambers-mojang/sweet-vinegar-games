@@ -384,8 +384,8 @@ func test_init_from_killer_data_sets_fields() -> void:
 		"solution":   TEST_SOLUTION,
 		"difficulty": 0,
 		"cages": [
-			{"cells": [0, 1, 2], "sum": 12, "anchor": 0},
-			{"cells": [3, 4],    "sum": 13, "anchor": 3},
+			{"cells": [0, 1, 2], "sum": 12},
+			{"cells": [3, 4],    "sum": 13},
 		],
 	}
 	var killer_logic := SudokuLogic.new(false, true)
@@ -393,14 +393,14 @@ func test_init_from_killer_data_sets_fields() -> void:
 	assert_true(killer_logic.is_killer, "is_killer should be true after init_from_killer_data")
 	assert_eq(killer_logic.killer_cages.size(), 2, "should have 2 cages")
 	assert_eq(int((killer_logic.killer_cages[0] as Dictionary)["sum"]), 12)
-	assert_eq(int((killer_logic.killer_cages[1] as Dictionary)["anchor"]), 3)
+	assert_eq(int((killer_logic.killer_cages[1] as Dictionary)["sum"]), 13)
 
 
 func test_killer_serialize_deserialize_roundtrip() -> void:
 	logic.is_killer = true
 	logic.killer_cages = [
-		{"cells": [0, 1, 2], "sum": 12, "anchor": 0},
-		{"cells": [9, 10],   "sum": 13, "anchor": 9},
+		{"cells": [0, 1, 2], "sum": 12},
+		{"cells": [9, 10],   "sum": 13},
 	]
 
 	var saved: Dictionary = logic.serialize()
@@ -412,7 +412,7 @@ func test_killer_serialize_deserialize_roundtrip() -> void:
 	assert_true(fresh.is_killer, "restored logic should be killer mode")
 	assert_eq(fresh.killer_cages.size(), 2)
 	assert_eq(int((fresh.killer_cages[0] as Dictionary)["sum"]), 12)
-	assert_eq(int((fresh.killer_cages[1] as Dictionary)["anchor"]), 9)
+	assert_eq(int((fresh.killer_cages[1] as Dictionary)["sum"]), 13)
 
 
 func test_non_killer_serialize_omits_killer_fields() -> void:

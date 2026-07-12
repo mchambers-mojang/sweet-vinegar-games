@@ -29,7 +29,7 @@ var hints_used: int = 0
 # Killer Sudoku state
 ## True when this game uses killer cage constraints.
 var is_killer: bool = false
-## Cage definitions: Array of { "cells": Array[int], "sum": int, "anchor": int }
+## Cage definitions: Array of { "cells": Array[int], "sum": int }
 var killer_cages: Array = []
 
 var _undo_stack: UndoStack = UndoStack.new()
@@ -109,7 +109,7 @@ func init_new_game(diff: int, seed_value: int) -> void:
 
 
 ## Initialise a Killer Sudoku game from pre-generated data produced by
-## KillerCageGenerator (run off the main thread).
+## KillerSudokuGenerator (run off the main thread).
 ## data keys: "puzzle", "solution", "cages", "difficulty"
 func init_from_killer_data(data: Dictionary) -> void:
 	var diff := int(data.get("difficulty", 0))
@@ -172,7 +172,6 @@ func init_from_save(data: Dictionary) -> void:
 						cells.append(int(c))
 					cage["cells"] = cells
 					cage["sum"] = int(cage_raw.get("sum", 0))
-					cage["anchor"] = int(cage_raw.get("anchor", 0))
 					killer_cages.append(cage)
 
 	_undo_stack.clear()
@@ -212,7 +211,6 @@ func serialize() -> Dictionary:
 			cages_serialized.append({
 				"cells": (d["cells"] as Array).duplicate(),
 				"sum": int(d["sum"]),
-				"anchor": int(d["anchor"]),
 			})
 		result["killer_cages"] = cages_serialized
 

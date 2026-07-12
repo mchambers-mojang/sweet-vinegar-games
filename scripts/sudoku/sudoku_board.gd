@@ -11,7 +11,7 @@ var show_row_col_box: bool = false
 var filter_number: int = 0
 var filter_color: Color = Color.TRANSPARENT
 
-## Killer Sudoku cage data.  Array of { "cells": Array[int], "sum": int, "anchor": int }.
+## Killer Sudoku cage data.  Array of { "cells": Array[int], "sum": int }.
 ## Empty when not in killer mode.
 var cage_data: Array = []
 
@@ -141,7 +141,8 @@ func get_cell_colors_dict() -> Dictionary:
 
 
 ## Apply killer cage data.  Clears cage visuals when called with an empty array.
-## cage_dicts: Array of { "cells": Array[int], "sum": int, "anchor": int }
+## cage_dicts: Array of { "cells": Array[int], "sum": int } or with optional "anchor": int.
+## When "anchor" is absent it is computed as the minimum cell index in the cage.
 func set_cages(cage_dicts: Array) -> void:
 	cage_data = cage_dicts.duplicate(true)
 
@@ -156,7 +157,15 @@ func set_cages(cage_dicts: Array) -> void:
 		var d: Dictionary = cage_data[i]
 		var cage_cells = d.get("cells", [])
 		var cage_sum: int = int(d.get("sum", 0))
-		var anchor: int = int(d.get("anchor", -1))
+		# Compute anchor as minimum cell index when not explicitly provided
+		var anchor: int = -1
+		if d.has("anchor"):
+			anchor = int(d.get("anchor", -1))
+		else:
+			for c in cage_cells:
+				var ci := int(c)
+				if anchor < 0 or ci < anchor:
+					anchor = ci
 		for c in cage_cells:
 			_cell_cage_map[c] = i
 		if anchor >= 0 and anchor < cells.size():
