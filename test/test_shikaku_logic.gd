@@ -139,3 +139,54 @@ func test_redo_stack_cleared_on_new_action() -> void:
 	assert_eq(puzzle.redo_stack.size(), 1)
 	puzzle.place_rectangle(2, 0, 1, 2)
 	assert_true(puzzle.redo_stack.is_empty())
+
+
+func test_can_undo_redo_hint_initial_state() -> void:
+	assert_false(logic.can_undo())
+	assert_false(logic.can_redo())
+	assert_true(logic.can_hint())
+
+
+func test_can_undo_after_place() -> void:
+	logic.place_rectangle(0, 0, 2, 1)
+	assert_true(logic.can_undo())
+	assert_false(logic.can_redo())
+
+
+func test_can_redo_after_undo() -> void:
+	logic.place_rectangle(0, 0, 2, 1)
+	logic.undo()
+	assert_false(logic.can_undo())
+	assert_true(logic.can_redo())
+
+
+func test_can_hint_false_after_used() -> void:
+	logic.use_hint()
+	assert_false(logic.can_hint())
+
+
+func test_can_undo_redo_false_when_completed() -> void:
+	logic.place_rectangle(0, 0, 2, 1)
+	logic.place_rectangle(0, 1, 2, 1)
+	assert_true(logic.is_completed)
+	assert_false(logic.can_undo())
+	assert_false(logic.can_redo())
+	assert_false(logic.can_hint())
+
+
+func test_get_unplaced_solution_rects_empty_when_all_placed() -> void:
+	logic.place_rectangle(0, 0, 2, 1)
+	logic.place_rectangle(0, 1, 2, 1)
+	assert_true(logic.get_unplaced_solution_rects().is_empty())
+
+
+func test_get_unplaced_solution_rects_returns_remaining() -> void:
+	logic.place_rectangle(0, 0, 2, 1)
+	var unplaced := logic.get_unplaced_solution_rects()
+	assert_eq(unplaced.size(), 1)
+	assert_eq(unplaced[0], Rect2i(0, 1, 2, 1))
+
+
+func test_get_unplaced_solution_rects_all_when_none_placed() -> void:
+	var unplaced := logic.get_unplaced_solution_rects()
+	assert_eq(unplaced.size(), logic.solution.size())
