@@ -1,13 +1,15 @@
 class_name CaromSimBridge
 extends Node
 
-## Coordinator that owns the deterministic SimWorld and drives render adapters.
+## Sync layer that owns the deterministic SimWorld and drives render adapters.
 ##
 ## Responsibilities:
 ##   • Runs SimWorld at 30 Hz using a fixed-timestep accumulator in _process.
 ##   • Provides interpolated positions to CaromPuck / CaromProjectile for smooth rendering.
-##   • Emits zone and collision events so the match controller and effects layer
-##     can react without coupling to Godot physics signals.
+##   • Registers pucks and projectiles and maintains sim↔scene object mappings.
+##
+## Stall-nudge gameplay policy is handled by StallDetector.
+## Zone and collision event signaling is handled by SimEventDispatcher.
 ##
 ## Usage:
 ##   1. Call setup_arena(arena) once to create walls and goal zones.
@@ -33,9 +35,6 @@ const ZONE_SOUTH_GOAL: int = 2
 
 const TICK_DURATION: float = 1.0 / 30.0
 
-## Sentinel representing "no best distance found yet" in nearest-goal search.
-const _DIST_SQ_INIT: int = 0x7FFFFFFFFFFFFFFF  # max int64
-
 # ---------------------------------------------------------------------------
 # Signals
 # ---------------------------------------------------------------------------
@@ -57,6 +56,9 @@ var _accumulator: float = 0.0
 ## The multiplayer controller drives ticks via tick_external().
 var multiplayer_mode: bool = false
 
+var _stall_detector: StallDetector = StallDetector.new()
+var _event_dispatcher: SimEventDispatcher = SimEventDispatcher.new()
+
 ## Puck tracking (parallel arrays — one entry per registered puck).
 var _puck_body_ids: Array[int]    = []
 var _puck_nodes: Array[CaromPuck] = []
@@ -73,7 +75,8 @@ var _proj_curr_pos: Dictionary = {}
 
 
 func _ready() -> void:
-	pass
+	_event_dispatcher.puck_zone_entered.connect(puck_zone_entered.emit)
+	_event_dispatcher.projectile_zone_entered.connect(projectile_zone_entered.emit)
 
 
 # ---------------------------------------------------------------------------
@@ -350,8 +353,7 @@ func _tick() -> void:
 	var _expired_projectiles_oob: Array[int] = []
 
 	# Apply stall nudge to each registered puck before advancing the sim.
-	for i in _puck_nodes.size():
-		_apply_puck_stall_nudge(i)
+	_stall_detector.apply_to_all(_sim, _puck_body_ids, _puck_nodes, TICK_DURATION)
 
 	# Snapshot previous positions for interpolation.
 	for i in _puck_nodes.size():
@@ -389,75 +391,7 @@ func _tick() -> void:
 		if is_instance_valid(projectile):
 			projectile.queue_free()
 
-	# Dispatch zone events.
-	for ev: Dictionary in _sim.zone_events:
-		var body_id: int = ev.body_id
-		var zone_id: int = ev.zone_id
-		if _is_puck_body(body_id):
-			puck_zone_entered.emit(body_id, zone_id)
-		elif _projectile_nodes.has(body_id):
-			projectile_zone_entered.emit(body_id, zone_id)
+	# Dispatch zone and collision events via SimEventDispatcher.
+	_event_dispatcher.dispatch_zone_events(_sim.zone_events, _puck_body_ids, _projectile_nodes)
+	_event_dispatcher.dispatch_collision_events(_sim.collision_events, _puck_body_ids, _projectile_nodes)
 
-	# Dispatch collision events to projectile render adapters.
-	for ev: Dictionary in _sim.collision_events:
-		var body_id: int = ev.body_id
-		if not _projectile_nodes.has(body_id):
-			continue
-		var projectile := _projectile_nodes[body_id] as CaromProjectile
-		if not is_instance_valid(projectile):
-			continue
-		var hit_puck: bool = _is_puck_body(ev.other_id)
-		var pos := Vector3(FP.to_float(ev.pos_x), 0.0, FP.to_float(ev.pos_y))
-		projectile.impact_occurred.emit(pos, hit_puck)
-
-
-# ---------------------------------------------------------------------------
-# Stall nudge (mirrors CaromPuck._apply_goal_nudge in sim space)
-# ---------------------------------------------------------------------------
-
-func _apply_puck_stall_nudge(idx: int) -> void:
-	var puck := _puck_nodes[idx] as CaromPuck
-	if puck.stall_nudge_force <= 0.0:
-		return
-
-	var body := _sim.get_body(_puck_body_ids[idx])
-	if body == null:
-		return
-
-	var speed: int = FP.FPVec2.length(body.velocity)
-	var threshold: int = FP.from_float(puck.stall_speed_threshold)
-	if speed > threshold:
-		return
-
-	# Find nearest goal target (uses CaromPuck's configured goal positions).
-	var goal_targets: Array[Vector3] = puck._goal_targets
-	if goal_targets.is_empty():
-		return
-
-	var best_dist_sq: int = _DIST_SQ_INIT
-	var best_dir: Dictionary = FP.FPVec2.make(FP.ONE, 0)
-
-	for goal_pos: Vector3 in goal_targets:
-		var gx: int = FP.from_float(goal_pos.x)
-		var gy: int = FP.from_float(goal_pos.z)
-		var dx: int = gx - body.position.x
-		var dy: int = gy - body.position.y
-		var d2: int = FP.mul(dx, dx) + FP.mul(dy, dy)
-		if d2 < best_dist_sq:
-			best_dist_sq = d2
-			var raw: Dictionary = FP.FPVec2.make(dx, dy)
-			var len: int = FP.FPVec2.length(raw)
-			if len > 0:
-				best_dir = FP.FPVec2.normalize(raw)
-
-	# Scale force → velocity change: Δv = F * dt / m  (mirrors apply_central_force semantics)
-	var nudge: int = FP.from_float(puck.stall_nudge_force * TICK_DURATION / FP.to_float(body.mass))
-	body.velocity = FP.FPVec2.add(body.velocity, FP.FPVec2.scale(best_dir, nudge))
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-func _is_puck_body(body_id: int) -> bool:
-	return _puck_body_ids.has(body_id)

@@ -33,7 +33,7 @@ The active play surface where gameplay happens. Owns its own UI, input handling,
 The Platform's ability to save and restore a Game's in-progress state across scene transitions. Each Game serializes/deserializes its own state; the Platform provides the storage layer.
 
 **Replay**:
-A recorded sequence of player actions (not video) that can re-simulate a play session. Each Game defines its own action vocabulary (e.g., cell placements for puzzles, shot angle + timing for Carom). Stored and managed by the Platform's ReplayManager.
+A recorded sequence of player actions (not video) that can re-simulate a play session. Each Game defines its own action vocabulary (e.g., cell placements for puzzles, shot angle + timing for Carom). Stored and managed by the Platform's ReplayRecorder (session lifecycle) and ReplayStorage (file I/O).
 
 **Replay Adapter**:
 A per-Game class that knows how to apply a single recorded frame to a visual representation. Implements `apply_frame(frame, visual, suppress_effects)` and `reset_to_state(state, visual)`. The Platform's ReplayPlayer drives the adapter; the adapter owns the Game-specific rendering logic.

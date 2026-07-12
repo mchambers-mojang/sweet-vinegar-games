@@ -40,11 +40,13 @@ func _ready() -> void:
 	hud.camera_mode_changed.connect(_on_camera_mode_changed)
 	state.score_changed.connect(hud.update_scores)
 
-	state.difficulty = arena.get_meta("carom_difficulty", 1) as int
-	if arena.has_meta("carom_difficulty"):
-		arena.remove_meta("carom_difficulty")
 
-	call_deferred("_init_match")
+## Start the match at the given difficulty level (1 = easy, 2 = medium, 3 = hard).
+## Must be called after the scene is in the tree (i.e. after _ready() has run).
+## Called by CaromArena.launch() for single-player matches.
+func start_match(difficulty: int) -> void:
+	state.difficulty = difficulty
+	_init_match()
 
 
 var _is_paused: bool = false
@@ -74,11 +76,23 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _process(delta: float) -> void:
 	var ai_turret := _match_round.get_ai_turret()
-	var player_turret := _match_round.get_player_turret()
 	if ai_turret:
-		hud.update_debug_overlay(ai_turret, player_turret)
+		hud.update_debug_overlay(_build_debug_info(ai_turret, _match_round.get_player_turret()))
 
 	_tick_sim_timer(delta)
+
+
+func _build_debug_info(ai_turret: CaromTurret, player_turret: CaromTurret) -> Dictionary:
+	var info := {}
+	if player_turret and player_turret.input is CaromHumanInput:
+		info["touch"] = (player_turret.input as CaromHumanInput).get_touch_debug_state()
+	if ai_turret.ai_controller:
+		info["ai"] = ai_turret.ai_controller.get_debug_info()
+		info["aim_offset"] = ai_turret.aim_offset_degrees
+		info["ammo_current"] = ai_turret.current_ammo
+		info["ammo_max"] = ai_turret.clip_size
+		info["is_reloading"] = ai_turret.is_reloading
+	return info
 
 
 func _init_match() -> void:
@@ -108,10 +122,7 @@ func _setup_sim_bridge() -> void:
 
 
 func _configure_sim_bridge() -> void:
-	for puck: CaromPuck in setup.pucks:
-		_bridge.register_puck(puck, puck.global_position)
-	_bridge.register_turret(setup.player_turret)
-	_bridge.register_turret(setup.ai_turret)
+	setup.configure_sim_bridge(_bridge)
 
 
 func _start_match() -> void:

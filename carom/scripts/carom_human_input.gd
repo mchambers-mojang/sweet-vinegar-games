@@ -37,6 +37,15 @@ var debug_total_input: float = 0.0
 var debug_last_fire: bool = false
 
 
+## Returns touch state for the HUD debug overlay.
+func get_touch_debug_state() -> Dictionary:
+	return {
+		"active_touches": _active_touches,
+		"total_input": debug_total_input,
+		"last_fire": debug_last_fire,
+	}
+
+
 func process(delta: float, turret_state: Dictionary) -> Dictionary:
 	CaromSettings.ensure_loaded()
 	var aim_arc: float = turret_state.get("aim_arc", 160.0)

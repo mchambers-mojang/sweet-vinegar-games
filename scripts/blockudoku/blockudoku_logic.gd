@@ -22,6 +22,9 @@ var is_game_over: bool = false
 var available_blocks: Array[Array] = []
 var blocks_placed_this_set: int = 0
 
+# Undo/redo history — owned here so all games store history in the logic layer.
+var _undo_stack: UndoStack = UndoStack.new()
+
 
 ## Result returned by try_place().  Carries everything the orchestrator needs
 ## to dispatch side effects and update UI — no rule logic belongs there.
@@ -64,6 +67,7 @@ func reset() -> void:
 	is_game_over = false
 	available_blocks = []
 	blocks_placed_this_set = 0
+	_undo_stack.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -209,6 +213,50 @@ func can_place(shape: Array, grid_col: int, grid_row: int) -> bool:
 		if board_grid[row * GRID_SIZE + col] != 0:
 			return false
 	return true
+
+
+# ---------------------------------------------------------------------------
+# Undo/redo history
+# ---------------------------------------------------------------------------
+
+## True if there is a move to undo.
+func can_undo() -> bool:
+	return _undo_stack.can_undo()
+
+
+## True if there is a move to redo.
+func can_redo() -> bool:
+	return _undo_stack.can_redo()
+
+
+## Record a before/after move pair in the undo stack (clears redo history).
+func push_move(before: Dictionary, after: Dictionary) -> void:
+	_undo_stack.push({"before": before, "after": after})
+
+
+## Pop the most recent move for undo; returns the "before" state to restore.
+## Returns an empty dict if there is nothing to undo.
+func undo_move() -> Dictionary:
+	var entry := _undo_stack.undo()
+	return entry.get("before", {})
+
+
+## Pop the most recent undone move for redo; returns the "after" state to restore.
+## Returns an empty dict if there is nothing to redo.
+func redo_move() -> Dictionary:
+	var entry := _undo_stack.redo()
+	return entry.get("after", {})
+
+
+## Clear only the redo history (e.g. when a game-over path invalidates redo
+## without recording a new undo entry).
+func clear_redo() -> void:
+	_undo_stack.clear_redo()
+
+
+## Clear both undo and redo history (e.g. on new game or resume).
+func clear_undo_history() -> void:
+	_undo_stack.clear()
 
 
 # ---------------------------------------------------------------------------

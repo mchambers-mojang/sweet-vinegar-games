@@ -1,7 +1,7 @@
 extends Node
 
 ## Platform settings coordinator — thin facade over DisplaySettings and FeedbackSettings.
-## Palette storage moved to ThemePalette (#84). All palette CRUD is now via AppTheme.palette.
+## Theme mode (dark/light/neon/custom) is owned by ThemePalette — access via AppTheme.palette.
 
 signal settings_changed
 
@@ -12,12 +12,6 @@ var display: DisplaySettings = DisplaySettings.new()
 var feedback: FeedbackSettings = FeedbackSettings.new()
 
 ## Display — delegated to DisplaySettings
-var dark_mode: String:
-	get:
-		return display.dark_mode
-	set(value):
-		display.dark_mode = value
-
 var show_timer: bool:
 	get:
 		return display.show_timer
@@ -92,7 +86,6 @@ func load_settings() -> void:
 
 func _snapshot() -> Dictionary:
 	return {
-		"dark_mode": dark_mode,
 		"show_timer": show_timer,
 		"sound_enabled": sound_enabled,
 		"haptic_enabled": haptic_enabled,
