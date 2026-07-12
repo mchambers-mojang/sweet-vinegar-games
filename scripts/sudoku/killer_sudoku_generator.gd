@@ -70,9 +70,10 @@ func _minimize_givens(puzzle: Array[int], constraint, rng: RandomNumberGenerator
 	minimized.assign(puzzle.duplicate())
 	var indices := range(81)
 	_shuffle_array(indices, rng)
-	# Re-check the same fixed shuffled order until stable because removing one
-	# clue can enable removing another clue that was still required earlier in
-	# the same pass. The loop stops as soon as a full pass removes nothing.
+	# Shuffle once up front, then re-check that same order until stable because
+	# removing one clue can enable removing another clue that was still required
+	# earlier in the same pass. The loop stops as soon as a full pass removes
+	# nothing.
 	var removed_any := true
 	while removed_any:
 		removed_any = false
@@ -83,8 +84,8 @@ func _minimize_givens(puzzle: Array[int], constraint, rng: RandomNumberGenerator
 			minimized[index] = 0
 			if not _is_acceptable_puzzle(minimized, constraint):
 				minimized[index] = backup
-				continue
-			removed_any = true
+			else:
+				removed_any = true
 	return minimized
 
 
