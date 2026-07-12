@@ -3,21 +3,15 @@ extends GutTest
 ## Unit tests for CaromMatchRound — round lifecycle coordination.
 
 const MatchRoundScript := preload("res://carom/scripts/carom_match_round.gd")
-const ArenaScene := preload("res://carom/scenes/carom_arena.tscn")
-const MatchSetupScript := preload("res://carom/scripts/carom_match_setup.gd")
+const CaromTestHarness := preload("res://test/helpers/carom_test_harness.gd")
 
 
 func _make_configured_round() -> CaromMatchRound:
-	var arena := ArenaScene.instantiate() as CaromArena
-	add_child_autofree(arena)
-	await get_tree().process_frame
-
-	var setup := arena.get_node("MatchSetup") as CaromMatchSetup
-	setup.spawn_entities(arena, arena.get_node("Actors"), 1)
-	await get_tree().process_frame
-
+	var h := CaromTestHarness.new()
+	await h.setup_arena(self)
+	await h.spawn_entities(self, 1)
 	var round: CaromMatchRound = MatchRoundScript.new()
-	round.configure(arena, setup)
+	round.configure(h.arena, h.setup)
 	return round
 
 
@@ -87,18 +81,14 @@ func test_end_round_deactivates_ai_turret() -> void:
 # --- unlock_goals ---
 
 func test_unlock_goals_clears_goal_lock() -> void:
-	var arena := ArenaScene.instantiate() as CaromArena
-	add_child_autofree(arena)
-	await get_tree().process_frame
-
-	var setup := arena.get_node("MatchSetup") as CaromMatchSetup
-	setup.spawn_entities(arena, arena.get_node("Actors"), 1)
-	await get_tree().process_frame
+	var h := CaromTestHarness.new()
+	await h.setup_arena(self)
+	await h.spawn_entities(self, 1)
 
 	var round: CaromMatchRound = MatchRoundScript.new()
-	round.configure(arena, setup)
+	round.configure(h.arena, h.setup)
 
-	arena.lock_goals()
-	assert_true(arena._goal_locked, "Goal should be locked before unlock_goals()")
+	h.arena.lock_goals()
+	assert_true(h.is_goal_locked(), "Goal should be locked before unlock_goals()")
 	round.unlock_goals()
-	assert_false(arena._goal_locked, "unlock_goals() must clear the goal lock")
+	assert_false(h.is_goal_locked(), "unlock_goals() must clear the goal lock")
