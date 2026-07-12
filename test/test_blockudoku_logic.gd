@@ -382,7 +382,7 @@ func test_commit_move_then_undo_restores_logic_state() -> void:
 	logic.try_place(0, Vector2i(0, 0))
 	logic.commit_move()
 	assert_eq(logic.score, score_before + 1, "Score should increase after placement")
-	assert_eq(logic.undo_stack.size(), 1, "undo_stack should have one entry")
+	assert_true(logic.can_undo(), "undo_stack should have one entry")
 
 	# Undo — logic state should be restored
 	var result := logic.undo()
@@ -411,12 +411,12 @@ func test_commit_move_clears_redo_stack() -> void:
 	logic.try_place(0, Vector2i(0, 0))
 	logic.commit_move()
 	logic.undo()
-	assert_eq(logic.redo_stack.size(), 1, "redo_stack should have one entry after undo")
+	assert_true(logic.can_redo(), "redo_stack should have one entry after undo")
 
 	# New move clears redo
 	logic.try_place(0, Vector2i(5, 5))
 	logic.commit_move()
-	assert_eq(logic.redo_stack.size(), 0, "redo_stack should be cleared by commit_move")
+	assert_false(logic.can_redo(), "redo_stack should be cleared by commit_move")
 
 
 func test_undo_disabled_when_game_over() -> void:
@@ -480,14 +480,14 @@ func test_invalid_placement_does_not_create_undo_entry() -> void:
 	logic.available_blocks[0] = shape_3h
 	var result := logic.try_place(0, Vector2i(7, 0))
 	assert_false(result.valid)
-	assert_eq(logic.undo_stack.size(), 0, "Invalid placement must not create an undo entry")
+	assert_false(logic.can_undo(), "Invalid placement must not create an undo entry")
 
 
 func test_reset_clears_undo_redo_stacks() -> void:
 	logic.try_place(0, Vector2i(0, 0))
 	logic.commit_move()
-	assert_eq(logic.undo_stack.size(), 1)
+	assert_true(logic.can_undo())
 
 	logic.reset()
-	assert_eq(logic.undo_stack.size(), 0, "reset() should clear undo_stack")
-	assert_eq(logic.redo_stack.size(), 0, "reset() should clear redo_stack")
+	assert_false(logic.can_undo(), "reset() should clear undo_stack")
+	assert_false(logic.can_redo(), "reset() should clear redo_stack")

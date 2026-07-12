@@ -106,6 +106,10 @@ func start_new_game() -> void:
 	begin_session()
 
 
+func launch(_params: LaunchParams) -> void:
+	start_new_game()
+
+
 func resume_game(data: Dictionary) -> void:
 	_new_best_shown = data.get("new_best_shown", false)
 	begin_session(data)
@@ -138,6 +142,7 @@ func _get_settings_snapshot() -> Dictionary:
 func _setup_game(saved_data: Dictionary) -> void:
 	var rotation_mode: bool = GameRulesRegistry.get_rule("blockudoku", "rotation_mode")
 	logic = BlockudokuLogic.new(rotation_mode)
+	logic.clear_undo_history()
 	if saved_data.is_empty():
 		_rng.seed = random_seed
 		board.reset()
@@ -168,7 +173,7 @@ func _setup_game(saved_data: Dictionary) -> void:
 
 
 func _increment_stats() -> void:
-	session.increment_stats_counter("blockudoku", "games_played")
+	_stats.increment_counter("blockudoku", "games_played")
 
 
 func _get_analytics_params() -> Dictionary:
@@ -257,13 +262,13 @@ func _start_drag(index: int, screen_pos: Vector2) -> void:
 	_drag_start_screen_pos = screen_pos
 	_drag_moved = false
 	_drag_last_grid_pos = Vector2i(-999, -999)
-	session.record_input(elapsed_time, "piece_selected", {
+	_recorder.record_input(elapsed_time, "piece_selected", {
 		"tray_index": index,
 	})
 	DragEffect.suppress()
 
 	# Visual + haptic feedback on grab
-	session.vibrate_light()
+	_haptic.vibrate_light()
 	if index < _tray_panels.size():
 		var panel := _tray_panels[index]
 		panel.pivot_offset = panel.size / 2.0
@@ -292,7 +297,7 @@ func _update_board_preview(screen_pos: Vector2) -> void:
 	if grid_pos != _drag_last_grid_pos:
 		# Only haptic if we've moved before (skip initial grab) and piece is on the board
 		if _drag_last_grid_pos != Vector2i(-999, -999) and grid_pos.x >= 0 and grid_pos.x < 9 and grid_pos.y >= 0 and grid_pos.y < 9:
-			session.vibrate_light()
+			_haptic.vibrate_light()
 		_drag_last_grid_pos = grid_pos
 	board.show_preview(_drag_shape, grid_pos.x, grid_pos.y)
 
@@ -301,7 +306,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 	if not _dragging:
 		return
 	_dragging = false
-	session.vibrate_stop()
+	_haptic.stop()
 	DragEffect.unsuppress()
 
 	# Reset tray panel visual
@@ -328,7 +333,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 		if shape.size() > 0:
 			logic.apply_rotation(_drag_block_index)
 			var rotated_shape: Array = logic.available_blocks[_drag_block_index]
-			session.record_input(elapsed_time, "piece_rotated", {
+			_recorder.record_input(elapsed_time, "piece_rotated", {
 				"tray_index": _drag_block_index,
 				"shape": _serialize_shape(rotated_shape),
 			})
@@ -355,8 +360,8 @@ func _end_drag(screen_pos: Vector2) -> void:
 		})
 		var block_color := BlockudokuShapes.get_shape_color(_drag_shape)
 		board.place_block(_drag_shape, grid_pos.x, grid_pos.y, block_color)
-		session.play_sound_place()
-		session.vibrate_light()
+		_sound.play_place()
+		_haptic.vibrate_light()
 
 		# Neon placement effects
 		if AppTheme.is_neon:
@@ -388,7 +393,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 		if _drag_block_index < _tray_panels.size():
 			_tray_panels[_drag_block_index].visible = false
 
-		session.log_event("piece_placed", {
+		_analytics.log_event("piece_placed", {
 			"game": "blockudoku",
 			"turn": logic.turns,
 			"cells": place_result.cells_placed,
@@ -410,23 +415,23 @@ func _end_drag(screen_pos: Vector2) -> void:
 					var combo_center := origin + Vector2(cell_size * 4.5, cell_size * 4.5)
 					var combo_amp := minf(0.5 + place_result.combo * 0.3, 2.0)
 					NeonRing.create(board, combo_center, Color(2.0, 0.3, 1.8), cell_size * (4.0 + place_result.combo), 0.4, combo_amp)
-			session.increment_stats_counter("blockudoku", "total_clears", place_result.lines_cleared + place_result.boxes_cleared)
-			session.track_achievement("blockudoku.clear_count", place_result.lines_cleared + place_result.boxes_cleared)
-			session.track_achievement("blockudoku.combo_count", place_result.combo)
-			session.log_event("line_cleared", {
+			_stats.increment_counter("blockudoku", "total_clears", place_result.lines_cleared + place_result.boxes_cleared)
+			_achievements.track("blockudoku.clear_count", place_result.lines_cleared + place_result.boxes_cleared)
+			_achievements.track("blockudoku.combo_count", place_result.combo)
+			_analytics.log_event("line_cleared", {
 				"game": "blockudoku",
 				"cleared": place_result.total_cells_cleared,
 				"lines": place_result.lines_cleared,
 				"boxes": place_result.boxes_cleared,
 			})
 			if place_result.combo > 1:
-				session.log_event("combo", {
+				_analytics.log_event("combo", {
 					"game": "blockudoku",
 					"combo": place_result.combo,
 					"bonus": place_result.combo_bonus,
 				})
-			session.play_sound_win()
-			session.vibrate_medium()
+			_sound.play_win()
+			_haptic.vibrate_medium()
 
 			# Show combo/multi-clear celebration text
 			_show_combo_text(place_result.lines_cleared + place_result.boxes_cleared, place_result.combo)
@@ -452,7 +457,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 			_save_current_state()
 	else:
 		# Invalid placement — do nothing
-		session.record_input(elapsed_time, "placement_rejected", {
+		_recorder.record_input(elapsed_time, "placement_rejected", {
 			"tray_index": _drag_block_index,
 			"grid_x": grid_pos.x,
 			"grid_y": grid_pos.y,
@@ -490,17 +495,17 @@ func _handle_game_over() -> void:
 	# Leaderboard: submit final score (blockudoku has one board: standard, higher = better).
 	GameEvents.leaderboard_score_ready.emit("blockudoku", "standard", float(logic.score))
 	logic.is_game_over = true
-	var completed: Dictionary = session.finish_replay("game_over", logic.score, elapsed_time, {
+	var completed: Dictionary = _recorder.finish_session("game_over", logic.score, elapsed_time, {
 		"turns": logic.turns,
 		"board_state": board.get_state(),
 	})
-	session.save_completed_replay(completed)
+	_storage.save_replay(completed)
 	_update_undo_redo_buttons()
 	_record_blockudoku_game_over(logic.score, logic.turns)
-	session.increment_stats_counter("blockudoku", "games_completed")
-	session.set_stats_counter("general", "current_win_streak", 0)
-	session.check_achievements()
-	session.log_event("game_over", {
+	_stats.increment_counter("blockudoku", "games_completed")
+	_stats.set_counter("general", "current_win_streak", 0)
+	_achievements.check_stats()
+	_analytics.log_event("game_over", {
 		"game": "blockudoku",
 		"won": false,
 		"ended_reason": "no_valid_moves",
@@ -510,7 +515,7 @@ func _handle_game_over() -> void:
 		"combo_count": logic.combo_count,
 	})
 	clear_save()
-	session.vibrate_success()
+	_haptic.vibrate_success()
 
 	# Shatter animation runs in background
 	_play_board_shatter()
@@ -607,7 +612,7 @@ func _show_game_over_dialog() -> void:
 			dialog.queue_free()
 			SceneTransition.transition_to(Scenes.BLOCKUDOKU_MENU)
 		elif action == "bookmark":
-			var success: bool = session.bookmark_replay()
+			var success: bool = _storage.bookmark_latest_replay()
 			if success:
 				dialog.dialog_text += "\n\n✓ Replay bookmarked!"
 			else:
@@ -667,7 +672,7 @@ func _show_combo_text(total_clears: int, combo: int) -> void:
 func _check_for_new_best() -> void:
 	if _new_best_shown:
 		return
-	var high: int = session.get_stats_counter("blockudoku", "high_score")
+	var high: int = _stats.get_counter("blockudoku", "high_score")
 	if logic.score <= high:
 		return
 	_new_best_shown = true
@@ -677,19 +682,19 @@ func _check_for_new_best() -> void:
 	var origin := board._get_grid_origin()
 	var center := origin + Vector2(cell_size * 4.5, cell_size * 4.5)
 	ComboLabel.create(board, center, "NEW BEST!", color)
-	session.vibrate_medium()
+	_haptic.vibrate_medium()
 
 
 func _on_back() -> void:
-	session.user_action("blockudoku_back_to_menu")
+	_crash.register_user_action("blockudoku_back_to_menu")
 	if not logic.is_game_over:
-		var completed: Dictionary = session.finish_replay("abandoned", logic.score, elapsed_time, {
+		var completed: Dictionary = _recorder.finish_session("abandoned", logic.score, elapsed_time, {
 			"turns": logic.turns,
 			"board_state": board.get_state(),
 		})
-		session.save_completed_replay(completed)
-		session.set_stats_counter("general", "current_win_streak", 0)
-		session.check_achievements()
+		_storage.save_replay(completed)
+		_stats.set_counter("general", "current_win_streak", 0)
+		_achievements.check_stats()
 		_save_current_state()
 	SceneTransition.transition_to(Scenes.BLOCKUDOKU_MENU)
 
@@ -723,8 +728,8 @@ func _on_redo_pressed() -> void:
 
 
 func _update_undo_redo_buttons() -> void:
-	undo_button.disabled = logic.is_game_over or logic.undo_stack.is_empty()
-	redo_button.disabled = logic.is_game_over or logic.redo_stack.is_empty()
+	undo_button.disabled = logic.is_game_over or not logic.can_undo()
+	redo_button.disabled = logic.is_game_over or not logic.can_redo()
 
 
 func _serialize_blocks(blocks: Array) -> Array:
@@ -760,16 +765,16 @@ func _apply_theme() -> void:
 
 
 func _record_blockudoku_game_over(final_score: int, final_turns: int) -> void:
-	session.record_stats("blockudoku", {
+	_stats.record("blockudoku", {
 		"type": "game_over",
 		"score": final_score,
 		"turns": final_turns,
 	})
-	session.increment_stats_counter("blockudoku", "total_score", final_score)
-	session.increment_stats_counter("blockudoku", "total_turns", final_turns)
-	var high: int = session.get_stats_counter("blockudoku", "high_score")
+	_stats.increment_counter("blockudoku", "total_score", final_score)
+	_stats.increment_counter("blockudoku", "total_turns", final_turns)
+	var high: int = _stats.get_counter("blockudoku", "high_score")
 	if final_score > high:
-		session.set_stats_counter("blockudoku", "high_score", final_score)
-	var best_turns: int = session.get_stats_counter("blockudoku", "best_turns")
+		_stats.set_counter("blockudoku", "high_score", final_score)
+	var best_turns: int = _stats.get_counter("blockudoku", "best_turns")
 	if final_turns > best_turns:
-		session.set_stats_counter("blockudoku", "best_turns", final_turns)
+		_stats.set_counter("blockudoku", "best_turns", final_turns)

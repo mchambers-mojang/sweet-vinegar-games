@@ -22,9 +22,9 @@ var is_game_over: bool = false
 var available_blocks: Array[Array] = []
 var blocks_placed_this_set: int = 0
 
-# Undo / redo — each entry: {"before": {logic, visual}, "after": {logic, visual}}
-var undo_stack: Array[Dictionary] = []
-var redo_stack: Array[Dictionary] = []
+# Undo/redo history — owned here so all games store history in the logic layer.
+var _undo_stack: UndoStack = UndoStack.new()
+# Pending "before" snapshot waiting for commit_move(); cleared on invalid paths.
 var _pending_undo_before: Dictionary = {}
 
 
@@ -78,8 +78,7 @@ func reset() -> void:
 	is_game_over = false
 	available_blocks = []
 	blocks_placed_this_set = 0
-	undo_stack.clear()
-	redo_stack.clear()
+	_undo_stack.clear()
 	_pending_undo_before = {}
 
 
@@ -217,8 +216,7 @@ func deal_blocks(new_shapes: Array[Array]) -> void:
 func commit_move(board_visual_after: Dictionary = {}) -> void:
 	if _pending_undo_before.is_empty():
 		return
-	redo_stack.clear()
-	undo_stack.append({
+	_undo_stack.push({
 		"before": _pending_undo_before,
 		"after": {
 			"logic": get_state(),
@@ -234,10 +232,9 @@ func commit_move(board_visual_after: Dictionary = {}) -> void:
 ## also greyed out in the UI at that point, so success=false is the expected response.
 func undo() -> UndoRedoResult:
 	var result := UndoRedoResult.new()
-	if undo_stack.is_empty() or is_game_over:
+	if is_game_over or not _undo_stack.can_undo():
 		return result
-	var entry: Dictionary = undo_stack.pop_back()
-	redo_stack.append(entry)
+	var entry: Dictionary = _undo_stack.undo()
 	var before: Dictionary = entry.get("before", {})
 	set_state(before.get("logic", {}))
 	result.success = true
@@ -250,10 +247,9 @@ func undo() -> UndoRedoResult:
 ## Redo is intentionally disabled once is_game_over is set — consistent with undo.
 func redo() -> UndoRedoResult:
 	var result := UndoRedoResult.new()
-	if redo_stack.is_empty() or is_game_over:
+	if is_game_over or not _undo_stack.can_redo():
 		return result
-	var entry: Dictionary = redo_stack.pop_back()
-	undo_stack.append(entry)
+	var entry: Dictionary = _undo_stack.redo()
 	var after: Dictionary = entry.get("after", {})
 	set_state(after.get("logic", {}))
 	result.success = true
@@ -299,6 +295,25 @@ func can_place(shape: Array, grid_col: int, grid_row: int) -> bool:
 		if board_grid[row * GRID_SIZE + col] != 0:
 			return false
 	return true
+
+
+# ---------------------------------------------------------------------------
+# Undo/redo history
+# ---------------------------------------------------------------------------
+
+## True if there is a move to undo.
+func can_undo() -> bool:
+	return _undo_stack.can_undo()
+
+
+## True if there is a move to redo.
+func can_redo() -> bool:
+	return _undo_stack.can_redo()
+
+
+## Clear both undo and redo history (e.g. on new game or resume).
+func clear_undo_history() -> void:
+	_undo_stack.clear()
 
 
 # ---------------------------------------------------------------------------
