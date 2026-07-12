@@ -7,9 +7,14 @@ var logic: SudokuLogic = null
 
 # UI-only state
 var difficulty: int = 0
+var rule_set: int = 0   # 0 = Standard, 1 = Anti-Knight
 var _can_continue_after_failure: bool = false
 var is_paused: bool = false
 var notes_mode: bool = false
+
+# Rule set constants (must match LaunchParams.rule_set and SudokuMainMenu values)
+const RULE_SET_STANDARD := 0
+const RULE_SET_ANTI_KNIGHT := 1
 
 # Cheat auto-solve
 var _cheat_active: bool = false
@@ -98,6 +103,7 @@ func _serialize_state() -> Dictionary:
 	state["can_continue_after_failure"] = _can_continue_after_failure
 	state["random_seed"] = random_seed
 	state["replay_id"] = replay_id
+	state["rule_set"] = rule_set
 	return state
 
 
@@ -147,11 +153,13 @@ func start_new_game(diff: int) -> void:
 
 
 func launch(params: LaunchParams) -> void:
+	rule_set = params.rule_set
 	start_new_game(params.option_value)
 
 
 func resume_game(data: Dictionary) -> void:
 	difficulty = data.get("difficulty", 0)
+	rule_set = data.get("rule_set", 0)
 	_can_continue_after_failure = data.get("can_continue_after_failure", false)
 	is_paused = false
 	notes_mode = false
@@ -169,17 +177,18 @@ func _get_difficulty() -> int:
 
 
 func _get_start_crash_params() -> Dictionary:
-	return {"difficulty": difficulty}
+	return {"difficulty": difficulty, "rule_set": rule_set}
 
 
 func _get_resume_crash_params(saved_data: Dictionary) -> Dictionary:
-	return {"difficulty": saved_data.get("difficulty", 0)}
+	return {"difficulty": saved_data.get("difficulty", 0), "rule_set": saved_data.get("rule_set", 0)}
 
 
 func _get_initial_state() -> Dictionary:
 	return {
 		"difficulty": logic.difficulty,
 		"puzzle": logic.puzzle.duplicate(),
+		"rule_set": rule_set,
 	}
 
 
@@ -194,7 +203,7 @@ func _get_settings_snapshot() -> Dictionary:
 func _setup_game(saved_data: Dictionary) -> void:
 	var strict_mode: bool = GameRulesRegistry.get_rule("sudoku", "error_mode") == "strict"
 	var auto_remove: bool = GameRulesRegistry.get_rule("sudoku", "auto_remove_pencil_marks")
-	logic = SudokuLogic.new(strict_mode, auto_remove)
+	logic = SudokuLogic.new(strict_mode, auto_remove, _make_constraint())
 	if saved_data.is_empty():
 		logic.init_new_game(difficulty, random_seed)
 		difficulty = logic.difficulty
@@ -654,6 +663,9 @@ func _apply_single_place_result(result: SudokuLogic.PlaceResult, cell_node: Sudo
 		for item in result.pencil_marks_removed:
 			board.cells[item["index"]].set_pencil_mark(item["number"], false)
 		_apply_unit_completion_effects(result.units_completed)
+		# Highlight anti-knight (or other constraint) conflicts briefly.
+		if result.constraint_conflicts.size() > 0:
+			_flash_constraint_conflicts(result.constraint_conflicts)
 		if result.game_won:
 			_handle_win()
 
@@ -706,6 +718,21 @@ func _apply_unit_completion_effects(units: Array) -> void:
 			var box_last := board.get_cell_rect((box_row + 2) * 9 + box_col + 2)
 			var box_sweep_rect := Rect2(box_first.position, Vector2(box_last.position.x + box_last.size.x - box_first.position.x, box_last.position.y + box_last.size.y - box_first.position.y))
 			EffectFactory.neon_sweep(board, box_sweep_rect, true, Color(1.5, 0.2, 1.0))
+
+
+## Flash conflicting cells (e.g. knight-move conflicts) briefly in error colour.
+## Cells are shown as errors for 0.6 s then reverted — the numbers are NOT changed.
+func _flash_constraint_conflicts(conflict_indices: Array[int]) -> void:
+	for idx in conflict_indices:
+		board.cells[idx].set_error(true)
+	var tween := create_tween()
+	tween.tween_interval(0.6)
+	tween.tween_callback(func() -> void:
+		for idx in conflict_indices:
+			if idx >= 0 and idx < board.cells.size():
+				board.cells[idx].set_error(false)
+				board.cells[idx].queue_redraw()
+	)
 
 
 func _update_number_completion() -> void:
@@ -838,7 +865,9 @@ func _show_win_dialog() -> void:
 
 func _restart_same_game() -> void:
 	var diff := difficulty
+	var rs := rule_set
 	SceneTransition.navigate(Scenes.SUDOKU_GAME, func(game_scene: Node) -> void:
+		game_scene.rule_set = rs
 		game_scene.start_new_game(diff)
 	)
 
@@ -1028,11 +1057,14 @@ func _log_game_over_analytics(won: bool) -> void:
 	GameEvents.game_ended.emit("sudoku", "win" if won else "game_over", elapsed_time)
 	# Leaderboard: submit completion time for easy/medium/hard/expert (indices 0-3).
 	if won and difficulty <= 3:
-		GameEvents.leaderboard_score_ready.emit("sudoku", DIFFICULTY_NAMES[difficulty].to_lower(), elapsed_time)
+		var diff_mode := DIFFICULTY_NAMES[difficulty].to_lower()
+		var mode := ("antiknight_" + diff_mode) if rule_set == RULE_SET_ANTI_KNIGHT else diff_mode
+		GameEvents.leaderboard_score_ready.emit("sudoku", mode, elapsed_time)
 	_analytics.log_event("game_over", {
 		"game": "sudoku",
 		"won": won,
 		"difficulty": difficulty,
+		"rule_set": rule_set,
 		"elapsed_time": elapsed_time,
 		"strikes": logic.strikes,
 		"hints_used": logic.hints_used,
@@ -1065,15 +1097,18 @@ func _record_sudoku_completion(diff: int, time: float, was_strict: bool, won: bo
 	_stats.record("sudoku", {
 		"type": "completion",
 		"difficulty": diff,
+		"rule_set": rule_set,
 		"time": time,
 		"was_strict": was_strict,
 		"won": won,
 	})
 	_stats.increment_counter("sudoku", "completed_d%d" % diff)
-	# Track best time
-	var best: float = float(_stats.get_counter("sudoku", "best_d%d" % diff))
+	# Track best time — use a separate key per rule_set so Anti-Knight bests don't
+	# compete with standard bests.
+	var best_key := "best_ak_d%d" % diff if rule_set == RULE_SET_ANTI_KNIGHT else "best_d%d" % diff
+	var best: float = float(_stats.get_counter("sudoku", best_key))
 	if best == 0 or time < best:
-		_stats.set_counter("sudoku", "best_d%d" % diff, int(time * 1000))
+		_stats.set_counter("sudoku", best_key, int(time * 1000))
 	# Streak tracking
 	if was_strict:
 		if won:
@@ -1089,7 +1124,16 @@ func _record_sudoku_completion(diff: int, time: float, was_strict: bool, won: bo
 
 
 func _get_best_time(diff: int) -> float:
-	var best_ms: int = _stats.get_counter("sudoku", "best_d%d" % diff)
+	var key := "best_ak_d%d" % diff if rule_set == RULE_SET_ANTI_KNIGHT else "best_d%d" % diff
+	var best_ms: int = _stats.get_counter("sudoku", key)
 	if best_ms == 0:
 		return -1.0
 	return float(best_ms) / 1000.0
+
+
+## Build the active SudokuConstraint from the current rule_set.
+## Returns null for standard (no extra constraint).
+func _make_constraint() -> SudokuConstraint:
+	if rule_set == RULE_SET_ANTI_KNIGHT:
+		return AntiKnightConstraint.new()
+	return null

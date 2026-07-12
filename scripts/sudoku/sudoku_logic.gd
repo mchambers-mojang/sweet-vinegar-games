@@ -14,6 +14,9 @@ const FAIL_AT_STRIKES := 4
 var strict_mode: bool = false
 var auto_remove_pencil_marks: bool = true
 
+## Optional variant constraint (e.g. AntiKnightConstraint).  null = standard Sudoku.
+var constraint: SudokuConstraint = null
+
 # Game state
 var puzzle: Array[int] = []
 var solution: Array[int] = []
@@ -49,6 +52,7 @@ class PlaceResult:
 	var game_won: bool = false
 	var pencil_marks_removed: Array = []  # Array of {index, number}
 	var units_completed: Array = []       # Array of {type, unit_index, cells}
+	var constraint_conflicts: Array[int] = []  # Indices of cells that conflict via active constraint
 
 
 ## Returned by toggle_pencil_mark().
@@ -86,9 +90,10 @@ class UndoRedoResult:
 	var restored_color: Color = Color.TRANSPARENT
 
 
-func _init(p_strict_mode: bool = false, p_auto_remove: bool = true) -> void:
+func _init(p_strict_mode: bool = false, p_auto_remove: bool = true, p_constraint: SudokuConstraint = null) -> void:
 	strict_mode = p_strict_mode
 	auto_remove_pencil_marks = p_auto_remove
+	constraint = p_constraint
 
 
 # ---------------------------------------------------------------------------
@@ -98,7 +103,8 @@ func _init(p_strict_mode: bool = false, p_auto_remove: bool = true) -> void:
 ## Generate a fresh puzzle and initialise all state.
 func init_new_game(diff: int, seed_value: int) -> void:
 	var generator := SudokuGenerator.new()
-	var result: Dictionary = generator.generate(diff, seed_value)
+	var constraints := [constraint] if constraint != null else []
+	var result: Dictionary = generator.generate(diff, seed_value, constraints)
 	_setup_from_arrays(diff, result["puzzle"], result["solution"])
 
 
@@ -210,6 +216,14 @@ func place_number(cell_index: int, number: int) -> PlaceResult:
 	colors[cell_index] = Color.TRANSPARENT
 	_undo_stack.clear_redo()
 	result.placed = true
+
+	# Detect constraint conflicts for error highlighting (free mode and hint mode).
+	# In strict mode this path is only reached for correct placements, so conflicts
+	# with the active constraint would imply a broken puzzle — skip the check.
+	if constraint != null and not strict_mode:
+		for idx in constraint.get_affected_indices(cell_index):
+			if current_grid[idx] == number:
+				result.constraint_conflicts.append(idx)
 
 	if auto_remove_pencil_marks:
 		result.pencil_marks_removed = _remove_pencil_marks_for_number(cell_index, number)

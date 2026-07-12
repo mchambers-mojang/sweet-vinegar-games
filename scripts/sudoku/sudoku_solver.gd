@@ -66,14 +66,25 @@ static func get_candidates(grid: Array[int], index: int) -> Array[int]:
 
 
 ## Brute-force solve using backtracking with MRV heuristic. Returns number of solutions found (stops at max_solutions).
-static func solve_brute_force(grid: Array[int], max_solutions: int = 2) -> Array[Array]:
+## Pass a non-empty constraints Array (of SudokuConstraint instances) to enforce variant rules.
+static func solve_brute_force(grid: Array[int], max_solutions: int = 2, constraints: Array = []) -> Array[Array]:
 	var solutions: Array[Array] = []
 	var work := grid.duplicate()
-	_backtrack_mrv(work, solutions, max_solutions)
+	_backtrack_mrv(work, solutions, max_solutions, constraints)
 	return solutions
 
 
-static func _find_mrv_cell(grid: Array[int]) -> int:
+## Returns true when placing val at index satisfies all standard rules and any extra constraints.
+static func is_valid_placement_constrained(grid: Array[int], index: int, val: int, constraints: Array) -> bool:
+	if not is_valid_placement(grid, index, val):
+		return false
+	for c in constraints:
+		if not (c as SudokuConstraint).is_valid(grid, index, val):
+			return false
+	return true
+
+
+static func _find_mrv_cell(grid: Array[int], constraints: Array = []) -> int:
 	## Find the empty cell with the fewest candidates (MRV heuristic)
 	var best_pos := -1
 	var best_count := 10
@@ -82,8 +93,12 @@ static func _find_mrv_cell(grid: Array[int]) -> int:
 			continue
 		var count := 0
 		for v in range(1, 10):
-			if is_valid_placement(grid, i, v):
-				count += 1
+			if constraints.is_empty():
+				if is_valid_placement(grid, i, v):
+					count += 1
+			else:
+				if is_valid_placement_constrained(grid, i, v, constraints):
+					count += 1
 		if count == 0:
 			return -2  # Dead end — no candidates
 		if count < best_count:
@@ -94,11 +109,11 @@ static func _find_mrv_cell(grid: Array[int]) -> int:
 	return best_pos
 
 
-static func _backtrack_mrv(grid: Array[int], solutions: Array[Array], max_solutions: int) -> void:
+static func _backtrack_mrv(grid: Array[int], solutions: Array[Array], max_solutions: int, constraints: Array = []) -> void:
 	if solutions.size() >= max_solutions:
 		return
 
-	var pos := _find_mrv_cell(grid)
+	var pos := _find_mrv_cell(grid, constraints)
 	if pos == -1:
 		# No empty cells — solved
 		solutions.append(grid.duplicate())
@@ -107,13 +122,22 @@ static func _backtrack_mrv(grid: Array[int], solutions: Array[Array], max_soluti
 		# Dead end
 		return
 
-	var candidates := get_candidates(grid, pos)
-	for val in candidates:
-		grid[pos] = val
-		_backtrack_mrv(grid, solutions, max_solutions)
-		grid[pos] = 0
-		if solutions.size() >= max_solutions:
-			return
+	if constraints.is_empty():
+		var candidates := get_candidates(grid, pos)
+		for val in candidates:
+			grid[pos] = val
+			_backtrack_mrv(grid, solutions, max_solutions, constraints)
+			grid[pos] = 0
+			if solutions.size() >= max_solutions:
+				return
+	else:
+		for val in range(1, 10):
+			if is_valid_placement_constrained(grid, pos, val, constraints):
+				grid[pos] = val
+				_backtrack_mrv(grid, solutions, max_solutions, constraints)
+				grid[pos] = 0
+				if solutions.size() >= max_solutions:
+					return
 
 
 ## Logic-based solve that tracks which techniques were needed.

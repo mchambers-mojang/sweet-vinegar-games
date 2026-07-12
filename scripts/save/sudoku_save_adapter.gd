@@ -14,6 +14,11 @@ func get_difficulty() -> int:
 	return int(restore().get("difficulty", 0))
 
 
+## Return the saved rule set index (0 = Standard, 1 = Anti-Knight), or 0 if no save.
+func get_rule_set() -> int:
+	return int(restore().get("rule_set", 0))
+
+
 ## Upgrade save data from an older schema version.
 func _migrate(data: Dictionary, _from_version: int) -> Dictionary:
 	# v0 → v1: no schema changes required; version stamp is added by

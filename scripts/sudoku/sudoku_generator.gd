@@ -29,7 +29,8 @@ const MAX_ATTEMPTS := 10
 
 ## Generate a puzzle of the requested difficulty.
 ## Returns a dictionary with "puzzle" (Array[int]) and "solution" (Array[int]).
-func generate(difficulty: SudokuSolver.Difficulty, seed: int = -1) -> Dictionary:
+## Pass a non-empty constraints Array to generate Anti-Knight (or other variant) puzzles.
+func generate(difficulty: SudokuSolver.Difficulty, seed: int = -1, constraints: Array = []) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	if seed >= 0:
 		rng.seed = seed
@@ -37,39 +38,38 @@ func generate(difficulty: SudokuSolver.Difficulty, seed: int = -1) -> Dictionary
 		rng.randomize()
 	for attempt in MAX_ATTEMPTS:
 		var full_grid := _generate_full_grid(rng)
-		var puzzle := _remove_cells(full_grid, difficulty, rng)
+		if not constraints.is_empty() and not _grid_satisfies_constraints(full_grid, constraints):
+			continue
+		var puzzle := _remove_cells_constrained(full_grid, difficulty, rng, constraints)
 		if puzzle.is_empty():
 			continue
 
 		# For easy/medium, skip the expensive difficulty analysis and just accept
-		if difficulty <= SudokuSolver.Difficulty.MEDIUM:
+		if difficulty <= SudokuSolver.Difficulty.MEDIUM and constraints.is_empty():
 			return {
 				"puzzle": puzzle,
 				"solution": full_grid,
 				"difficulty": difficulty,
 			}
 
-		var solver := SudokuSolver.new()
-		solver.analyze(puzzle)
-
-		if solver.is_unique:
+		var solutions := SudokuSolver.solve_brute_force(puzzle, 2, constraints)
+		if solutions.size() == 1:
 			return {
 				"puzzle": puzzle,
-				"solution": solver.solution,
+				"solution": solutions[0],
 				"difficulty": difficulty,
 			}
 
 	# Fallback: return whatever we get closest to
 	var fallback_full_grid := _generate_full_grid(rng)
-	var fallback_puzzle := _remove_cells(fallback_full_grid, difficulty, rng)
+	var fallback_puzzle := _remove_cells_constrained(fallback_full_grid, difficulty, rng, constraints)
 	if fallback_puzzle.is_empty():
-		fallback_puzzle = _simple_remove(fallback_full_grid, CLUE_TARGETS[difficulty], rng)
-	var fallback_solver := SudokuSolver.new()
-	fallback_solver.analyze(fallback_puzzle)
+		fallback_puzzle = _simple_remove_constrained(fallback_full_grid, CLUE_TARGETS[difficulty], rng, constraints)
+	var fallback_solutions := SudokuSolver.solve_brute_force(fallback_puzzle, 2, constraints)
 	return {
 		"puzzle": fallback_puzzle,
-		"solution": fallback_solver.solution if fallback_solver.is_unique else fallback_full_grid,
-		"difficulty": fallback_solver.difficulty,
+		"solution": fallback_solutions[0] if fallback_solutions.size() >= 1 else fallback_full_grid,
+		"difficulty": difficulty,
 	}
 
 
@@ -169,9 +169,18 @@ func _reorder_stacks(grid: Array[int], order: Array) -> Array[int]:
 
 ## Remove cells to create a puzzle, ensuring unique solution and target difficulty
 func _remove_cells(full_grid: Array[int], target_difficulty: SudokuSolver.Difficulty, rng: RandomNumberGenerator) -> Array[int]:
+	return _remove_cells_constrained(full_grid, target_difficulty, rng, [])
+
+
+## Constraint-aware version of _remove_cells.
+func _remove_cells_constrained(full_grid: Array[int], target_difficulty: SudokuSolver.Difficulty, rng: RandomNumberGenerator, constraints: Array) -> Array[int]:
 	var puzzle: Array[int] = []
 	puzzle.assign(full_grid.duplicate())
+	# Anti-knight puzzles are naturally harder at the same clue count; add a few extra
+	# clues to keep them playable at each tier.
 	var target_clues: int = CLUE_TARGETS[target_difficulty]
+	if not constraints.is_empty():
+		target_clues += 3
 
 	# Create a random removal order
 	var indices := range(81)
@@ -186,8 +195,8 @@ func _remove_cells(full_grid: Array[int], target_difficulty: SudokuSolver.Diffic
 		puzzle[idx] = 0
 		removed_count += 1
 
-		# Check unique solution
-		var solutions := SudokuSolver.solve_brute_force(puzzle, 2)
+		# Check unique solution (constraint-aware)
+		var solutions := SudokuSolver.solve_brute_force(puzzle, 2, constraints)
 		if solutions.size() != 1:
 			puzzle[idx] = backup
 			removed_count -= 1
@@ -202,6 +211,11 @@ func _remove_cells(full_grid: Array[int], target_difficulty: SudokuSolver.Diffic
 
 ## Simple fallback: just remove random cells without difficulty targeting
 func _simple_remove(full_grid: Array[int], target_clues: int, rng: RandomNumberGenerator) -> Array[int]:
+	return _simple_remove_constrained(full_grid, target_clues, rng, [])
+
+
+## Constraint-aware version of _simple_remove.
+func _simple_remove_constrained(full_grid: Array[int], target_clues: int, rng: RandomNumberGenerator, constraints: Array) -> Array[int]:
 	var puzzle: Array[int] = []
 	puzzle.assign(full_grid.duplicate())
 	var indices := range(81)
@@ -214,7 +228,7 @@ func _simple_remove(full_grid: Array[int], target_clues: int, rng: RandomNumberG
 		var backup: int = puzzle[idx]
 		puzzle[idx] = 0
 		removed += 1
-		var solutions := SudokuSolver.solve_brute_force(puzzle, 2)
+		var solutions := SudokuSolver.solve_brute_force(puzzle, 2, constraints)
 		if solutions.size() != 1:
 			puzzle[idx] = backup
 			removed -= 1
@@ -223,6 +237,22 @@ func _simple_remove(full_grid: Array[int], target_clues: int, rng: RandomNumberG
 			break
 
 	return puzzle
+
+
+## Returns true when every cell in grid satisfies all provided constraints.
+## Used to verify that a generated full grid is a legal starting point for the variant.
+func _grid_satisfies_constraints(grid: Array[int], constraints: Array) -> bool:
+	for i in 81:
+		if grid[i] == 0:
+			continue
+		var val: int = grid[i]
+		grid[i] = 0
+		for c in constraints:
+			if not (c as SudokuConstraint).is_valid(grid, i, val):
+				grid[i] = val
+				return false
+		grid[i] = val
+	return true
 
 
 func _shuffle_array(arr: Array, rng: RandomNumberGenerator) -> void:
