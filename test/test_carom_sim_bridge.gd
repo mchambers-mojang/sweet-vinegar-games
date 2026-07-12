@@ -148,3 +148,25 @@ func test_reset_puck_to_zeroes_velocity_and_sets_position() -> void:
 	assert_almost_eq(FP.to_float(body.velocity.y), 0.0, 0.001, "velocity.y should be zero after reset")
 	assert_almost_eq(FP.to_float(body.position.x), 1.0, 0.01, "position.x should be reset target")
 	assert_almost_eq(FP.to_float(body.position.y), 12.0, 0.01, "position.y should be reset target")
+
+
+# ---------------------------------------------------------------------------
+# 7. CaromMatchSetup.configure_sim_bridge registers all spawned actors
+# ---------------------------------------------------------------------------
+
+func test_configure_sim_bridge_registers_pucks() -> void:
+	var result := _make_bridge_with_arena()
+	var bridge: CaromSimBridge = result.bridge
+	var arena: CaromArena = result.arena
+
+	var setup := arena.get_node("MatchSetup") as CaromMatchSetup
+	setup.spawn_entities(arena, arena.get_node("Actors"), 1)
+	await get_tree().process_frame
+
+	setup.configure_sim_bridge(bridge)
+
+	# The puck should now hold a back-reference to the bridge
+	assert_not_null(setup.pucks[0]._bridge,
+		"Puck should be registered with the bridge after configure_sim_bridge()")
+	assert_eq(setup.pucks[0]._bridge, bridge,
+		"Puck _bridge reference should point to the provided bridge")

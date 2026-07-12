@@ -52,6 +52,15 @@ func spawn_entities(arena: CaromArena, actors_parent: Node3D, ai_difficulty_leve
 	ai_turret.set_aim_projection_distance(0.0)
 
 
+## Register all spawned actors with an existing SimBridge.
+## Call this after spawn_entities() and after the bridge is created and added to the scene.
+func configure_sim_bridge(bridge: CaromSimBridge) -> void:
+	for puck: CaromPuck in pucks:
+		bridge.register_puck(puck, puck.global_position)
+	bridge.register_turret(player_turret)
+	bridge.register_turret(ai_turret)
+
+
 func _cleanup() -> void:
 	if player_turret:
 		player_turret.queue_free()
