@@ -256,9 +256,9 @@ func _update_preview() -> void:
 
 func _on_back() -> void:
 	if _unsaved:
-		_show_unsaved_dialog(func() -> void: SceneTransition.transition_to(Scenes.SETTINGS))
+		_show_unsaved_dialog(func() -> void: SceneTransition.pop())
 		return
-	SceneTransition.transition_to(Scenes.SETTINGS)
+	SceneTransition.pop()
 
 
 func _on_palette_selected(index: int) -> void:

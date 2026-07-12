@@ -7,8 +7,6 @@ extends CanvasLayer
 const SHOCKWAVE_SHADER := preload("res://shaders/shockwave.gdshader")
 
 static func create(parent: Node, world_pos: Vector2, _color: Color, max_radius: float = 80.0, duration: float = 0.4, amplitude: float = 1.0) -> void:
-	if not PlatformSettings.shockwave_enabled:
-		return
 	var ring := NeonRing.new()
 	ring.layer = 100
 	parent.add_child(ring)

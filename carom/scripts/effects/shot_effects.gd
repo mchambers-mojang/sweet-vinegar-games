@@ -37,7 +37,7 @@ func _on_projectile_fired(projectile: CaromProjectile, color: Color) -> void:
 
 	projectile.impact_occurred.connect(_on_projectile_impact.bind(projectile, color))
 
-	HapticManager.vibrate_light()
+	FeedbackManager.vibrate_light()
 
 	if DebugFlags.debug_fire_screen_shake and _screen_shake:
 		_screen_shake.shake(0.05)
@@ -52,7 +52,7 @@ func _on_projectile_impact(pos: Vector3, hit_puck: bool, projectile: CaromProjec
 		# Approximate outward normal from the impact point toward the projectile centre.
 		var normal: Vector3 = diff.normalized() if diff.length_squared() > 0.0001 else Vector3.FORWARD
 		_impact_spawner.spawn_puck_impact(pos, -normal, color, 1.0)
-		HapticManager.vibrate_medium()
+		FeedbackManager.vibrate_medium()
 	else:
 		# The sim does not expose the wall surface normal in the collision event.
 		# Vector3.FORWARD is a cosmetic placeholder; the sparks appear at the

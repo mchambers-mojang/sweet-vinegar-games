@@ -30,7 +30,7 @@ func _on_continue() -> void:
 		return
 	PlayerIdentity.complete_setup(name_text, visible_toggle.button_pressed)
 	PlayerIdentity.sync_profile()
-	SceneTransition.transition_to(Scenes.GAME_PICKER)
+	SceneTransition.navigate(Scenes.GAME_PICKER)
 
 
 func _apply_theme() -> void:

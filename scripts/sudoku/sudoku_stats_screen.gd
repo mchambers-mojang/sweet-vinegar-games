@@ -12,7 +12,7 @@ const DIFFICULTY_NAMES := ["Easy", "Medium", "Hard", "Expert", "Evil"]
 
 func _ready() -> void:
 	back_button.pressed.connect(func() -> void:
-		SceneTransition.transition_to(Scenes.SUDOKU_MENU)
+		SceneTransition.navigate(Scenes.SUDOKU_MENU)
 	)
 	_build_stats_ui()
 	_apply_theme()

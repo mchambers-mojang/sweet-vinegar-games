@@ -11,7 +11,7 @@ var _original_screen_shake_enabled: bool
 
 func before_each() -> void:
 	_viewport = AppTheme.get_viewport()
-	_original_mode = PlatformSettings.dark_mode
+	_original_mode = AppTheme.palette.get_mode()
 	_original_screen_shake_enabled = PlatformSettings.screen_shake_enabled
 	PlatformSettings.screen_shake_enabled = true
 	AppTheme.set_theme_mode("neon")

@@ -3,9 +3,9 @@ extends GameMenu
 
 ## Carom menu — config-driven via assets/menu/carom_menu.tres
 ##
-## Carom has no save support and uses a PlayButton instead of NewGameButton.
-## It passes difficulty via set_meta("carom_difficulty", …) instead of a
-## start_new_game() method.  All of this is expressed in the MenuConfig resource.
+## Carom has no save support and uses a NewGameButton.
+## The online button launches the arena in online mode by passing
+## LaunchParams(online=true) to CaromArena.launch().
 
 func _init() -> void:
 	config = preload("res://assets/menu/carom_menu.tres")
@@ -19,12 +19,8 @@ func _ready() -> void:
 
 
 func _on_online_pressed() -> void:
-	# Launch the arena in online mode.
-	# The arena scene loads CaromOnlineMatchController instead of the
-	# normal CaromMatchController when "carom_online" meta is set.
-	SceneTransition.transition_with_callback(func() -> void:
-		var arena_scene: Node = load(Scenes.CAROM_ARENA).instantiate()
-		arena_scene.set_meta("carom_online", true)
-		get_tree().root.add_child(arena_scene)
-		queue_free()
+	var params := LaunchParams.new()
+	params.online = true
+	SceneTransition.navigate(Scenes.CAROM_ARENA, func(arena_scene: Node) -> void:
+		arena_scene.launch(params)
 	)
