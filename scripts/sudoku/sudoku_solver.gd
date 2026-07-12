@@ -105,7 +105,7 @@ static func _find_mrv_cell(grid: Array[int], constraints: Array = []) -> int:
 
 ## Returns false if any filled cell in a complete grid violates constraints.
 ## Temporarily clears each cell to evaluate placement validity against the
-## remaining grid, which is the same test the back-tracker uses during fill.
+## remaining grid, which is the same test the backtracking solver uses during fill.
 ## Always returns true when constraints is empty (standard Sudoku path).
 static func _is_complete_grid_valid(grid: Array[int], constraints: Array) -> bool:
 	if constraints.is_empty():
@@ -128,7 +128,7 @@ static func _backtrack_mrv(grid: Array[int], solutions: Array[Array], max_soluti
 
 	var pos := _find_mrv_cell(grid, constraints)
 	if pos == -1:
-		# No empty cells — validate all filled cells (including givens) against
+		# No empty cells - validate all filled cells (including givens) against
 		# constraints before recording this as a solution.
 		if _is_complete_grid_valid(grid, constraints):
 			solutions.append(grid.duplicate())
