@@ -39,7 +39,7 @@ func test_puck_zone_entered_emitted_for_puck_body() -> void:
 	var puck_body_ids: Array[int] = [42]
 	var projectile_nodes: Dictionary = {}
 
-	# Synthesise a zone event list (same structure SimWorld produces).
+	# Synthesize a zone event list (same structure SimWorld produces).
 	var zone_events: Array = [{body_id = 42, zone_id = 1}]
 
 	watch_signals(dispatcher)
