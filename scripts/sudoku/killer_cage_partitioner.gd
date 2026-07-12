@@ -93,6 +93,7 @@ static func _build_target_sizes(difficulty: int, rng: RandomNumberGenerator) -> 
 	for size in weights.keys():
 		allowed_sizes.append(int(size))
 	allowed_sizes.sort()
+	var fill_cache: Dictionary = {}
 	for _attempt in 20:
 		var sizes: Array[int] = []
 		var remaining := GRID_CELLS
@@ -100,7 +101,7 @@ static func _build_target_sizes(difficulty: int, rng: RandomNumberGenerator) -> 
 			var size := _pick_weighted_size(weights, rng)
 			if size > remaining:
 				continue
-			if not _can_fill_remaining(remaining - size, allowed_sizes):
+			if not _can_fill_remaining(remaining - size, allowed_sizes, fill_cache):
 				continue
 			sizes.append(size)
 			remaining -= size
@@ -125,34 +126,19 @@ static func _pick_weighted_size(weights: Dictionary, rng: RandomNumberGenerator)
 	return int(weights.keys()[0])
 
 
-static func _can_fill_remaining(remaining: int, allowed_sizes: Array[int]) -> bool:
+static func _can_fill_remaining(remaining: int, allowed_sizes: Array[int], cache: Dictionary) -> bool:
 	if remaining == 0:
 		return true
 	if remaining < 0:
 		return false
+	if cache.has(remaining):
+		return bool(cache[remaining])
 	for size in allowed_sizes:
-		if _can_fill_remaining(remaining - size, allowed_sizes):
+		if _can_fill_remaining(remaining - size, allowed_sizes, cache):
+			cache[remaining] = true
 			return true
+	cache[remaining] = false
 	return false
-
-
-static func _build_shape_candidates(start: int, target_size: int, available: Array[bool], rng: RandomNumberGenerator) -> Array:
-	var candidates: Array = []
-	var seen: Dictionary = {}
-	for _attempt in MAX_SHAPE_CANDIDATES * 3:
-		var shape := _grow_shape(start, target_size, available, rng)
-		if shape.size() != target_size:
-			continue
-		shape.sort()
-		var key := _cells_key(shape)
-		if seen.has(key):
-			continue
-		seen[key] = true
-		candidates.append(shape)
-		if candidates.size() >= MAX_SHAPE_CANDIDATES:
-			break
-	_shuffle_array(candidates, rng)
-	return candidates
 
 
 static func _grow_shape(start: int, target_size: int, available: Array[bool], rng: RandomNumberGenerator) -> Array[int]:
@@ -248,17 +234,3 @@ static func _build_row_fallback(grid: Array[int], difficulty: int) -> Array:
 			col += int(size)
 	return cages
 
-
-static func _cells_key(cells: Array[int]) -> String:
-	var parts: PackedStringArray = []
-	for cell in cells:
-		parts.append(str(cell))
-	return ",".join(parts)
-
-
-static func _shuffle_array(arr: Array, rng: RandomNumberGenerator) -> void:
-	for i in range(arr.size() - 1, 0, -1):
-		var j := rng.randi_range(0, i)
-		var tmp = arr[i]
-		arr[i] = arr[j]
-		arr[j] = tmp
