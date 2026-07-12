@@ -32,7 +32,7 @@ var _last_ring_pos := Vector2.ZERO
 func _ready() -> void:
 	layer = 90
 	_effects_enabled = PlatformSettings.particle_effects_enabled
-	PlatformSettings.feedback.changed.connect(_on_feedback_settings_changed)
+	PlatformSettings.settings_changed.connect(_on_feedback_settings_changed)
 	_setup()
 
 

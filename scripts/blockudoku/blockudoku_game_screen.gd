@@ -376,7 +376,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 					(grid_pos.x + co.x + 0.5) * cell_size,
 					(grid_pos.y + co.y + 0.5) * cell_size
 				)
-			EffectFactory.neon_burst(board, cell_center, block_color, 6, 0.5)
+				EffectFactory.neon_burst(board, cell_center, block_color, 6, 0.5)
 
 			# Expanding ring from shape center
 			var bounds := BlockudokuShapes.get_bounds(_drag_shape)
