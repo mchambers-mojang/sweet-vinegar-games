@@ -273,6 +273,96 @@ func test_restore_if_resumable_returns_empty_when_not_resumable() -> void:
 
 
 # ---------------------------------------------------------------------------
+# BlockudokuSaveAdapter — round-trip
+# ---------------------------------------------------------------------------
+
+func test_blockudoku_adapter_save_and_restore() -> void:
+	var adapter := BlockudokuSaveAdapter.new()
+	var state: Dictionary = {
+		"score": 1500,
+		"turns": 42,
+		"combo_count": 3,
+		"elapsed_time": 120.0,
+		"board_state": {"grid": [], "colors": []},
+		"available_blocks": [[{"x": 0, "y": 0}]],
+		"blocks_placed_this_set": 1,
+		"random_seed": 99999,
+		"rng_state": 12345,
+	}
+	adapter.save(state)
+	assert_true(adapter.has_save())
+	var restored: Dictionary = adapter.restore()
+	assert_eq(restored["score"], 1500)
+	assert_eq(restored["turns"], 42)
+	assert_eq(restored["elapsed_time"], 120.0)
+	assert_eq(restored["random_seed"], 99999)
+
+
+func test_blockudoku_adapter_clear() -> void:
+	var adapter := BlockudokuSaveAdapter.new()
+	adapter.save({"board_state": {}, "available_blocks": []})
+	assert_true(adapter.has_save())
+	adapter.clear()
+	assert_false(adapter.has_save())
+
+
+func test_blockudoku_adapter_can_resume_with_valid_save() -> void:
+	var adapter := BlockudokuSaveAdapter.new()
+	adapter.save({"board_state": {"grid": []}, "available_blocks": []})
+	assert_true(adapter.can_resume())
+
+
+func test_blockudoku_adapter_can_resume_false_when_no_save() -> void:
+	var adapter := BlockudokuSaveAdapter.new()
+	assert_false(adapter.can_resume())
+
+
+func test_blockudoku_adapter_can_resume_false_missing_board_state() -> void:
+	var adapter := BlockudokuSaveAdapter.new()
+	adapter.save({"score": 100, "available_blocks": []})
+	assert_false(adapter.can_resume(), "Save without board_state must not be resumable")
+
+
+func test_blockudoku_adapter_can_resume_false_missing_available_blocks() -> void:
+	var adapter := BlockudokuSaveAdapter.new()
+	adapter.save({"score": 100, "board_state": {"grid": []}})
+	assert_false(adapter.can_resume(), "Save without available_blocks must not be resumable")
+
+
+func test_blockudoku_adapter_get_score() -> void:
+	var adapter := BlockudokuSaveAdapter.new()
+	adapter.save({"board_state": {}, "available_blocks": [], "score": 2500})
+	assert_eq(adapter.get_score(), 2500)
+
+
+func test_blockudoku_adapter_get_score_default_zero_when_no_save() -> void:
+	var adapter := BlockudokuSaveAdapter.new()
+	assert_eq(adapter.get_score(), 0)
+
+
+# ---------------------------------------------------------------------------
+# GameSaveAdapter — adapter-level version stamping and migration
+# ---------------------------------------------------------------------------
+
+func test_adapter_save_stamps_version_key() -> void:
+	var adapter := SudokuSaveAdapter.new()
+	adapter.save({"puzzle": _make_array(81, 1), "solution": _make_array(81, 5), "current_grid": _make_array(81, 0)})
+	# The version key must not be visible to callers
+	var restored: Dictionary = adapter.restore()
+	assert_false(restored.has(GameSaveAdapter.VERSION_KEY), "VERSION_KEY must be stripped from restored data")
+
+
+func test_adapter_migration_applied_for_v0_save() -> void:
+	# Write a v0 save (no VERSION_KEY) directly into the adapter's file
+	_write_v0_save_to_adapter_path("sudoku", {"puzzle": _make_array(81, 0), "solution": _make_array(81, 5), "current_grid": _make_array(81, 0)})
+	var adapter := SudokuSaveAdapter.new()
+	# restore() must succeed (migration is a no-op for v1, but the call path runs)
+	var data: Dictionary = adapter.restore()
+	assert_false(data.is_empty(), "restore() must succeed for a v0 save")
+	assert_true(data.has("puzzle"), "puzzle key must survive migration")
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -294,3 +384,16 @@ func _write_v0_save(game_id: String, data: Dictionary) -> void:
 		config.set_value(game_id, str(key), data[key])
 	# Deliberately do NOT write VERSION_KEY — this simulates a legacy save
 	config.save(save_mgr.save_path)
+
+
+## Write a v0 save to the adapter's save path (GameSaveManager.save_path,
+## redirected to _TEST_ADAPTER_PATH in before_each).
+func _write_v0_save_to_adapter_path(game_id: String, data: Dictionary) -> void:
+	var config := ConfigFile.new()
+	config.load(GameSaveManager.save_path)
+	if config.has_section(game_id):
+		config.erase_section(game_id)
+	for key in data.keys():
+		config.set_value(game_id, str(key), data[key])
+	# Deliberately do NOT write VERSION_KEY — this simulates a legacy save
+	config.save(GameSaveManager.save_path)

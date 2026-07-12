@@ -52,6 +52,10 @@ func _get_scene_path() -> String:
 	return Scenes.BLOCKUDOKU_GAME
 
 
+func _get_save_adapter() -> GameSaveAdapter:
+	return BlockudokuSaveAdapter.new()
+
+
 func _is_initialized() -> bool:
 	return logic != null and not logic.available_blocks.is_empty()
 
