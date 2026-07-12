@@ -55,7 +55,9 @@ func can_resume() -> bool:
 ## Persist game state to disk with a version stamp.
 func save(state: Dictionary) -> void:
 	var config := ConfigFile.new()
-	config.load(GameSaveManager.save_path)  # OK if file doesn't exist yet
+	# ERR_FILE_NOT_FOUND is expected and safe on first save; all other errors
+	# are silently ignored because we are about to overwrite the file anyway.
+	config.load(GameSaveManager.save_path)
 	var game_id := _get_game_id()
 	if config.has_section(game_id):
 		config.erase_section(game_id)

@@ -386,8 +386,9 @@ func _write_v0_save(game_id: String, data: Dictionary) -> void:
 	config.save(save_mgr.save_path)
 
 
-## Write a v0 save to the adapter's save path (GameSaveManager.save_path,
-## redirected to _TEST_ADAPTER_PATH in before_each).
+## Write a v0 save to the adapter's save path (GameSaveManager.save_path is
+## redirected to _TEST_ADAPTER_PATH during tests by before_each(), so this
+## writes to the isolated test file rather than the real user save).
 func _write_v0_save_to_adapter_path(game_id: String, data: Dictionary) -> void:
 	var config := ConfigFile.new()
 	config.load(GameSaveManager.save_path)
