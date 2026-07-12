@@ -222,14 +222,9 @@ func _filled_cells_are_valid(grid: Array[int]) -> bool:
 		if value == 0:
 			continue
 		grid[index] = 0
-		var sudoku_valid: bool = SudokuSolver.is_valid_placement(grid, index, value)
-		if not sudoku_valid:
-			grid[index] = value
-			return false
-		if constraint == null:
-			grid[index] = value
-			continue
-		var is_valid: bool = constraint.is_valid(grid, index, value)
+		var is_valid := SudokuSolver.is_valid_placement(grid, index, value)
+		if is_valid and constraint != null:
+			is_valid = constraint.is_valid(grid, index, value)
 		grid[index] = value
 		if not is_valid:
 			return false
