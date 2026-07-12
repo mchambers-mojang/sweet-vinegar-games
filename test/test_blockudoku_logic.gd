@@ -51,7 +51,7 @@ func test_invalid_placement_out_of_bounds() -> void:
 	var shape_3h: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0)]
 	logic.available_blocks[1] = shape_3h
 	var before_score := logic.score
-	var result2 := logic.try_place(1, Vector2i(7, 0))  # 7+2=9 which is out of bounds
+	var result2 := logic.try_place(1, Vector2i(7, 0))  # 7+2=9, out of bounds
 	assert_false(result2.valid, "Placement out of bounds should be invalid")
 	assert_eq(logic.score, before_score, "Score must not change on invalid placement")
 	assert_eq(logic.turns, 1, "Turn count must not change on invalid placement")
@@ -475,10 +475,10 @@ func test_multiple_undos_restore_correct_states() -> void:
 
 
 func test_invalid_placement_does_not_create_undo_entry() -> void:
-	# Place at an out-of-bounds position (single cell at row 9 would be invalid)
+	# Try to place a 3-wide piece starting at col 7: col 7+2=9, out of bounds.
 	var shape_3h: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0)]
 	logic.available_blocks[0] = shape_3h
-	var result := logic.try_place(0, Vector2i(7, 0))  # 7+2=9 out of bounds
+	var result := logic.try_place(0, Vector2i(7, 0))
 	assert_false(result.valid)
 	assert_eq(logic.undo_stack.size(), 0, "Invalid placement must not create an undo entry")
 

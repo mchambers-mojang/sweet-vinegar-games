@@ -95,14 +95,19 @@ func try_place(block_index: int, grid_pos: Vector2i, board_visual_before: Dictio
 	var result := PlaceResult.new()
 
 	if block_index < 0 or block_index >= available_blocks.size():
+		_pending_undo_before = {}
 		return result
 	var shape: Array = available_blocks[block_index]
 	if shape.is_empty():
+		_pending_undo_before = {}
 		return result
 	if not can_place(shape, grid_pos.x, grid_pos.y):
+		_pending_undo_before = {}
 		return result
 
 	# Capture undo "before" snapshot before any mutation.
+	# The capture must happen here (before any state change) so that the
+	# "before" state is the true pre-placement state for reliable undo.
 	_pending_undo_before = {
 		"logic": get_state(),
 		"visual": board_visual_before,
@@ -214,7 +219,7 @@ func commit_move(board_visual_after: Dictionary = {}) -> void:
 		return
 	redo_stack.clear()
 	undo_stack.append({
-		"before": _pending_undo_before.duplicate(true),
+		"before": _pending_undo_before,
 		"after": {
 			"logic": get_state(),
 			"visual": board_visual_after,
@@ -225,9 +230,11 @@ func commit_move(board_visual_after: Dictionary = {}) -> void:
 
 ## Revert the most recent committed move.  Logic state is restored immediately;
 ## the board visual to restore is in result.board_visual.
+## Undo is intentionally disabled once is_game_over is set — the undo button is
+## also greyed out in the UI at that point, so success=false is the expected response.
 func undo() -> UndoRedoResult:
 	var result := UndoRedoResult.new()
-	if is_game_over or undo_stack.is_empty():
+	if undo_stack.is_empty() or is_game_over:
 		return result
 	var entry: Dictionary = undo_stack.pop_back()
 	redo_stack.append(entry)
@@ -240,9 +247,10 @@ func undo() -> UndoRedoResult:
 
 ## Reapply the most recently undone move.  Logic state is restored immediately;
 ## the board visual to restore is in result.board_visual.
+## Redo is intentionally disabled once is_game_over is set — consistent with undo.
 func redo() -> UndoRedoResult:
 	var result := UndoRedoResult.new()
-	if is_game_over or redo_stack.is_empty():
+	if redo_stack.is_empty() or is_game_over:
 		return result
 	var entry: Dictionary = redo_stack.pop_back()
 	undo_stack.append(entry)
