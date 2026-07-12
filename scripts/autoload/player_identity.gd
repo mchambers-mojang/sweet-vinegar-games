@@ -64,8 +64,8 @@ func _ready() -> void:
 
 
 ## Called by the name prompt screen to finalise first-boot setup.
-func complete_setup(name: String, visible: bool) -> void:
-	display_name = name.strip_edges().substr(0, MAX_DISPLAY_NAME_LENGTH)
+func complete_setup(new_display_name: String, visible: bool) -> void:
+	display_name = new_display_name.strip_edges().substr(0, MAX_DISPLAY_NAME_LENGTH)
 	leaderboard_visible = visible
 	is_setup_complete = true
 	_pending_sync = true
