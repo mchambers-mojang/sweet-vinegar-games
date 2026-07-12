@@ -81,7 +81,7 @@ func is_goal_locked() -> bool:
 # Typed accessors — bridge / sim state
 # ---------------------------------------------------------------------------
 
-## Returns the interpolated 3-D world position of puck at the given alpha.
+## Returns the interpolated 3D world position of puck at the given alpha.
 ## Delegates to CaromSimBridge.get_puck_position().
 func get_puck_position(puck: CaromPuck, alpha: float) -> Vector3:
 	return bridge.get_puck_position(puck, alpha)
@@ -90,7 +90,7 @@ func get_puck_position(puck: CaromPuck, alpha: float) -> Vector3:
 ## Returns the SimBody for the given puck without exposing bridge internals.
 ## Returns null if the puck is not registered.
 func get_sim_body_for_puck(puck: CaromPuck) -> SimBody:
-	var idx := bridge._puck_nodes.find(puck)
+	var idx := _get_puck_index(puck)
 	if idx < 0:
 		return null
 	return bridge._sim.get_body(bridge._puck_body_ids[idx])
@@ -99,10 +99,14 @@ func get_sim_body_for_puck(puck: CaromPuck) -> SimBody:
 ## Returns the sim body-ID for the given puck (used in signal assertions).
 ## Returns -1 if the puck is not registered.
 func get_puck_body_id(puck: CaromPuck) -> int:
-	var idx := bridge._puck_nodes.find(puck)
+	var idx := _get_puck_index(puck)
 	if idx < 0:
 		return -1
 	return bridge._puck_body_ids[idx]
+
+
+func _get_puck_index(puck: CaromPuck) -> int:
+	return bridge._puck_nodes.find(puck)
 
 
 ## Returns the number of sim ticks executed via run_ticks() since setup.
