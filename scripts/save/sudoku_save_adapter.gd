@@ -14,6 +14,11 @@ func get_difficulty() -> int:
 	return int(restore().get("difficulty", 0))
 
 
+## Return the saved rule set identifier (empty = standard Sudoku), or "" if no save.
+func get_rule_set() -> String:
+	return str(restore().get("rule_set", ""))
+
+
 ## Upgrade save data from an older schema version.
 func _migrate(data: Dictionary, _from_version: int) -> Dictionary:
 	# v0 → v1: no schema changes required; version stamp is added by

@@ -32,13 +32,13 @@ var techniques_used: Array[Technique] = []
 var difficulty: Difficulty = Difficulty.EASY
 
 
-## Check if placing val at index is valid in the grid
-static func is_valid_placement(grid: Array[int], index: int, val: int) -> bool:
+## Check if placing val at index is valid in the grid.
+## Pass a non-empty constraints array to also validate variant rules.
+static func is_valid_placement(grid: Array[int], index: int, val: int, constraints: Array = []) -> bool:
 	var row := index / 9
 	var col := index % 9
 	var box_row := (row / 3) * 3
 	var box_col := (col / 3) * 3
-
 	for i in 9:
 		# Check row
 		if grid[row * 9 + i] == val:
@@ -51,30 +51,37 @@ static func is_valid_placement(grid: Array[int], index: int, val: int) -> bool:
 		var bc := box_col + i % 3
 		if grid[br * 9 + bc] == val:
 			return false
+	# Check variant constraints
+	for constraint in constraints:
+		if not constraint.is_valid(grid, index, val):
+			return false
 	return true
 
 
-## Get all candidates for a cell
-static func get_candidates(grid: Array[int], index: int) -> Array[int]:
+## Get all candidates for a cell.
+## Pass a non-empty constraints array to filter by variant rules as well.
+static func get_candidates(grid: Array[int], index: int, constraints: Array = []) -> Array[int]:
 	if grid[index] != 0:
 		return []
 	var candidates: Array[int] = []
 	for val in range(1, 10):
-		if is_valid_placement(grid, index, val):
+		if is_valid_placement(grid, index, val, constraints):
 			candidates.append(val)
 	return candidates
 
 
-## Brute-force solve using backtracking with MRV heuristic. Returns number of solutions found (stops at max_solutions).
-static func solve_brute_force(grid: Array[int], max_solutions: int = 2) -> Array[Array]:
+## Brute-force solve using backtracking with MRV heuristic.
+## Returns number of solutions found (stops at max_solutions).
+## Pass a non-empty constraints array for variant rule checking.
+static func solve_brute_force(grid: Array[int], max_solutions: int = 2, constraints: Array = []) -> Array[Array]:
 	var solutions: Array[Array] = []
 	var work := grid.duplicate()
-	_backtrack_mrv(work, solutions, max_solutions)
+	_backtrack_mrv(work, solutions, max_solutions, constraints)
 	return solutions
 
 
-static func _find_mrv_cell(grid: Array[int]) -> int:
-	## Find the empty cell with the fewest candidates (MRV heuristic)
+## Find the empty cell with the fewest candidates (MRV heuristic).
+static func _find_mrv_cell(grid: Array[int], constraints: Array = []) -> int:
 	var best_pos := -1
 	var best_count := 10
 	for i in 81:
@@ -82,7 +89,7 @@ static func _find_mrv_cell(grid: Array[int]) -> int:
 			continue
 		var count := 0
 		for v in range(1, 10):
-			if is_valid_placement(grid, i, v):
+			if is_valid_placement(grid, i, v, constraints):
 				count += 1
 		if count == 0:
 			return -2  # Dead end — no candidates
@@ -94,11 +101,11 @@ static func _find_mrv_cell(grid: Array[int]) -> int:
 	return best_pos
 
 
-static func _backtrack_mrv(grid: Array[int], solutions: Array[Array], max_solutions: int) -> void:
+static func _backtrack_mrv(grid: Array[int], solutions: Array[Array], max_solutions: int, constraints: Array = []) -> void:
 	if solutions.size() >= max_solutions:
 		return
 
-	var pos := _find_mrv_cell(grid)
+	var pos := _find_mrv_cell(grid, constraints)
 	if pos == -1:
 		# No empty cells — solved
 		solutions.append(grid.duplicate())
@@ -107,10 +114,10 @@ static func _backtrack_mrv(grid: Array[int], solutions: Array[Array], max_soluti
 		# Dead end
 		return
 
-	var candidates := get_candidates(grid, pos)
+	var candidates := get_candidates(grid, pos, constraints)
 	for val in candidates:
 		grid[pos] = val
-		_backtrack_mrv(grid, solutions, max_solutions)
+		_backtrack_mrv(grid, solutions, max_solutions, constraints)
 		grid[pos] = 0
 		if solutions.size() >= max_solutions:
 			return
@@ -483,15 +490,16 @@ func rate_difficulty() -> Difficulty:
 
 
 ## Full solve and rate: solves a copy, checks uniqueness, rates difficulty
-func analyze(puzzle: Array[int]) -> void:
-	# Check uniqueness with brute force
-	var solutions := solve_brute_force(puzzle, 2)
+func analyze(puzzle: Array[int], constraints: Array = []) -> void:
+	# Check uniqueness with brute force (constraint-aware)
+	var solutions := solve_brute_force(puzzle, 2, constraints)
 	is_unique = solutions.size() == 1
 	if is_unique:
 		solution = []
 		solution.assign(solutions[0])
 
-	# Rate difficulty with logic solver
+	# Rate difficulty with logic solver (standard techniques only — the extra
+	# constraint just makes the puzzle easier so this gives a conservative rating)
 	var work: Array[int] = []
 	work.assign(puzzle.duplicate())
 	solve_logic(work)

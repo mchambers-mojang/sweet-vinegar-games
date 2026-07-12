@@ -18,3 +18,8 @@ extends Resource
 ## When true, launch Carom in online multiplayer mode.
 ## Replaces the "carom_online" metadata key.
 @export var online: bool = false
+
+## Variant rule set identifier.  Empty string means the default rule set for
+## the game (e.g. standard Sudoku).  Populated by menus that expose a rule-set
+## dropdown (e.g. Sudoku: "anti_knight", "anti_king").
+@export var rule_set: String = ""

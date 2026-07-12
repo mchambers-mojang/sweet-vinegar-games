@@ -23,7 +23,8 @@ game_rules = {
 "input_mode": "cell_first",
 "error_mode": "strict",
 "highlight_row_col_box": true,
-"auto_remove_pencil_marks": true
+"auto_remove_pencil_marks": true,
+"rule_set_index": 0
 }
 leaderboard_modes = PackedStringArray("easy", "medium", "hard", "expert", "")
 leaderboard_is_time_based = true

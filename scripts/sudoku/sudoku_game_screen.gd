@@ -7,6 +7,7 @@ var logic: SudokuLogic = null
 
 # UI-only state
 var difficulty: int = 0
+var rule_set: String = ""
 var _can_continue_after_failure: bool = false
 var is_paused: bool = false
 var notes_mode: bool = false
@@ -98,6 +99,7 @@ func _serialize_state() -> Dictionary:
 	state["can_continue_after_failure"] = _can_continue_after_failure
 	state["random_seed"] = random_seed
 	state["replay_id"] = replay_id
+	state["rule_set"] = rule_set
 	return state
 
 
@@ -147,11 +149,13 @@ func start_new_game(diff: int) -> void:
 
 
 func launch(params: LaunchParams) -> void:
+	rule_set = params.rule_set
 	start_new_game(params.option_value)
 
 
 func resume_game(data: Dictionary) -> void:
 	difficulty = data.get("difficulty", 0)
+	rule_set = data.get("rule_set", "")
 	_can_continue_after_failure = data.get("can_continue_after_failure", false)
 	is_paused = false
 	notes_mode = false
@@ -195,10 +199,21 @@ func _setup_game(saved_data: Dictionary) -> void:
 	var strict_mode: bool = GameRulesRegistry.get_rule("sudoku", "error_mode") == "strict"
 	var auto_remove: bool = GameRulesRegistry.get_rule("sudoku", "auto_remove_pencil_marks")
 	logic = SudokuLogic.new(strict_mode, auto_remove)
+
+	# Restore rule_set from save (for resume) or use the instance var (for new game).
+	if not saved_data.is_empty():
+		rule_set = saved_data.get("rule_set", "")
+
+	# Wire the constraint that corresponds to the active rule set.
+	var constraint := _make_constraint(rule_set)
+	if constraint:
+		logic.constraints = [constraint]
+	logic.rule_set = rule_set
+
 	if saved_data.is_empty():
 		logic.init_new_game(difficulty, random_seed)
 		difficulty = logic.difficulty
-		difficulty_label.text = DIFFICULTY_NAMES[logic.difficulty]
+		difficulty_label.text = _difficulty_label_text(logic.difficulty)
 		board.load_puzzle(logic.puzzle)
 	else:
 		logic.init_from_save(saved_data)
@@ -206,7 +221,7 @@ func _setup_game(saved_data: Dictionary) -> void:
 		# Legacy fallback: old saves had no random_seed field.
 		if random_seed == 0:
 			random_seed = _derive_seed_from_puzzle(logic.puzzle)
-		difficulty_label.text = DIFFICULTY_NAMES[logic.difficulty]
+		difficulty_label.text = _difficulty_label_text(logic.difficulty)
 		_load_board_from_logic()
 		if logic.is_failed and _is_board_locked():
 			# Re-show the fail dialog for failed saves so players can choose Continue/Menu.
@@ -467,6 +482,7 @@ func _on_erase_pressed() -> void:
 	_haptic.vibrate_light()
 	_update_number_completion()
 	board._update_highlighting()
+	_refresh_constraint_errors()
 	_save_current_state()
 
 
@@ -504,6 +520,7 @@ func _on_undo_pressed() -> void:
 	_update_button_states()
 	_update_number_completion()
 	board._update_highlighting()
+	_refresh_constraint_errors()
 	_save_current_state()
 
 
@@ -519,6 +536,7 @@ func _on_redo_pressed() -> void:
 	_update_button_states()
 	_update_number_completion()
 	board._update_highlighting()
+	_refresh_constraint_errors()
 	_save_current_state()
 
 
@@ -603,6 +621,7 @@ func _load_board_from_logic() -> void:
 		cell.queue_redraw()
 	board.selected_index = -1
 	board._update_highlighting()
+	_refresh_constraint_errors()
 
 
 ## Applies the visual side-effects of a logic.place_number() result to the given cell node.
@@ -654,6 +673,9 @@ func _apply_single_place_result(result: SudokuLogic.PlaceResult, cell_node: Sudo
 		for item in result.pencil_marks_removed:
 			board.cells[item["index"]].set_pencil_mark(item["number"], false)
 		_apply_unit_completion_effects(result.units_completed)
+		# Apply constraint conflict highlighting (free mode only)
+		if not result.conflict_indices.is_empty():
+			_refresh_constraint_errors()
 		if result.game_won:
 			_handle_win()
 
@@ -1028,7 +1050,8 @@ func _log_game_over_analytics(won: bool) -> void:
 	GameEvents.game_ended.emit("sudoku", "win" if won else "game_over", elapsed_time)
 	# Leaderboard: submit completion time for easy/medium/hard/expert (indices 0-3).
 	if won and difficulty <= 3:
-		GameEvents.leaderboard_score_ready.emit("sudoku", DIFFICULTY_NAMES[difficulty].to_lower(), elapsed_time)
+		var lb_mode := _get_leaderboard_mode()
+		GameEvents.leaderboard_score_ready.emit("sudoku", lb_mode, elapsed_time)
 	_analytics.log_event("game_over", {
 		"game": "sudoku",
 		"won": won,
@@ -1037,6 +1060,58 @@ func _log_game_over_analytics(won: bool) -> void:
 		"strikes": logic.strikes,
 		"hints_used": logic.hints_used,
 	})
+
+
+## Returns the leaderboard mode string for the current rule_set + difficulty combination.
+func _get_leaderboard_mode() -> String:
+	var diff_name := DIFFICULTY_NAMES[difficulty].to_lower()
+	match rule_set:
+		"anti_knight":
+			return "sudoku_antiknight_" + diff_name
+		"anti_king":
+			return "sudoku_antiking_" + diff_name
+		_:
+			return diff_name
+
+
+## Returns the display label for the current difficulty (prepends rule set name when active).
+func _difficulty_label_text(diff: int) -> String:
+	var base := DIFFICULTY_NAMES[diff]
+	match rule_set:
+		"anti_knight":
+			return "Anti-Knight – " + base
+		"anti_king":
+			return "Anti-King – " + base
+		_:
+			return base
+
+
+## Returns a new SudokuConstraint for the given rule set id, or null for standard.
+func _make_constraint(rule_set_id: String) -> SudokuConstraint:
+	match rule_set_id:
+		"anti_knight":
+			return AntiKnightConstraint.new()
+		"anti_king":
+			return AntiKingConstraint.new()
+		_:
+			return null
+
+
+## Refreshes the is_error state of all non-given cells based on active constraints.
+## Called in free mode after any board change when constraints are active.
+func _refresh_constraint_errors() -> void:
+	if logic == null or logic.constraints.is_empty():
+		return
+	if GameRulesRegistry.get_rule("sudoku", "error_mode") == "strict":
+		return
+	var error_set: Dictionary = {}
+	for idx in logic.get_constraint_errors():
+		error_set[idx] = true
+	for i in 81:
+		var cell := board.cells[i]
+		if cell.is_given:
+			continue
+		cell.set_error(error_set.has(i))
 
 
 func _apply_theme() -> void:
