@@ -51,6 +51,7 @@ func push(target_path: String) -> void:
 ## Frees the current scene and re-attaches the scene at the top of the stack.
 func pop() -> void:
 	if _nav_stack.is_empty():
+		push_warning("SceneTransition.pop() called with an empty navigation stack")
 		return
 	if _transitioning:
 		return
