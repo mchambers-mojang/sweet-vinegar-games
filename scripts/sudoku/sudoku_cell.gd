@@ -286,7 +286,6 @@ func _draw() -> void:
 		draw_string(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, text_color)
 	elif pencil_marks.size() > 0:
 		var pencil_font := ThemeDB.fallback_font
-		# Shift pencil marks slightly right/down when a cage sum label is in the corner
 		var pencil_size := int(cell_size.y * 0.28)
 		var pencil_color: Color
 		if has_custom_color:
@@ -295,6 +294,8 @@ func _draw() -> void:
 			pencil_color = tm.get_color("text_pencil")
 		var cell_w := cell_size.x / 3.0
 		var cell_h := cell_size.y / 3.0
+		# When a cage sum label occupies the top-left corner, nudge mark 1 to avoid overlap.
+		var sum_label_w := int(cell_size.y * 0.22) * (2 if cage_anchor_sum >= 10 else 1)
 		for mark in pencil_marks:
 			var pm_col := (mark - 1) % 3
 			var pm_row := (mark - 1) / 3
@@ -302,6 +303,9 @@ func _draw() -> void:
 			var pencil_text_size := pencil_font.get_string_size(pencil_text, HORIZONTAL_ALIGNMENT_CENTER, -1, pencil_size)
 			var px := pm_col * cell_w + (cell_w - pencil_text_size.x) / 2.0
 			var py := pm_row * cell_h + (cell_h + pencil_text_size.y * 0.7) / 2.0
+			# Nudge mark 1 (top-left grid cell) right when the cage sum label is present
+			if mark == 1 and cage_anchor_sum > 0:
+				px += sum_label_w * 0.5
 			draw_string(pencil_font, Vector2(px, py), pencil_text, HORIZONTAL_ALIGNMENT_LEFT, -1, pencil_size, pencil_color)
 
 	# Killer Sudoku: sum label in the top-left corner of the anchor cell
