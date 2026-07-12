@@ -57,7 +57,7 @@ func pop() -> void:
 		return
 	AppTheme.clear_screen_shake()
 	_transitioning = true
-	HapticManager.stop()
+	FeedbackManager.stop()
 	_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	_overlay.color = _get_fade_color(0.0)
 	if _tween and _tween.is_valid():

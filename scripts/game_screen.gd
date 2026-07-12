@@ -19,6 +19,10 @@ const TimeFormat := preload("res://scripts/utils/time_format.gd")
 
 
 # --- Injected dependencies (default to global autoloads) ---
+# _recorder and _storage both default to ReplaySystem (merged autoload).
+# _sound and _haptic both default to FeedbackManager (merged autoload).
+# They remain separate parameters so unit tests can inject fine-grained mocks
+# for recording behaviour vs. persistence, and sound vs. haptic, independently.
 
 var _recorder: Object
 var _storage: Object
@@ -42,15 +46,15 @@ func _init(
 	p_sound: Object = null,
 	p_haptic: Object = null
 ) -> void:
-	_recorder = p_recorder if p_recorder != null else ReplayRecorder
-	_storage = p_storage if p_storage != null else ReplayStorage
+	_recorder = p_recorder if p_recorder != null else ReplaySystem
+	_storage = p_storage if p_storage != null else ReplaySystem
 	_crash = p_crash if p_crash != null else CrashCollector
 	_analytics = p_analytics if p_analytics != null else AnalyticsManager
 	_achievements = p_achievements if p_achievements != null else AchievementEngine
 	_saves = p_saves if p_saves != null else GameSaveManager
 	_stats = p_stats if p_stats != null else GameStatsManager
-	_sound = p_sound if p_sound != null else SoundManager
-	_haptic = p_haptic if p_haptic != null else HapticManager
+	_sound = p_sound if p_sound != null else FeedbackManager
+	_haptic = p_haptic if p_haptic != null else FeedbackManager
 
 
 # --- Session state (owned by base) ---
