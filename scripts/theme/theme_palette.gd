@@ -124,7 +124,7 @@ func _init() -> void:
 # ---------------------------------------------------------------------------
 
 ## Switch to the given mode and emit palette_changed.
-## Callers: AppTheme._apply_theme_setting(), AppTheme.set_theme_mode(), ThemeEditorScreen.
+## Callers: AppTheme.set_theme_mode(), settings_screen (via AppTheme), ThemeEditorScreen.
 func set_mode(mode: String) -> void:
 	_mode = mode
 	match mode:
@@ -160,22 +160,28 @@ func get_color(key: String) -> Color:
 	return _colors.get(key, Color.MAGENTA)
 
 
-## Persist custom palette arrays to settings.cfg.
-## Only writes the [custom_palettes] section; mode persistence is handled by
-## AppTheme._on_palette_changed() to keep ThemePalette free of PlatformSettings coupling.
+## Returns the current active mode string.
+func get_mode() -> String:
+	return _mode
+
+
+## Persist mode and custom palette arrays to settings.cfg.
+## ThemePalette is the sole owner of dark_mode persistence.
 func save() -> void:
 	var config := ConfigFile.new()
 	config.load(SAVE_PATH)
+	config.set_value("display", "dark_mode", _mode)
 	config.set_value("custom_palettes", "active_index", active_custom_palette_index)
 	config.set_value("custom_palettes", "list", JSON.stringify(custom_palettes))
 	config.save(SAVE_PATH)
 
 
-## Load custom palette arrays from settings.cfg.
+## Load mode and custom palette arrays from settings.cfg.
 func load() -> void:
 	var config := ConfigFile.new()
 	if config.load(SAVE_PATH) != OK:
 		return
+	_mode = config.get_value("display", "dark_mode", _mode)
 	active_custom_palette_index = config.get_value("custom_palettes", "active_index", -1)
 	var json_str: String = config.get_value("custom_palettes", "list", "[]")
 	var parsed: Variant = JSON.parse_string(json_str)
