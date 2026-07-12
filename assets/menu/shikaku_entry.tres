@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="GameEntry" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/menu/game_entry.gd" id="1_shikaku"]
+
+[resource]
+script = ExtResource("1_shikaku")
+id = "shikaku"
+title = "Shikaku"
+menu_scene_path = "res://scenes/shikaku_menu.tscn"
+icon = ""
+unlock_rule = ""
