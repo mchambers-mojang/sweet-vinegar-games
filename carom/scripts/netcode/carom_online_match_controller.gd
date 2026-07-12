@@ -487,10 +487,10 @@ func _on_goal_scored(scoring_side: StringName, goal_puck: CaromPuck) -> void:
 
 	if local_scored:
 		_player_score += 1
-		HapticManager.vibrate_success()
+		FeedbackManager.vibrate_success()
 	else:
 		_opponent_score += 1
-		HapticManager.vibrate_error()
+		FeedbackManager.vibrate_error()
 
 	hud.update_scores(_player_score, _opponent_score)
 
@@ -558,7 +558,7 @@ func _on_resume() -> void:
 
 func _on_menu() -> void:
 	shutdown()
-	SceneTransition.transition_to(Scenes.CAROM_MENU)
+	SceneTransition.navigate(Scenes.CAROM_MENU)
 
 
 func _on_camera_mode_changed(mode: String) -> void:

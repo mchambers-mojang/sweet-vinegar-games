@@ -205,7 +205,7 @@ func check_and_clear(suppress_effects: bool = false) -> Dictionary:
 
 	if not suppress_effects:
 		# Spawn neon effects before clearing
-		if AppTheme.is_neon and PlatformSettings.particle_effects_enabled:
+		if AppTheme.is_neon:
 			var cell_size := _get_cell_size()
 			var origin := _get_grid_origin()
 
@@ -217,7 +217,7 @@ func check_and_clear(suppress_effects: bool = false) -> Dictionary:
 					Vector2(cell_size, cell_size)
 				)
 				var shard_color: Color = _flash_saved_colors[i] if i < _flash_saved_colors.size() else Color(0.0, 1.5, 1.5)
-				GlassShatter.create(self, cell_rect, shard_color, 4)
+				EffectFactory.glass_shatter(self, cell_rect, shard_color, 4)
 
 			# Sweep effects on cleared rows
 			for r in rows_to_clear:
@@ -225,7 +225,7 @@ func check_and_clear(suppress_effects: bool = false) -> Dictionary:
 					origin + Vector2(0, r * cell_size),
 					Vector2(GRID_SIZE * cell_size, cell_size)
 				)
-				NeonSweep.create(self, row_rect, true, Color(0.0, 2.0, 1.5))
+				EffectFactory.neon_sweep(self, row_rect, true, Color(0.0, 2.0, 1.5))
 
 			# Sweep effects on cleared columns
 			for c in cols_to_clear:
@@ -233,7 +233,7 @@ func check_and_clear(suppress_effects: bool = false) -> Dictionary:
 					origin + Vector2(c * cell_size, 0),
 					Vector2(cell_size, GRID_SIZE * cell_size)
 				)
-				NeonSweep.create(self, col_rect, false, Color(2.0, 0.3, 1.8))
+				EffectFactory.neon_sweep(self, col_rect, false, Color(2.0, 0.3, 1.8))
 
 			# Burst on cleared boxes
 			for box_pos in boxes_to_clear:
@@ -241,7 +241,7 @@ func check_and_clear(suppress_effects: bool = false) -> Dictionary:
 					(box_pos.x + BOX_SIZE / 2.0) * cell_size,
 					(box_pos.y + BOX_SIZE / 2.0) * cell_size
 				)
-				NeonBurst.create(self, center, Color(1.5, 0.2, 1.0), 24, 1.5)
+				EffectFactory.neon_burst(self, center, Color(1.5, 0.2, 1.0), 24, 1.5)
 
 			# Shockwave from center of cleared area
 			var all_x := 0.0
@@ -253,7 +253,7 @@ func check_and_clear(suppress_effects: bool = false) -> Dictionary:
 				(all_x / _flash_cells.size()) * cell_size,
 				(all_y / _flash_cells.size()) * cell_size
 			)
-			NeonRing.create(self, clear_center, Color(0.0, 2.0, 1.5), cell_size * 5.0, 0.4)
+			EffectFactory.neon_ring(self, clear_center, Color(0.0, 2.0, 1.5), cell_size * 5.0, 0.4)
 
 			# Screen shake
 			AppTheme.screen_shake(6.0, 0.2)

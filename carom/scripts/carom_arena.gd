@@ -45,10 +45,19 @@ func _ready() -> void:
 	_apply_camera_safe_area()
 	get_tree().root.size_changed.connect(_apply_camera_safe_area)
 
-	# If launched in online mode, swap the match controller
-	if has_meta("carom_online"):
-		remove_meta("carom_online")
+
+## Start a new Carom match from a LaunchParams value.
+## Called by CaromMenu (and CaromMenu._on_online_pressed) after the arena is
+## added to the scene tree.  Replaces the carom_difficulty and carom_online metas.
+func launch(params: LaunchParams) -> void:
+	if params.online:
 		_switch_to_online_mode()
+	else:
+		var match_ctrl := get_node_or_null("MatchController") as CaromMatchController
+		if match_ctrl:
+			match_ctrl.start_match(params.option_value)
+		else:
+			push_warning("CaromArena.launch(): MatchController node not found — match will not start.")
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -179,7 +188,7 @@ func on_sim_puck_scored(puck: CaromPuck, scoring_side: StringName) -> void:
 
 
 ## Replace the standard MatchController with the online multiplayer flow.
-## Called from _ready() when the arena is launched with carom_online meta.
+## Called from launch() when params.online is true.
 func _switch_to_online_mode() -> void:
 	# Remove the single-player match controller
 	var match_ctrl := get_node_or_null("MatchController")
@@ -216,5 +225,5 @@ func _switch_to_online_mode() -> void:
 	)
 	menu.cancelled.connect(func() -> void:
 		menu.queue_free()
-		SceneTransition.transition_to(Scenes.CAROM_MENU)
+		SceneTransition.navigate(Scenes.CAROM_MENU)
 	)

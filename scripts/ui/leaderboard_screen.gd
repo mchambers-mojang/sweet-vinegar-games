@@ -2,7 +2,7 @@ class_name LeaderboardScreen
 extends PanelContainer
 
 ## Full-screen leaderboard view. Shows top 10 + pinned player rank.
-## Navigated from a Game Menu via transition_with_callback → setup().
+## Navigated from a Game Menu via SceneTransition.navigate() with a setup callback.
 
 const TimeFormat := preload("res://scripts/utils/time_format.gd")
 const REST_BASE_URL := "https://carom-signaling-dae9dadjh0h9aqgb.westus3-01.azurewebsites.net"
@@ -74,7 +74,7 @@ func _on_mode_selected(index: int) -> void:
 
 
 func _on_back_pressed() -> void:
-	SceneTransition.transition_to(_return_scene)
+	SceneTransition.navigate(_return_scene)
 
 
 func _fetch() -> void:

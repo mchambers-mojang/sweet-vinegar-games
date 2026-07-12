@@ -16,7 +16,7 @@ var _category_expanded: Dictionary = {
 
 func _ready() -> void:
 	back_button.pressed.connect(func() -> void:
-		SceneTransition.transition_to(Scenes.GAME_PICKER)
+		SceneTransition.navigate(Scenes.GAME_PICKER)
 	)
 	_build_ui()
 	_apply_theme()

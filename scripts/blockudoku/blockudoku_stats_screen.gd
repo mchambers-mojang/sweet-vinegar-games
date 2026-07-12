@@ -10,7 +10,7 @@ const ScoreHistoryGraph := preload("res://scripts/blockudoku/score_history_graph
 
 func _ready() -> void:
 	back_button.pressed.connect(func() -> void:
-		SceneTransition.transition_to(Scenes.BLOCKUDOKU_MENU)
+		SceneTransition.navigate(Scenes.BLOCKUDOKU_MENU)
 	)
 	_build_stats_ui()
 	_apply_theme()

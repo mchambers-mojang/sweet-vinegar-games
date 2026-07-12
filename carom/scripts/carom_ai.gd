@@ -264,6 +264,25 @@ func _should_try_bank_shot() -> bool:
 	return puck_x > 6.0 and _rng.randf() < 0.3
 
 
+## Returns a snapshot of AI debug state for the HUD overlay.
+## Callers receive data, not internal object references.
+func get_debug_info() -> Dictionary:
+	var puck_pos := "N/A"
+	var puck_vel := "N/A"
+	if puck:
+		puck_pos = "%.1f, %.1f" % [puck.global_position.x, puck.global_position.z]
+		puck_vel = "%.1f, %.1f" % [_puck_velocity_estimate.x, _puck_velocity_estimate.z]
+	const STATE_NAMES := ["ATTACK", "DEFEND", "RELOAD_PRESSURE", "TRICK_SHOT"]
+	return {
+		"state": STATE_NAMES[current_state] if current_state < STATE_NAMES.size() else "UNKNOWN",
+		"difficulty": difficulty.difficulty_name if difficulty else "?",
+		"target_aim": _target_aim_degrees,
+		"puck_pos": puck_pos,
+		"puck_vel": puck_vel,
+		"puck_threatening": _is_puck_threatening(),
+	}
+
+
 func _is_puck_threatening() -> bool:
 	if not puck:
 		return false

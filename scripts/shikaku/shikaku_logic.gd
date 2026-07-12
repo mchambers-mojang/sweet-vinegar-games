@@ -14,8 +14,17 @@ var solution: Array[Rect2i] = []
 var placed_rects: Array[Rect2i] = []
 var is_completed: bool = false
 var hints_used: int = 0
-var undo_stack: Array[Dictionary] = []
-var redo_stack: Array[Dictionary] = []
+
+var _undo_stack: UndoStack = UndoStack.new()
+
+var undo_stack: Array[Dictionary]:
+	get:
+		return _undo_stack.get_undo_entries()
+
+var redo_stack: Array[Dictionary]:
+	get:
+		return _undo_stack.get_redo_entries()
+
 var random_seed: int = 0
 
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
@@ -53,8 +62,7 @@ func init_new_game(width: int, height: int, seed_value: int) -> void:
 	placed_rects.clear()
 	is_completed = false
 	hints_used = 0
-	undo_stack.clear()
-	redo_stack.clear()
+	_undo_stack.clear()
 
 
 func init_from_save(data: Dictionary) -> void:
@@ -64,8 +72,9 @@ func init_from_save(data: Dictionary) -> void:
 	solution = _deserialize_rects(data.get("solution", []))
 	placed_rects = _deserialize_rects(data.get("placed_rects", []))
 	hints_used = int(data.get("hints_used", 0))
-	undo_stack = _deserialize_action_stack(data.get("undo_stack", []))
-	redo_stack = _deserialize_action_stack(data.get("redo_stack", []))
+	var undo_entries := _deserialize_action_stack(data.get("undo_stack", []))
+	var redo_entries := _deserialize_action_stack(data.get("redo_stack", []))
+	_undo_stack.load_entries(undo_entries, redo_entries)
 	random_seed = int(data.get("random_seed", 0))
 	if random_seed == 0:
 		random_seed = _derive_seed_from_numbers(numbers)
@@ -82,8 +91,8 @@ func serialize() -> Dictionary:
 		"placed_rects": _serialize_rects(placed_rects),
 		"hints_used": hints_used,
 		"is_completed": is_completed,
-		"undo_stack": _serialize_action_stack(undo_stack),
-		"redo_stack": _serialize_action_stack(redo_stack),
+		"undo_stack": _serialize_action_stack(_undo_stack.get_undo_entries()),
+		"redo_stack": _serialize_action_stack(_undo_stack.get_redo_entries()),
 		"random_seed": random_seed,
 	}
 
@@ -95,8 +104,7 @@ func place_rectangle(x: int, y: int, w: int, h: int) -> PlaceRectResult:
 	if not _is_valid_placement(rect):
 		return result
 	placed_rects.append(rect)
-	undo_stack.append({"action": "place", "rect": result.rect.duplicate()})
-	redo_stack.clear()
+	_undo_stack.push({"action": "place", "rect": result.rect.duplicate()})
 	result.valid = true
 	_recompute_completion()
 	result.game_won = is_completed
@@ -110,8 +118,7 @@ func remove_rectangle(x: int, y: int, w: int, h: int) -> RemoveRectResult:
 	for i in range(placed_rects.size() - 1, -1, -1):
 		if placed_rects[i] == rect:
 			placed_rects.remove_at(i)
-			undo_stack.append({"action": "remove", "rect": result.rect.duplicate()})
-			redo_stack.clear()
+			_undo_stack.push({"action": "remove", "rect": result.rect.duplicate()})
 			result.was_present = true
 			break
 	_recompute_completion()
@@ -140,9 +147,9 @@ func use_hint() -> HintResult:
 
 func undo() -> UndoRedoResult:
 	var result: UndoRedoResult = UndoRedoResult.new()
-	if undo_stack.is_empty():
+	if not _undo_stack.can_undo():
 		return result
-	var entry: Dictionary = undo_stack.pop_back()
+	var entry: Dictionary = _undo_stack.undo()
 	var action_type := str(entry.get("action", ""))
 	var rect_data: Dictionary = entry.get("rect", {})
 	var rect: Rect2i = _dict_to_rect(rect_data)
@@ -152,7 +159,6 @@ func undo() -> UndoRedoResult:
 		placed_rects.append(rect)
 	else:
 		return result
-	redo_stack.append({"action": action_type, "rect": rect_data.duplicate()})
 	_recompute_completion()
 	result.action_type = action_type
 	result.rect = rect_data.duplicate()
@@ -161,9 +167,9 @@ func undo() -> UndoRedoResult:
 
 func redo() -> UndoRedoResult:
 	var result: UndoRedoResult = UndoRedoResult.new()
-	if redo_stack.is_empty():
+	if not _undo_stack.can_redo():
 		return result
-	var entry: Dictionary = redo_stack.pop_back()
+	var entry: Dictionary = _undo_stack.redo()
 	var action_type := str(entry.get("action", ""))
 	var rect_data: Dictionary = entry.get("rect", {})
 	var rect: Rect2i = _dict_to_rect(rect_data)
@@ -173,10 +179,29 @@ func redo() -> UndoRedoResult:
 		_remove_last_matching(rect)
 	else:
 		return result
-	undo_stack.append({"action": action_type, "rect": rect_data.duplicate()})
 	_recompute_completion()
 	result.action_type = action_type
 	result.rect = rect_data.duplicate()
+	return result
+
+
+func can_undo() -> bool:
+	return not is_completed and _undo_stack.can_undo()
+
+
+func can_redo() -> bool:
+	return not is_completed and _undo_stack.can_redo()
+
+
+func can_hint() -> bool:
+	return not is_completed and hints_used < MAX_HINTS_ALLOWED
+
+
+func get_unplaced_solution_rects() -> Array[Rect2i]:
+	var result: Array[Rect2i] = []
+	for rect in solution:
+		if not _has_rect(rect):
+			result.append(rect)
 	return result
 
 
