@@ -57,6 +57,20 @@ class BlockValueConstraint extends SudokuConstraint:
 		return "block_value_%d_%d" % [blocked_index, blocked_value]
 
 
+# Helper: blocks every value placement at a specific index — always unsatisfiable.
+class BlockAllAtIndexConstraint extends SudokuConstraint:
+	var blocked_index: int
+
+	func _init(idx: int) -> void:
+		blocked_index = idx
+
+	func is_valid(grid: Array[int], index: int, value: int) -> bool:
+		return index != blocked_index
+
+	func get_id() -> String:
+		return "block_all_%d" % blocked_index
+
+
 # ---------------------------------------------------------------------------
 # 1. SudokuConstraint base-class default implementations
 # ---------------------------------------------------------------------------
@@ -345,4 +359,19 @@ func test_solve_logic_rejects_completed_grid_with_constraint_violation() -> void
 	var solved := solver.solve_logic(grid, [c])
 	assert_false(solved,
 		"solve_logic must return false for a completed grid that violates constraints")
+
+
+# ---------------------------------------------------------------------------
+# 13. Focused regression: unsatisfiable constraints never escape generate()
+# ---------------------------------------------------------------------------
+
+func test_generate_returns_empty_dict_for_unsatisfiable_constraints() -> void:
+	# BlockAllAtIndexConstraint forbids any value at index 0, making a valid
+	# 9×9 Sudoku grid impossible. generate() must return {} — never a
+	# constraint-violating puzzle/solution pair.
+	var gen := SudokuGenerator.new()
+	var c := BlockAllAtIndexConstraint.new(0)
+	var result := gen.generate(SudokuSolver.Difficulty.EASY, 42, [c])
+	assert_eq(result, {},
+		"generate() must return {} when constraints are unsatisfiable")
 

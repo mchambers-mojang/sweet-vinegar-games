@@ -42,6 +42,9 @@ func generate(difficulty: SudokuSolver.Difficulty, seed: int = -1, constraints: 
 		rng.randomize()
 	for attempt in MAX_ATTEMPTS:
 		var full_grid := _generate_full_grid(rng, constraints)
+		if full_grid.is_empty():
+			# Constraints are unsatisfiable — no valid grid exists, fail fast.
+			return {}
 		var puzzle := _remove_cells(full_grid, difficulty, rng, constraints)
 		if puzzle.is_empty():
 			continue
@@ -66,6 +69,9 @@ func generate(difficulty: SudokuSolver.Difficulty, seed: int = -1, constraints: 
 
 	# Fallback: return whatever we get closest to
 	var fallback_full_grid := _generate_full_grid(rng, constraints)
+	if fallback_full_grid.is_empty():
+		# Constraints are unsatisfiable — signal failure to caller.
+		return {}
 	var fallback_puzzle := _remove_cells(fallback_full_grid, difficulty, rng, constraints)
 	if fallback_puzzle.is_empty():
 		fallback_puzzle = _simple_remove(fallback_full_grid, CLUE_TARGETS[difficulty], rng, constraints)
@@ -132,30 +138,31 @@ func _generate_full_grid(rng: RandomNumberGenerator, constraints: Array = []) ->
 		empty.resize(81)
 		empty.fill(0)
 		var solutions := SudokuSolver.solve_brute_force(empty, 1, constraints)
-		if not solutions.is_empty():
-			var base_solution: Array[int] = solutions[0]
-			# Try a random digit relabelling for variety. Value-sensitive
-			# constraints (e.g. cage sums) are not invariant under arbitrary
-			# bijections, so we validate each attempt and retry up to 8 times.
-			# If no relabelling satisfies the constraints, use the raw solution.
-			var relabel_digits := [1, 2, 3, 4, 5, 6, 7, 8, 9]
-			var found_relabel := false
-			for _r in MAX_RELABEL_ATTEMPTS:
-				_shuffle_array(relabel_digits, rng)
-				var relabel_map := {}
-				for i in 9:
-					relabel_map[i + 1] = relabel_digits[i]
-				var candidate: Array[int] = base_solution.duplicate()
-				for i in 81:
-					candidate[i] = relabel_map[candidate[i]]
-				if SudokuSolver.is_complete_grid_valid(candidate, constraints):
-					grid = candidate
-					found_relabel = true
-					break
-			if not found_relabel:
-				grid = base_solution
-		# If brute-force also fails the constraints are unsatisfiable; return
-		# the best-effort transformed grid so generation can still proceed.
+		if solutions.is_empty():
+			# Constraints are unsatisfiable — propagate failure as empty array.
+			var failure: Array[int] = []
+			return failure
+		var base_solution: Array[int] = solutions[0]
+		# Try a random digit relabelling for variety. Value-sensitive
+		# constraints (e.g. cage sums) are not invariant under arbitrary
+		# bijections, so we validate each attempt and retry up to 8 times.
+		# If no relabelling satisfies the constraints, use the raw solution.
+		var relabel_digits := [1, 2, 3, 4, 5, 6, 7, 8, 9]
+		var found_relabel := false
+		for _r in MAX_RELABEL_ATTEMPTS:
+			_shuffle_array(relabel_digits, rng)
+			var relabel_map := {}
+			for i in 9:
+				relabel_map[i + 1] = relabel_digits[i]
+			var candidate: Array[int] = base_solution.duplicate()
+			for i in 81:
+				candidate[i] = relabel_map[candidate[i]]
+			if SudokuSolver.is_complete_grid_valid(candidate, constraints):
+				grid = candidate
+				found_relabel = true
+				break
+		if not found_relabel:
+			grid = base_solution
 
 	return grid
 
