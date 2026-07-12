@@ -17,7 +17,6 @@ func generate(difficulty: int, seed: int = -1) -> Dictionary:
 	else:
 		rng.randomize()
 
-	var last_result := {}
 	for _attempt in MAX_ATTEMPTS:
 		var full_grid := SudokuGenerator.new()._generate_full_grid(rng)
 		var cages := KillerCagePartitionerScript.partition_with_rng(full_grid, difficulty, rng)
@@ -38,13 +37,7 @@ func generate(difficulty: int, seed: int = -1) -> Dictionary:
 				"cages": constraint.get_cages(),
 				"difficulty": solver.difficulty,
 			}
-		last_result = {
-			"puzzle": puzzle,
-			"solution": full_grid,
-			"cages": constraint.get_cages(),
-			"difficulty": solver.difficulty,
-		}
-	return last_result
+	return {}
 
 
 func _create_puzzle_with_minimal_givens(full_grid: Array[int], constraint, difficulty: int, rng: RandomNumberGenerator) -> Array[int]:
@@ -77,13 +70,18 @@ func _minimize_givens(puzzle: Array[int], constraint, rng: RandomNumberGenerator
 	minimized.assign(puzzle.duplicate())
 	var indices := range(81)
 	_shuffle_array(indices, rng)
-	for index in indices:
-		if minimized[index] == 0:
-			continue
-		var backup := int(minimized[index])
-		minimized[index] = 0
-		if not _is_acceptable_puzzle(minimized, constraint):
-			minimized[index] = backup
+	var removed_any := true
+	while removed_any:
+		removed_any = false
+		for index in indices:
+			if minimized[index] == 0:
+				continue
+			var backup := int(minimized[index])
+			minimized[index] = 0
+			if not _is_acceptable_puzzle(minimized, constraint):
+				minimized[index] = backup
+				continue
+			removed_any = true
 	return minimized
 
 

@@ -56,3 +56,12 @@ func test_get_affected_indices_returns_other_cells_in_cage() -> void:
 		{"cells": [10, 11, 20], "sum": 14},
 	])
 	assert_eq(constraint.get_affected_indices(11), [10, 20])
+
+
+func test_brute_force_rejects_completed_grid_that_breaks_cage_constraints() -> void:
+	var grid: Array[int] = []
+	grid.assign(SudokuGenerator.SEED_GRID.duplicate())
+	var constraint := KillerConstraintScript.new([
+		{"cells": [0, 1], "sum": 9},
+	])
+	assert_eq(SudokuSolver.solve_brute_force(grid, 2, [constraint]).size(), 0)

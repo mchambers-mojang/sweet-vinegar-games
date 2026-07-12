@@ -22,6 +22,8 @@ func solve_logic(grid: Array[int], p_constraint = null) -> bool:
 	if p_constraint != null:
 		constraint = p_constraint
 	techniques_used.clear()
+	if not _filled_cells_are_valid(grid):
+		return false
 
 	while true:
 		var candidates := _build_candidates(grid)
@@ -188,7 +190,7 @@ func _apply_naked_singles(grid: Array[int], candidates: Array) -> bool:
 
 func _apply_hidden_singles(grid: Array[int], candidates: Array) -> bool:
 	var progress := false
-	for unit in _get_units():
+	for unit in SudokuSolver._get_all_units():
 		for digit in range(1, 10):
 			var positions: Array[int] = []
 			for index in unit:
@@ -198,16 +200,6 @@ func _apply_hidden_singles(grid: Array[int], candidates: Array) -> bool:
 				grid[positions[0]] = digit
 				progress = true
 	return progress
-
-
-func _get_units() -> Array:
-	var units := SudokuSolver._get_all_units()
-	for cage in constraint.get_cages():
-		var unit: Array[int] = []
-		for cell in cage["cells"]:
-			unit.append(int(cell))
-		units.append(unit)
-	return units
 
 
 func _has_dead_cell(grid: Array[int], candidates: Array) -> bool:
@@ -220,6 +212,23 @@ func _has_dead_cell(grid: Array[int], candidates: Array) -> bool:
 func _is_complete(grid: Array[int]) -> bool:
 	for value in grid:
 		if int(value) == 0:
+			return false
+	return _filled_cells_are_valid(grid)
+
+
+func _filled_cells_are_valid(grid: Array[int]) -> bool:
+	if not SudokuSolver._are_filled_cells_valid(grid):
+		return false
+	if constraint == null:
+		return true
+	for index in 81:
+		var value := int(grid[index])
+		if value == 0:
+			continue
+		grid[index] = 0
+		var is_valid: bool = constraint.is_valid(grid, index, value)
+		grid[index] = value
+		if not is_valid:
 			return false
 	return true
 
