@@ -146,6 +146,10 @@ func start_new_game(diff: int) -> void:
 	begin_session()
 
 
+func launch(params: LaunchParams) -> void:
+	start_new_game(params.option_value)
+
+
 func resume_game(data: Dictionary) -> void:
 	difficulty = data.get("difficulty", 0)
 	_can_continue_after_failure = data.get("can_continue_after_failure", false)

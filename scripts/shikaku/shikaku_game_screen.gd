@@ -95,6 +95,10 @@ func start_new_game(w: int, h: int) -> void:
 	begin_session()
 
 
+func launch(params: LaunchParams) -> void:
+	start_new_game(params.option_value, params.option_value)
+
+
 func resume_game(data: Dictionary) -> void:
 	grid_width = data.get("width", 10)
 	grid_height = data.get("height", 10)

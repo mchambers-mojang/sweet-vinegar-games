@@ -56,22 +56,13 @@ extends Resource
 
 # --- Game-scene launch ---
 
-## Method to call on the game scene node when starting a new game.
-## Leave empty when no method call is needed (use start_game_meta_key only).
-@export var start_game_method: String = "start_new_game"
-
-## When true, the resolved option value is passed as the first argument
-## to start_game_method.
-@export var start_game_passes_option: bool = false
-
-## When true, the resolved option value is passed as BOTH the first and
-## second argument (used for Shikaku where width == height == grid_size).
-@export var start_game_passes_option_twice: bool = false
-
-## When non-empty, set_meta(start_game_meta_key, option_value) is called on
-## the game scene before adding it to the tree.
-## Used for Carom, which reads difficulty via get_meta("carom_difficulty").
-@export var start_game_meta_key: String = ""
+## Build a LaunchParams instance for the given resolved option value.
+## Called by GameMenu._start_game() to produce the params passed to
+## game_scene.launch(params).
+func build_launch_params(option_val: int) -> LaunchParams:
+	var p := LaunchParams.new()
+	p.option_value = option_val
+	return p
 
 # --- Abandon stats ---
 

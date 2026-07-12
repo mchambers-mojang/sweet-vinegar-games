@@ -145,24 +145,16 @@ func _setup_leaderboard_button(stats_btn: Button) -> void:
 
 
 ## Called when starting a new game.
-## Config-driven: reads game_scene_path, start_game_method, and option value.
-## Legacy: override to instantiate scene and start.
+## Builds a LaunchParams from the current option value and calls
+## game_scene.launch(params).
 func _start_game() -> void:
 	if not config:
 		return
-	var option_val := _get_current_option_value()
+	var params := config.build_launch_params(_get_current_option_value())
 	SceneTransition.transition_with_callback(func() -> void:
 		var game_scene: Node = load(config.game_scene_path).instantiate()
-		if not config.start_game_meta_key.is_empty():
-			game_scene.set_meta(config.start_game_meta_key, option_val)
 		get_tree().root.add_child(game_scene)
-		if not config.start_game_method.is_empty():
-			if config.start_game_passes_option_twice:
-				game_scene.call(config.start_game_method, option_val, option_val)
-			elif config.start_game_passes_option:
-				game_scene.call(config.start_game_method, option_val)
-			else:
-				game_scene.call(config.start_game_method)
+		game_scene.launch(params)
 		queue_free()
 	)
 

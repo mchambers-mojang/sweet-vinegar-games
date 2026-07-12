@@ -110,6 +110,10 @@ func start_new_game() -> void:
 	begin_session()
 
 
+func launch(_params: LaunchParams) -> void:
+	start_new_game()
+
+
 func resume_game(data: Dictionary) -> void:
 	_new_best_shown = data.get("new_best_shown", false)
 	undo_stack.clear()

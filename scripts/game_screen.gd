@@ -88,6 +88,14 @@ func _deserialize_state(_data: Dictionary) -> void:
 	pass
 
 
+## Start a new game with the provided launch parameters.
+## Called by GameMenu after the scene is added to the tree.
+## Subclasses implement this to extract the relevant fields from params
+## (e.g. params.option_value for difficulty or grid size) and call begin_session().
+func launch(_params: LaunchParams) -> void:
+	pass
+
+
 ## Return true if the game has been explicitly initialized (from menu).
 ## Used to decide whether auto-resume should fire.
 func _is_initialized() -> bool:
