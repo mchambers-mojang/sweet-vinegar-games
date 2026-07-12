@@ -106,17 +106,17 @@ func _reduce_cage_candidates(grid: Array[int], candidates: Array) -> bool:
 		if empty_cells.is_empty():
 			continue
 
-		var cell_valid_digits_out := {}
+		var valid_digits_by_cell := {}
 		for cell in empty_cells:
-			cell_valid_digits_out[cell] = []
-		var assignment_count := _enumerate_cage_assignments(empty_cells, 0, candidates, used_digits, sum_so_far, target_sum, cell_valid_digits_out)
+			valid_digits_by_cell[cell] = []
+		var assignment_count := _enumerate_cage_assignments(empty_cells, 0, candidates, used_digits, sum_so_far, target_sum, valid_digits_by_cell)
 		if assignment_count == 0:
 			for cell in empty_cells:
 				candidates[cell] = []
 			continue
 
 		for cell in empty_cells:
-			var allowed: Array = cell_valid_digits_out[cell]
+			var allowed: Array = valid_digits_by_cell[cell]
 			var current: Array = candidates[cell]
 			var filtered: Array[int] = []
 			for digit in current:
@@ -128,7 +128,7 @@ func _reduce_cage_candidates(grid: Array[int], candidates: Array) -> bool:
 	return changed
 
 
-func _enumerate_cage_assignments(empty_cells: Array[int], cell_index: int, candidates: Array, used_digits: Array[int], sum_so_far: int, target_sum: int, cell_valid_digits_out: Dictionary) -> int:
+func _enumerate_cage_assignments(empty_cells: Array[int], cell_index: int, candidates: Array, used_digits: Array[int], sum_so_far: int, target_sum: int, valid_digits_by_cell: Dictionary) -> int:
 	if cell_index >= empty_cells.size():
 		return 1 if sum_so_far == target_sum else 0
 
@@ -150,9 +150,9 @@ func _enumerate_cage_assignments(empty_cells: Array[int], cell_index: int, candi
 		if not _remaining_sum_possible(next_used, next_sum, target_sum, remaining_cells):
 			continue
 
-		var sub_count := _enumerate_cage_assignments(empty_cells, cell_index + 1, candidates, next_used, next_sum, target_sum, cell_valid_digits_out)
+		var sub_count := _enumerate_cage_assignments(empty_cells, cell_index + 1, candidates, next_used, next_sum, target_sum, valid_digits_by_cell)
 		if sub_count > 0:
-			var cell_digits: Array = cell_valid_digits_out[current_cell]
+			var cell_digits: Array = valid_digits_by_cell[current_cell]
 			if not digit in cell_digits:
 				cell_digits.append(digit)
 			count += sub_count
