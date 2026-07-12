@@ -34,7 +34,7 @@ func test_pure_killer_puzzle_generated_when_cages_provide_uniqueness() -> void:
 		})
 
 	var generator := KillerSudokuGeneratorScript.new()
-	var puzzle := generator._build_minimal_givens_puzzle(full_grid, KillerConstraintScript.new(cages), RandomNumberGenerator.new())
+	var puzzle := generator._minimize_from_full_grid(full_grid, KillerConstraintScript.new(cages), RandomNumberGenerator.new())
 	assert_eq(_count_givens(puzzle), 0)
 
 
@@ -45,7 +45,7 @@ func test_fallback_adds_only_needed_givens_for_uniqueness() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 42
 	var constraint := KillerConstraintScript.new([])
-	var puzzle := generator._build_minimal_givens_puzzle(full_grid, constraint, rng)
+	var puzzle := generator._minimize_from_full_grid(full_grid, constraint, rng)
 	assert_true(_count_givens(puzzle) > 0)
 	assert_true(generator._is_acceptable_puzzle(puzzle, constraint))
 
