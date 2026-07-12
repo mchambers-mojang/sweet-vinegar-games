@@ -38,8 +38,6 @@ var _rng := RandomNumberGenerator.new()
 
 # Block tray piece display nodes
 var _tray_panels: Array[Control] = []
-var undo_stack: Array[Dictionary] = []
-var redo_stack: Array[Dictionary] = []
 
 
 # --- GameScreen overrides ---
@@ -105,15 +103,11 @@ func _on_game_screen_ready() -> void:
 
 func start_new_game() -> void:
 	_new_best_shown = false
-	undo_stack.clear()
-	redo_stack.clear()
 	begin_session()
 
 
 func resume_game(data: Dictionary) -> void:
 	_new_best_shown = data.get("new_best_shown", false)
-	undo_stack.clear()
-	redo_stack.clear()
 	begin_session(data)
 
 
@@ -144,6 +138,7 @@ func _get_settings_snapshot() -> Dictionary:
 func _setup_game(saved_data: Dictionary) -> void:
 	var rotation_mode: bool = GameRulesRegistry.get_rule("blockudoku", "rotation_mode")
 	logic = BlockudokuLogic.new(rotation_mode)
+	logic.clear_undo_history()
 	if saved_data.is_empty():
 		_rng.seed = random_seed
 		board.reset()
@@ -447,7 +442,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 			_deal_new_blocks()
 
 		# Game-over check (logic.can_any_piece_fit() when we just dealt; otherwise use result flag)
-		redo_stack.clear()
+		logic.clear_redo()
 		var has_valid_move: bool
 		if place_result.new_blocks_dealt:
 			has_valid_move = logic.can_any_piece_fit()
@@ -461,10 +456,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 			_update_undo_redo_buttons()
 			_handle_game_over()
 		else:
-			undo_stack.append({
-				"before": before_state,
-				"after": _capture_move_state(),
-			})
+			logic.push_move(before_state, _capture_move_state())
 			_update_undo_redo_buttons()
 			_save_current_state()
 	else:
@@ -718,11 +710,10 @@ func _update_score_display() -> void:
 func _on_undo_pressed() -> void:
 	if logic.is_game_over:
 		return
-	if undo_stack.is_empty():
+	if not logic.can_undo():
 		return
-	var move: Dictionary = undo_stack.pop_back()
-	redo_stack.append(move)
-	_apply_move_state(move.get("before", {}))
+	var before_state: Dictionary = logic.undo_move()
+	_apply_move_state(before_state)
 	_update_undo_redo_buttons()
 	_save_current_state()
 
@@ -730,18 +721,17 @@ func _on_undo_pressed() -> void:
 func _on_redo_pressed() -> void:
 	if logic.is_game_over:
 		return
-	if redo_stack.is_empty():
+	if not logic.can_redo():
 		return
-	var move: Dictionary = redo_stack.pop_back()
-	undo_stack.append(move)
-	_apply_move_state(move.get("after", {}))
+	var after_state: Dictionary = logic.redo_move()
+	_apply_move_state(after_state)
 	_update_undo_redo_buttons()
 	_save_current_state()
 
 
 func _update_undo_redo_buttons() -> void:
-	undo_button.disabled = logic.is_game_over or undo_stack.is_empty()
-	redo_button.disabled = logic.is_game_over or redo_stack.is_empty()
+	undo_button.disabled = logic.is_game_over or not logic.can_undo()
+	redo_button.disabled = logic.is_game_over or not logic.can_redo()
 
 
 func _capture_move_state() -> Dictionary:
