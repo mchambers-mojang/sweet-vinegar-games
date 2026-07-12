@@ -495,10 +495,6 @@ func _setup_from_arrays(diff: int, p_puzzle: Array, p_solution: Array) -> void:
 	_undo_stack.clear()
 
 
-func _is_unsolved_editable(index: int) -> bool:
-	return puzzle[index] == 0 and current_grid[index] != solution[index]
-
-
 func _init_pencil_marks() -> void:
 	pencil_marks.clear()
 	pencil_marks.resize(GRID_CELLS)
@@ -617,3 +613,7 @@ func _get_completed_units(index: int) -> Array:
 		units.append({"type": "box", "unit_index": (box_row / 3) * 3 + box_col / 3, "cells": cells})
 
 	return units
+
+
+func _is_unsolved_editable(index: int) -> bool:
+	return puzzle[index] == 0 and current_grid[index] != solution[index]
