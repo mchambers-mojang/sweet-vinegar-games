@@ -128,6 +128,9 @@ static func _backtrack_mrv(grid: Array[int], solutions: Array[Array], max_soluti
 
 
 static func _are_filled_cells_valid(grid: Array[int], p_constraints: Array = []) -> bool:
+	## Temporarily clears each filled cell, validates it against the remaining
+	## grid and active constraints, then restores the original value before
+	## checking the next cell.
 	for index in 81:
 		var value := int(grid[index])
 		if value == 0:

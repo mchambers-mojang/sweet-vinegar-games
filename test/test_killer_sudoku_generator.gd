@@ -5,7 +5,7 @@ const KillerSudokuGeneratorScript := preload("res://scripts/sudoku/killer_sudoku
 const KillerSudokuSolverScript := preload("res://scripts/sudoku/killer_sudoku_solver.gd")
 
 
-class RejectingGenerator extends KillerSudokuGeneratorScript:
+class DuplicateDigitGenerator extends KillerSudokuGeneratorScript:
 	func _create_puzzle_with_minimal_givens(full_grid: Array[int], _constraint, _difficulty: int, _rng: RandomNumberGenerator) -> Array[int]:
 		var invalid: Array[int] = []
 		invalid.assign(full_grid.duplicate())
@@ -68,7 +68,7 @@ func test_fallback_adds_only_needed_givens_for_uniqueness() -> void:
 
 
 func test_generate_returns_empty_result_when_attempts_are_rejected() -> void:
-	var result: Dictionary = RejectingGenerator.new().generate(SudokuSolver.Difficulty.EASY, 9)
+	var result: Dictionary = DuplicateDigitGenerator.new().generate(SudokuSolver.Difficulty.EASY, 9)
 	assert_false(result.has("puzzle"))
 
 
