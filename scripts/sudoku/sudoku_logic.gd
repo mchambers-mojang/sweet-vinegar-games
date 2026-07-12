@@ -306,6 +306,26 @@ func use_hint(cell_index: int) -> HintResult:
 	return result
 
 
+## Select and fill a hint cell automatically.
+## Prefers preferred_index if it is unsolved and editable; otherwise picks a random unsolved cell.
+## Returns a result with success=false when no unsolved cell exists.
+func use_hint_auto(preferred_index: int) -> HintResult:
+	var index := -1
+	if preferred_index >= 0 and preferred_index < GRID_CELLS:
+		if _is_unsolved_editable(preferred_index):
+			index = preferred_index
+	if index < 0:
+		var candidates: Array[int] = []
+		for i in GRID_CELLS:
+			if _is_unsolved_editable(i):
+				candidates.append(i)
+		if candidates.is_empty():
+			return HintResult.new()
+		candidates.shuffle()
+		index = candidates[0]
+	return use_hint(index)
+
+
 ## Revert the most recent undoable action. Returns the restored cell state.
 func undo() -> UndoRedoResult:
 	var result := UndoRedoResult.new()
@@ -420,6 +440,38 @@ func count_filled_cells() -> int:
 
 func is_board_locked() -> bool:
 	return is_completed or is_failed
+
+
+## Returns true when there is at least one action to undo.
+func can_undo() -> bool:
+	return _undo_stack.can_undo()
+
+
+## Returns true when there is at least one action to redo.
+func can_redo() -> bool:
+	return _undo_stack.can_redo()
+
+
+## Count how many cells in the current grid contain the given number.
+func count_number_placements(number: int) -> int:
+	var count := 0
+	for v in current_grid:
+		if int(v) == number:
+			count += 1
+	return count
+
+
+## Pick a random unsolved cell (current_grid != solution). Returns -1 when fully solved.
+## Used by the cheat auto-solve so the screen never needs to scan the grid directly.
+func pick_unsolved_cell() -> int:
+	var candidates: Array[int] = []
+	for i in GRID_CELLS:
+		if current_grid[i] != solution[i]:
+			candidates.append(i)
+	if candidates.is_empty():
+		return -1
+	candidates.shuffle()
+	return candidates[0]
 
 
 # ---------------------------------------------------------------------------
@@ -561,3 +613,7 @@ func _get_completed_units(index: int) -> Array:
 		units.append({"type": "box", "unit_index": (box_row / 3) * 3 + box_col / 3, "cells": cells})
 
 	return units
+
+
+func _is_unsolved_editable(index: int) -> bool:
+	return puzzle[index] == 0 and current_grid[index] != solution[index]
