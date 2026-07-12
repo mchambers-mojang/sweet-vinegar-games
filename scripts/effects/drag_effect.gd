@@ -31,7 +31,13 @@ var _last_ring_pos := Vector2.ZERO
 
 func _ready() -> void:
 	layer = 90
+	_effects_enabled = PlatformSettings.particle_effects_enabled
+	PlatformSettings.feedback.changed.connect(_on_feedback_settings_changed)
 	_setup()
+
+
+func _on_feedback_settings_changed() -> void:
+	_effects_enabled = PlatformSettings.particle_effects_enabled
 
 
 func _setup() -> void:
@@ -61,6 +67,7 @@ func _setup() -> void:
 
 
 var _suppressed := false
+var _effects_enabled := true
 
 
 ## Call to prevent ripple/trail while game elements handle their own drag.
@@ -74,7 +81,7 @@ func unsuppress() -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if not PlatformSettings.particle_effects_enabled:
+	if not _effects_enabled:
 		return
 
 	var pos := Vector2.ZERO

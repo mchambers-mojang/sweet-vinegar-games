@@ -358,9 +358,9 @@ func _handle_number_first_cell_tap(index: int) -> void:
 			# Neon glass shatter + shockwave on error
 			if AppTheme.is_neon:
 				var error_cell_rect := board.get_cell_rect(index)
-				GlassShatter.create(board, error_cell_rect, Color(2.0, 0.0, 0.2), 10)
+				EffectFactory.glass_shatter(board, error_cell_rect, Color(2.0, 0.0, 0.2), 10)
 				var err_center := error_cell_rect.position + error_cell_rect.size / 2.0
-				NeonRing.create(board, err_center, Color(2.0, 0.0, 0.2), error_cell_rect.size.x * 2.5, 0.2, 0.4)
+				EffectFactory.neon_ring(board, err_center, Color(2.0, 0.0, 0.2), error_cell_rect.size.x * 2.5, 0.2, 0.4)
 				AppTheme.screen_shake(5.0, 0.15)
 
 			var revert_tween := create_tween()
@@ -390,7 +390,7 @@ func _handle_number_first_cell_tap(index: int) -> void:
 			if AppTheme.is_neon:
 				var placed_cell_rect := board.get_cell_rect(index)
 				var center := placed_cell_rect.position + placed_cell_rect.size / 2.0
-				NeonBurst.create(board, center, Color(0.0, 2.0, 1.6), 10, 0.8)
+				EffectFactory.neon_burst(board, center, Color(0.0, 2.0, 1.6), 10, 0.8)
 
 			for item in result.pencil_marks_removed:
 				board.cells[item["index"]].set_pencil_mark(item["number"], false)
@@ -464,9 +464,9 @@ func _place_or_note_number(number: int) -> void:
 			# Neon glass shatter + shockwave on error
 			if AppTheme.is_neon:
 				var error_cell_rect := board.get_cell_rect(index)
-				GlassShatter.create(board, error_cell_rect, Color(2.0, 0.0, 0.2), 10)
+				EffectFactory.glass_shatter(board, error_cell_rect, Color(2.0, 0.0, 0.2), 10)
 				var err_center := error_cell_rect.position + error_cell_rect.size / 2.0
-				NeonRing.create(board, err_center, Color(2.0, 0.0, 0.2), error_cell_rect.size.x * 2.5, 0.2, 0.4)
+				EffectFactory.neon_ring(board, err_center, Color(2.0, 0.0, 0.2), error_cell_rect.size.x * 2.5, 0.2, 0.4)
 				AppTheme.screen_shake(5.0, 0.15)
 
 			var revert_tween := create_tween()
@@ -500,7 +500,7 @@ func _place_or_note_number(number: int) -> void:
 			if AppTheme.is_neon:
 				var placed_cell_rect := board.get_cell_rect(index)
 				var center := placed_cell_rect.position + placed_cell_rect.size / 2.0
-				NeonBurst.create(board, center, Color(0.0, 2.0, 1.6), 10, 0.8)
+				EffectFactory.neon_burst(board, center, Color(0.0, 2.0, 1.6), 10, 0.8)
 
 			for item in result.pencil_marks_removed:
 				board.cells[item["index"]].set_pencil_mark(item["number"], false)
@@ -683,7 +683,7 @@ func _play_win_celebration() -> void:
 	if AppTheme.is_neon:
 		var center_rect := board.get_cell_rect(40)  # Center cell (row 4, col 4)
 		var center := center_rect.position + center_rect.size / 2.0
-		NeonRing.create(board, center, Color(0.0, 2.0, 1.5), center_rect.size.x * 8.0, 0.5, 1.2)
+		EffectFactory.neon_ring(board, center, Color(0.0, 2.0, 1.5), center_rect.size.x * 8.0, 0.5, 1.2)
 		AppTheme.screen_shake(6.0, 0.2)
 	# Cascade reveal: flash each cell in sequence from top-left to bottom-right
 	var tween := create_tween()
@@ -749,7 +749,7 @@ func _apply_unit_completion_effects(units: Array) -> void:
 		avg_x += cell_rect.position.x + cell_rect.size.x / 2.0
 		avg_y += cell_rect.position.y + cell_rect.size.y / 2.0
 	var center := Vector2(avg_x / flash_indices.size(), avg_y / flash_indices.size())
-	NeonRing.create(board, center, Color(0.0, 2.0, 1.5), board.get_cell_rect(0).size.x * 4.0, 0.35, 0.6)
+	EffectFactory.neon_ring(board, center, Color(0.0, 2.0, 1.5), board.get_cell_rect(0).size.x * 4.0, 0.35, 0.6)
 
 	for unit: Dictionary in units:
 		var unit_type: String = unit["type"]
@@ -758,19 +758,19 @@ func _apply_unit_completion_effects(units: Array) -> void:
 			var row_first := board.get_cell_rect(unit_index * 9)
 			var row_last := board.get_cell_rect(unit_index * 9 + 8)
 			var row_sweep_rect := Rect2(row_first.position, Vector2(row_last.position.x + row_last.size.x - row_first.position.x, row_first.size.y))
-			NeonSweep.create(board, row_sweep_rect, true, Color(0.0, 2.0, 1.5))
+			EffectFactory.neon_sweep(board, row_sweep_rect, true, Color(0.0, 2.0, 1.5))
 		elif unit_type == "col":
 			var col_first := board.get_cell_rect(unit_index)
 			var col_last := board.get_cell_rect(72 + unit_index)
 			var col_sweep_rect := Rect2(col_first.position, Vector2(col_first.size.x, col_last.position.y + col_last.size.y - col_first.position.y))
-			NeonSweep.create(board, col_sweep_rect, false, Color(2.0, 0.3, 1.8))
+			EffectFactory.neon_sweep(board, col_sweep_rect, false, Color(2.0, 0.3, 1.8))
 		elif unit_type == "box":
 			var box_row := (unit_index / 3) * 3
 			var box_col := (unit_index % 3) * 3
 			var box_first := board.get_cell_rect(box_row * 9 + box_col)
 			var box_last := board.get_cell_rect((box_row + 2) * 9 + box_col + 2)
 			var box_sweep_rect := Rect2(box_first.position, Vector2(box_last.position.x + box_last.size.x - box_first.position.x, box_last.position.y + box_last.size.y - box_first.position.y))
-			NeonSweep.create(board, box_sweep_rect, true, Color(1.5, 0.2, 1.0))
+			EffectFactory.neon_sweep(board, box_sweep_rect, true, Color(1.5, 0.2, 1.0))
 
 
 func _update_number_completion() -> void:

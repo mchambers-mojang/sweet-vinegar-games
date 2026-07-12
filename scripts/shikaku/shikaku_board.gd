@@ -319,7 +319,7 @@ func flash_all(color: Color, duration: float) -> void:
 				(rect.position.y + rect.size.y / 2.0) * cell_size
 			)
 			var rc: Color = rect_colors[i] if i < rect_colors.size() else Color(0.0, 1.5, 1.5)
-			NeonBurst.create(self, center, rc, 12, 1.2)
+			EffectFactory.neon_burst(self, center, rc, 12, 1.2)
 		AppTheme.screen_shake(8.0, 0.25)
 
 	var t := create_tween()

@@ -8,8 +8,6 @@ const LIFETIME := 0.4
 
 
 static func create(parent: Node, rect: Rect2, horizontal: bool = true, color: Color = Color(0.0, 2.0, 1.5)) -> void:
-	if not PlatformSettings.particle_effects_enabled:
-		return
 	var sweep := NeonSweep.new()
 	sweep.position = rect.position
 	parent.add_child(sweep)
