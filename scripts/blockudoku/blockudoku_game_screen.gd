@@ -379,7 +379,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 					(grid_pos.x + co.x + 0.5) * cell_size,
 					(grid_pos.y + co.y + 0.5) * cell_size
 				)
-				NeonBurst.create(board, cell_center, block_color, 6, 0.5)
+				EffectFactory.neon_burst(board, cell_center, block_color, 6, 0.5)
 
 			# Expanding ring from shape center
 			var bounds := BlockudokuShapes.get_bounds(_drag_shape)
@@ -387,7 +387,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 				(grid_pos.x + bounds.x / 2.0) * cell_size,
 				(grid_pos.y + bounds.y / 2.0) * cell_size
 			)
-			NeonRing.create(board, shape_center, block_color, cell_size * 2.0, 0.25, 0.3)
+			EffectFactory.neon_ring(board, shape_center, block_color, cell_size * 2.0, 0.25, 0.3)
 
 			# Cell flash — briefly brighten placed cells
 			board.flash_placed_cells(_drag_shape, grid_pos.x, grid_pos.y, block_color)
@@ -420,7 +420,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 				if AppTheme.is_neon:
 					var combo_center := origin + Vector2(cell_size * 4.5, cell_size * 4.5)
 					var combo_amp := minf(0.5 + place_result.combo * 0.3, 2.0)
-					NeonRing.create(board, combo_center, Color(2.0, 0.3, 1.8), cell_size * (4.0 + place_result.combo), 0.4, combo_amp)
+					EffectFactory.neon_ring(board, combo_center, Color(2.0, 0.3, 1.8), cell_size * (4.0 + place_result.combo), 0.4, combo_amp)
 			_stats.increment_counter("blockudoku", "total_clears", place_result.lines_cleared + place_result.boxes_cleared)
 			_achievements.track("blockudoku.clear_count", place_result.lines_cleared + place_result.boxes_cleared)
 			_achievements.track("blockudoku.combo_count", place_result.combo)
@@ -576,7 +576,7 @@ func _play_board_shatter() -> void:
 				var color: Color = board.cell_colors[cell_pos.y * board.GRID_SIZE + cell_pos.x]
 				if color == Color.TRANSPARENT:
 					color = AppTheme.get_color("cell_given")
-				GlassShatter.create(board, rect, color, 6)
+				EffectFactory.glass_shatter(board, rect, color, 6)
 				board.grid[cell_pos.y * board.GRID_SIZE + cell_pos.x] = 0
 				board.cell_colors[cell_pos.y * board.GRID_SIZE + cell_pos.x] = Color.TRANSPARENT
 			board.queue_redraw()
@@ -585,7 +585,7 @@ func _play_board_shatter() -> void:
 	if AppTheme.is_neon:
 		_shatter_tween.tween_callback(func() -> void:
 			var board_center := origin + Vector2(cell_size * 4.5, cell_size * 4.5)
-			NeonRing.create(board, board_center, Color(2.0, 0.0, 0.3), cell_size * 8.0, 0.5, 1.5)
+			EffectFactory.neon_ring(board, board_center, Color(2.0, 0.0, 0.3), cell_size * 8.0, 0.5, 1.5)
 			AppTheme.screen_shake(8.0, 0.3)
 		).set_delay(0.1)
 
