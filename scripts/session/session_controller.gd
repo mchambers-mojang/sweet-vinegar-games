@@ -12,6 +12,10 @@ extends RefCounted
 
 
 # --- Injected dependencies (default to global autoloads) ---
+# _recorder and _storage both default to ReplaySystem (merged autoload).
+# _sound and _haptic both default to FeedbackManager (merged autoload).
+# They remain separate parameters so unit tests can inject fine-grained mocks
+# for recording behaviour vs. persistence, and sound vs. haptic, independently.
 
 var _recorder: Object
 var _storage: Object
