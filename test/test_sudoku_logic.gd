@@ -283,3 +283,87 @@ func test_unit_completion_detection() -> void:
 			row_completed = true
 			break
 	assert_true(row_completed, "Completing row 0 should be reported in units_completed")
+
+
+# ---------------------------------------------------------------------------
+# 14. can_undo / can_redo
+# ---------------------------------------------------------------------------
+
+func test_can_undo_and_redo() -> void:
+	assert_false(logic.can_undo(), "No undo available before any action")
+	assert_false(logic.can_redo(), "No redo available before any action")
+
+	logic.place_number(2, 4)
+	assert_true(logic.can_undo(), "Undo should be available after a placement")
+	assert_false(logic.can_redo(), "No redo before any undo")
+
+	logic.undo()
+	assert_false(logic.can_undo(), "No undo after reverting the only action")
+	assert_true(logic.can_redo(), "Redo should be available after undo")
+
+	logic.redo()
+	assert_true(logic.can_undo(), "Undo available after redo")
+	assert_false(logic.can_redo(), "No redo after re-applying the only action")
+
+
+# ---------------------------------------------------------------------------
+# 15. count_number_placements
+# ---------------------------------------------------------------------------
+
+func test_count_number_placements() -> void:
+	# Baseline includes given cells already in current_grid
+	var initial_count := logic.count_number_placements(4)
+	# Place a 4 in an empty cell (puzzle[2]==0, solution[2]==4)
+	logic.place_number(2, 4)
+	assert_eq(logic.count_number_placements(4), initial_count + 1,
+		"Placing a 4 should increase the count by one")
+
+	logic.erase_cell(2)
+	assert_eq(logic.count_number_placements(4), initial_count,
+		"Erasing the placed 4 should restore the original count")
+
+
+# ---------------------------------------------------------------------------
+# 16. pick_unsolved_cell
+# ---------------------------------------------------------------------------
+
+func test_pick_unsolved_cell_returns_unsolved() -> void:
+	var index := logic.pick_unsolved_cell()
+	assert_true(index >= 0 and index < 81, "Should return a valid cell index")
+	assert_ne(logic.current_grid[index], logic.solution[index],
+		"Returned cell must not yet match the solution")
+
+
+func test_pick_unsolved_cell_returns_minus_one_when_complete() -> void:
+	# Fill all cells with correct answers
+	for i in 81:
+		logic.current_grid[i] = logic.solution[i]
+	var index := logic.pick_unsolved_cell()
+	assert_eq(index, -1, "Should return -1 when the board is fully solved")
+
+
+# ---------------------------------------------------------------------------
+# 17. use_hint_auto — preferred cell used when unsolved
+# ---------------------------------------------------------------------------
+
+func test_use_hint_auto_prefers_selected_cell() -> void:
+	var preferred := 2  # puzzle[2]==0, solution[2]==4 — unsolved editable cell
+	var result := logic.use_hint_auto(preferred)
+	assert_true(result.success, "Hint should succeed when a valid unsolved cell is preferred")
+	assert_eq(result.cell_index, preferred, "Preferred unsolved cell should be chosen")
+	assert_eq(result.number, logic.solution[preferred])
+
+
+func test_use_hint_auto_falls_back_when_preferred_already_correct() -> void:
+	# Make the preferred cell already correctly placed
+	logic.current_grid[2] = logic.solution[2]
+	var result := logic.use_hint_auto(2)
+	assert_true(result.success, "Hint should succeed by picking another unsolved cell")
+	assert_ne(result.cell_index, 2, "Should not choose the already-correct preferred cell")
+
+
+func test_use_hint_auto_fails_when_no_unsolved_cells() -> void:
+	for i in 81:
+		logic.current_grid[i] = logic.solution[i]
+	var result := logic.use_hint_auto(-1)
+	assert_false(result.success, "Should return success=false when nothing left to hint")

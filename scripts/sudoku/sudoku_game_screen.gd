@@ -253,16 +253,10 @@ func _cheat_place_one() -> void:
 	if _is_board_locked():
 		_cheat_active = false
 		return
-	# Find all unsolved cells (empty or wrong) and pick one at random
-	var unsolved_indices: Array[int] = []
-	for i in 81:
-		if logic.current_grid[i] != logic.solution[i]:
-			unsolved_indices.append(i)
-	if unsolved_indices.is_empty():
+	var index := logic.pick_unsolved_cell()
+	if index < 0:
 		_cheat_active = false
 		return
-	unsolved_indices.shuffle()
-	var index := unsolved_indices[0]
 
 	board.select_cell(index)
 
@@ -346,59 +340,9 @@ func _handle_number_first_cell_tap(index: int) -> void:
 			session.vibrate_light()
 	else:
 		var result := logic.place_number(index, _selected_number)
-		if not result.valid:
-			return
-		if result.strikes_added > 0:
-			_update_strikes_display()
-			_play_error_feedback()
-			cell.set_value(_selected_number)
-			cell.set_error(true)
-			var revert_cell := cell
-
-			# Neon glass shatter + shockwave on error
-			if AppTheme.is_neon:
-				var error_cell_rect := board.get_cell_rect(index)
-				GlassShatter.create(board, error_cell_rect, Color(2.0, 0.0, 0.2), 10)
-				var err_center := error_cell_rect.position + error_cell_rect.size / 2.0
-				NeonRing.create(board, err_center, Color(2.0, 0.0, 0.2), error_cell_rect.size.x * 2.5, 0.2, 0.4)
-				AppTheme.screen_shake(5.0, 0.15)
-
-			var revert_tween := create_tween()
-			revert_tween.tween_interval(0.4)
-			revert_tween.tween_callback(func() -> void:
-				revert_cell.value = 0
-				revert_cell.is_error = false
-				revert_cell.queue_redraw()
-			)
-			if result.game_failed:
-				_can_continue_after_failure = false
-				_update_button_states()
-				session.set_stats_counter("general", "current_win_streak", 0)
-				session.check_achievements()
-				_log_game_over_analytics(false)
-				_show_fail_dialog()
+		if _apply_single_place_result(result, cell, false):
 			_save_current_state()
-			_update_number_completion()
-			board._update_highlighting()
 			return
-		if result.placed:
-			cell.set_value(result.number)
-			cell.set_error(false)
-			cell.set_cell_color(Color.TRANSPARENT)
-
-			# Neon burst on correct placement
-			if AppTheme.is_neon:
-				var placed_cell_rect := board.get_cell_rect(index)
-				var center := placed_cell_rect.position + placed_cell_rect.size / 2.0
-				NeonBurst.create(board, center, Color(0.0, 2.0, 1.6), 10, 0.8)
-
-			for item in result.pencil_marks_removed:
-				board.cells[item["index"]].set_pencil_mark(item["number"], false)
-			_apply_unit_completion_effects(result.units_completed)
-			_update_number_completion()
-			board._update_highlighting()
-			if result.game_won:
-				_handle_win()
 	_save_current_state()
 
 
@@ -451,66 +395,9 @@ func _place_or_note_number(number: int) -> void:
 			session.vibrate_light()
 	else:
 		var result := logic.place_number(index, number)
-		if not result.valid:
-			return
-		if result.strikes_added > 0:
-			_update_strikes_display()
-			_play_error_feedback()
-			# Briefly flash the wrong number then revert
-			cell.set_value(number)
-			cell.set_error(true)
-			var revert_cell := cell
-
-			# Neon glass shatter + shockwave on error
-			if AppTheme.is_neon:
-				var error_cell_rect := board.get_cell_rect(index)
-				GlassShatter.create(board, error_cell_rect, Color(2.0, 0.0, 0.2), 10)
-				var err_center := error_cell_rect.position + error_cell_rect.size / 2.0
-				NeonRing.create(board, err_center, Color(2.0, 0.0, 0.2), error_cell_rect.size.x * 2.5, 0.2, 0.4)
-				AppTheme.screen_shake(5.0, 0.15)
-
-			var revert_tween := create_tween()
-			revert_tween.tween_interval(0.4)
-			revert_tween.tween_callback(func() -> void:
-				revert_cell.value = 0
-				revert_cell.is_error = false
-				revert_cell.queue_redraw()
-			)
-
-			if result.game_failed:
-				_can_continue_after_failure = false
-				_update_button_states()
-				session.set_stats_counter("general", "current_win_streak", 0)
-				session.check_achievements()
-				_log_game_over_analytics(false)
-				_show_fail_dialog()
+		if _apply_single_place_result(result, cell, true):
 			_save_current_state()
-			_update_number_completion()
-			board._update_highlighting()
 			return
-
-		if result.placed:
-			cell.set_value(result.number)
-			cell.set_error(false)
-			cell.set_cell_color(Color.TRANSPARENT)
-			session.play_sound_place()
-			session.vibrate_light()
-
-			# Neon burst on correct placement
-			if AppTheme.is_neon:
-				var placed_cell_rect := board.get_cell_rect(index)
-				var center := placed_cell_rect.position + placed_cell_rect.size / 2.0
-				NeonBurst.create(board, center, Color(0.0, 2.0, 1.6), 10, 0.8)
-
-			for item in result.pencil_marks_removed:
-				board.cells[item["index"]].set_pencil_mark(item["number"], false)
-			_apply_unit_completion_effects(result.units_completed)
-			_update_number_completion()
-			board._update_highlighting()
-
-			if result.game_won:
-				_handle_win()
-
 	_save_current_state()
 
 
@@ -527,30 +414,14 @@ func _on_hint_pressed() -> void:
 		return
 	session.user_action("sudoku_hint_used", {"selected_index": board.selected_index})
 
-	var index: int = -1
+	var result := logic.use_hint_auto(board.selected_index)
+	if not result.success:
+		return
 
-	# Use selected cell if it's unsolved
-	if board.selected_index >= 0:
-		var sel := board.selected_index
-		if not board.cells[sel].is_given and logic.current_grid[sel] != logic.solution[sel]:
-			index = sel
+	board.selected_index = result.cell_index
+	session.record_input(elapsed_time, "hint_pressed", {"index": result.cell_index, "value": result.number})
 
-	# Otherwise pick a random unsolved cell
-	if index < 0:
-		var empty_cells: Array[int] = []
-		for i in 81:
-			if logic.current_grid[i] == 0 or logic.current_grid[i] != logic.solution[i]:
-				empty_cells.append(i)
-		if empty_cells.is_empty():
-			return
-		empty_cells.shuffle()
-		index = empty_cells[0]
-
-	board.selected_index = index
-	session.record_input(elapsed_time, "hint_pressed", {"index": index, "value": logic.solution[index]})
-
-	var result := logic.use_hint(index)
-	var cell := board.cells[index]
+	var cell := board.cells[result.cell_index]
 	cell.set_value(result.number)
 	cell.set_error(false)
 	hint_button.disabled = true
@@ -617,7 +488,7 @@ func _on_back_pressed() -> void:
 func _on_undo_pressed() -> void:
 	if _is_board_locked():
 		return
-	if logic.undo_stack.is_empty():
+	if not logic.can_undo():
 		return
 	session.user_action("sudoku_undo")
 	var result := logic.undo()
@@ -632,7 +503,7 @@ func _on_undo_pressed() -> void:
 func _on_redo_pressed() -> void:
 	if _is_board_locked():
 		return
-	if logic.redo_stack.is_empty():
+	if not logic.can_redo():
 		return
 	session.user_action("sudoku_redo")
 	var result := logic.redo()
@@ -644,6 +515,64 @@ func _on_redo_pressed() -> void:
 	_save_current_state()
 
 
+
+
+## Applies the visual side-effects of a logic.place_number() result to the given cell node.
+## play_success_sounds: whether to play placement sound + light haptic on a correct placement.
+## Returns true when the caller should stop further processing (invalid action or error state).
+## The caller is responsible for calling _save_current_state() after this returns.
+func _apply_single_place_result(result: SudokuLogic.PlaceResult, cell_node: SudokuCell, play_success_sounds: bool) -> bool:
+	if not result.valid:
+		return true
+
+	if result.strikes_added > 0:
+		_update_strikes_display()
+		_play_error_feedback()
+		cell_node.set_value(result.number)
+		cell_node.set_error(true)
+		var revert_cell := cell_node
+		if AppTheme.is_neon:
+			var error_cell_rect := board.get_cell_rect(result.cell_index)
+			GlassShatter.create(board, error_cell_rect, Color(2.0, 0.0, 0.2), 10)
+			var err_center := error_cell_rect.position + error_cell_rect.size / 2.0
+			NeonRing.create(board, err_center, Color(2.0, 0.0, 0.2), error_cell_rect.size.x * 2.5, 0.2, 0.4)
+			AppTheme.screen_shake(5.0, 0.15)
+		var revert_tween := create_tween()
+		revert_tween.tween_interval(0.4)
+		revert_tween.tween_callback(func() -> void:
+			revert_cell.value = 0
+			revert_cell.is_error = false
+			revert_cell.queue_redraw()
+		)
+		if result.game_failed:
+			_can_continue_after_failure = false
+			_update_button_states()
+			session.set_stats_counter("general", "current_win_streak", 0)
+			session.check_achievements()
+			_log_game_over_analytics(false)
+			_show_fail_dialog()
+		return true
+
+	if result.placed:
+		cell_node.set_value(result.number)
+		cell_node.set_error(false)
+		cell_node.set_cell_color(Color.TRANSPARENT)
+		if play_success_sounds:
+			session.play_sound_place()
+			session.vibrate_light()
+		if AppTheme.is_neon:
+			var placed_cell_rect := board.get_cell_rect(result.cell_index)
+			var center := placed_cell_rect.position + placed_cell_rect.size / 2.0
+			NeonBurst.create(board, center, Color(0.0, 2.0, 1.6), 10, 0.8)
+		for item in result.pencil_marks_removed:
+			board.cells[item["index"]].set_pencil_mark(item["number"], false)
+		_apply_unit_completion_effects(result.units_completed)
+		_update_number_completion()
+		board._update_highlighting()
+		if result.game_won:
+			_handle_win()
+
+	return false
 
 
 func _handle_win() -> void:
@@ -776,22 +705,13 @@ func _apply_unit_completion_effects(units: Array) -> void:
 func _update_number_completion() -> void:
 	if logic == null:
 		return
-	var counts: Array[int] = []
-	counts.resize(10)
-	counts.fill(0)
-	for i in 81:
-		if logic.current_grid[i] > 0:
-			counts[logic.current_grid[i]] += 1
-
 	for i in range(9):
 		if i < _number_buttons.size():
 			var btn := _number_buttons[i]
 			var num := i + 1
-			btn.disabled = counts[num] >= 9
-			if counts[num] >= 9:
-				btn.modulate = Color(1, 1, 1, 0.3)
-			else:
-				btn.modulate = Color.WHITE
+			var count := logic.count_number_placements(num)
+			btn.disabled = count >= 9
+			btn.modulate = Color(1, 1, 1, 0.3) if count >= 9 else Color.WHITE
 
 
 func _update_strikes_display() -> void:
@@ -811,8 +731,8 @@ func _update_button_states() -> void:
 	if logic == null:
 		return
 	var board_locked := _is_board_locked()
-	undo_button.disabled = board_locked or logic.undo_stack.is_empty()
-	redo_button.disabled = board_locked or logic.redo_stack.is_empty()
+	undo_button.disabled = board_locked or not logic.can_undo()
+	redo_button.disabled = board_locked or not logic.can_redo()
 	erase_button.visible = GameRulesRegistry.get_rule("sudoku", "error_mode") != "strict"
 	hint_button.disabled = board_locked or logic.hints_used >= 1
 
