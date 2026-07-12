@@ -146,6 +146,10 @@ func start_new_game(diff: int) -> void:
 	begin_session()
 
 
+func launch(params: LaunchParams) -> void:
+	start_new_game(params.option_value)
+
+
 func resume_game(data: Dictionary) -> void:
 	difficulty = data.get("difficulty", 0)
 	_can_continue_after_failure = data.get("can_continue_after_failure", false)
@@ -213,8 +217,8 @@ func _setup_game(saved_data: Dictionary) -> void:
 
 
 func _increment_stats() -> void:
-	session.increment_stats_counter("sudoku", "games_started")
-	session.increment_stats_counter("sudoku", "started_d%d" % difficulty)
+	_stats.increment_counter("sudoku", "games_started")
+	_stats.increment_counter("sudoku", "started_d%d" % difficulty)
 
 
 func _get_analytics_params() -> Dictionary:
@@ -287,7 +291,7 @@ func _cheat_place_one() -> void:
 func _on_cell_selected(index: int) -> void:
 	if _is_board_locked():
 		return
-	session.record_input(elapsed_time, "cell_selected", {"index": index})
+	_recorder.record_input(elapsed_time, "cell_selected", {"index": index})
 
 	var now := Time.get_ticks_msec() / 1000.0
 	var cell := board.cells[index]
@@ -342,8 +346,8 @@ func _handle_number_first_cell_tap(index: int) -> void:
 		if pr.valid:
 			cell.pencil_marks = (logic.pencil_marks[index] as Array).duplicate()
 			cell.queue_redraw()
-			session.play_sound_pencil()
-			session.vibrate_light()
+			_sound.play_pencil()
+			_haptic.vibrate_light()
 	else:
 		var result := logic.place_number(index, _selected_number)
 		if not result.valid:
@@ -373,8 +377,8 @@ func _handle_number_first_cell_tap(index: int) -> void:
 			if result.game_failed:
 				_can_continue_after_failure = false
 				_update_button_states()
-				session.set_stats_counter("general", "current_win_streak", 0)
-				session.check_achievements()
+				_stats.set_counter("general", "current_win_streak", 0)
+				_achievements.check_stats()
 				_log_game_over_analytics(false)
 				_show_fail_dialog()
 			_save_current_state()
@@ -405,7 +409,7 @@ func _handle_number_first_cell_tap(index: int) -> void:
 func _on_number_pressed(number: int) -> void:
 	if _is_board_locked():
 		return
-	session.record_input(elapsed_time, "number_button", {
+	_recorder.record_input(elapsed_time, "number_button", {
 		"number": number,
 		"notes_mode": notes_mode,
 		"input_mode": GameRulesRegistry.get_rule("sudoku", "input_mode"),
@@ -447,8 +451,8 @@ func _place_or_note_number(number: int) -> void:
 		if pr.valid:
 			cell.pencil_marks = (logic.pencil_marks[index] as Array).duplicate()
 			cell.queue_redraw()
-			session.play_sound_pencil()
-			session.vibrate_light()
+			_sound.play_pencil()
+			_haptic.vibrate_light()
 	else:
 		var result := logic.place_number(index, number)
 		if not result.valid:
@@ -480,8 +484,8 @@ func _place_or_note_number(number: int) -> void:
 			if result.game_failed:
 				_can_continue_after_failure = false
 				_update_button_states()
-				session.set_stats_counter("general", "current_win_streak", 0)
-				session.check_achievements()
+				_stats.set_counter("general", "current_win_streak", 0)
+				_achievements.check_stats()
 				_log_game_over_analytics(false)
 				_show_fail_dialog()
 			_save_current_state()
@@ -493,8 +497,8 @@ func _place_or_note_number(number: int) -> void:
 			cell.set_value(result.number)
 			cell.set_error(false)
 			cell.set_cell_color(Color.TRANSPARENT)
-			session.play_sound_place()
-			session.vibrate_light()
+			_sound.play_place()
+			_haptic.vibrate_light()
 
 			# Neon burst on correct placement
 			if AppTheme.is_neon:
@@ -525,7 +529,7 @@ func _on_notes_pressed() -> void:
 func _on_hint_pressed() -> void:
 	if _is_board_locked() or logic.hints_used >= 1:
 		return
-	session.user_action("sudoku_hint_used", {"selected_index": board.selected_index})
+	_crash.register_user_action("sudoku_hint_used", {"selected_index": board.selected_index})
 
 	var index: int = -1
 
@@ -547,7 +551,7 @@ func _on_hint_pressed() -> void:
 		index = empty_cells[0]
 
 	board.selected_index = index
-	session.record_input(elapsed_time, "hint_pressed", {"index": index, "value": logic.solution[index]})
+	_recorder.record_input(elapsed_time, "hint_pressed", {"index": index, "value": logic.solution[index]})
 
 	var result := logic.use_hint(index)
 	var cell := board.cells[index]
@@ -576,7 +580,7 @@ func _on_erase_pressed() -> void:
 	var cell := board.cells[index]
 	if cell.is_given:
 		return
-	session.record_input(elapsed_time, "erase_pressed", {"index": index})
+	_recorder.record_input(elapsed_time, "erase_pressed", {"index": index})
 
 	var result := logic.erase_cell(index)
 	if not result.success:
@@ -585,8 +589,8 @@ func _on_erase_pressed() -> void:
 	cell.is_error = false
 	cell.pencil_marks = []
 	cell.queue_redraw()
-	session.play_sound_erase()
-	session.vibrate_light()
+	_sound.play_erase()
+	_haptic.vibrate_light()
 	_update_number_completion()
 	board._update_highlighting()
 	_save_current_state()
@@ -597,19 +601,19 @@ func _on_pause_pressed() -> void:
 	pause_button.text = "Resume" if is_paused else "Pause"
 	# Hide board when paused
 	board.visible = not is_paused
-	session.user_action("sudoku_pause_toggled", {"is_paused": is_paused})
+	_crash.register_user_action("sudoku_pause_toggled", {"is_paused": is_paused})
 
 
 func _on_back_pressed() -> void:
-	var completed: Dictionary = session.finish_replay("abandoned", logic.count_filled_cells(), elapsed_time, {
+	var completed: Dictionary = _recorder.finish_session("abandoned", logic.count_filled_cells(), elapsed_time, {
 		"difficulty": difficulty,
 		"strikes": logic.strikes,
 	})
-	session.save_completed_replay(completed)
-	session.user_action("sudoku_back_to_menu")
+	_storage.save_replay(completed)
+	_crash.register_user_action("sudoku_back_to_menu")
 	if not logic.is_completed:
-		session.set_stats_counter("general", "current_win_streak", 0)
-		session.check_achievements()
+		_stats.set_counter("general", "current_win_streak", 0)
+		_achievements.check_stats()
 	_save_current_state()
 	SceneTransition.navigate(Scenes.SUDOKU_MENU)
 
@@ -619,7 +623,7 @@ func _on_undo_pressed() -> void:
 		return
 	if logic.undo_stack.is_empty():
 		return
-	session.user_action("sudoku_undo")
+	_crash.register_user_action("sudoku_undo")
 	var result := logic.undo()
 	if result.success:
 		_sync_cell_display(result.cell_index)
@@ -634,7 +638,7 @@ func _on_redo_pressed() -> void:
 		return
 	if logic.redo_stack.is_empty():
 		return
-	session.user_action("sudoku_redo")
+	_crash.register_user_action("sudoku_redo")
 	var result := logic.redo()
 	if result.success:
 		_sync_cell_display(result.cell_index)
@@ -648,27 +652,27 @@ func _on_redo_pressed() -> void:
 
 func _handle_win() -> void:
 	var won := not logic.is_failed
-	var completed: Dictionary = session.finish_replay("win" if won else "completed_after_failure", logic.count_filled_cells(), elapsed_time, {
+	var completed: Dictionary = _recorder.finish_session("win" if won else "completed_after_failure", logic.count_filled_cells(), elapsed_time, {
 		"difficulty": difficulty,
 		"strikes": logic.strikes,
 		"hints_used": logic.hints_used,
 	})
-	session.save_completed_replay(completed)
+	_storage.save_replay(completed)
 	var previous_best: float = _get_best_time(difficulty)
 	_record_sudoku_completion(difficulty, elapsed_time, GameRulesRegistry.get_rule("sudoku", "error_mode") == "strict", won)
 	if won:
-		session.increment_stats_counter("general", "games_won")
-		session.increment_stats_counter("sudoku", "games_won")
-		session.increment_stats_counter("general", "current_win_streak")
+		_stats.increment_counter("general", "games_won")
+		_stats.increment_counter("sudoku", "games_won")
+		_stats.increment_counter("general", "current_win_streak")
 		if logic.strikes == 0:
-			session.increment_stats_counter("sudoku", "perfect_wins")
+			_stats.increment_counter("sudoku", "perfect_wins")
 		if elapsed_time < 300.0:
-			session.increment_stats_counter("sudoku", "wins_under_300s")
+			_stats.increment_counter("sudoku", "wins_under_300s")
 		if elapsed_time < 180.0:
-			session.increment_stats_counter("sudoku", "wins_under_180s")
+			_stats.increment_counter("sudoku", "wins_under_180s")
 	else:
-		session.set_stats_counter("general", "current_win_streak", 0)
-	session.check_achievements()
+		_stats.set_counter("general", "current_win_streak", 0)
+	_achievements.check_stats()
 	_log_game_over_analytics(won)
 	clear_save()
 	_play_win_celebration()
@@ -677,8 +681,8 @@ func _handle_win() -> void:
 
 
 func _play_win_celebration() -> void:
-	session.play_sound_win()
-	session.vibrate_success()
+	_sound.play_win()
+	_haptic.vibrate_success()
 	# Neon win shockwave from board center
 	if AppTheme.is_neon:
 		var center_rect := board.get_cell_rect(40)  # Center cell (row 4, col 4)
@@ -702,7 +706,7 @@ func _show_new_best_indicator() -> void:
 	var center := center_rect.position + center_rect.size / 2.0
 	var color := Color(0.0, 2.0, 1.5) if AppTheme.is_neon else Color(0.2, 0.75, 1.0)
 	ComboLabel.create(board, center, "NEW BEST!", color)
-	session.vibrate_medium()
+	_haptic.vibrate_medium()
 
 
 func _sync_cell_display(cell_index: int) -> void:
@@ -735,7 +739,7 @@ func _apply_unit_completion_effects(units: Array) -> void:
 		for idx: int in unit["cells"]:
 			flash_indices[idx] = true
 
-	session.play_sound_unit_complete()
+	_sound.play_unit_complete()
 	for idx: int in flash_indices.keys():
 		board.cells[idx].flash(Color(1.0, 0.85, 0.4), 0.35)
 
@@ -834,8 +838,8 @@ func _select_number_button(number: int) -> void:
 
 
 func _play_error_feedback() -> void:
-	session.play_sound_error()
-	session.vibrate_error()
+	_sound.play_error()
+	_haptic.vibrate_error()
 	# Screen shake
 	var original_pos := position
 	var tween := create_tween()
@@ -855,11 +859,11 @@ func _show_fail_dialog() -> void:
 	add_child(dialog)
 	dialog.popup_centered()
 	dialog.confirmed.connect(func() -> void:
-		var completed: Dictionary = session.finish_replay("failed", logic.count_filled_cells(), elapsed_time, {
+		var completed: Dictionary = _recorder.finish_session("failed", logic.count_filled_cells(), elapsed_time, {
 			"difficulty": difficulty,
 			"strikes": logic.strikes,
 		})
-		session.save_completed_replay(completed)
+		_storage.save_replay(completed)
 		dialog.queue_free()
 		_restart_same_game()
 	)
@@ -870,11 +874,11 @@ func _show_fail_dialog() -> void:
 			_save_current_state()
 			dialog.queue_free()
 		elif action == "menu":
-			var completed: Dictionary = session.finish_replay("failed", logic.count_filled_cells(), elapsed_time, {
+			var completed: Dictionary = _recorder.finish_session("failed", logic.count_filled_cells(), elapsed_time, {
 				"difficulty": difficulty,
 				"strikes": logic.strikes,
 			})
-			session.save_completed_replay(completed)
+			_storage.save_replay(completed)
 			dialog.queue_free()
 			SceneTransition.navigate(Scenes.SUDOKU_MENU)
 	)
@@ -902,7 +906,7 @@ func _show_win_dialog() -> void:
 			dialog.queue_free()
 			SceneTransition.navigate(Scenes.SUDOKU_MENU)
 		elif action == "bookmark":
-			var success: bool = session.bookmark_replay()
+			var success: bool = _storage.bookmark_latest_replay()
 			if success:
 				dialog.dialog_text += "\n\n✓ Replay bookmarked!"
 			else:
@@ -969,7 +973,7 @@ func _setup_color_buttons() -> void:
 func _on_color_pressed(color: Color) -> void:
 	if _is_board_locked():
 		return
-	session.record_input(elapsed_time, "color_pressed", {
+	_recorder.record_input(elapsed_time, "color_pressed", {
 		"color": color.to_html(),
 		"selected_index": board.selected_index,
 	})
@@ -1046,8 +1050,8 @@ func _apply_number_to_multi_selection(number: int) -> void:
 				)
 				if result.game_failed:
 					_can_continue_after_failure = false
-					session.set_stats_counter("general", "current_win_streak", 0)
-					session.check_achievements()
+					_stats.set_counter("general", "current_win_streak", 0)
+					_achievements.check_stats()
 					_update_button_states()
 					_log_game_over_analytics(false)
 					_show_fail_dialog()
@@ -1103,7 +1107,7 @@ func _log_game_over_analytics(won: bool) -> void:
 	# Leaderboard: submit completion time for easy/medium/hard/expert (indices 0-3).
 	if won and difficulty <= 3:
 		GameEvents.leaderboard_score_ready.emit("sudoku", DIFFICULTY_NAMES[difficulty].to_lower(), elapsed_time)
-	session.log_event("game_over", {
+	_analytics.log_event("game_over", {
 		"game": "sudoku",
 		"won": won,
 		"difficulty": difficulty,
@@ -1136,34 +1140,34 @@ func _derive_seed_from_puzzle(values: Array[int]) -> int:
 
 
 func _record_sudoku_completion(diff: int, time: float, was_strict: bool, won: bool) -> void:
-	session.record_stats("sudoku", {
+	_stats.record("sudoku", {
 		"type": "completion",
 		"difficulty": diff,
 		"time": time,
 		"was_strict": was_strict,
 		"won": won,
 	})
-	session.increment_stats_counter("sudoku", "completed_d%d" % diff)
+	_stats.increment_counter("sudoku", "completed_d%d" % diff)
 	# Track best time
-	var best: float = float(session.get_stats_counter("sudoku", "best_d%d" % diff))
+	var best: float = float(_stats.get_counter("sudoku", "best_d%d" % diff))
 	if best == 0 or time < best:
-		session.set_stats_counter("sudoku", "best_d%d" % diff, int(time * 1000))
+		_stats.set_counter("sudoku", "best_d%d" % diff, int(time * 1000))
 	# Streak tracking
 	if was_strict:
 		if won:
-			var streak: int = session.get_stats_counter("sudoku", "current_streak") + 1
-			session.set_stats_counter("sudoku", "current_streak", streak)
-			var best_streak: int = session.get_stats_counter("sudoku", "best_streak")
+			var streak: int = _stats.get_counter("sudoku", "current_streak") + 1
+			_stats.set_counter("sudoku", "current_streak", streak)
+			var best_streak: int = _stats.get_counter("sudoku", "best_streak")
 			if streak > best_streak:
-				session.set_stats_counter("sudoku", "best_streak", streak)
-			session.increment_stats_counter("sudoku", "won_d%d" % diff)
+				_stats.set_counter("sudoku", "best_streak", streak)
+			_stats.increment_counter("sudoku", "won_d%d" % diff)
 		else:
-			session.set_stats_counter("sudoku", "current_streak", 0)
-			session.increment_stats_counter("sudoku", "lost_d%d" % diff)
+			_stats.set_counter("sudoku", "current_streak", 0)
+			_stats.increment_counter("sudoku", "lost_d%d" % diff)
 
 
 func _get_best_time(diff: int) -> float:
-	var best_ms: int = session.get_stats_counter("sudoku", "best_d%d" % diff)
+	var best_ms: int = _stats.get_counter("sudoku", "best_d%d" % diff)
 	if best_ms == 0:
 		return -1.0
 	return float(best_ms) / 1000.0

@@ -31,8 +31,6 @@ var _settings_panel: CaromSettings = null
 var _gear_button: Button = null
 var _current_camera_mode: String = CaromSettings.CAMERA_MODE_TOP_DOWN
 
-const AI_STATE_NAMES := ["ATTACK", "DEFEND", "RELOAD_PRESSURE", "TRICK_SHOT"]
-
 
 func _ready() -> void:
 	CaromSettings.ensure_loaded()
@@ -464,39 +462,32 @@ func toggle_debug_overlay() -> void:
 			_touch_debug_draw.visible = false
 
 
-func update_debug_overlay(ai_turret: CaromTurret, player_turret: CaromTurret = null) -> void:
+func update_debug_overlay(debug_info: Dictionary) -> void:
 	if not _debug_visible:
 		return
 
-	# Update touch debug draw from the player turret's input state
-	if _touch_debug_draw and player_turret and player_turret.input is CaromHumanInput:
-		var human_input := player_turret.input as CaromHumanInput
+	# Update touch debug draw from player input state
+	if _touch_debug_draw and debug_info.has("touch"):
+		var touch: Dictionary = debug_info["touch"]
 		_touch_debug_draw.update_touch_state(
-			human_input._active_touches,
-			human_input.debug_total_input,
-			human_input.debug_last_fire
+			touch.get("active_touches", {}),
+			touch.get("total_input", 0.0),
+			touch.get("last_fire", false)
 		)
 
 	if not _debug_label:
 		return
-	if not ai_turret or not ai_turret.ai_controller:
+	if not debug_info.has("ai"):
 		_debug_label.text = "AI: no controller"
 		return
 
-	var ai = ai_turret.ai_controller
-	var state_name: String = AI_STATE_NAMES[ai.current_state] if ai.current_state < AI_STATE_NAMES.size() else "UNKNOWN"
-	var puck_pos_text := "N/A"
-	var puck_vel_text := "N/A"
-	if ai.puck:
-		puck_pos_text = "%.1f, %.1f" % [ai.puck.global_position.x, ai.puck.global_position.z]
-		puck_vel_text = "%.1f, %.1f" % [ai._puck_velocity_estimate.x, ai._puck_velocity_estimate.z]
-
+	var ai: Dictionary = debug_info["ai"]
 	_debug_label.text = "=== AI DEBUG (F3) ===\n" \
-		+ "State: %s\n" % state_name \
-		+ "Difficulty: %s\n" % ai.difficulty.difficulty_name \
-		+ "Aim offset: %.1f°\n" % ai_turret.aim_offset_degrees \
-		+ "Target aim: %.1f°\n" % ai._target_aim_degrees \
-		+ "Ammo: %d/%d%s\n" % [ai_turret.current_ammo, ai_turret.clip_size, " (reloading)" if ai_turret.is_reloading else ""] \
-		+ "Puck pos: %s\n" % puck_pos_text \
-		+ "Puck vel: %s\n" % puck_vel_text \
-		+ "Threatening: %s" % str(ai._is_puck_threatening())
+		+ "State: %s\n" % ai.get("state", "UNKNOWN") \
+		+ "Difficulty: %s\n" % ai.get("difficulty", "?") \
+		+ "Aim offset: %.1f°\n" % debug_info.get("aim_offset", 0.0) \
+		+ "Target aim: %.1f°\n" % ai.get("target_aim", 0.0) \
+		+ "Ammo: %d/%d%s\n" % [debug_info.get("ammo_current", 0), debug_info.get("ammo_max", 0), " (reloading)" if debug_info.get("is_reloading", false) else ""] \
+		+ "Puck pos: %s\n" % ai.get("puck_pos", "N/A") \
+		+ "Puck vel: %s\n" % ai.get("puck_vel", "N/A") \
+		+ "Threatening: %s" % str(ai.get("puck_threatening", false))
