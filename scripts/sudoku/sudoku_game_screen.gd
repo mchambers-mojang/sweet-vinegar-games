@@ -20,6 +20,8 @@ var _pending_killer_data: Dictionary = {}
 var _killer_gen_thread: Thread = null
 ## Cage constraint checker (nil for standard Sudoku).
 var _killer_constraint: KillerConstraint = null
+## Tween that drives the generating spinner animation.
+var _spinner_tween: Tween = null
 
 # Cheat auto-solve
 var _cheat_active: bool = false
@@ -240,8 +242,8 @@ func _show_generating_spinner(visible: bool) -> void:
 		add_child(lbl)
 		overlay = lbl
 		lbl.set_meta("dot_frame", 0)
-		var tween := create_tween().set_loops()
-		tween.tween_callback(func() -> void:
+		_spinner_tween = create_tween().set_loops()
+		_spinner_tween.tween_callback(func() -> void:
 			if is_instance_valid(lbl) and lbl.visible:
 				var frame: int = lbl.get_meta("dot_frame", 0)
 				frame = (frame + 1) % 4
@@ -249,6 +251,9 @@ func _show_generating_spinner(visible: bool) -> void:
 				lbl.text = "Generating Killer puzzle" + ".".repeat(frame)
 		).set_delay(0.4)
 	overlay.visible = visible
+	if not visible and _spinner_tween != null:
+		_spinner_tween.kill()
+		_spinner_tween = null
 
 
 # --- Session ceremony hooks ---
