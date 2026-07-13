@@ -196,7 +196,12 @@ func _setup_game(saved_data: Dictionary) -> void:
 	var auto_remove: bool = GameRulesRegistry.get_rule("sudoku", "auto_remove_pencil_marks")
 	logic = SudokuLogic.new(strict_mode, auto_remove)
 	if saved_data.is_empty():
-		logic.init_new_game(difficulty, random_seed)
+		if not logic.init_new_game(difficulty, random_seed):
+			# Generator could not produce a valid puzzle (e.g. unsatisfiable constraints).
+			# Navigate back to the menu; _is_initialized() returns false so no
+			# further access to uninitialised state occurs.
+			call_deferred("_abort_generation_failure")
+			return
 		difficulty = logic.difficulty
 		difficulty_label.text = DIFFICULTY_NAMES[logic.difficulty]
 		board.load_puzzle(logic.puzzle)
@@ -489,6 +494,12 @@ func _on_back_pressed() -> void:
 		_stats.set_counter("general", "current_win_streak", 0)
 		_achievements.check_stats()
 	_save_current_state()
+	SceneTransition.navigate(Scenes.SUDOKU_MENU)
+
+
+## Called deferred when init_new_game() fails (e.g. unsatisfiable constraints).
+## Navigates back to the menu so the player never sees a broken game state.
+func _abort_generation_failure() -> void:
 	SceneTransition.navigate(Scenes.SUDOKU_MENU)
 
 

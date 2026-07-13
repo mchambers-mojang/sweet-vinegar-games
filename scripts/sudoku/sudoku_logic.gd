@@ -102,10 +102,16 @@ func _init(p_strict_mode: bool = false, p_auto_remove: bool = true) -> void:
 # ---------------------------------------------------------------------------
 
 ## Generate a fresh puzzle and initialise all state.
-func init_new_game(diff: int, seed_value: int) -> void:
+## Returns true on success. Returns false when the generator cannot produce a
+## valid puzzle (e.g. unsatisfiable constraints); in that case no game state
+## is set up and the caller must handle the failure explicitly.
+func init_new_game(diff: int, seed_value: int) -> bool:
 	var generator := SudokuGenerator.new()
 	var result: Dictionary = generator.generate(diff, seed_value, constraints)
+	if result.is_empty():
+		return false
 	_setup_from_arrays(diff, result["puzzle"], result["solution"])
+	return true
 
 
 ## Restore state from a save dictionary (same format as serialize()).

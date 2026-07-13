@@ -375,3 +375,32 @@ func test_generate_returns_empty_dict_for_unsatisfiable_constraints() -> void:
 	assert_eq(result, {},
 		"generate() must return {} when constraints are unsatisfiable")
 
+
+# ---------------------------------------------------------------------------
+# 14. Integration regression: init_new_game failure propagates through SudokuLogic
+# ---------------------------------------------------------------------------
+
+func test_init_new_game_returns_false_for_unsatisfiable_constraints() -> void:
+	# BlockAllAtIndexConstraint makes a valid grid impossible.
+	# init_new_game must return false and must not leave SudokuLogic in
+	# a partially-initialised state (puzzle must remain empty).
+	var logic := SudokuLogic.new()
+	logic.constraints = [BlockAllAtIndexConstraint.new(0)]
+	var ok := logic.init_new_game(SudokuSolver.Difficulty.EASY, 42)
+	assert_false(ok,
+		"init_new_game must return false when generation is impossible")
+	assert_true(logic.puzzle.is_empty(),
+		"puzzle must be empty after a failed init_new_game")
+	assert_true(logic.solution.is_empty(),
+		"solution must be empty after a failed init_new_game")
+
+
+func test_init_new_game_returns_true_for_standard_sudoku() -> void:
+	# Regression guard: standard Sudoku (no constraints) must still succeed.
+	var logic := SudokuLogic.new()
+	var ok := logic.init_new_game(SudokuSolver.Difficulty.EASY, 42)
+	assert_true(ok,
+		"init_new_game must return true for standard Sudoku")
+	assert_eq(logic.puzzle.size(), 81,
+		"puzzle must be fully initialised on success")
+
