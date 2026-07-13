@@ -4,17 +4,33 @@ extends GutTest
 ## (Formerly test_crash_writer.gd; CrashWriter was merged into CrashCollector.)
 
 const CollectorScript := preload("res://scripts/autoload/crash_collector.gd")
+const TEST_REPORT_DIR := "user://test_crash_writer_reports"
 
 var collector: Node
 
 
 func before_each() -> void:
+	_clear_test_reports()
 	collector = Node.new()
 	collector.set_script(CollectorScript)
+	collector._report_dir = TEST_REPORT_DIR
 	add_child_autofree(collector)
 	# Reset cached state so tests start clean
 	collector._latest_report_path = ""
 	collector._latest_report_text = ""
+
+
+func after_all() -> void:
+	_clear_test_reports()
+
+
+func _clear_test_reports() -> void:
+	var dir := DirAccess.open(TEST_REPORT_DIR)
+	if dir == null:
+		return
+	for file_name in dir.get_files():
+		DirAccess.remove_absolute(TEST_REPORT_DIR.path_join(file_name))
+	DirAccess.remove_absolute(TEST_REPORT_DIR)
 
 
 func _capture(kind: String = "test_error") -> String:
@@ -55,7 +71,7 @@ func test_get_latest_report_text_returns_empty_when_no_path_set() -> void:
 	# (Note: disk may have prior reports from CI; only testing the in-memory fast path)
 	collector._latest_report_text = ""
 	# Force the lazy-load path to skip by giving a nonexistent path
-	collector._latest_report_path = "user://crash_logs/nonexistent_test_file.json"
+	collector._latest_report_path = TEST_REPORT_DIR.path_join("nonexistent_test_file.json")
 	var text: String = collector.get_latest_report_text()
 	assert_eq(text, "", "Should return empty string when file does not exist")
 
@@ -105,7 +121,7 @@ func test_trim_respects_limit() -> void:
 
 func test_clipboard_copy_returns_false_when_empty() -> void:
 	# Point to a nonexistent path so the disk fallback returns empty
-	collector._latest_report_path = "user://crash_logs/nonexistent_test_file.json"
+	collector._latest_report_path = TEST_REPORT_DIR.path_join("nonexistent_test_file.json")
 	var result: bool = collector.copy_latest_report_to_clipboard()
 	assert_false(result, "Should return false when no report is available")
 
