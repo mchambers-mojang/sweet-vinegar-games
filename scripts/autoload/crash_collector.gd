@@ -15,6 +15,7 @@ var _last_log_size: int = 0
 var _error_check_timer: float = 0.0
 var _latest_report_path: String = ""
 var _latest_report_text: String = ""
+var _report_dir: String = LOG_DIR
 
 
 func _ready() -> void:
@@ -220,7 +221,7 @@ func _write_report(report: Dictionary) -> String:
 	var ticks := Time.get_ticks_usec()
 	var stamp := Time.get_datetime_string_from_system(false, true).replace(":", "-")
 	var file_name := "crash_%s_%d_%d.json" % [stamp, unix, ticks]
-	var path := LOG_DIR.path_join(file_name)
+	var path := _report_dir.path_join(file_name)
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	if file == null:
 		return ""
@@ -282,12 +283,12 @@ func trim_old_reports() -> void:
 
 
 func _ensure_log_dir() -> void:
-	DirAccess.make_dir_recursive_absolute(LOG_DIR)
+	DirAccess.make_dir_recursive_absolute(_report_dir)
 
 
 func _get_recent_report_paths(limit: int = MAX_LOG_FILES) -> Array[String]:
 	var paths: Array[String] = []
-	var dir := DirAccess.open(LOG_DIR)
+	var dir := DirAccess.open(_report_dir)
 	if dir == null:
 		return paths
 	dir.list_dir_begin()
@@ -298,7 +299,7 @@ func _get_recent_report_paths(limit: int = MAX_LOG_FILES) -> Array[String]:
 		if dir.current_is_dir():
 			continue
 		if name.ends_with(".json"):
-			paths.append(LOG_DIR.path_join(name))
+			paths.append(_report_dir.path_join(name))
 	dir.list_dir_end()
 	paths.sort()
 	paths.reverse()
