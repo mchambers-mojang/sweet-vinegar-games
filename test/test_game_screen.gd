@@ -7,6 +7,13 @@ extends GutTest
 ## pass mock instances and call begin_session() / save_progress() / clear_save()
 ## directly on the node — _ready() is never required.
 
+## Reference save data for the lifecycle integration tests.
+## Used by test_lifecycle_transition_failed_generation_redirect to plant a
+## resumable save that _try_auto_resume would load if not suppressed.
+const LIFECYCLE_TEST_PLANTED_SAVE := {
+	"difficulty": 0, "random_seed": 99, "elapsed_time": 10.0, "replay_id": "old-id"
+}
+
 
 # ---------------------------------------------------------------------------
 # Mock helpers (identical to the ones that previously lived in
@@ -537,10 +544,7 @@ func test_lifecycle_transition_failed_generation_redirect() -> void:
 	var mock_stats := MockStats.new()
 
 	# Plant a resumable save that _try_auto_resume would load if not suppressed.
-	const PLANTED_SAVE := {
-		"difficulty": 0, "random_seed": 99, "elapsed_time": 10.0, "replay_id": "old-id"
-	}
-	mock_saves.data["sudoku"] = PLANTED_SAVE.duplicate()
+	mock_saves.data["sudoku"] = LIFECYCLE_TEST_PLANTED_SAVE.duplicate()
 
 	var s := TestSudokuFailScreenTree.new(
 		mock_recorder, MockStorage.new(), MockCrash.new(), MockAnalytics.new(),
@@ -584,12 +588,13 @@ func test_lifecycle_transition_failed_generation_redirect() -> void:
 			"_abort_generation_failure must not fire before transition_completed emits")
 
 	# Let the deferred _try_auto_resume run — it must be suppressed.
-	await get_tree().process_frame
+	# call_deferred() fires at the end of the current idle frame, so one
+	# process_frame await is sufficient to let it execute.
 	await get_tree().process_frame
 
 	assert_false(s._is_initialized(),
 			"_try_auto_resume must not initialize the screen when _suppress_auto_resume is set")
-	assert_eq(mock_saves.data.get("sudoku"), PLANTED_SAVE,
+	assert_eq(mock_saves.data.get("sudoku"), LIFECYCLE_TEST_PLANTED_SAVE,
 			"planted save must be untouched — no resume or save write occurred")
 	assert_eq(s.abort_call_count, 0,
 			"_abort_generation_failure must still not have fired (transition not yet complete)")
