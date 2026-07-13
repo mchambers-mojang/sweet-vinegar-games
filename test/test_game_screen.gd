@@ -436,8 +436,8 @@ func test_suppress_auto_resume_flag_prevents_try_auto_resume() -> void:
 
 	assert_false(screen._is_initialized(),
 			"_try_auto_resume must not initialize the screen when _suppress_auto_resume is true")
-	assert_false(saves.data.has("test_game") and saves.data["test_game"] == {},
-			"_try_auto_resume must not clear saved data")
+	assert_true(saves.data.has("test_game") and saves.data["test_game"] == {"dummy": true},
+			"_try_auto_resume must leave saved data untouched when suppressed")
 
 
 func test_failed_generation_suppresses_auto_resume_and_no_ceremony() -> void:
@@ -464,7 +464,7 @@ func test_failed_generation_suppresses_auto_resume_and_no_ceremony() -> void:
 	# Trigger the real new-game path: begin_session → _setup_game → init_new_game fails.
 	s.start_new_game(0)
 
-	# begin_session() emits a push_error when _is_initialized() is false.
+	# begin_session() calls push_error after _setup_game() returns with _is_initialized() false.
 	assert_push_error("setup failed to initialize game state")
 
 	# No ceremony must have run.
