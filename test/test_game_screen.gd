@@ -169,14 +169,18 @@ class MockHaptic:
 # Minimal concrete GameScreen subclass for testing
 # ---------------------------------------------------------------------------
 
-class TestScreen extends GameScreen:
+class TestScreen extends "res://scripts/game_screen.gd":
 	var game_id := "test_game"
+	var initialized := true
 
 	func _get_game_id() -> String:
 		return game_id
 
 	func _serialize_state() -> Dictionary:
 		return {"dummy": true}
+
+	func _is_initialized() -> bool:
+		return initialized
 
 
 # ---------------------------------------------------------------------------
@@ -307,6 +311,17 @@ func test_begin_session_new_saves_progress() -> void:
 	assert_true(saves.data.has("test_game"))
 
 
+func test_begin_session_stops_when_setup_does_not_initialize() -> void:
+	screen.initialized = false
+
+	screen.begin_session()
+
+	assert_push_error("setup failed to initialize game state")
+	assert_false(recorder.started)
+	assert_false(saves.data.has("test_game"))
+	assert_eq(stats.counters.get("general.games_played", 0), 0)
+
+
 # ---------------------------------------------------------------------------
 # begin_session() — resume
 # ---------------------------------------------------------------------------
@@ -373,3 +388,16 @@ func test_clear_save_delegates_to_saves() -> void:
 	saves.data["test_game"] = {"dummy": true}
 	screen.clear_save()
 	assert_false(saves.data.has("test_game"))
+
+
+func test_all_game_screen_scripts_compile() -> void:
+	var paths := [
+		"res://scripts/blockudoku/blockudoku_game_screen.gd",
+		"res://scripts/shikaku/shikaku_game_screen.gd",
+		"res://scripts/sudoku/sudoku_game_screen.gd",
+		"res://carom/scripts/carom_arena.gd",
+	]
+	for path in paths:
+		var script := load(path) as GDScript
+		assert_not_null(script, "%s should load" % path)
+		assert_true(script.can_instantiate(), "%s should compile" % path)

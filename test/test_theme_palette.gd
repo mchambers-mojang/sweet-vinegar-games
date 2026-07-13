@@ -90,6 +90,16 @@ func test_build_custom_neon_defaults_match_neon_colors() -> void:
 # Mode switching
 # ---------------------------------------------------------------------------
 
+func test_default_mode_applies_neon_palette_on_startup() -> void:
+	var pal := _make_palette()
+	pal.set_mode(pal.get_mode())
+
+	assert_eq(pal.get_mode(), "neon")
+	assert_true(pal.is_neon)
+	assert_true(pal.is_dark)
+	assert_eq(pal.get_color("background"), Color(0.04, 0.04, 0.1))
+
+
 func test_set_mode_dark_sets_is_dark_true() -> void:
 	var pal := _make_palette()
 	pal.set_mode("dark")

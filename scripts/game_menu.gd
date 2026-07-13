@@ -206,6 +206,8 @@ func _ready() -> void:
 	var settings_btn := _find_button("settings_button", "SettingsButton")
 	var back_btn := _find_button("back_button", "BackButton")
 	var start_btn := _find_start_button()
+	if start_btn and config and not config.start_button_text.is_empty():
+		start_btn.text = config.start_button_text
 
 	if back_btn:
 		back_btn.pressed.connect(func() -> void:

@@ -351,7 +351,12 @@ func _end_drag(screen_pos: Vector2) -> void:
 	# Attempt placement via the logic module (validates + mutates logic board_grid).
 	# Pass the current board visual so the undo entry captures the "before" colour state.
 	var old_score := logic.score
-	var place_result := logic.try_place(_drag_block_index, grid_pos, board.get_state())
+	var place_result := logic.try_place(
+		_drag_block_index,
+		grid_pos,
+		board.get_state(),
+		{"rng_state": _rng.state},
+	)
 
 	if place_result.valid:
 		GameEvents.move_made.emit("blockudoku", {
@@ -456,7 +461,7 @@ func _end_drag(screen_pos: Vector2) -> void:
 			_handle_game_over()
 		else:
 			# Finalise the undo entry now that board visual reflects the completed move.
-			logic.commit_move(board.get_state())
+			logic.commit_move(board.get_state(), {"rng_state": _rng.state})
 			_update_undo_redo_buttons()
 			_save_current_state()
 	else:
@@ -710,6 +715,8 @@ func _on_undo_pressed() -> void:
 		return
 	if not result.board_visual.is_empty():
 		board.set_state(result.board_visual)
+	if result.orchestrator_state.has("rng_state"):
+		_rng.state = int(result.orchestrator_state["rng_state"])
 	_build_tray()
 	_update_score_display()
 	_update_undo_redo_buttons()
@@ -722,6 +729,8 @@ func _on_redo_pressed() -> void:
 		return
 	if not result.board_visual.is_empty():
 		board.set_state(result.board_visual)
+	if result.orchestrator_state.has("rng_state"):
+		_rng.state = int(result.orchestrator_state["rng_state"])
 	_build_tray()
 	_update_score_display()
 	_update_undo_redo_buttons()

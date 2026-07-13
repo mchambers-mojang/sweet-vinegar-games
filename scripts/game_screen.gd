@@ -265,6 +265,9 @@ func begin_session(saved_data: Dictionary = {}) -> void:
 	# _setup_game() runs here so game state (board, seed derivation for legacy
 	# saves) is fully initialised before _recorder.start_session() below.
 	_setup_game(saved_data)
+	if not _is_initialized():
+		push_error("GameScreen: %s setup failed to initialize game state" % game_id)
+		return
 
 	if not is_resuming or not _recorder.has_active_session():
 		replay_id = _recorder.start_session(
@@ -306,7 +309,7 @@ func _try_auto_resume() -> void:
 		if not data.is_empty():
 			_deserialize_state(data)
 	elif _saves.has_saved_game(_get_game_id()):
-		var data := _saves.load_game(_get_game_id())
+		var data: Dictionary = _saves.load_game(_get_game_id())
 		if not data.is_empty():
 			_deserialize_state(data)
 

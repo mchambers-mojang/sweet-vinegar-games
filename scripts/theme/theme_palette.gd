@@ -11,7 +11,7 @@ signal palette_changed
 const SAVE_PATH := "user://settings.cfg"
 
 ## Current active mode: "system", "light", "dark", "neon", "custom"
-var _mode: String = "light"
+var _mode: String = "neon"
 
 ## Live color dictionary — modified in-place by _apply_color_set().
 ## AppTheme.colors is assigned to point at this same object so all callers

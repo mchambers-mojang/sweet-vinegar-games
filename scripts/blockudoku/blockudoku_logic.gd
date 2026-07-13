@@ -58,6 +58,8 @@ class UndoRedoResult:
 	## Opaque board visual state dict (from board.get_state()) captured before/after
 	## the move. The screen should pass it to board.set_state() to restore colours.
 	var board_visual: Dictionary = {}
+	## Opaque screen-owned state captured with the move, such as RNG state.
+	var orchestrator_state: Dictionary = {}
 
 
 func _init(p_rotation_mode: bool = false) -> void:
@@ -90,7 +92,13 @@ func reset() -> void:
 ## dispatch side effects.  State is mutated only on a valid placement.
 ## board_visual_before is an opaque board.get_state() snapshot captured by the
 ## screen before the move; it is stored in the undo entry and returned by undo().
-func try_place(block_index: int, grid_pos: Vector2i, board_visual_before: Dictionary = {}) -> PlaceResult:
+## orchestrator_state_before captures screen-owned deterministic state such as RNG.
+func try_place(
+		block_index: int,
+		grid_pos: Vector2i,
+		board_visual_before: Dictionary = {},
+		orchestrator_state_before: Dictionary = {},
+) -> PlaceResult:
 	var result := PlaceResult.new()
 
 	if block_index < 0 or block_index >= available_blocks.size():
@@ -110,6 +118,7 @@ func try_place(block_index: int, grid_pos: Vector2i, board_visual_before: Dictio
 	_pending_undo_before = {
 		"logic": get_state(),
 		"visual": board_visual_before,
+		"orchestrator": orchestrator_state_before.duplicate(true),
 	}
 
 	result.valid = true
@@ -212,8 +221,12 @@ func deal_blocks(new_shapes: Array[Array]) -> void:
 ## board visual has been updated (after board.place_block / board.check_and_clear)
 ## and after deal_blocks() if new_blocks_dealt was true.  board_visual_after is
 ## an opaque board.get_state() snapshot returned by redo().
+## orchestrator_state_after is restored by redo() alongside the logic snapshot.
 ## If no pending before-state exists (invalid or rotation-only move) this is a no-op.
-func commit_move(board_visual_after: Dictionary = {}) -> void:
+func commit_move(
+		board_visual_after: Dictionary = {},
+		orchestrator_state_after: Dictionary = {},
+) -> void:
 	if _pending_undo_before.is_empty():
 		return
 	_undo_stack.push({
@@ -221,6 +234,7 @@ func commit_move(board_visual_after: Dictionary = {}) -> void:
 		"after": {
 			"logic": get_state(),
 			"visual": board_visual_after,
+			"orchestrator": orchestrator_state_after.duplicate(true),
 		},
 	})
 	_pending_undo_before = {}
@@ -239,6 +253,7 @@ func undo() -> UndoRedoResult:
 	set_state(before.get("logic", {}))
 	result.success = true
 	result.board_visual = before.get("visual", {})
+	result.orchestrator_state = before.get("orchestrator", {}).duplicate(true)
 	return result
 
 
@@ -254,6 +269,7 @@ func redo() -> UndoRedoResult:
 	set_state(after.get("logic", {}))
 	result.success = true
 	result.board_visual = after.get("visual", {})
+	result.orchestrator_state = after.get("orchestrator", {}).duplicate(true)
 	return result
 
 

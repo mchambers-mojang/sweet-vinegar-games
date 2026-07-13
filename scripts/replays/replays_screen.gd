@@ -123,16 +123,15 @@ func _add_replay_row(replay: Dictionary) -> void:
 	vbox.add_child(btn_row)
 
 	# Play button — all supported games use the generic replay viewer
-	var can_play := game_mode in ["blockudoku", "shikaku", "sudoku"]
-	if can_play:
+	var supports_playback := game_mode in ["blockudoku", "shikaku", "sudoku"]
+	if supports_playback:
 		var play_btn := Button.new()
 		play_btn.text = "▶ Play"
 		play_btn.custom_minimum_size = Vector2(0, 36)
-		play_btn.pressed.connect(func() -> void:
-		var full_replay := ReplaySystem.get_replay_by_id(replay_id)
-			ReplaySystem.set_pending_playback(full_replay)
-			SceneTransition.navigate(Scenes.REPLAY_VIEWER)
-		)
+		play_btn.disabled = int(replay.get("frame_count", -1)) == 0
+		if play_btn.disabled:
+			play_btn.tooltip_text = "This replay has no recorded moves"
+		play_btn.pressed.connect(_play_replay.bind(replay_id))
 		btn_row.add_child(play_btn)
 
 	# Share button
@@ -157,6 +156,19 @@ func _add_replay_row(replay: Dictionary) -> void:
 		_build_ui()
 	)
 	btn_row.add_child(delete_btn)
+
+
+func _play_replay(replay_id: String) -> void:
+	var replay := ReplaySystem.get_replay_by_id(replay_id)
+	if replay.is_empty():
+		_show_toast("Replay data could not be loaded")
+		push_error("ReplaysScreen: Failed to load replay '%s'" % replay_id)
+		return
+	if replay.get("frames", []).is_empty():
+		_show_toast("This replay has no recorded moves")
+		return
+	ReplaySystem.set_pending_playback(replay)
+	SceneTransition.navigate(Scenes.REPLAY_VIEWER)
 
 
 func _format_date(unix_time: int) -> String:

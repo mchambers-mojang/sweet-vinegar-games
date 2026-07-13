@@ -4,6 +4,7 @@ extends GutTest
 ## Updated to use ReplayRecorder directly after the ReplayManager → ReplayRecorder + ReplayStorage split.
 
 const RecorderScript := preload("res://scripts/replays/replay_recorder.gd")
+const TEST_ACTIVE_REPLAY_PATH := "user://test_replay_manager_active.json"
 
 var recorder: Node
 
@@ -11,6 +12,7 @@ var recorder: Node
 func before_each() -> void:
 	recorder = Node.new()
 	recorder.set_script(RecorderScript)
+	recorder.active_replay_path = TEST_ACTIVE_REPLAY_PATH
 	add_child_autofree(recorder)
 	# Override internal state after _ready (avoids filesystem side-effects)
 	recorder._active_replay = {}
@@ -18,6 +20,11 @@ func before_each() -> void:
 	recorder._active_sequence = 0
 	recorder._save_timer = 0.0
 	recorder._dirty = false
+
+
+func after_each() -> void:
+	if FileAccess.file_exists(TEST_ACTIVE_REPLAY_PATH):
+		DirAccess.remove_absolute(TEST_ACTIVE_REPLAY_PATH)
 
 
 # --- Session lifecycle ---

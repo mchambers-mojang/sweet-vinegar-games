@@ -17,6 +17,7 @@ var _current_mode: String = ""
 
 var _cache: Dictionary = {}
 var _inflight_key: String = ""
+var _stats: Object = GameStatsManager
 
 @onready var _back_button: Button = %BackButton
 @onready var _title_label: Label = %TitleLabel
@@ -38,9 +39,11 @@ func _ready() -> void:
 		theme = AppTheme.get_theme_resource()
 		_apply_theme()
 	)
+	if not _game_id.is_empty():
+		_apply_setup()
 
 
-## Called by the Game Menu after instantiation.
+## Called by the Game Menu after the screen enters the scene tree.
 func setup(game_id: String, modes: PackedStringArray, mode_labels: PackedStringArray,
 		is_time_based: bool, selected_index: int, return_scene: String) -> void:
 	_game_id = game_id
@@ -48,14 +51,20 @@ func setup(game_id: String, modes: PackedStringArray, mode_labels: PackedStringA
 	_mode_labels = mode_labels
 	_is_time_based = is_time_based
 	_return_scene = return_scene
+	_pending_selected_index = selected_index
+	if is_node_ready():
+		_apply_setup()
 
-	# Populate dropdown (only if more than one mode)
+
+var _pending_selected_index: int = 0
+
+func _apply_setup() -> void:
 	_mode_dropdown.clear()
 	if _modes.size() > 1:
 		_mode_dropdown.visible = true
 		for i in range(_modes.size()):
 			_mode_dropdown.add_item(_mode_labels[i] if i < _mode_labels.size() else _modes[i], i)
-		var clamped_idx := clampi(selected_index, 0, _modes.size() - 1)
+		var clamped_idx := clampi(_pending_selected_index, 0, _modes.size() - 1)
 		_mode_dropdown.selected = clamped_idx
 		_current_mode = _modes[clamped_idx]
 	elif _modes.size() == 1:
@@ -145,6 +154,7 @@ func _show_data(data: Dictionary) -> void:
 	var top: Array = data.get("top", [])
 	var player_rank = data.get("player_rank", null)
 	var player_score = data.get("player_score", null)
+	_sync_personal_best(player_score)
 
 	_status_label.visible = top.is_empty()
 	if top.is_empty():
@@ -178,6 +188,15 @@ func _show_data(data: Dictionary) -> void:
 		]
 	else:
 		_player_row.visible = false
+
+
+func _sync_personal_best(player_score: Variant) -> void:
+	if player_score == null or _game_id != "blockudoku" or _current_mode != "standard":
+		return
+	var remote_best := int(player_score)
+	var local_best: int = _stats.get_counter("blockudoku", "high_score")
+	if remote_best > local_best:
+		_stats.set_counter("blockudoku", "high_score", remote_best)
 
 
 func _create_entry_row(rank: int, display_name: String, value: float, is_player: bool) -> HBoxContainer:
