@@ -7,10 +7,10 @@ extends GutTest
 ## pass mock instances and call begin_session() / save_progress() / clear_save()
 ## directly on the node — _ready() is never required.
 
-## Reference save data for the lifecycle integration tests.
+## Reference save data for failed-generation lifecycle integration tests.
 ## Used by test_lifecycle_transition_failed_generation_redirect to plant a
 ## resumable save that _try_auto_resume would load if not suppressed.
-const LIFECYCLE_TEST_PLANTED_SAVE := {
+const FAILED_GENERATION_TEST_PLANTED_SAVE := {
 	"difficulty": 0, "random_seed": 99, "elapsed_time": 10.0, "replay_id": "old-id"
 }
 
@@ -544,7 +544,7 @@ func test_lifecycle_transition_failed_generation_redirect() -> void:
 	var mock_stats := MockStats.new()
 
 	# Plant a resumable save that _try_auto_resume would load if not suppressed.
-	mock_saves.data["sudoku"] = LIFECYCLE_TEST_PLANTED_SAVE.duplicate()
+	mock_saves.data["sudoku"] = FAILED_GENERATION_TEST_PLANTED_SAVE.duplicate()
 
 	var s := TestSudokuFailScreenTree.new(
 		mock_recorder, MockStorage.new(), MockCrash.new(), MockAnalytics.new(),
@@ -556,7 +556,7 @@ func test_lifecycle_transition_failed_generation_redirect() -> void:
 	# _abort_generation_failure to transition_completed (ONE_SHOT) rather than
 	# calling it directly.  This matches the real navigate() lifecycle where
 	# _transitioning == true from navigate() start through the full fade-in.
-	var was_transitioning := SceneTransition.is_transitioning
+	var original_transitioning_state := SceneTransition.is_transitioning
 	SceneTransition._transitioning = true
 
 	# Add to the scene tree — _ready() runs, which calls
@@ -594,7 +594,7 @@ func test_lifecycle_transition_failed_generation_redirect() -> void:
 
 	assert_false(s._is_initialized(),
 			"_try_auto_resume must not initialize the screen when _suppress_auto_resume is set")
-	assert_eq(mock_saves.data.get("sudoku"), LIFECYCLE_TEST_PLANTED_SAVE,
+	assert_eq(mock_saves.data.get("sudoku"), FAILED_GENERATION_TEST_PLANTED_SAVE,
 			"planted save must be untouched — no resume or save write occurred")
 	assert_eq(s.abort_call_count, 0,
 			"_abort_generation_failure must still not have fired (transition not yet complete)")
@@ -619,4 +619,4 @@ func test_lifecycle_transition_failed_generation_redirect() -> void:
 			"_abort_generation_failure must fire exactly once (CONNECT_ONE_SHOT enforced)")
 
 	# Restore SceneTransition state so subsequent tests are unaffected.
-	SceneTransition._transitioning = was_transitioning
+	SceneTransition._transitioning = original_transitioning_state
