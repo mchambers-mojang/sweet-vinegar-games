@@ -67,6 +67,11 @@ var replay_id: String = ""
 # null for games that have not yet migrated to the adapter contract.
 var _save_adapter: GameSaveAdapter = null
 
+## Set by a subclass before _try_auto_resume fires to prevent a deferred
+## auto-resume from overwriting an explicit (failed) launch state.
+## Typically set in _setup_game() when generation fails.
+var _suppress_auto_resume: bool = false
+
 @onready var timer_label: Label = %TimerLabel
 
 
@@ -302,6 +307,8 @@ func clear_save() -> void:
 
 
 func _try_auto_resume() -> void:
+	if _suppress_auto_resume:
+		return
 	if _is_initialized():
 		return
 	if _save_adapter:

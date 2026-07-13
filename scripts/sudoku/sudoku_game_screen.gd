@@ -5,6 +5,11 @@ extends GameScreen
 # Pure game-rule logic — no UI, no autoloads
 var logic: SudokuLogic = null
 
+## Variant-rule constraints forwarded to SudokuLogic on each new game.
+## Set before launch() / start_new_game() to enable variant rules.
+## An empty array (default) produces standard Sudoku behaviour.
+var constraints: Array[SudokuConstraint] = []
+
 # UI-only state
 var difficulty: int = 0
 var _can_continue_after_failure: bool = false
@@ -195,12 +200,19 @@ func _setup_game(saved_data: Dictionary) -> void:
 	var strict_mode: bool = GameRulesRegistry.get_rule("sudoku", "error_mode") == "strict"
 	var auto_remove: bool = GameRulesRegistry.get_rule("sudoku", "auto_remove_pencil_marks")
 	logic = SudokuLogic.new(strict_mode, auto_remove)
+	logic.constraints = constraints
 	if saved_data.is_empty():
 		if not logic.init_new_game(difficulty, random_seed):
-			# Generator could not produce a valid puzzle (e.g. unsatisfiable constraints).
-			# Navigate back to the menu; _is_initialized() returns false so no
-			# further access to uninitialised state occurs.
-			call_deferred("_abort_generation_failure")
+			# Generation failed (e.g. unsatisfiable constraints).
+			# Suppress deferred auto-resume so saved data isn't loaded over the
+			# failed state, then queue a navigate-back once the active fade
+			# transition completes (or immediately when no transition is running).
+			_suppress_auto_resume = true
+			if SceneTransition.is_transitioning:
+				SceneTransition.transition_completed.connect(
+						_abort_generation_failure, CONNECT_ONE_SHOT)
+			else:
+				_abort_generation_failure()
 			return
 		difficulty = logic.difficulty
 		difficulty_label.text = DIFFICULTY_NAMES[logic.difficulty]
@@ -497,8 +509,9 @@ func _on_back_pressed() -> void:
 	SceneTransition.navigate(Scenes.SUDOKU_MENU)
 
 
-## Called deferred when init_new_game() fails (e.g. unsatisfiable constraints).
-## Navigates back to the menu so the player never sees a broken game state.
+## Called when init_new_game() fails (e.g. unsatisfiable constraints).
+## Navigates back to the Sudoku menu. Invoked either directly (when no
+## transition is active) or via SceneTransition.transition_completed.
 func _abort_generation_failure() -> void:
 	SceneTransition.navigate(Scenes.SUDOKU_MENU)
 

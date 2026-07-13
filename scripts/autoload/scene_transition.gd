@@ -7,11 +7,22 @@ extends CanvasLayer
 ##   SceneTransition.push("res://scenes/settings.tscn")  # caller stays on stack
 ##   SceneTransition.pop()                               # restores previous scene
 
+## Emitted when the active fade-in completes and the overlay becomes idle.
+## Connect once (CONNECT_ONE_SHOT) to queue work that must wait for the
+## current transition — e.g. a deferred navigate() from a setup callback.
+signal transition_completed
+
 var _overlay: ColorRect
 var _tween: Tween
 const FADE_DURATION := 0.15
 var _transitioning := false
 var _initial_fade_pending := true
+
+## True while a fade is running (fade-out → scene swap → fade-in).
+## Use this together with transition_completed to avoid calling navigate()
+## while a transition is already in progress.
+var is_transitioning: bool:
+	get: return _transitioning
 
 ## Navigation stack — Node instances held alive off the scene tree.
 var _nav_stack: Array[Node] = []
@@ -94,6 +105,7 @@ func _fade_in() -> void:
 	_tween.tween_callback(func() -> void:
 		_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_transitioning = false
+		transition_completed.emit()
 	)
 
 

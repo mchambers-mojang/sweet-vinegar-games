@@ -401,3 +401,91 @@ func test_all_game_screen_scripts_compile() -> void:
 		var script := load(path) as GDScript
 		assert_not_null(script, "%s should load" % path)
 		assert_true(script.can_instantiate(), "%s should compile" % path)
+
+
+# ---------------------------------------------------------------------------
+# Generation-failure redirect: suppress auto-resume and ceremony
+# ---------------------------------------------------------------------------
+
+## Unsatisfiable constraint — every value at index 0 is illegal, so no
+## valid 9x9 grid can be produced.  Used to force init_new_game() failure.
+class BlockAllAtIndexConstraint extends SudokuConstraint:
+	func is_valid(grid: Array[int], index: int, value: int) -> bool:
+		return index != 0
+
+	func get_id() -> String:
+		return "block_all_0"
+
+
+## SudokuGameScreen subclass that captures the abort-navigation call
+## without touching SceneTransition / scene tree.
+class TestSudokuFailScreen extends "res://scripts/sudoku/sudoku_game_screen.gd":
+	var abort_called := false
+
+	func _abort_generation_failure() -> void:
+		abort_called = true
+
+
+func test_suppress_auto_resume_flag_prevents_try_auto_resume() -> void:
+	# Base-class guarantee: _suppress_auto_resume blocks _try_auto_resume.
+	saves.data["test_game"] = {"dummy": true}
+	screen._suppress_auto_resume = true
+	screen.initialized = false
+
+	screen._try_auto_resume()
+
+	assert_false(screen._is_initialized(),
+			"_try_auto_resume must not initialize the screen when _suppress_auto_resume is true")
+	assert_false(saves.data.has("test_game") and saves.data["test_game"] == {},
+			"_try_auto_resume must not clear saved data")
+
+
+func test_failed_generation_suppresses_auto_resume_and_no_ceremony() -> void:
+	# Integration regression: launching through the real SudokuGameScreen /
+	# SudokuLogic setup path with an unsatisfiable constraint must:
+	#   • set _suppress_auto_resume so saved data cannot be auto-resumed, and
+	#   • NOT run any session ceremony (no replay, stats, or save writes).
+	# Saved game data is planted to prove _try_auto_resume won't pick it up.
+
+	var mock_recorder := MockRecorder.new()
+	var mock_saves := MockSaves.new()
+	var mock_stats := MockStats.new()
+	# Plant a saved game; _try_auto_resume would normally resume this.
+	mock_saves.data["sudoku"] = {
+		"difficulty": 0, "random_seed": 1, "elapsed_time": 5.0, "replay_id": "old"
+	}
+
+	var s := TestSudokuFailScreen.new(
+		mock_recorder, MockStorage.new(), MockCrash.new(), MockAnalytics.new(),
+		MockAchievements.new(), mock_saves, mock_stats, MockSound.new(), MockHaptic.new()
+	)
+	s.constraints = [BlockAllAtIndexConstraint.new()]
+
+	# Trigger the real new-game path: begin_session → _setup_game → init_new_game fails.
+	s.start_new_game(0)
+
+	# begin_session() emits a push_error when _is_initialized() is false.
+	assert_push_error("setup failed to initialize game state")
+
+	# No ceremony must have run.
+	assert_false(mock_recorder.started,
+			"replay must not be started after failed generation")
+	assert_eq(mock_stats.counters.get("sudoku.games_started", 0), 0,
+			"games_started stat must not be incremented after failed generation")
+	assert_eq(mock_stats.counters.get("general.games_played", 0), 0,
+			"general games_played stat must not be incremented after failed generation")
+
+	# abort handler must have been triggered (menu redirect requested).
+	assert_true(s.abort_called,
+			"_abort_generation_failure must be called when generation fails")
+
+	# auto-resume must be suppressed.
+	assert_true(s._suppress_auto_resume,
+			"_suppress_auto_resume must be true after a failed generation")
+
+	# _try_auto_resume must not resume the planted save.
+	s._try_auto_resume()
+	assert_false(s._is_initialized(),
+			"_try_auto_resume must not resume the game when suppressed after failed launch")
+
+	s.free()
