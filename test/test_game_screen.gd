@@ -426,6 +426,37 @@ class TestSudokuFailScreen extends "res://scripts/sudoku/sudoku_game_screen.gd":
 		abort_called = true
 
 
+## SudokuGameScreen subclass for the full scene-tree lifecycle integration test.
+## Overrides UI-heavy methods that would crash without @onready scene nodes,
+## tracks abort call count and save_progress calls, and returns null from
+## _get_save_adapter() so _try_auto_resume() uses MockSaves (_saves) instead
+## of the real file-backed SudokuSaveAdapter — making planted data detectable.
+class TestSudokuFailScreenTree extends "res://scripts/sudoku/sudoku_game_screen.gd":
+	var abort_call_count := 0
+	var save_progress_call_count := 0
+
+	## Prevent @onready node wiring from crashing (board, buttons etc. are null).
+	func _on_game_screen_ready() -> void:
+		pass
+
+	## Prevent AppTheme / UI node access inside _apply_theme().
+	func _apply_game_theme() -> void:
+		pass
+
+	## Capture the redirect without calling SceneTransition.navigate().
+	func _abort_generation_failure() -> void:
+		abort_call_count += 1
+
+	## Use MockSaves (_saves) instead of the real file-backed SudokuSaveAdapter
+	## so planted save data is visible to _try_auto_resume() without touching disk.
+	func _get_save_adapter() -> GameSaveAdapter:
+		return null
+
+	## Track calls without writing to disk or crashing on null logic.
+	func save_progress() -> void:
+		save_progress_call_count += 1
+
+
 func test_suppress_auto_resume_flag_prevents_try_auto_resume() -> void:
 	# Base-class guarantee: _suppress_auto_resume blocks _try_auto_resume.
 	saves.data["test_game"] = {"dummy": true}
@@ -489,3 +520,98 @@ func test_failed_generation_suppresses_auto_resume_and_no_ceremony() -> void:
 			"_try_auto_resume must not resume the game when suppressed after failed launch")
 
 	s.free()
+
+
+func test_lifecycle_transition_failed_generation_redirect() -> void:
+	# Full scene-tree lifecycle regression: simulates the real SceneTransition.navigate()
+	# lifecycle (is_transitioning == true when _setup_game runs, _ready() fires so the
+	# deferred _try_auto_resume is scheduled), and verifies:
+	#   • the transition_completed connection fires _abort_generation_failure exactly once
+	#   • CONNECT_ONE_SHOT prevents a duplicate call on a second emit
+	#   • _suppress_auto_resume is set before the deferred _try_auto_resume runs
+	#   • planted save data is never loaded (no resume ceremony)
+	#   • no replay, stats, or save writes occur
+
+	var mock_recorder := MockRecorder.new()
+	var mock_saves := MockSaves.new()
+	var mock_stats := MockStats.new()
+
+	# Plant a resumable save that _try_auto_resume would load if not suppressed.
+	const PLANTED_SAVE := {
+		"difficulty": 0, "random_seed": 99, "elapsed_time": 10.0, "replay_id": "old-id"
+	}
+	mock_saves.data["sudoku"] = PLANTED_SAVE.duplicate()
+
+	var s := TestSudokuFailScreenTree.new(
+		mock_recorder, MockStorage.new(), MockCrash.new(), MockAnalytics.new(),
+		MockAchievements.new(), mock_saves, mock_stats, MockSound.new(), MockHaptic.new()
+	)
+	s.constraints = [BlockAllAtIndexConstraint.new()]
+
+	# Simulate an active SceneTransition so the _setup_game failure path connects
+	# _abort_generation_failure to transition_completed (ONE_SHOT) rather than
+	# calling it directly.  This matches the real navigate() lifecycle where
+	# _transitioning == true from navigate() start through the full fade-in.
+	var was_transitioning := SceneTransition.is_transitioning
+	SceneTransition._transitioning = true
+
+	# Add to the scene tree — _ready() runs, which calls
+	# _try_auto_resume.call_deferred(), scheduling it for the next frame.
+	add_child_autofree(s)
+
+	# Simulate the setup callback (_attach_scene calls this after _ready()):
+	# begin_session → _setup_game → generation fails → suppresses resume →
+	# connects _abort_generation_failure to transition_completed (ONE_SHOT).
+	s.start_new_game(0)
+
+	# begin_session() emits push_error when _is_initialized() is false.
+	assert_push_error("setup failed to initialize game state")
+
+	# _suppress_auto_resume must be set before the deferred _try_auto_resume fires.
+	assert_true(s._suppress_auto_resume,
+			"_suppress_auto_resume must be set immediately after failed generation")
+
+	# No ceremony before transition completes.
+	assert_false(mock_recorder.started,
+			"replay must not start before transition_completed")
+	assert_eq(mock_stats.counters.get("general.games_played", 0), 0,
+			"games_played must not be incremented before transition_completed")
+	assert_eq(s.save_progress_call_count, 0,
+			"save_progress must not be called before transition_completed")
+
+	# Redirect must not fire yet — handler is pending on transition_completed.
+	assert_eq(s.abort_call_count, 0,
+			"_abort_generation_failure must not fire before transition_completed emits")
+
+	# Let the deferred _try_auto_resume run — it must be suppressed.
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	assert_false(s._is_initialized(),
+			"_try_auto_resume must not initialize the screen when _suppress_auto_resume is set")
+	assert_eq(mock_saves.data.get("sudoku"), PLANTED_SAVE,
+			"planted save must be untouched — no resume or save write occurred")
+	assert_eq(s.abort_call_count, 0,
+			"_abort_generation_failure must still not have fired (transition not yet complete)")
+
+	# Emit transition_completed — the ONE_SHOT handler fires exactly once.
+	SceneTransition.transition_completed.emit()
+
+	assert_eq(s.abort_call_count, 1,
+			"_abort_generation_failure must fire exactly once when transition_completed emits")
+	assert_false(mock_recorder.started,
+			"replay must not start after redirect")
+	assert_eq(mock_stats.counters.get("general.games_played", 0), 0,
+			"games_played stat must remain 0 after redirect")
+	assert_eq(s.save_progress_call_count, 0,
+			"save_progress must not be called during failed launch")
+	assert_false(mock_recorder.flushed,
+			"replay flush must not occur during failed launch")
+
+	# Emit again — CONNECT_ONE_SHOT must have removed the handler, so no second call.
+	SceneTransition.transition_completed.emit()
+	assert_eq(s.abort_call_count, 1,
+			"_abort_generation_failure must fire exactly once (CONNECT_ONE_SHOT enforced)")
+
+	# Restore SceneTransition state so subsequent tests are unaffected.
+	SceneTransition._transitioning = was_transitioning
