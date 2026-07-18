@@ -74,7 +74,8 @@ func generate(difficulty: SudokuSolver.Difficulty, seed: int = -1, constraints: 
 		return {}
 	var fallback_puzzle := _remove_cells(fallback_full_grid, difficulty, rng, constraints)
 	if fallback_puzzle.is_empty():
-		fallback_puzzle = _simple_remove(fallback_full_grid, CLUE_TARGETS[difficulty], rng, constraints)
+		var simple_target: int = CLUE_TARGETS[difficulty] + (3 if not constraints.is_empty() else 0)
+		fallback_puzzle = _simple_remove(fallback_full_grid, simple_target, rng, constraints)
 	var fallback_solver := SudokuSolver.new()
 	fallback_solver.analyze(fallback_puzzle, constraints)
 	return {
@@ -219,10 +220,14 @@ func _reorder_stacks(grid: Array[int], order: Array) -> Array[int]:
 
 ## Remove cells to create a puzzle, ensuring unique solution and target difficulty.
 ## Pass constraints to verify uniqueness under variant rules.
+## Constrained variants target 3 more clues so difficulty tiers remain
+## comparable to standard Sudoku despite the additional constraint.
 func _remove_cells(full_grid: Array[int], target_difficulty: SudokuSolver.Difficulty, rng: RandomNumberGenerator, constraints: Array = []) -> Array[int]:
 	var puzzle: Array[int] = []
 	puzzle.assign(full_grid.duplicate())
 	var target_clues: int = CLUE_TARGETS[target_difficulty]
+	if not constraints.is_empty():
+		target_clues += 3
 
 	# Create a random removal order
 	var indices := range(81)
