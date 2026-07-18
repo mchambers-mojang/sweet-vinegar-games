@@ -435,11 +435,13 @@ class TestSudokuFailScreen extends "res://scripts/sudoku/sudoku_game_screen.gd":
 
 ## SudokuGameScreen subclass for the full scene-tree lifecycle integration test.
 ## Overrides UI-heavy methods that would crash without @onready scene nodes,
-## tracks abort call count and save_progress calls, and returns null from
-## _get_save_adapter() so _try_auto_resume() uses MockSaves (_saves) instead
-## of the real file-backed SudokuSaveAdapter — making planted data detectable.
+## tracks save_progress calls, and returns null from _get_save_adapter() so
+## _try_auto_resume() uses MockSaves (_saves) instead of the real file-backed
+## SudokuSaveAdapter — making planted data detectable.
+## _abort_generation_failure() is intentionally NOT overridden: the production
+## handler calls SceneTransition.navigate(), so the test verifies navigation by
+## observing SceneTransition._transitioning rather than a stub counter.
 class TestSudokuFailScreenTree extends "res://scripts/sudoku/sudoku_game_screen.gd":
-	var abort_call_count := 0
 	var save_progress_call_count := 0
 
 	## Prevent @onready node wiring from crashing (board, buttons etc. are null).
@@ -449,10 +451,6 @@ class TestSudokuFailScreenTree extends "res://scripts/sudoku/sudoku_game_screen.
 	## Prevent AppTheme / UI node access inside _apply_theme().
 	func _apply_game_theme() -> void:
 		pass
-
-	## Capture the redirect without calling SceneTransition.navigate().
-	func _abort_generation_failure() -> void:
-		abort_call_count += 1
 
 	## Use MockSaves (_saves) instead of the real file-backed SudokuSaveAdapter
 	## so planted save data is visible to _try_auto_resume() without touching disk.
@@ -530,14 +528,22 @@ func test_failed_generation_suppresses_auto_resume_and_no_ceremony() -> void:
 
 
 func test_lifecycle_transition_failed_generation_redirect() -> void:
-	# Full scene-tree lifecycle regression: simulates the real SceneTransition.navigate()
-	# lifecycle (is_transitioning == true when _setup_game runs, _ready() fires so the
-	# deferred _try_auto_resume is scheduled), and verifies:
-	#   • the transition_completed connection fires _abort_generation_failure exactly once
-	#   • CONNECT_ONE_SHOT prevents a duplicate call on a second emit
+	# Full scene-tree lifecycle regression: drives the failed-generation redirect
+	# through the real SceneTransition.navigate() path with the production
+	# _abort_generation_failure() handler intact.  Verifies:
+	#   • navigate() is called and is NOT silently dropped by the _transitioning guard
+	#   • CONNECT_ONE_SHOT prevents a duplicate navigate() on a second emit
 	#   • _suppress_auto_resume is set before the deferred _try_auto_resume runs
 	#   • planted save data is never loaded (no resume ceremony)
 	#   • no replay, stats, or save writes occur
+	#
+	# Navigation is verified by observing SceneTransition._transitioning: the
+	# production _fade_in() sets _transitioning = false immediately before
+	# emitting transition_completed, so any navigate() call in the handler will
+	# see _transitioning == false and proceed (setting it back to true).  A
+	# navigate() dropped by the guard would leave _transitioning unchanged (false).
+	# After verifying, the tween is killed to prevent the async factory (scene
+	# load) from running, and _transitioning is restored for subsequent tests.
 
 	var mock_recorder := MockRecorder.new()
 	var mock_saves := MockSaves.new()
@@ -583,9 +589,9 @@ func test_lifecycle_transition_failed_generation_redirect() -> void:
 	assert_eq(s.save_progress_call_count, 0,
 			"save_progress must not be called before transition_completed")
 
-	# Redirect must not fire yet — handler is pending on transition_completed.
-	assert_eq(s.abort_call_count, 0,
-			"_abort_generation_failure must not fire before transition_completed emits")
+	# navigate() must not have been called yet (_transitioning still true from setup).
+	assert_true(SceneTransition.is_transitioning,
+			"SceneTransition must still be transitioning before transition_completed emits")
 
 	# Let the deferred _try_auto_resume run — it must be suppressed.
 	# call_deferred() fires at the end of the current idle frame, so one
@@ -596,14 +602,22 @@ func test_lifecycle_transition_failed_generation_redirect() -> void:
 			"_try_auto_resume must not initialize the screen when _suppress_auto_resume is set")
 	assert_eq(mock_saves.data.get("sudoku"), FAILED_GENERATION_TEST_PLANTED_SAVE,
 			"planted save must be untouched — no resume or save write occurred")
-	assert_eq(s.abort_call_count, 0,
-			"_abort_generation_failure must still not have fired (transition not yet complete)")
+	assert_true(SceneTransition.is_transitioning,
+			"navigate() must still not have been called (transition not yet complete)")
 
-	# Emit transition_completed — the ONE_SHOT handler fires exactly once.
+	# Mirror real _fade_in() behavior: clear _transitioning BEFORE emitting
+	# transition_completed.  The production handler will call navigate(), which
+	# checks _transitioning at its entry — if we left it true the navigate()
+	# would be silently dropped and this test would catch the regression.
+	SceneTransition._transitioning = false
 	SceneTransition.transition_completed.emit()
 
-	assert_eq(s.abort_call_count, 1,
-			"_abort_generation_failure must fire exactly once when transition_completed emits")
+	# Production _abort_generation_failure() called SceneTransition.navigate(),
+	# which passed the _transitioning == false guard and set _transitioning = true.
+	# A dropped navigate() would leave _transitioning false — the assertion below
+	# is the definitive proof that navigation was not discarded.
+	assert_true(SceneTransition.is_transitioning,
+			"SceneTransition.navigate() must have started a transition (not dropped by guard)")
 	assert_false(mock_recorder.started,
 			"replay must not start after redirect")
 	assert_eq(mock_stats.counters.get("general.games_played", 0), 0,
@@ -613,10 +627,18 @@ func test_lifecycle_transition_failed_generation_redirect() -> void:
 	assert_false(mock_recorder.flushed,
 			"replay flush must not occur during failed launch")
 
-	# Emit again — CONNECT_ONE_SHOT must have removed the handler, so no second call.
+	# Kill the pending fade-out tween to prevent the async factory (scene load)
+	# from running after the test completes.  Reset _transitioning so the second
+	# emit below can be a clean CONNECT_ONE_SHOT check.
+	if SceneTransition._tween and SceneTransition._tween.is_valid():
+		SceneTransition._tween.kill()
+	SceneTransition._transitioning = false
+
+	# CONNECT_ONE_SHOT: a second transition_completed must NOT call navigate() again.
+	# If the handler were still connected, navigate() would set _transitioning = true.
 	SceneTransition.transition_completed.emit()
-	assert_eq(s.abort_call_count, 1,
-			"_abort_generation_failure must fire exactly once (CONNECT_ONE_SHOT enforced)")
+	assert_false(SceneTransition.is_transitioning,
+			"CONNECT_ONE_SHOT must prevent a second navigate() call on re-emit")
 
 	# Restore SceneTransition state so subsequent tests are unaffected.
 	SceneTransition._transitioning = original_transitioning_state
