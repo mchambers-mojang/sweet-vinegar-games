@@ -209,8 +209,15 @@ func _setup_game(saved_data: Dictionary) -> void:
 			# transition completes (or immediately when no transition is running).
 			_suppress_auto_resume = true
 			if SceneTransition.is_transitioning:
+				# CONNECT_DEFERRED is required here: transition_completed fires
+				# from inside the _fade_in() tween callback, and calling
+				# navigate() synchronously from within that callback prevents
+				# the new redirect tween from being processed by Godot.
+				# Deferring ensures _abort_generation_failure runs in the next
+				# idle step — after the tween callback returns — so navigate()
+				# creates the redirect tween in a normal game-loop context.
 				SceneTransition.transition_completed.connect(
-						_abort_generation_failure, CONNECT_ONE_SHOT)
+						_abort_generation_failure, CONNECT_ONE_SHOT | CONNECT_DEFERRED)
 			else:
 				_abort_generation_failure()
 			return

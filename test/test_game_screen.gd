@@ -528,124 +528,118 @@ func test_failed_generation_suppresses_auto_resume_and_no_ceremony() -> void:
 
 
 func test_lifecycle_transition_failed_generation_redirect() -> void:
-	# Full scene-tree lifecycle regression: exercises the blocked lifecycle end
-	# to end, including the real SceneTransition._fade_in() ordering.
-	#   • _fade_in() runs for real — if it ever regressed to emit-before-clear,
-	#     _abort_generation_failure()'s navigate() call would be dropped by the
-	#     _transitioning guard and the assertion below would fail.
-	#   • CONNECT_ONE_SHOT prevents a duplicate navigate() on a second emit.
-	#   • _suppress_auto_resume is set before the deferred _try_auto_resume runs.
-	#   • planted save data is never loaded (no resume ceremony).
-	#   • no replay, stats, or save writes occur.
+	# Full lifecycle regression: the originating navigation runs through the
+	# real SceneTransition._do_navigate() pipeline — fade-out tween, scene
+	# attach + setup callback, 2-frame wait, fade-in tween, transition_completed
+	# signal — not manually arranged state and a direct _fade_in() call.
+	# Both the originating transition and the resulting redirect (to the Sudoku
+	# menu) are then awaited to completion.
 	#
-	# How the ordering proof works:
-	#   SceneTransition._fade_in() starts a tween that, on completion, executes:
-	#     1. _overlay.mouse_filter = IGNORE
-	#     2. _transitioning = false          ← guard cleared FIRST
-	#     3. transition_completed.emit()      ← signal emitted SECOND
-	#   When transition_completed fires, all connected handlers run before
-	#   the awaiting coroutine resumes.  _abort_generation_failure (ONE_SHOT,
-	#   connected earlier) fires first — navigate() sees _transitioning == false
-	#   and sets it back to true.  When the test's await resumes it asserts
-	#   is_transitioning == true, which would be false if the guard was still
-	#   set (regressed ordering) or the handler was not connected at all.
+	# _abort_generation_failure is connected CONNECT_ONE_SHOT | CONNECT_DEFERRED
+	# in _setup_game: it fires in the NEXT idle step (not synchronously from
+	# within the _fade_in() tween callback).  Calling navigate() synchronously
+	# from inside a tween callback prevents the new redirect tween from being
+	# processed by Godot; the deferred connection avoids that race.
+	# One process-frame gap (below) lets the deferred abort fire so that the
+	# redirect's is_transitioning flag is set before the second await.
 
 	var mock_recorder := MockRecorder.new()
 	var mock_saves := MockSaves.new()
 	var mock_stats := MockStats.new()
-
-	# Plant a resumable save that _try_auto_resume would load if not suppressed.
 	mock_saves.data["sudoku"] = FAILED_GENERATION_TEST_PLANTED_SAVE.duplicate()
 
-	var s := TestSudokuFailScreenTree.new(
-		mock_recorder, MockStorage.new(), MockCrash.new(), MockAnalytics.new(),
-		MockAchievements.new(), mock_saves, mock_stats, MockSound.new(), MockHaptic.new()
+	var screen_ref_holder := {"ref": null}
+
+	# Save state for cleanup after both transitions.
+	var gut_runner := get_tree().current_scene
+	var original_nav_stack := SceneTransition._nav_stack.duplicate()
+	SceneTransition._nav_stack.clear()
+
+	# Protection against the redirect freeing the GUT runner.
+	# _do_navigate(free_old=false) removes the GUT runner from the tree and
+	# pushes it onto _nav_stack during the originating tween callback.
+	# The redirect (free_old=true) frees everything in _nav_stack when its tween
+	# fires.  This ONE_SHOT handler fires synchronously on transition_completed
+	# (still in the same frame as the originating fade-in), clearing nav_stack
+	# before the deferred _abort_generation_failure fires in the next idle step
+	# and starts the redirect tween — so the redirect's free loop finds nothing.
+	SceneTransition.transition_completed.connect(func() -> void:
+		SceneTransition._nav_stack.clear()
+	, CONNECT_ONE_SHOT)
+
+	# Start the originating navigation through the real _do_navigate() pipeline.
+	# free_old=false keeps the GUT runner alive (pushed to nav_stack) rather
+	# than freeing it; the protection handler above clears nav_stack before the
+	# redirect tween can free the GUT runner.
+	SceneTransition._do_navigate(
+		func() -> Node:
+			var s := TestSudokuFailScreenTree.new(
+				mock_recorder, MockStorage.new(), MockCrash.new(), MockAnalytics.new(),
+				MockAchievements.new(), mock_saves, mock_stats, MockSound.new(), MockHaptic.new()
+			)
+			s.constraints = [BlockAllAtIndexConstraint.new()]
+			# Use a shared holder dict because GDScript 4 lambdas capture by value
+			# — direct variable assignment inside a lambda cannot update the outer scope.
+			screen_ref_holder["ref"] = s
+			return s,
+		func(_s: Node) -> void:
+			screen_ref_holder["ref"].start_new_game(0),
+		false
 	)
-	s.constraints = [BlockAllAtIndexConstraint.new()]
 
-	# Put SceneTransition into the same state as a real navigate() call: overlay
-	# blocks input and _transitioning is true from the start of the fade-out.
-	# This is what the production setup callback sees when launched by GameMenu.
-	var original_transitioning_state := SceneTransition.is_transitioning
-	SceneTransition._transitioning = true
-	SceneTransition._overlay.mouse_filter = Control.MOUSE_FILTER_STOP
-
-	# Add to the scene tree — _ready() runs, which calls
-	# _try_auto_resume.call_deferred(), scheduling it for the next frame.
-	add_child_autofree(s)
-
-	# Simulate the setup callback (_attach_scene calls this after _ready()):
-	# begin_session → _setup_game → generation fails → suppresses resume →
-	# connects _abort_generation_failure to transition_completed (ONE_SHOT).
-	s.start_new_game(0)
-
-	# begin_session() calls GDScript's push_error(), which GUT intercepts.
-	assert_push_error("setup failed to initialize game state")
-
-	# _suppress_auto_resume must be set synchronously inside _setup_game.
-	assert_true(s._suppress_auto_resume,
-			"_suppress_auto_resume must be set immediately after failed generation")
-
-	# No ceremony before transition completes.
-	assert_false(mock_recorder.started,
-			"replay must not start before transition_completed")
-	assert_eq(mock_stats.counters.get("general.games_played", 0), 0,
-			"games_played must not be incremented before transition_completed")
-	assert_eq(s.save_progress_call_count, 0,
-			"save_progress must not be called before transition_completed")
-
-	# Redirect handler is pending on transition_completed — _transitioning still true.
-	assert_true(SceneTransition.is_transitioning,
-			"SceneTransition must still be transitioning before transition_completed emits")
-
-	# Let the deferred _try_auto_resume run — it must be suppressed.
-	# call_deferred() fires at the end of the current idle frame, so one
-	# process_frame await is sufficient to let it execute.
-	await get_tree().process_frame
-
-	assert_false(s._is_initialized(),
-			"_try_auto_resume must not initialize the screen when _suppress_auto_resume is set")
-	assert_eq(mock_saves.data.get("sudoku"), FAILED_GENERATION_TEST_PLANTED_SAVE,
-			"planted save must be untouched — no resume or save write occurred")
-	assert_true(SceneTransition.is_transitioning,
-			"navigate() must still not have been called (transition not yet complete)")
-
-	# Drive real _fade_in(): its tween completes and the tween callback runs:
-	#   _transitioning = false → transition_completed.emit()
-	# The ONE_SHOT _abort_generation_failure handler fires BEFORE this await
-	# resumes; it calls navigate() which sets _transitioning = true again.
-	SceneTransition._fade_in()
+	# Await the originating transition (fade-out → attach → 2-frame wait → fade-in).
+	# When transition_completed fires: the protection handler (sync) clears nav_stack;
+	# _abort_generation_failure is scheduled as deferred — it runs next idle step.
 	await SceneTransition.transition_completed
 
-	# _abort_generation_failure ran (ONE_SHOT, now disconnected) and called
-	# navigate().  navigate() checked _transitioning == false (the ordering
-	# that _fade_in guarantees) and set it to true.  A navigate() dropped by
-	# the _transitioning guard would leave _transitioning false here.
+	# begin_session() calls push_error after the failed _setup_game; consume it.
+	assert_push_error("setup failed to initialize game state")
+
+	assert_true((screen_ref_holder["ref"] as TestSudokuFailScreenTree)._suppress_auto_resume,
+			"_suppress_auto_resume must be set synchronously in _setup_game")
+	assert_false(mock_recorder.started,
+			"replay must not start before redirect completes")
+	assert_eq(mock_stats.counters.get("general.games_played", 0), 0,
+			"games_played must not be incremented before redirect completes")
+	assert_eq((screen_ref_holder["ref"] as TestSudokuFailScreenTree).save_progress_call_count, 0,
+			"save_progress must not be called before redirect completes")
+	# Redirect has NOT started yet: _abort_generation_failure is deferred.
+	assert_false(SceneTransition.is_transitioning,
+			"redirect must not start synchronously — _abort_generation_failure is deferred")
+
+	# One idle step for the deferred _abort_generation_failure to fire.
+	# After this frame the production abort handler has called navigate(SUDOKU_MENU)
+	# and the redirect transition is running.
+	await get_tree().process_frame
+
 	assert_true(SceneTransition.is_transitioning,
-			"SceneTransition.navigate() must have started a transition (not dropped by guard)")
+			"navigate(SUDOKU_MENU) must have started the redirect transition")
+
+	# Await the redirect transition (fade-out → Sudoku menu loads → fade-in).
+	await SceneTransition.transition_completed
+
 	assert_false(mock_recorder.started,
 			"replay must not start after redirect")
 	assert_eq(mock_stats.counters.get("general.games_played", 0), 0,
-			"games_played stat must remain 0 after redirect")
-	assert_eq(s.save_progress_call_count, 0,
-			"save_progress must not be called during failed launch")
+			"games_played must remain 0 after redirect")
 	assert_false(mock_recorder.flushed,
 			"replay flush must not occur during failed launch")
+	assert_eq(mock_saves.data.get("sudoku"), FAILED_GENERATION_TEST_PLANTED_SAVE,
+			"planted save must be untouched — no resume or save write occurred")
 
-	# Cancel the new navigate()'s fade-out tween before it loads the real scene.
-	# cancel_transition() also restores the overlay to non-blocking input.
-	SceneTransition.cancel_transition()
-	assert_false(SceneTransition.is_transitioning,
-			"cancel_transition must clear _transitioning")
-	assert_eq(SceneTransition._overlay.mouse_filter, Control.MOUSE_FILTER_IGNORE,
-			"cancel_transition must restore overlay to non-blocking input")
-
-	# CONNECT_ONE_SHOT: _abort_generation_failure was already consumed.
-	# A second transition_completed emission must NOT call navigate() again.
-	# If the handler were still connected, navigate() would set _transitioning = true.
+	# CONNECT_ONE_SHOT: _abort_generation_failure was consumed on the deferred
+	# first-transition emit.  After the redirect's fade-in, _transitioning is
+	# false; a stale connected handler would call navigate() again (→ true).
 	SceneTransition.transition_completed.emit()
 	assert_false(SceneTransition.is_transitioning,
 			"CONNECT_ONE_SHOT must prevent a second navigate() call on re-emit")
 
-	# Restore SceneTransition state so subsequent tests are unaffected.
-	SceneTransition._transitioning = original_transitioning_state
+	# Restore test environment: the redirect loaded the Sudoku menu as current_scene.
+	# Re-add the GUT runner (removed from tree by _do_navigate) so subsequent
+	# tests are unaffected.
+	var loaded_menu := get_tree().current_scene
+	get_tree().root.add_child(gut_runner)
+	get_tree().current_scene = gut_runner
+	if loaded_menu:
+		loaded_menu.queue_free()
+	SceneTransition._nav_stack = original_nav_stack

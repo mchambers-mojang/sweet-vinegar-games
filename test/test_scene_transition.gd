@@ -41,6 +41,25 @@ func test_cancel_transition_restores_overlay_mouse_filter() -> void:
 	SceneTransition._transitioning = original_transitioning
 
 
+## cancel_transition() must reset overlay alpha to 0 (fully transparent)
+## so a mid-fade cancel never leaves the current scene dimmed or obscured.
+func test_cancel_transition_restores_overlay_alpha_to_transparent() -> void:
+	# Simulate being mid-fade-out: overlay is partially opaque (e.g. 0.6 alpha).
+	var original_alpha := SceneTransition._overlay.color.a
+	var original_transitioning := SceneTransition.is_transitioning
+	SceneTransition._overlay.color.a = 0.6
+	SceneTransition._transitioning = true
+
+	SceneTransition.cancel_transition()
+
+	assert_eq(SceneTransition._overlay.color.a, 0.0,
+			"cancel_transition must reset overlay alpha to 0 (fully transparent)")
+
+	# Restore state.
+	SceneTransition._overlay.color.a = original_alpha
+	SceneTransition._transitioning = original_transitioning
+
+
 ## cancel_transition() must increment _transition_gen so any two-frame
 ## _fade_in() callbacks already queued by a previous _do_navigate / pop
 ## tween are skipped and cannot fire _fade_in() or transition_completed

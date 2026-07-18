@@ -123,10 +123,11 @@ func _fade_in() -> void:
 
 
 ## Cancel any in-progress transition tween and mark the overlay idle.
-## Restores the overlay to non-blocking input and increments _transition_gen
-## so any already-queued two-frame _fade_in() callback (scheduled inside a
-## _do_navigate or pop tween) is silently skipped — preventing it from
-## overriding a subsequent transition that starts after the cancel.
+## Restores the overlay to non-blocking input, resets alpha to fully
+## transparent (so a mid-fade cancel never leaves the scene dimmed), and
+## increments _transition_gen so any already-queued two-frame _fade_in()
+## callback (scheduled inside a _do_navigate or pop tween) is silently
+## skipped — preventing it from overriding a subsequent transition.
 func cancel_transition() -> void:
 	if _tween and _tween.is_valid():
 		_tween.kill()
@@ -134,6 +135,7 @@ func cancel_transition() -> void:
 	_transition_gen += 1
 	if _overlay:
 		_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_overlay.color = _get_fade_color(0.0)
 
 
 ## Auto-apply safe area to every scene root under the tree root.
