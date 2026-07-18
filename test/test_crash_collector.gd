@@ -8,6 +8,11 @@ const TEST_REPORT_DIR := "user://test_crash_collector_reports"
 var collector: Node
 
 
+class ReplayHookProvider extends Node:
+	func get_payload() -> Dictionary:
+		return {"data": "live"}
+
+
 func before_each() -> void:
 	_clear_test_reports()
 	collector = Node.new()
@@ -115,6 +120,17 @@ func test_unregister_replay_hook() -> void:
 	collector.unregister_replay_hook(hook)
 	collector.capture_error("after hook unregister")
 	assert_false(called, "Unregistered replay hook should not be called")
+
+
+func test_freed_replay_hook_provider_is_ignored() -> void:
+	var provider := ReplayHookProvider.new()
+	collector.register_replay_hook(provider.get_payload)
+	provider.free()
+
+	var payload: Dictionary = collector._collect_replay_payload()
+
+	assert_true(payload.is_empty(), "Freed replay hook providers should be ignored")
+	assert_true(collector._replay_hooks.is_empty(), "Freed replay hooks should be pruned")
 
 
 # --- capture_error / capture_crash ---

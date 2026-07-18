@@ -40,8 +40,12 @@ jobs:
             echo "::error::Tests failed!"
             exit 1
           fi
-          if grep -q "All tests passed" test_output.txt; then
-            echo "All tests passed!"
+          # GUT omits the literal "All tests passed" when tests are risky/pending,
+          # even when every executed assertion passes. Require a completed summary
+          # with at least one passing test; the nonzero failure check above remains
+          # authoritative.
+          if grep -q "Run Summary" test_output.txt && grep -Eq "Passing Tests[[:space:]]+[1-9][0-9]*" test_output.txt; then
+            echo "Test run completed without failures."
           else
             echo "::error::Test run did not complete successfully"
             exit 1

@@ -26,6 +26,10 @@ func _ready() -> void:
 	CrashCollector.register_replay_hook(get_crash_recovery_payload)
 
 
+func _exit_tree() -> void:
+	CrashCollector.unregister_replay_hook(get_crash_recovery_payload)
+
+
 func get_crash_recovery_payload() -> Dictionary:
 	var latest: Dictionary = {}
 	if not _replay_index.is_empty():

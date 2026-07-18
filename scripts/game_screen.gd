@@ -67,6 +67,11 @@ var replay_id: String = ""
 # null for games that have not yet migrated to the adapter contract.
 var _save_adapter: GameSaveAdapter = null
 
+## Set by a subclass before _try_auto_resume fires to prevent a deferred
+## auto-resume from overwriting an explicit (failed) launch state.
+## Typically set in _setup_game() when generation fails.
+var _suppress_auto_resume: bool = false
+
 @onready var timer_label: Label = %TimerLabel
 
 
@@ -265,6 +270,9 @@ func begin_session(saved_data: Dictionary = {}) -> void:
 	# _setup_game() runs here so game state (board, seed derivation for legacy
 	# saves) is fully initialised before _recorder.start_session() below.
 	_setup_game(saved_data)
+	if not _is_initialized():
+		push_error("GameScreen: %s setup failed to initialize game state" % game_id)
+		return
 
 	if not is_resuming or not _recorder.has_active_session():
 		replay_id = _recorder.start_session(
@@ -299,6 +307,8 @@ func clear_save() -> void:
 
 
 func _try_auto_resume() -> void:
+	if _suppress_auto_resume:
+		return
 	if _is_initialized():
 		return
 	if _save_adapter:
