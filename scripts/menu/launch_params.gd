@@ -19,7 +19,7 @@ extends Resource
 ## Replaces the "carom_online" metadata key.
 @export var online: bool = false
 
-## Variant rule set identifier.  Empty string means the default rule set for
-## the game (e.g. standard Sudoku).  Populated by menus that expose a rule-set
-## dropdown (e.g. Sudoku: "anti_knight", "anti_king").
-@export var rule_set: String = ""
+## Rule-set index for games that support variant rules (e.g. Sudoku Anti-Knight/Anti-King).
+## 0 = standard rules; non-zero values are game-defined.
+## Defaults to 0 so existing callers that do not set it get standard behaviour.
+@export var rule_set: int = 0

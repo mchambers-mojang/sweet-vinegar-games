@@ -14,8 +14,6 @@ const FAIL_AT_STRIKES := 4
 var strict_mode: bool = false
 var auto_remove_pencil_marks: bool = true
 
-## Identifier for the active rule set (empty = standard Sudoku).
-var rule_set: String = ""
 ## Active variant constraints evaluated during placement validation.
 ## Set before calling init_new_game() to enable variant rules;
 ## passed automatically to the generator and solver during game setup.
@@ -57,9 +55,7 @@ class PlaceResult:
 	var game_won: bool = false
 	var pencil_marks_removed: Array = []  # Array of {index, number}
 	var units_completed: Array = []       # Array of {type, unit_index, cells}
-	## Indices of cells that conflict with this placement via active constraints.
-	## Only populated in free mode (non-strict) when constraints are active.
-	var conflict_indices: Array[int] = []
+	var constraint_conflicts: Array[int] = []  # Indices of cells that conflict via active constraint
 
 
 ## Returned by toggle_pencil_mark().
@@ -126,7 +122,6 @@ func init_from_save(data: Dictionary) -> void:
 	is_failed = data.get("is_failed", false)
 	hints_used = data.get("hints_used", 0)
 	is_completed = false
-	rule_set = data.get("rule_set", "")
 
 	puzzle.clear()
 	for v in data.get("puzzle", []):
@@ -186,7 +181,6 @@ func serialize() -> Dictionary:
 		"strikes": strikes,
 		"is_failed": is_failed,
 		"hints_used": hints_used,
-		"rule_set": rule_set,
 	}
 
 
@@ -233,11 +227,16 @@ func place_number(cell_index: int, number: int) -> PlaceResult:
 	if auto_remove_pencil_marks:
 		result.pencil_marks_removed = _remove_pencil_marks_for_number(cell_index, number)
 
-	result.units_completed = _get_completed_units(cell_index)
-
-	# In free mode with active constraints, surface constraint violations for highlighting
+	# Detect constraint conflicts for error highlighting (free mode only).
+	# In strict mode this path is only reached for correct placements, so
+	# constraint conflicts would imply a broken puzzle — skip the check.
 	if not strict_mode and not constraints.is_empty():
-		result.conflict_indices = get_constraint_errors()
+		for c: SudokuConstraint in constraints:
+			for idx in c.get_affected_indices(cell_index):
+				if current_grid[idx] == number and not idx in result.constraint_conflicts:
+					result.constraint_conflicts.append(idx)
+
+	result.units_completed = _get_completed_units(cell_index)
 
 	if _check_win():
 		is_completed = true

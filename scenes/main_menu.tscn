@@ -6,29 +6,7 @@
 [node name="MainMenu" instance=ExtResource("1")]
 script = ExtResource("2")
 
-[node name="MarginContainer/VBoxContainer/TitleLabel" parent="."]
-unique_name_in_owner = true
-text = "Sudoku"
-
-[node name="RuleSetRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer" index=6]
-layout_mode = 2
-alignment = 1
-
-[node name="RuleSetLabel" type="Label" parent="MarginContainer/VBoxContainer/RuleSetRow"]
-layout_mode = 2
-text = "Rule Set: "
-
-[node name="RuleSetButton" type="OptionButton" parent="MarginContainer/VBoxContainer/RuleSetRow"]
-unique_name_in_owner = true
-layout_mode = 2
-item_count = 3
-popup/item_0/text = "Standard"
-popup/item_1/text = "Anti-Knight"
-popup/item_1/id = 1
-popup/item_2/text = "Anti-King"
-popup/item_2/id = 2
-
-[node name="DifficultyRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer" index=7]
+[node name="DifficultyRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer" index=6]
 layout_mode = 2
 alignment = 1
 

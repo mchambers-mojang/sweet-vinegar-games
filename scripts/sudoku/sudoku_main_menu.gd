@@ -2,29 +2,21 @@ extends GameMenu
 
 ## Sudoku main menu — config-driven via assets/menu/sudoku_menu.tres
 ##
-## Extends the base GameMenu to add:
-##   • Rule-set dropdown (Standard / Anti-Knight / Anti-King)
-##   • Rule-set–aware LaunchParams construction
-##   • Leaderboard button that covers all rule-set + difficulty combinations
+## Extends GameMenu with a "Rule Set" dropdown (Standard / Anti-Knight / Anti-King)
+## injected dynamically below the existing DifficultyButton row.
+## The selected rule set is forwarded to the game screen via LaunchParams.rule_set.
 
-## Rule set ids indexed by RuleSetButton position.
-const RULE_SET_IDS: Array[String] = ["", "anti_knight", "anti_king"]
+const RULE_SET_STANDARD := 0
+const RULE_SET_ANTI_KNIGHT := 1
+const RULE_SET_ANTI_KING := 2
 
-## Leaderboard mode ids and labels, grouped by rule set.
-const LB_MODES: PackedStringArray = [
-	"easy", "medium", "hard", "expert",
-	"sudoku_antiknight_easy", "sudoku_antiknight_medium",
-	"sudoku_antiknight_hard", "sudoku_antiknight_expert",
-	"sudoku_antiking_easy",   "sudoku_antiking_medium",
-	"sudoku_antiking_hard",   "sudoku_antiking_expert",
-]
-const LB_LABELS: PackedStringArray = [
-	"Easy", "Medium", "Hard", "Expert",
-	"Anti-Knight Easy", "Anti-Knight Medium",
-	"Anti-Knight Hard", "Anti-Knight Expert",
-	"Anti-King Easy",   "Anti-King Medium",
-	"Anti-King Hard",   "Anti-King Expert",
-]
+const ANTI_KNIGHT_MODES := PackedStringArray(["antiknight_easy", "antiknight_medium", "antiknight_hard", "antiknight_expert"])
+const ANTI_KNIGHT_LABELS := PackedStringArray(["Anti-Knight Easy", "Anti-Knight Medium", "Anti-Knight Hard", "Anti-Knight Expert"])
+const ANTI_KING_MODES := PackedStringArray(["antiking_easy", "antiking_medium", "antiking_hard", "antiking_expert"])
+const ANTI_KING_LABELS := PackedStringArray(["Anti-King Easy", "Anti-King Medium", "Anti-King Hard", "Anti-King Expert"])
+
+var _rule_set_index: int = RULE_SET_STANDARD
+var _rule_set_button: OptionButton = null
 
 
 func _init() -> void:
@@ -37,54 +29,119 @@ func _get_save_adapter() -> GameSaveAdapter:
 
 func _on_menu_ready() -> void:
 	super._on_menu_ready()
-	# Persist the last selected rule set across menu visits.
-	var rule_btn := get_node_or_null("%RuleSetButton") as OptionButton
-	if rule_btn:
-		var saved_idx: int = int(GameRulesRegistry.get_rule("sudoku", "rule_set_index"))
-		if saved_idx >= 0 and saved_idx < rule_btn.item_count:
-			rule_btn.selected = saved_idx
-		rule_btn.item_selected.connect(func(idx: int) -> void:
-			GameRulesRegistry.set_rule("sudoku", "rule_set_index", idx)
-		)
+	_inject_rule_set_row()
 
 
-## Build LaunchParams that includes both the difficulty and the rule set.
+## Injects an HBoxContainer with "Rule Set:" label and OptionButton
+## (Standard / Anti-Knight / Anti-King) directly below the DifficultyRow.
+func _inject_rule_set_row() -> void:
+	var diff_btn := get_node_or_null("%DifficultyButton") as OptionButton
+	if diff_btn == null:
+		return
+	var diff_row: Node = diff_btn.get_parent()
+	var vbox := diff_row.get_parent() as VBoxContainer
+	if vbox == null:
+		return
+
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+
+	var lbl := Label.new()
+	lbl.text = "Rule Set: "
+	row.add_child(lbl)
+
+	_rule_set_button = OptionButton.new()
+	_rule_set_button.add_item("Standard")
+	_rule_set_button.add_item("Anti-Knight")
+	_rule_set_button.add_item("Anti-King")
+	_rule_set_button.selected = _rule_set_index
+	_rule_set_button.item_selected.connect(func(idx: int) -> void: _rule_set_index = idx)
+	row.add_child(_rule_set_button)
+
+	vbox.add_child(row)
+	vbox.move_child(row, diff_row.get_index() + 1)
+
+
+## Override _start_game to include the rule_set in LaunchParams.
 func _start_game() -> void:
+	if not config:
+		return
 	var params := config.build_launch_params(_get_current_option_value())
-	# Read the rule set from the %RuleSetButton (0 = Standard, 1 = Anti-Knight, 2 = Anti-King).
-	var rule_btn := get_node_or_null("%RuleSetButton") as OptionButton
-	if rule_btn and rule_btn.selected >= 0 and rule_btn.selected < RULE_SET_IDS.size():
-		params.rule_set = RULE_SET_IDS[rule_btn.selected]
+	params.rule_set = _rule_set_index
 	SceneTransition.navigate(config.game_scene_path, func(game_scene: Node) -> void:
 		game_scene.launch(params)
 	)
 
 
-## Override the leaderboard button to show all rule-set + difficulty combos.
+## Override _setup_leaderboard_button to add Anti-Knight and Anti-King modes.
 func _setup_leaderboard_button(stats_btn: Button) -> void:
-	if not config:
+	if not config or config.leaderboard_modes.is_empty():
 		return
+
+	# Build combined mode + label lists: standard first, then variants.
+	var modes: PackedStringArray = PackedStringArray()
+	var labels: PackedStringArray = PackedStringArray()
+	var opt_btn := get_node_or_null("%DifficultyButton") as OptionButton
+
+	# Standard modes (from config, skip empty Evil slot)
+	for i in range(config.leaderboard_modes.size()):
+		var m: String = config.leaderboard_modes[i]
+		if m.is_empty():
+			continue
+		modes.append(m)
+		if opt_btn and i < opt_btn.item_count:
+			labels.append(opt_btn.get_item_text(i))
+		else:
+			labels.append(m.capitalize())
+
+	# Anti-Knight modes
+	for i in range(ANTI_KNIGHT_MODES.size()):
+		modes.append(ANTI_KNIGHT_MODES[i])
+		labels.append(ANTI_KNIGHT_LABELS[i])
+
+	# Anti-King modes
+	for i in range(ANTI_KING_MODES.size()):
+		modes.append(ANTI_KING_MODES[i])
+		labels.append(ANTI_KING_LABELS[i])
+
+	if modes.is_empty():
+		return
+
 	var btn := Button.new()
 	btn.text = "Leaderboard"
 	btn.custom_minimum_size = Vector2(0, 50)
 	btn.pressed.connect(func() -> void:
-		# Default selection: match current rule-set + difficulty dropdowns.
+		# Pre-select: map current (rule_set, difficulty) to the combined modes list.
+		var diff_idx := _get_current_option_index()
+		var standard_modes_count := 0
+		for m in config.leaderboard_modes:
+			if not m.is_empty():
+				standard_modes_count += 1
 		var selected_lb_idx := 0
-		var rule_btn := get_node_or_null("%RuleSetButton") as OptionButton
-		var diff_btn := get_node_or_null("%DifficultyButton") as OptionButton
-		var rule_idx := rule_btn.selected if rule_btn else 0
-		var diff_idx := diff_btn.selected if diff_btn else 0
-		# Easy/Medium/Hard/Expert are at positions 0-3; Evil (4) has no leaderboard.
-		if diff_idx < 4:
-			selected_lb_idx = rule_idx * 4 + diff_idx
+		if _rule_set_index == RULE_SET_ANTI_KNIGHT:
+			selected_lb_idx = standard_modes_count + mini(diff_idx, ANTI_KNIGHT_MODES.size() - 1)
+		elif _rule_set_index == RULE_SET_ANTI_KING:
+			selected_lb_idx = standard_modes_count + ANTI_KNIGHT_MODES.size() + mini(diff_idx, ANTI_KING_MODES.size() - 1)
+		else:
+			# Map diff_idx to the non-empty standard modes index
+			var count := 0
+			for i in range(config.leaderboard_modes.size()):
+				if config.leaderboard_modes[i].is_empty():
+					continue
+				if i == diff_idx:
+					selected_lb_idx = count
+					break
+				count += 1
 		var return_path := _get_menu_scene_path()
 		SceneTransition.navigate(Scenes.LEADERBOARD, func(screen: Node) -> void:
-			screen.setup("sudoku", LB_MODES, LB_LABELS, true, selected_lb_idx, return_path)
+			screen.setup(config.game_id, modes, labels, config.leaderboard_is_time_based, selected_lb_idx, return_path)
 		)
 	)
+
 	if stats_btn:
-		var parent := stats_btn.get_parent()
-		parent.add_child(btn)
-		parent.move_child(btn, stats_btn.get_index() + 1)
+		stats_btn.get_parent().add_child(btn)
+		stats_btn.get_parent().move_child(btn, stats_btn.get_index() + 1)
 	else:
-		add_child(btn)
+		var vbox := find_child("VBoxContainer", true, false)
+		if vbox:
+			vbox.add_child(btn)
