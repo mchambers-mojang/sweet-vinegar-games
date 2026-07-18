@@ -83,7 +83,7 @@ func _setup_leaderboard_button(stats_btn: Button) -> void:
 	var labels: PackedStringArray = PackedStringArray()
 	var opt_btn := get_node_or_null("%DifficultyButton") as OptionButton
 
-	# Standard modes (from config, skip empty Evil slot)
+	# Standard modes (from config, skip empty Evil slot — Evil difficulty has no leaderboard support)
 	for i in range(config.leaderboard_modes.size()):
 		var m: String = config.leaderboard_modes[i]
 		if m.is_empty():
