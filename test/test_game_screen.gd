@@ -579,7 +579,7 @@ func test_lifecycle_transition_failed_generation_redirect() -> void:
 	# connects _abort_generation_failure to transition_completed (ONE_SHOT).
 	s.start_new_game(0)
 
-	# begin_session() calls push_error when _is_initialized() is false.
+	# begin_session() calls GDScript's push_error(), which GUT intercepts.
 	assert_push_error("setup failed to initialize game state")
 
 	# _suppress_auto_resume must be set synchronously inside _setup_game.

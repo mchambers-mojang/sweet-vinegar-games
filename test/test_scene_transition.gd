@@ -67,7 +67,4 @@ func test_cancel_transition_increments_generation_for_stale_callback_suppression
 
 	assert_false(unexpected_complete,
 			"stale queued _fade_in callback must be suppressed after cancel_transition")
-
-	# Disconnect the guard signal connection if it is still live.
-	if SceneTransition.transition_completed.is_connected(func() -> void: pass):
-		pass  # ONE_SHOT connection disconnects itself once fired
+	# ONE_SHOT connections disconnect themselves after firing; no manual cleanup needed.
