@@ -55,6 +55,7 @@ class PlaceResult:
 	var game_won: bool = false
 	var pencil_marks_removed: Array = []  # Array of {index, number}
 	var units_completed: Array = []       # Array of {type, unit_index, cells}
+	var constraint_conflicts: Array[int] = []  # Indices of cells that conflict via active constraint
 
 
 ## Returned by toggle_pencil_mark().
@@ -225,6 +226,15 @@ func place_number(cell_index: int, number: int) -> PlaceResult:
 
 	if auto_remove_pencil_marks:
 		result.pencil_marks_removed = _remove_pencil_marks_for_number(cell_index, number)
+
+	# Detect constraint conflicts for error highlighting (free mode only).
+	# In strict mode this path is only reached for correct placements, so
+	# constraint conflicts would imply a broken puzzle — skip the check.
+	if not strict_mode and not constraints.is_empty():
+		for c: SudokuConstraint in constraints:
+			for idx in c.get_affected_indices(cell_index):
+				if current_grid[idx] == number and not idx in result.constraint_conflicts:
+					result.constraint_conflicts.append(idx)
 
 	result.units_completed = _get_completed_units(cell_index)
 
