@@ -227,6 +227,18 @@ func _on_killer_generation_complete() -> void:
 		_killer_gen_thread.wait_to_finish()
 		_killer_gen_thread = null
 	_show_generating_spinner(false)
+	var puzzle = _pending_killer_data.get("puzzle", [])
+	if (puzzle as Array).size() != 81:
+		# Generator exhausted all attempts and returned {} — treat the same as
+		# a standard generation failure: discard state and navigate back to menu.
+		_pending_killer_data = {}
+		_suppress_auto_resume = true
+		if SceneTransition.is_transitioning:
+			SceneTransition.transition_completed.connect(
+					_abort_generation_failure, CONNECT_ONE_SHOT | CONNECT_DEFERRED)
+		else:
+			_abort_generation_failure()
+		return
 	begin_session()
 
 
@@ -1322,10 +1334,7 @@ func _refresh_killer_errors() -> void:
 			for idx in cells:
 				error_cells[idx] = true
 	for i in 81:
-		var cell := board.cells[i]
-		if cell.is_given:
-			continue
-		cell.set_error(error_cells.has(i))
+		board.cells[i].set_error(error_cells.has(i))
 
 
 func _apply_theme() -> void:
