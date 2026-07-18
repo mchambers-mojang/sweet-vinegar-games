@@ -12,6 +12,7 @@ game_scene_path = "res://carom/scenes/carom_arena.tscn"
 stats_scene_path = ""
 has_save_support = false
 start_button_unique_name = "NewGameButton"
+start_button_text = "Play"
 option_button_unique_name = "DifficultyButton"
 option_default_index = 1
 option_values = PackedInt32Array()

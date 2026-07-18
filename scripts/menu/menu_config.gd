@@ -41,6 +41,9 @@ extends Resource
 ## Set to "PlayButton" for menus that use a different label (e.g. Carom).
 @export var start_button_unique_name: String = "NewGameButton"
 
+## Optional text override for the start button. Empty keeps the scene default.
+@export var start_button_text: String = ""
+
 # --- Option dropdown (difficulty / grid-size / etc.) ---
 
 ## Unique-name of the optional OptionButton node. Empty = no option dropdown.

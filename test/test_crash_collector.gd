@@ -3,13 +3,21 @@ extends GutTest
 ## Unit tests for CrashCollector — state providers, replay hooks, user actions, capture.
 
 const CollectorScript := preload("res://scripts/autoload/crash_collector.gd")
+const TEST_REPORT_DIR := "user://test_crash_collector_reports"
 
 var collector: Node
 
 
+class ReplayHookProvider extends Node:
+	func get_payload() -> Dictionary:
+		return {"data": "live"}
+
+
 func before_each() -> void:
+	_clear_test_reports()
 	collector = Node.new()
 	collector.set_script(CollectorScript)
+	collector._report_dir = TEST_REPORT_DIR
 	add_child_autofree(collector)
 	# Reset internal state after _ready
 	collector._recent_actions = [] as Array[Dictionary]
@@ -20,6 +28,19 @@ func before_each() -> void:
 	collector._error_check_timer = 0.0
 	collector._latest_report_path = ""
 	collector._latest_report_text = ""
+
+
+func after_all() -> void:
+	_clear_test_reports()
+
+
+func _clear_test_reports() -> void:
+	var dir := DirAccess.open(TEST_REPORT_DIR)
+	if dir == null:
+		return
+	for file_name in dir.get_files():
+		DirAccess.remove_absolute(TEST_REPORT_DIR.path_join(file_name))
+	DirAccess.remove_absolute(TEST_REPORT_DIR)
 
 
 # --- State providers ---
@@ -39,7 +60,7 @@ func test_state_provider_value_included_in_report() -> void:
 		return {"custom_state": "hello"}
 	collector.register_state_provider(provider)
 	collector.capture_error("state test")
-	var text := CrashCollector.get_latest_report_text()
+	var text: String = collector.get_latest_report_text()
 	assert_true(text.contains("custom_state"), "custom_state key should appear in the report")
 
 
@@ -68,7 +89,7 @@ func test_user_actions_included_in_report() -> void:
 	collector.register_user_action("opened_menu", {"from": "home"})
 	collector.register_user_action("started_game")
 	collector.capture_error("action test")
-	var text := CrashCollector.get_latest_report_text()
+	var text: String = collector.get_latest_report_text()
 	assert_true(text.contains("opened_menu"), "User action should appear in report")
 	assert_true(text.contains("started_game"), "User action should appear in report")
 
@@ -86,7 +107,7 @@ func test_replay_hook_included() -> void:
 		return {"frames": [{"seq": 0}]}
 	collector.register_replay_hook(hook)
 	collector.capture_error("replay test")
-	var text := CrashCollector.get_latest_report_text()
+	var text: String = collector.get_latest_report_text()
 	assert_true(text.contains("\"replay\""), "Replay payload should appear in report")
 
 
@@ -101,33 +122,45 @@ func test_unregister_replay_hook() -> void:
 	assert_false(called, "Unregistered replay hook should not be called")
 
 
+func test_freed_replay_hook_provider_is_ignored() -> void:
+	var provider := ReplayHookProvider.new()
+	collector.register_replay_hook(provider.get_payload)
+	provider.free()
+
+	var payload: Dictionary = collector._collect_replay_payload()
+
+	assert_true(payload.is_empty(), "Freed replay hook providers should be ignored")
+	assert_true(collector._replay_hooks.is_empty(), "Freed replay hooks should be pruned")
+
+
 # --- capture_error / capture_crash ---
 
 func test_capture_error_triggers_write() -> void:
 	collector.capture_error("test message")
-	var path := CrashCollector.get_latest_report_path()
+	var path: String = collector.get_latest_report_path()
 	assert_true(path != "", "CrashCollector should have written a file")
+	assert_true(path.begins_with(TEST_REPORT_DIR), "Test reports should use isolated storage")
 
 
 func test_capture_crash_triggers_write() -> void:
 	collector.capture_crash("test_kind", "test message")
-	var path := CrashCollector.get_latest_report_path()
+	var path: String = collector.get_latest_report_path()
 	assert_true(path != "", "CrashCollector should have written a file")
 
 
 func test_capture_error_wraps_as_runtime_error() -> void:
 	collector.capture_error("boom")
-	var text := CrashCollector.get_latest_report_text()
+	var text: String = collector.get_latest_report_text()
 	assert_true(text.contains("runtime_error"), "capture_error should produce kind=runtime_error")
 
 
 func test_capture_crash_includes_kind() -> void:
 	collector.capture_crash("engine_crash", "oops")
-	var text := CrashCollector.get_latest_report_text()
+	var text: String = collector.get_latest_report_text()
 	assert_true(text.contains("engine_crash"), "Report should contain the crash kind")
 
 
 func test_capture_error_stack_trace_in_extra() -> void:
 	collector.capture_error("err", "line 42 in foo.gd")
-	var text := CrashCollector.get_latest_report_text()
+	var text: String = collector.get_latest_report_text()
 	assert_true(text.contains("stack_trace"), "Stack trace should appear in report")

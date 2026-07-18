@@ -52,7 +52,6 @@ func _build_game_buttons() -> void:
 		var btn := Button.new()
 		btn.text = entry.title
 		btn.custom_minimum_size = Vector2(0, 60)
-		btn.layout_mode = 2
 		btn.visible = entry.unlock_rule != "secret_tap"
 		btn.pressed.connect(func() -> void:
 			if ResourceLoader.exists(entry.menu_scene_path):

@@ -3,6 +3,7 @@ extends GutTest
 ## Unit tests for ReplayRecorder — in-memory session lifecycle and crash recovery.
 
 const RecorderScript := preload("res://scripts/replays/replay_recorder.gd")
+const TEST_ACTIVE_REPLAY_PATH := "user://test_replay_recorder_active.json"
 
 var recorder: Node
 
@@ -10,6 +11,7 @@ var recorder: Node
 func before_each() -> void:
 	recorder = Node.new()
 	recorder.set_script(RecorderScript)
+	recorder.active_replay_path = TEST_ACTIVE_REPLAY_PATH
 	add_child_autofree(recorder)
 	# Override internal state after _ready (avoids filesystem side-effects)
 	recorder._active_replay = {}
@@ -17,6 +19,11 @@ func before_each() -> void:
 	recorder._active_sequence = 0
 	recorder._save_timer = 0.0
 	recorder._dirty = false
+
+
+func after_each() -> void:
+	if FileAccess.file_exists(TEST_ACTIVE_REPLAY_PATH):
+		DirAccess.remove_absolute(TEST_ACTIVE_REPLAY_PATH)
 
 
 func test_start_session_creates_active() -> void:

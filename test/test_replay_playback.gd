@@ -215,6 +215,81 @@ func test_shikaku_frame_rectangle_removed() -> void:
 	assert_eq(frame["input_event"]["payload"]["index"], 2)
 
 
+func test_shikaku_replay_recovers_missing_initial_state_from_seed() -> void:
+	var replay := {
+		"id": "legacy_shikaku",
+		"header": {
+			"game_mode": "shikaku",
+			"seed": 7,
+			"initial_state": {},
+		},
+		"frames": [
+			{
+				"tick": 500,
+				"seq": 0,
+				"input_event": {
+					"type": "rectangle_placed",
+					"payload": {"x": 0, "y": 0},
+				},
+			},
+			{
+				"tick": 1000,
+				"seq": 1,
+				"input_event": {
+					"type": "rectangle_placed",
+					"payload": {"x": 0, "y": 0, "w": 2, "h": 1},
+				},
+			},
+		],
+		"footer": {
+			"duration": 1.0,
+			"final_state": {"width": 5, "height": 5},
+		},
+	}
+	ReplaySystem.set_pending_playback(replay)
+	var viewer := (load("res://scenes/replay_viewer.tscn") as PackedScene).instantiate()
+	add_child_autofree(viewer)
+	await get_tree().process_frame
+
+	var board := viewer._visual as ShikakuBoard
+	assert_not_null(board)
+	assert_eq(board.grid_width, 5)
+	assert_eq(board.grid_height, 5)
+	assert_false(board.numbers.is_empty(), "Seeded Shikaku replay should reconstruct its clue numbers")
+	assert_gt(board.size.x, 0.0, "Shikaku replay board should receive layout width")
+	assert_gt(board.size.y, 0.0, "Shikaku replay board should receive layout height")
+	assert_eq(viewer._frames.size(), 1, "Malformed Shikaku frames should not enter playback")
+	viewer.scrub_to(1)
+	assert_eq(board.placed_rects, [Rect2i(0, 0, 2, 1)])
+
+
+func test_shikaku_replay_rejects_seed_incompatible_with_recorded_moves() -> void:
+	var replay := {
+		"header": {
+			"game_mode": "shikaku",
+			"seed": 7,
+			"initial_state": {},
+		},
+		"frames": [
+			{
+				"input_event": {
+					"type": "rectangle_placed",
+					"payload": {"x": 0, "y": 0, "w": 4, "h": 2},
+				},
+			},
+		],
+		"footer": {
+			"outcome": "win",
+			"final_state": {"width": 5, "height": 5},
+		},
+	}
+	var adapter := ShikakuReplayAdapter.new()
+	assert_true(
+		adapter.get_initial_state(replay).is_empty(),
+		"An incompatible seed must not synthesize the wrong Shikaku board",
+	)
+
+
 # --- Replay scrub behavior ---
 
 func test_scrub_to_replays_intermediate_frames_with_suppressed_effects() -> void:

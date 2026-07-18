@@ -148,7 +148,7 @@ func test_speed_cap_clamps_velocity() -> void:
 	world.advance()
 
 	var speed: float = _tof(FP.FPVec2.length(b.velocity))
-	assert_le(speed, 10.1, "Speed should be capped at 10, got %f" % speed)
+	assert_lte(speed, 10.1, "Speed should be capped at 10, got %f" % speed)
 
 # ---------------------------------------------------------------------------
 # 5. Zone detection triggers when body centre enters

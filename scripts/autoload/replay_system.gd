@@ -42,13 +42,13 @@ func _process(delta: float) -> void:
 		_save_active_replay()
 
 
-func start_session(game_mode: String, seed: int, initial_state: Dictionary, settings_snapshot: Dictionary = {}) -> String:
+func start_session(game_mode: String, session_seed: int, initial_state: Dictionary, settings_snapshot: Dictionary = {}) -> String:
 	_active_replay = {
 		"id": "%d_%d_%d" % [Time.get_unix_time_from_system(), Time.get_ticks_usec(), _id_rng.randi()],
 		"header": {
 			"game_mode": game_mode,
 			"version": _get_game_version(),
-			"seed": seed,
+			"seed": session_seed,
 			"settings_snapshot": settings_snapshot,
 			"timestamp": Time.get_unix_time_from_system(),
 			"initial_state": initial_state,
@@ -314,6 +314,7 @@ func _extract_metadata(replay: Dictionary) -> Dictionary:
 	return {
 		"id": replay.get("id", ""),
 		"bookmarked": replay.get("bookmarked", false),
+		"frame_count": replay.get("frames", []).size(),
 		"header": header,
 		"footer": footer,
 	}
