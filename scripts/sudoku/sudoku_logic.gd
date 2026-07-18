@@ -14,11 +14,13 @@ const FAIL_AT_STRIKES := 4
 var strict_mode: bool = false
 var auto_remove_pencil_marks: bool = true
 
-# Variant rule set
 ## Identifier for the active rule set (empty = standard Sudoku).
 var rule_set: String = ""
-## Active constraints.  Set before calling init_new_game or init_from_save.
-var constraints: Array = []
+## Active variant constraints evaluated during placement validation.
+## Set before calling init_new_game() to enable variant rules;
+## passed automatically to the generator and solver during game setup.
+## An empty array (default) reproduces standard Sudoku behaviour exactly.
+var constraints: Array[SudokuConstraint] = []
 
 # Game state
 var puzzle: Array[int] = []
@@ -105,10 +107,16 @@ func _init(p_strict_mode: bool = false, p_auto_remove: bool = true) -> void:
 # ---------------------------------------------------------------------------
 
 ## Generate a fresh puzzle and initialise all state.
-func init_new_game(diff: int, seed_value: int) -> void:
+## Returns true on success. Returns false when the generator cannot produce a
+## valid puzzle (e.g. unsatisfiable constraints); in that case no game state
+## is set up and the caller must handle the failure explicitly.
+func init_new_game(diff: int, seed_value: int) -> bool:
 	var generator := SudokuGenerator.new()
 	var result: Dictionary = generator.generate(diff, seed_value, constraints)
+	if result.is_empty():
+		return false
 	_setup_from_arrays(diff, result["puzzle"], result["solution"])
+	return true
 
 
 ## Restore state from a save dictionary (same format as serialize()).
@@ -205,8 +213,8 @@ func place_number(cell_index: int, number: int) -> PlaceResult:
 
 	result.valid = true
 
-	# Strict mode: wrong answer adds a strike but does not change the grid
-	if strict_mode and solution[cell_index] != number:
+	# Strict mode: wrong answer or constraint violation adds a strike but does not change the grid
+	if strict_mode and (solution[cell_index] != number or not _is_constraint_valid(cell_index, number)):
 		strikes += 1
 		result.strikes_added = 1
 		if strikes >= FAIL_AT_STRIKES and not is_failed:
@@ -654,3 +662,12 @@ func _get_completed_units(index: int) -> Array:
 
 func _is_unsolved_editable(index: int) -> bool:
 	return puzzle[index] == 0 and current_grid[index] != solution[index]
+
+
+## Returns false if any active constraint forbids placing number at cell_index
+## in the current grid state.  Always true when constraints is empty.
+func _is_constraint_valid(cell_index: int, number: int) -> bool:
+	for c in constraints:
+		if not c.is_valid(current_grid, cell_index, number):
+			return false
+	return true

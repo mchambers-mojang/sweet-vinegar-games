@@ -7,11 +7,29 @@ extends CanvasLayer
 ##   SceneTransition.push("res://scenes/settings.tscn")  # caller stays on stack
 ##   SceneTransition.pop()                               # restores previous scene
 
+## Emitted when the active fade-in completes and the overlay becomes idle.
+## Connect once (CONNECT_ONE_SHOT) to queue work that must wait for the
+## current transition — e.g. a deferred navigate() from a setup callback.
+signal transition_completed
+
 var _overlay: ColorRect
 var _tween: Tween
 const FADE_DURATION := 0.15
 var _transitioning := false
 var _initial_fade_pending := true
+
+## Monotonically-increasing counter incremented by cancel_transition().
+## Each pop()/navigate() captures the value at call time as expected_gen;
+## the deferred _fade_in() callback is skipped when _transition_gen no
+## longer matches, preventing a cancelled transition's pending callback
+## from interfering with a subsequent transition.
+var _transition_gen := 0
+
+## True while a fade is running (fade-out → scene swap → fade-in).
+## Use this together with transition_completed to avoid calling navigate()
+## while a transition is already in progress.
+var is_transitioning: bool:
+	get: return _transitioning
 
 ## Navigation stack — Node instances held alive off the scene tree.
 var _nav_stack: Array[Node] = []
@@ -34,8 +52,7 @@ func _ready() -> void:
 
 ## Navigate to target_path, fully replacing the current scene.
 ## SceneTransition always owns instantiation and scene lifecycle.
-## The optional setup Callable receives the new scene instance before add_child,
-## so any metadata set there is visible to _ready() on the new scene.
+## The optional setup Callable receives the new scene after its _ready() runs.
 ## Clears the navigation stack, freeing any stacked scenes.
 func navigate(target_path: String, setup: Callable = Callable()) -> void:
 	_do_navigate(func() -> Node: return load(target_path).instantiate(), setup, true)
@@ -57,6 +74,7 @@ func pop() -> void:
 		return
 	AppTheme.clear_screen_shake()
 	_transitioning = true
+	var expected_gen: int = _transition_gen
 	FeedbackManager.stop()
 	_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	_overlay.color = _get_fade_color(0.0)
@@ -71,9 +89,14 @@ func pop() -> void:
 		get_tree().current_scene = previous
 		if current:
 			current.queue_free()
-		# Wait two frames so the restored scene fully renders behind the overlay
+		# Wait two frames so the restored scene fully renders behind the overlay.
+		# The generation check ensures a cancel_transition() between here and the
+		# callback does not start a stale fade-in over a newer transition.
 		get_tree().process_frame.connect(func() -> void:
-			get_tree().process_frame.connect(_fade_in, CONNECT_ONE_SHOT)
+			get_tree().process_frame.connect(func() -> void:
+				if _transition_gen == expected_gen:
+					_fade_in()
+			, CONNECT_ONE_SHOT)
 		, CONNECT_ONE_SHOT)
 	)
 
@@ -95,7 +118,24 @@ func _fade_in() -> void:
 	_tween.tween_callback(func() -> void:
 		_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_transitioning = false
+		transition_completed.emit()
 	)
+
+
+## Cancel any in-progress transition tween and mark the overlay idle.
+## Restores the overlay to non-blocking input, resets alpha to fully
+## transparent (so a mid-fade cancel never leaves the scene dimmed), and
+## increments _transition_gen so any already-queued two-frame _fade_in()
+## callback (scheduled inside a _do_navigate or pop tween) is silently
+## skipped — preventing it from overriding a subsequent transition.
+func cancel_transition() -> void:
+	if _tween and _tween.is_valid():
+		_tween.kill()
+	_transitioning = false
+	_transition_gen += 1
+	if _overlay:
+		_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_overlay.color = _get_fade_color(0.0)
 
 
 ## Auto-apply safe area to every scene root under the tree root.
@@ -127,7 +167,8 @@ func _do_navigate(factory: Callable, setup: Callable, free_old: bool) -> void:
 		return
 	AppTheme.clear_screen_shake()
 	_transitioning = true
-	HapticManager.stop()
+	var expected_gen: int = _transition_gen
+	FeedbackManager.stop()
 	_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	_overlay.color = _get_fade_color(0.0)
 	if _tween and _tween.is_valid():
@@ -137,10 +178,7 @@ func _do_navigate(factory: Callable, setup: Callable, free_old: bool) -> void:
 	_tween.tween_callback(func() -> void:
 		var old_scene := get_tree().current_scene
 		var new_scene: Node = factory.call()
-		if setup.is_valid():
-			setup.call(new_scene)
-		get_tree().root.add_child(new_scene)
-		get_tree().current_scene = new_scene
+		_attach_scene(new_scene, setup)
 		if free_old:
 			for stacked in _nav_stack:
 				stacked.queue_free()
@@ -151,8 +189,23 @@ func _do_navigate(factory: Callable, setup: Callable, free_old: bool) -> void:
 			if old_scene:
 				get_tree().root.remove_child(old_scene)
 				_nav_stack.push_back(old_scene)
-		# Wait two frames so the new scene fully initialises and renders behind the overlay
+		# Wait two frames so the new scene fully initialises and renders behind the overlay.
+		# The generation check ensures a cancel_transition() between here and the
+		# callback does not start a stale fade-in over a newer transition.
 		get_tree().process_frame.connect(func() -> void:
-			get_tree().process_frame.connect(_fade_in, CONNECT_ONE_SHOT)
+			get_tree().process_frame.connect(func() -> void:
+				if _transition_gen == expected_gen:
+					_fade_in()
+			, CONNECT_ONE_SHOT)
 		, CONNECT_ONE_SHOT)
 	)
+
+
+func _attach_scene(new_scene: Node, setup: Callable) -> void:
+	var setup_on_ready := setup.is_valid() and not new_scene.is_node_ready()
+	if setup_on_ready:
+		new_scene.ready.connect(setup.bind(new_scene), CONNECT_ONE_SHOT)
+	get_tree().root.add_child(new_scene)
+	get_tree().current_scene = new_scene
+	if setup.is_valid() and not setup_on_ready:
+		setup.call(new_scene)

@@ -1,0 +1,406 @@
+extends GutTest
+
+## Tests for the SudokuConstraint base class and its integration with
+## SudokuSolver, SudokuLogic, and SudokuGenerator.
+
+const LogicScript := preload("res://scripts/sudoku/sudoku_logic.gd")
+
+# ---------------------------------------------------------------------------
+# Shared puzzle/solution used by the logic tests
+# ---------------------------------------------------------------------------
+
+const TEST_PUZZLE: Array[int] = [
+	5, 3, 0, 0, 7, 0, 0, 0, 0,
+	6, 0, 0, 1, 9, 5, 0, 0, 0,
+	0, 9, 8, 0, 0, 0, 0, 6, 0,
+	8, 0, 0, 0, 6, 0, 0, 0, 3,
+	4, 0, 0, 8, 0, 3, 0, 0, 1,
+	7, 0, 0, 0, 2, 0, 0, 0, 6,
+	0, 6, 0, 0, 0, 0, 2, 8, 0,
+	0, 0, 0, 4, 1, 9, 0, 0, 5,
+	0, 0, 0, 0, 8, 0, 0, 7, 9,
+]
+const TEST_SOLUTION: Array[int] = [
+	5, 3, 4, 6, 7, 8, 9, 1, 2,
+	6, 7, 2, 1, 9, 5, 3, 4, 8,
+	1, 9, 8, 3, 4, 2, 5, 6, 7,
+	8, 5, 9, 7, 6, 1, 4, 2, 3,
+	4, 2, 6, 8, 5, 3, 7, 9, 1,
+	7, 1, 3, 9, 2, 4, 8, 5, 6,
+	9, 6, 1, 5, 3, 7, 2, 8, 4,
+	2, 8, 7, 4, 1, 9, 6, 3, 5,
+	3, 4, 5, 2, 8, 6, 1, 7, 9,
+]
+
+
+# ---------------------------------------------------------------------------
+# Helper constraint: blocks a specific (index, value) pair
+# ---------------------------------------------------------------------------
+
+class BlockValueConstraint extends SudokuConstraint:
+	var blocked_index: int
+	var blocked_value: int
+
+	func _init(idx: int, val: int) -> void:
+		blocked_index = idx
+		blocked_value = val
+
+	func is_valid(grid: Array[int], index: int, value: int) -> bool:
+		return not (index == blocked_index and value == blocked_value)
+
+	func get_affected_indices(index: int) -> Array[int]:
+		if index == blocked_index:
+			return [blocked_index]
+		return []
+
+	func get_id() -> String:
+		return "block_value_%d_%d" % [blocked_index, blocked_value]
+
+
+# Helper: blocks every value placement at a specific index — always unsatisfiable.
+class BlockAllAtIndexConstraint extends SudokuConstraint:
+	var blocked_index: int
+
+	func _init(idx: int) -> void:
+		blocked_index = idx
+
+	func is_valid(grid: Array[int], index: int, value: int) -> bool:
+		return index != blocked_index
+
+	func get_id() -> String:
+		return "block_all_%d" % blocked_index
+
+
+# ---------------------------------------------------------------------------
+# 1. SudokuConstraint base-class default implementations
+# ---------------------------------------------------------------------------
+
+func test_base_is_valid_always_true() -> void:
+	var c := SudokuConstraint.new()
+	var grid: Array[int] = []
+	grid.resize(81)
+	grid.fill(0)
+	assert_true(c.is_valid(grid, 0, 5))
+
+
+func test_base_get_affected_indices_empty() -> void:
+	var c := SudokuConstraint.new()
+	assert_eq(c.get_affected_indices(0).size(), 0)
+
+
+func test_base_get_id_empty_string() -> void:
+	var c := SudokuConstraint.new()
+	assert_eq(c.get_id(), "")
+
+
+# ---------------------------------------------------------------------------
+# 2. SudokuSolver.is_valid_placement respects constraints
+# ---------------------------------------------------------------------------
+
+func test_solver_valid_placement_no_constraints() -> void:
+	var grid: Array[int] = []
+	grid.resize(81)
+	grid.fill(0)
+	assert_true(SudokuSolver.is_valid_placement(grid, 0, 5, []))
+
+
+func test_solver_constraint_blocks_value() -> void:
+	var grid: Array[int] = []
+	grid.resize(81)
+	grid.fill(0)
+	var c := BlockValueConstraint.new(0, 5)
+	assert_false(SudokuSolver.is_valid_placement(grid, 0, 5, [c]))
+
+
+func test_solver_constraint_allows_other_values() -> void:
+	var grid: Array[int] = []
+	grid.resize(81)
+	grid.fill(0)
+	var c := BlockValueConstraint.new(0, 5)
+	assert_true(SudokuSolver.is_valid_placement(grid, 0, 6, [c]))
+
+
+func test_solver_constraint_does_not_affect_other_indices() -> void:
+	var grid: Array[int] = []
+	grid.resize(81)
+	grid.fill(0)
+	var c := BlockValueConstraint.new(0, 5)
+	# Blocking value 5 at index 0 does not block value 5 at index 1
+	assert_true(SudokuSolver.is_valid_placement(grid, 1, 5, [c]))
+
+
+# ---------------------------------------------------------------------------
+# 3. SudokuSolver.get_candidates respects constraints
+# ---------------------------------------------------------------------------
+
+func test_get_candidates_excludes_constraint_blocked_value() -> void:
+	var grid: Array[int] = []
+	grid.resize(81)
+	grid.fill(0)
+	# Block values 1-8 at index 0 via standard row conflicts
+	for i in range(1, 9):
+		grid[i] = i  # fills row 0 cols 1-8 with 1-8
+	# Without constraint, only 9 should be a candidate
+	var base_cands := SudokuSolver.get_candidates(grid, 0, [])
+	assert_eq(base_cands, [9])
+	# Block 9 via constraint → no candidates
+	var c := BlockValueConstraint.new(0, 9)
+	var constrained_cands := SudokuSolver.get_candidates(grid, 0, [c])
+	assert_eq(constrained_cands.size(), 0)
+
+
+# ---------------------------------------------------------------------------
+# 4. SudokuLogic.constraints property
+# ---------------------------------------------------------------------------
+
+func test_logic_constraints_default_empty() -> void:
+	var logic := SudokuLogic.new()
+	assert_eq(logic.constraints.size(), 0)
+
+
+func test_logic_constraints_assignable() -> void:
+	var logic := SudokuLogic.new()
+	var c := BlockValueConstraint.new(0, 5)
+	logic.constraints = [c]
+	assert_eq(logic.constraints.size(), 1)
+
+
+# ---------------------------------------------------------------------------
+# 5. SudokuLogic strict mode — constraint violation adds a strike
+# ---------------------------------------------------------------------------
+
+func test_logic_strict_constraint_violation_adds_strike() -> void:
+	var logic := SudokuLogic.new(true)  # strict mode
+	logic._setup_from_arrays(0, TEST_PUZZLE, TEST_SOLUTION)
+	# Cell 2 is empty in the puzzle; solution[2] == 4
+	# Add a constraint that blocks placing 4 at index 2
+	var c := BlockValueConstraint.new(2, 4)
+	logic.constraints = [c]
+	var result := logic.place_number(2, 4)
+	# Even though 4 is the correct solution value, the constraint blocks it
+	assert_true(result.valid, "attempt on editable cell should be valid")
+	assert_false(result.placed, "should not be placed — constraint blocks it")
+	assert_eq(result.strikes_added, 1, "constraint violation should add a strike")
+
+
+func test_logic_strict_no_constraint_violation_places_correctly() -> void:
+	var logic := SudokuLogic.new(true)
+	logic._setup_from_arrays(0, TEST_PUZZLE, TEST_SOLUTION)
+	# No constraints — correct answer should place
+	var result := logic.place_number(2, 4)
+	assert_true(result.placed)
+	assert_eq(result.strikes_added, 0)
+
+
+# ---------------------------------------------------------------------------
+# 6. SudokuLogic free mode — constraint violation still places (free behaviour)
+# ---------------------------------------------------------------------------
+
+func test_logic_free_mode_constraint_violation_still_places() -> void:
+	var logic := SudokuLogic.new(false)  # free (non-strict) mode
+	logic._setup_from_arrays(0, TEST_PUZZLE, TEST_SOLUTION)
+	# Block correct answer at cell 2 with a constraint
+	var c := BlockValueConstraint.new(2, 4)
+	logic.constraints = [c]
+	# In free mode the number should still be placed (no enforcement)
+	var result := logic.place_number(2, 4)
+	assert_true(result.placed, "free mode should still place even with constraint")
+	assert_eq(result.strikes_added, 0)
+
+
+# ---------------------------------------------------------------------------
+# 7. Standard Sudoku unchanged with empty constraints (regression guard)
+# ---------------------------------------------------------------------------
+
+func test_standard_sudoku_place_correct_no_regression() -> void:
+	var logic := SudokuLogic.new(true)
+	logic._setup_from_arrays(0, TEST_PUZZLE, TEST_SOLUTION)
+	var result := logic.place_number(2, 4)
+	assert_true(result.valid)
+	assert_true(result.placed)
+	assert_eq(result.strikes_added, 0)
+
+
+func test_standard_sudoku_place_wrong_adds_strike() -> void:
+	var logic := SudokuLogic.new(true)
+	logic._setup_from_arrays(0, TEST_PUZZLE, TEST_SOLUTION)
+	var result := logic.place_number(2, 9)  # wrong: solution[2] == 4
+	assert_true(result.valid)
+	assert_false(result.placed)
+	assert_eq(result.strikes_added, 1)
+
+
+func test_solver_is_valid_placement_no_regression() -> void:
+	var grid: Array[int] = []
+	grid.resize(81)
+	grid.fill(0)
+	grid[3] = 7  # row conflict
+	assert_false(SudokuSolver.is_valid_placement(grid, 0, 7))
+
+
+# ---------------------------------------------------------------------------
+# 8. is_complete_grid_valid — Issue 2 regression guard
+# ---------------------------------------------------------------------------
+
+func test_is_complete_grid_valid_returns_true_for_no_constraints() -> void:
+	# Any grid (even invalid) returns true when constraints is empty
+	var grid: Array[int] = []
+	grid.resize(81)
+	grid.fill(1)
+	assert_true(SudokuSolver.is_complete_grid_valid(grid, []))
+
+
+func test_is_complete_grid_valid_passes_for_valid_solution() -> void:
+	# TEST_SOLUTION satisfies no custom constraint
+	assert_true(SudokuSolver.is_complete_grid_valid(TEST_SOLUTION.duplicate(), []))
+
+
+func test_is_complete_grid_valid_detects_constraint_violation() -> void:
+	# Block placing TEST_SOLUTION[0] (==5) at index 0 — the completed grid
+	# should be detected as violating that constraint.
+	var c := BlockValueConstraint.new(0, TEST_SOLUTION[0])
+	var grid: Array[int] = TEST_SOLUTION.duplicate()
+	assert_false(SudokuSolver.is_complete_grid_valid(grid, [c]))
+
+
+func test_brute_force_rejects_given_that_violates_constraint() -> void:
+	# Build a puzzle where the only remaining cell to fill is cell 80.
+	# A constraint blocks the correct value at cell 0 (a given).
+	# The solver should find zero solutions since the given itself is invalid.
+	var puzzle: Array[int] = TEST_SOLUTION.duplicate()
+	puzzle[80] = 0  # one empty cell to solve
+	# Block the given at cell 0 (value == TEST_SOLUTION[0])
+	var c := BlockValueConstraint.new(0, TEST_SOLUTION[0])
+	var solutions := SudokuSolver.solve_brute_force(puzzle, 2, [c])
+	assert_eq(solutions.size(), 0, "constraint-violating given should yield no solutions")
+
+
+# ---------------------------------------------------------------------------
+# 9. solve_logic with constraints — Issue 3 regression guard
+# ---------------------------------------------------------------------------
+
+func test_solve_logic_respects_constraints_in_candidate_init() -> void:
+	# Create a near-complete puzzle where only cell 2 is empty and
+	# both possible values are blocked by a constraint for one of them.
+	# solve_logic should then pick the only valid candidate.
+	var grid: Array[int] = TEST_SOLUTION.duplicate()
+	grid[2] = 0  # cell 2 solution value is 4
+	# Block value 3 at index 2 (3 is not a valid candidate anyway due to
+	# standard rules, so this constraint is effectively a no-op — it verifies
+	# that passing constraints does not break the standard logic path).
+	var c := BlockValueConstraint.new(2, 3)
+	var solver := SudokuSolver.new()
+	var solved := solver.solve_logic(grid, [c])
+	assert_true(solved, "logic solver should fill the single empty cell")
+	assert_eq(grid[2], 4, "cell 2 should be filled with the correct value")
+
+
+# ---------------------------------------------------------------------------
+# 10. Focused regression: value-sensitive relabeling (Issue 1 follow-up)
+# ---------------------------------------------------------------------------
+
+func test_full_grid_satisfies_constraints_after_relabeling() -> void:
+	# Use a constraint that blocks a specific value at a specific index.
+	# Most random relabelings will map a different digit there, potentially
+	# making the grid invalid. The generator must validate and retry or
+	# fall back to the raw brute-force solution — never returning an invalid grid.
+	var gen := SudokuGenerator.new()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 12345
+	var c := BlockValueConstraint.new(0, 1)  # block value 1 at index 0
+	var grid := gen._generate_full_grid(rng, [c])
+	assert_true(
+		SudokuSolver.is_complete_grid_valid(grid, [c]),
+		"_generate_full_grid must always return a constraint-valid grid"
+	)
+	assert_ne(grid[0], 1, "index 0 must not hold the blocked value 1")
+
+
+# ---------------------------------------------------------------------------
+# 11. Focused regression: early rejection of sparse invalid givens (Issue 2)
+# ---------------------------------------------------------------------------
+
+func test_brute_force_rejects_sparse_invalid_given_immediately() -> void:
+	# A sparse puzzle (80 empty cells) with one constraint-invalid given.
+	# Before the fix, the solver would enumerate all completions before
+	# rejecting. After the fix it must return [] without backtracking.
+	var puzzle: Array[int] = []
+	puzzle.resize(81)
+	puzzle.fill(0)
+	puzzle[0] = 5  # given that the constraint blocks
+	var c := BlockValueConstraint.new(0, 5)
+	var solutions := SudokuSolver.solve_brute_force(puzzle, 2, [c])
+	assert_eq(solutions.size(), 0,
+		"sparse puzzle with a constraint-invalid given must return no solutions")
+
+
+# ---------------------------------------------------------------------------
+# 12. Focused regression: solve_logic rejects constraint-invalid givens / completed grids (Issue 3)
+# ---------------------------------------------------------------------------
+
+func test_solve_logic_rejects_given_that_violates_constraint() -> void:
+	# Near-complete grid: one empty cell, but a pre-filled cell violates the constraint.
+	# solve_logic should return false immediately on the invalid given.
+	var grid: Array[int] = TEST_SOLUTION.duplicate()
+	grid[2] = 0  # leave one empty cell
+	var c := BlockValueConstraint.new(0, TEST_SOLUTION[0])  # given at index 0 is invalid
+	var solver := SudokuSolver.new()
+	var solved := solver.solve_logic(grid, [c])
+	assert_false(solved,
+		"solve_logic must return false when a given violates constraints")
+
+
+func test_solve_logic_rejects_completed_grid_with_constraint_violation() -> void:
+	# A fully filled grid (no empty cells) that violates a constraint should
+	# cause solve_logic to return false — it must validate givens at entry.
+	var grid: Array[int] = TEST_SOLUTION.duplicate()
+	var c := BlockValueConstraint.new(0, TEST_SOLUTION[0])
+	var solver := SudokuSolver.new()
+	var solved := solver.solve_logic(grid, [c])
+	assert_false(solved,
+		"solve_logic must return false for a completed grid that violates constraints")
+
+
+# ---------------------------------------------------------------------------
+# 13. Focused regression: unsatisfiable constraints never escape generate()
+# ---------------------------------------------------------------------------
+
+func test_generate_returns_empty_dict_for_unsatisfiable_constraints() -> void:
+	# BlockAllAtIndexConstraint forbids any value at index 0, making a valid
+	# 9×9 Sudoku grid impossible. generate() must return {} — never a
+	# constraint-violating puzzle/solution pair.
+	var gen := SudokuGenerator.new()
+	var c := BlockAllAtIndexConstraint.new(0)
+	var result := gen.generate(SudokuSolver.Difficulty.EASY, 42, [c])
+	assert_eq(result, {},
+		"generate() must return {} when constraints are unsatisfiable")
+
+
+# ---------------------------------------------------------------------------
+# 14. Integration regression: init_new_game failure propagates through SudokuLogic
+# ---------------------------------------------------------------------------
+
+func test_init_new_game_returns_false_for_unsatisfiable_constraints() -> void:
+	# BlockAllAtIndexConstraint makes a valid grid impossible.
+	# init_new_game must return false and must not leave SudokuLogic in
+	# a partially-initialised state (puzzle must remain empty).
+	var logic := SudokuLogic.new()
+	logic.constraints = [BlockAllAtIndexConstraint.new(0)]
+	var ok := logic.init_new_game(SudokuSolver.Difficulty.EASY, 42)
+	assert_false(ok,
+		"init_new_game must return false when generation is impossible")
+	assert_true(logic.puzzle.is_empty(),
+		"puzzle must be empty after a failed init_new_game")
+	assert_true(logic.solution.is_empty(),
+		"solution must be empty after a failed init_new_game")
+
+
+func test_init_new_game_returns_true_for_standard_sudoku() -> void:
+	# Regression guard: standard Sudoku (no constraints) must still succeed.
+	var logic := SudokuLogic.new()
+	var ok := logic.init_new_game(SudokuSolver.Difficulty.EASY, 42)
+	assert_true(ok,
+		"init_new_game must return true for standard Sudoku")
+	assert_eq(logic.puzzle.size(), 81,
+		"puzzle must be fully initialised on success")
+
