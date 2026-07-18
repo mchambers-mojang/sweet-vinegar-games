@@ -11,9 +11,19 @@ var show_row_col_box: bool = false
 var filter_number: int = 0
 var filter_color: Color = Color.TRANSPARENT
 
+## Killer Sudoku cage data.  Array of { "cells": Array[int], "sum": int }.
+## Empty when not in killer mode.
+var cage_data: Array = []
+
+## Lookup: cell_index → cage_index (-1 when not in killer mode).
+var _cell_cage_map: Array[int] = []
+
 const GRID_PADDING := 2.0
 const THIN_LINE := 1.0
 const THICK_LINE := 3.0
+const CAGE_LINE := 1.5
+const CAGE_DASH := 4.0
+const CAGE_GAP := 3.0
 
 
 func _ready() -> void:
@@ -128,6 +138,41 @@ func get_cell_colors_dict() -> Dictionary:
 		if cells[i].cell_color != Color.TRANSPARENT:
 			result[str(i)] = cells[i].cell_color.to_html()
 	return result
+
+
+## Apply killer cage data.  Clears cage visuals when called with an empty array.
+## cage_dicts: Array of { "cells": Array[int], "sum": int } or with optional "anchor": int.
+## When "anchor" is absent it is computed as the minimum cell index in the cage.
+func set_cages(cage_dicts: Array) -> void:
+	cage_data = cage_dicts.duplicate(true)
+
+	# Reset all anchor sums
+	for cell in cells:
+		cell.cage_anchor_sum = 0
+
+	# Build cell → cage lookup and set anchor sum labels
+	_cell_cage_map.resize(81)
+	_cell_cage_map.fill(-1)
+	for i in cage_data.size():
+		var d: Dictionary = cage_data[i]
+		var cage_cells = d.get("cells", [])
+		var cage_sum: int = int(d.get("sum", 0))
+		# Compute anchor as minimum cell index when not explicitly provided
+		var anchor: int = -1
+		if d.has("anchor"):
+			anchor = int(d.get("anchor", -1))
+		else:
+			for c in cage_cells:
+				var ci := int(c)
+				if anchor < 0 or ci < anchor:
+					anchor = ci
+		for c in cage_cells:
+			_cell_cage_map[c] = i
+		if anchor >= 0 and anchor < cells.size():
+			cells[anchor].cage_anchor_sum = cage_sum
+			cells[anchor].queue_redraw()
+
+	queue_redraw()
 
 
 func _redraw_cells() -> void:
@@ -266,7 +311,70 @@ func _draw() -> void:
 		var x := _col_positions[c] - thin
 		draw_rect(Rect2(Vector2(x, oy), Vector2(thin, gh)), thin_color)
 
+	# Killer Sudoku: dashed cage outlines drawn on top of cell backgrounds
+	if not cage_data.is_empty() and not _cell_cage_map.is_empty():
+		_draw_cage_outlines(neon_mode)
+
 	# Neon outer glow
 	if neon_mode:
 		var glow := Color(thick_color.r * 0.4, thick_color.g * 0.4, thick_color.b * 0.4, 0.25)
 		draw_rect(Rect2(Vector2(ox - 3, oy - 3), Vector2(gw + 6, gh + 6)), glow, false, 6.0)
+
+
+## Draw dashed outlines along cage boundaries.
+## An edge is drawn where adjacent cells belong to different cages (or at board edge).
+func _draw_cage_outlines(neon_mode: bool) -> void:
+	var tm := AppTheme
+	var cage_color: Color
+	if neon_mode:
+		cage_color = Color(0.0, 1.2, 1.0, 0.85)
+	else:
+		var thick_color := tm.get_color("grid_line_thick")
+		# Blend between thick grid color and a warm tint for visibility
+		cage_color = thick_color.lerp(Color(0.35, 0.45, 0.75), 0.45)
+		cage_color.a = 0.90
+
+	var margin := 2.0  # inset from cell edge so cage lines don't overlap grid lines
+
+	for i in 81:
+		var ci: int = _cell_cage_map[i]
+		var r := i / 9
+		var c := i % 9
+
+		var cx := _col_positions[c]
+		var cy := _row_positions[r]
+		var cw := _cell_w
+		var ch := _cell_h
+
+		# Check each of the 4 edges: top, bottom, left, right
+		# Top edge (between row r-1 and row r)
+		var top_nb := (r - 1) * 9 + c
+		if r == 0 or _cell_cage_map[top_nb] != ci:
+			draw_dashed_line(
+				Vector2(cx + margin, cy),
+				Vector2(cx + cw - margin, cy),
+				cage_color, CAGE_LINE, CAGE_DASH)
+
+		# Bottom edge (between row r and row r+1)
+		var bot_nb := (r + 1) * 9 + c
+		if r == 8 or _cell_cage_map[bot_nb] != ci:
+			draw_dashed_line(
+				Vector2(cx + margin, cy + ch),
+				Vector2(cx + cw - margin, cy + ch),
+				cage_color, CAGE_LINE, CAGE_DASH)
+
+		# Left edge (between col c-1 and col c)
+		var left_nb := r * 9 + (c - 1)
+		if c == 0 or _cell_cage_map[left_nb] != ci:
+			draw_dashed_line(
+				Vector2(cx, cy + margin),
+				Vector2(cx, cy + ch - margin),
+				cage_color, CAGE_LINE, CAGE_DASH)
+
+		# Right edge (between col c and col c+1)
+		var right_nb := r * 9 + (c + 1)
+		if c == 8 or _cell_cage_map[right_nb] != ci:
+			draw_dashed_line(
+				Vector2(cx + cw, cy + margin),
+				Vector2(cx + cw, cy + ch - margin),
+				cage_color, CAGE_LINE, CAGE_DASH)

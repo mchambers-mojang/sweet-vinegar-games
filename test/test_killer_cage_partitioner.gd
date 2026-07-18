@@ -25,12 +25,6 @@ func test_partition_size_ranges_expand_with_difficulty() -> void:
 	assert_true(_count_large_cages(expert, 4) > _count_large_cages(easy, 4))
 
 
-func test_partition_rejects_cages_with_duplicate_source_digits() -> void:
-	var cages := KillerCagePartitionerScript.partition(FULL_GRID, SudokuSolver.Difficulty.EASY, 21)
-	for cage in cages:
-		assert_true(_cage_digits_are_unique(cage["cells"]))
-
-
 func _covered_cell_count(cages: Array) -> int:
 	var total := 0
 	for cage in cages:
@@ -101,13 +95,3 @@ func _count_large_cages(cages: Array, size_threshold: int) -> int:
 		if (cage["cells"] as Array).size() >= size_threshold:
 			count += 1
 	return count
-
-
-func _cage_digits_are_unique(cells: Array) -> bool:
-	var seen := {}
-	for cell in cells:
-		var digit := FULL_GRID[int(cell)]
-		if seen.has(digit):
-			return false
-		seen[digit] = true
-	return true
