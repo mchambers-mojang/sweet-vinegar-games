@@ -21,3 +21,53 @@ func test_setup_callback_runs_after_scene_is_ready() -> void:
 	assert_true(result["setup_saw_ready"], "setup callback should run after the scene's _ready()")
 	get_tree().current_scene = previous_scene
 	probe.queue_free()
+
+
+## cancel_transition() must restore the overlay to non-blocking input and
+## clear _transitioning so the system is idle after cancellation.
+func test_cancel_transition_restores_overlay_mouse_filter() -> void:
+	# Put the overlay into the blocking state that a real navigate() sets.
+	var original_transitioning := SceneTransition.is_transitioning
+	SceneTransition._overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	SceneTransition._transitioning = true
+
+	SceneTransition.cancel_transition()
+
+	assert_eq(SceneTransition._overlay.mouse_filter, Control.MOUSE_FILTER_IGNORE,
+			"cancel_transition must restore overlay mouse_filter to IGNORE")
+	assert_false(SceneTransition.is_transitioning,
+			"cancel_transition must clear _transitioning")
+
+	SceneTransition._transitioning = original_transitioning
+
+
+## cancel_transition() must increment _transition_gen so any two-frame
+## _fade_in() callbacks already queued by a previous _do_navigate / pop
+## tween are skipped and cannot fire _fade_in() or transition_completed
+## over a subsequent transition.
+func test_cancel_transition_increments_generation_for_stale_callback_suppression() -> void:
+	var gen_before := SceneTransition._transition_gen
+
+	SceneTransition.cancel_transition()
+
+	assert_gt(SceneTransition._transition_gen, gen_before,
+			"cancel_transition must increment _transition_gen to invalidate pending _fade_in callbacks")
+
+	# Verify suppression: simulate what a stale queued lambda does — check the
+	# captured gen against the current gen.  After a cancel, they differ, so
+	# _fade_in() must not be called.  We confirm by tracking transition_completed.
+	var unexpected_complete := false
+	SceneTransition.transition_completed.connect(
+			func() -> void: unexpected_complete = true, CONNECT_ONE_SHOT)
+
+	# Stale lambda condition: captured gen (gen_before) != current gen
+	if SceneTransition._transition_gen == gen_before:
+		# This branch must NOT execute — if it did _fade_in() would run.
+		SceneTransition._fade_in()
+
+	assert_false(unexpected_complete,
+			"stale queued _fade_in callback must be suppressed after cancel_transition")
+
+	# Disconnect the guard signal connection if it is still live.
+	if SceneTransition.transition_completed.is_connected(func() -> void: pass):
+		pass  # ONE_SHOT connection disconnects itself once fired

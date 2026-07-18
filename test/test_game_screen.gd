@@ -528,22 +528,27 @@ func test_failed_generation_suppresses_auto_resume_and_no_ceremony() -> void:
 
 
 func test_lifecycle_transition_failed_generation_redirect() -> void:
-	# Full scene-tree lifecycle regression: drives the failed-generation redirect
-	# through the real SceneTransition.navigate() path with the production
-	# _abort_generation_failure() handler intact.  Verifies:
-	#   • navigate() is called and is NOT silently dropped by the _transitioning guard
-	#   • CONNECT_ONE_SHOT prevents a duplicate navigate() on a second emit
-	#   • _suppress_auto_resume is set before the deferred _try_auto_resume runs
-	#   • planted save data is never loaded (no resume ceremony)
-	#   • no replay, stats, or save writes occur
+	# Full scene-tree lifecycle regression: exercises the blocked lifecycle end
+	# to end, including the real SceneTransition._fade_in() ordering.
+	#   • _fade_in() runs for real — if it ever regressed to emit-before-clear,
+	#     _abort_generation_failure()'s navigate() call would be dropped by the
+	#     _transitioning guard and the assertion below would fail.
+	#   • CONNECT_ONE_SHOT prevents a duplicate navigate() on a second emit.
+	#   • _suppress_auto_resume is set before the deferred _try_auto_resume runs.
+	#   • planted save data is never loaded (no resume ceremony).
+	#   • no replay, stats, or save writes occur.
 	#
-	# Navigation is verified by observing SceneTransition._transitioning: the
-	# production _fade_in() sets _transitioning = false immediately before
-	# emitting transition_completed, so any navigate() call in the handler will
-	# see _transitioning == false and proceed (setting it back to true).  A
-	# navigate() dropped by the guard would leave _transitioning unchanged (false).
-	# After verifying, the tween is killed to prevent the async factory (scene
-	# load) from running, and _transitioning is restored for subsequent tests.
+	# How the ordering proof works:
+	#   SceneTransition._fade_in() starts a tween that, on completion, executes:
+	#     1. _overlay.mouse_filter = IGNORE
+	#     2. _transitioning = false          ← guard cleared FIRST
+	#     3. transition_completed.emit()      ← signal emitted SECOND
+	#   When transition_completed fires, all connected handlers run before
+	#   the awaiting coroutine resumes.  _abort_generation_failure (ONE_SHOT,
+	#   connected earlier) fires first — navigate() sees _transitioning == false
+	#   and sets it back to true.  When the test's await resumes it asserts
+	#   is_transitioning == true, which would be false if the guard was still
+	#   set (regressed ordering) or the handler was not connected at all.
 
 	var mock_recorder := MockRecorder.new()
 	var mock_saves := MockSaves.new()
@@ -558,12 +563,12 @@ func test_lifecycle_transition_failed_generation_redirect() -> void:
 	)
 	s.constraints = [BlockAllAtIndexConstraint.new()]
 
-	# Simulate an active SceneTransition so the _setup_game failure path connects
-	# _abort_generation_failure to transition_completed (ONE_SHOT) rather than
-	# calling it directly.  This matches the real navigate() lifecycle where
-	# _transitioning == true from navigate() start through the full fade-in.
+	# Put SceneTransition into the same state as a real navigate() call: overlay
+	# blocks input and _transitioning is true from the start of the fade-out.
+	# This is what the production setup callback sees when launched by GameMenu.
 	var original_transitioning_state := SceneTransition.is_transitioning
 	SceneTransition._transitioning = true
+	SceneTransition._overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 
 	# Add to the scene tree — _ready() runs, which calls
 	# _try_auto_resume.call_deferred(), scheduling it for the next frame.
@@ -574,10 +579,10 @@ func test_lifecycle_transition_failed_generation_redirect() -> void:
 	# connects _abort_generation_failure to transition_completed (ONE_SHOT).
 	s.start_new_game(0)
 
-	# begin_session() emits push_error when _is_initialized() is false.
+	# begin_session() calls push_error when _is_initialized() is false.
 	assert_push_error("setup failed to initialize game state")
 
-	# _suppress_auto_resume must be set before the deferred _try_auto_resume fires.
+	# _suppress_auto_resume must be set synchronously inside _setup_game.
 	assert_true(s._suppress_auto_resume,
 			"_suppress_auto_resume must be set immediately after failed generation")
 
@@ -589,7 +594,7 @@ func test_lifecycle_transition_failed_generation_redirect() -> void:
 	assert_eq(s.save_progress_call_count, 0,
 			"save_progress must not be called before transition_completed")
 
-	# navigate() must not have been called yet (_transitioning still true from setup).
+	# Redirect handler is pending on transition_completed — _transitioning still true.
 	assert_true(SceneTransition.is_transitioning,
 			"SceneTransition must still be transitioning before transition_completed emits")
 
@@ -605,17 +610,17 @@ func test_lifecycle_transition_failed_generation_redirect() -> void:
 	assert_true(SceneTransition.is_transitioning,
 			"navigate() must still not have been called (transition not yet complete)")
 
-	# Mirror real _fade_in() behavior: clear _transitioning BEFORE emitting
-	# transition_completed.  The production handler will call navigate(), which
-	# checks _transitioning at its entry — if we left it true the navigate()
-	# would be silently dropped and this test would catch the regression.
-	SceneTransition._transitioning = false
-	SceneTransition.transition_completed.emit()
+	# Drive real _fade_in(): its tween completes and the tween callback runs:
+	#   _transitioning = false → transition_completed.emit()
+	# The ONE_SHOT _abort_generation_failure handler fires BEFORE this await
+	# resumes; it calls navigate() which sets _transitioning = true again.
+	SceneTransition._fade_in()
+	await SceneTransition.transition_completed
 
-	# Production _abort_generation_failure() called SceneTransition.navigate(),
-	# which passed the _transitioning == false guard and set _transitioning = true.
-	# A dropped navigate() would leave _transitioning false — the assertion below
-	# is the definitive proof that navigation was not discarded.
+	# _abort_generation_failure ran (ONE_SHOT, now disconnected) and called
+	# navigate().  navigate() checked _transitioning == false (the ordering
+	# that _fade_in guarantees) and set it to true.  A navigate() dropped by
+	# the _transitioning guard would leave _transitioning false here.
 	assert_true(SceneTransition.is_transitioning,
 			"SceneTransition.navigate() must have started a transition (not dropped by guard)")
 	assert_false(mock_recorder.started,
@@ -627,12 +632,16 @@ func test_lifecycle_transition_failed_generation_redirect() -> void:
 	assert_false(mock_recorder.flushed,
 			"replay flush must not occur during failed launch")
 
-	# Kill the pending fade-out tween to prevent the async factory (scene load)
-	# from running after the test completes.  Reset _transitioning so the second
-	# emit below can be a clean CONNECT_ONE_SHOT check.
+	# Cancel the new navigate()'s fade-out tween before it loads the real scene.
+	# cancel_transition() also restores the overlay to non-blocking input.
 	SceneTransition.cancel_transition()
+	assert_false(SceneTransition.is_transitioning,
+			"cancel_transition must clear _transitioning")
+	assert_eq(SceneTransition._overlay.mouse_filter, Control.MOUSE_FILTER_IGNORE,
+			"cancel_transition must restore overlay to non-blocking input")
 
-	# CONNECT_ONE_SHOT: a second transition_completed must NOT call navigate() again.
+	# CONNECT_ONE_SHOT: _abort_generation_failure was already consumed.
+	# A second transition_completed emission must NOT call navigate() again.
 	# If the handler were still connected, navigate() would set _transitioning = true.
 	SceneTransition.transition_completed.emit()
 	assert_false(SceneTransition.is_transitioning,

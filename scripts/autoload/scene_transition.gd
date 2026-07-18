@@ -18,6 +18,13 @@ const FADE_DURATION := 0.15
 var _transitioning := false
 var _initial_fade_pending := true
 
+## Monotonically-increasing counter incremented by cancel_transition().
+## Each pop()/navigate() captures the value at call time as expected_gen;
+## the deferred _fade_in() callback is skipped when _transition_gen no
+## longer matches, preventing a cancelled transition's pending callback
+## from interfering with a subsequent transition.
+var _transition_gen := 0
+
 ## True while a fade is running (fade-out → scene swap → fade-in).
 ## Use this together with transition_completed to avoid calling navigate()
 ## while a transition is already in progress.
@@ -67,6 +74,7 @@ func pop() -> void:
 		return
 	AppTheme.clear_screen_shake()
 	_transitioning = true
+	var expected_gen: int = _transition_gen
 	FeedbackManager.stop()
 	_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	_overlay.color = _get_fade_color(0.0)
@@ -81,9 +89,14 @@ func pop() -> void:
 		get_tree().current_scene = previous
 		if current:
 			current.queue_free()
-		# Wait two frames so the restored scene fully renders behind the overlay
+		# Wait two frames so the restored scene fully renders behind the overlay.
+		# The generation check ensures a cancel_transition() between here and the
+		# callback does not start a stale fade-in over a newer transition.
 		get_tree().process_frame.connect(func() -> void:
-			get_tree().process_frame.connect(_fade_in, CONNECT_ONE_SHOT)
+			get_tree().process_frame.connect(func() -> void:
+				if _transition_gen == expected_gen:
+					_fade_in()
+			, CONNECT_ONE_SHOT)
 		, CONNECT_ONE_SHOT)
 	)
 
@@ -110,12 +123,17 @@ func _fade_in() -> void:
 
 
 ## Cancel any in-progress transition tween and mark the overlay idle.
-## Use this in tests to prevent the async scene-load factory from running
-## after a navigate() call whose full lifecycle is not needed.
+## Restores the overlay to non-blocking input and increments _transition_gen
+## so any already-queued two-frame _fade_in() callback (scheduled inside a
+## _do_navigate or pop tween) is silently skipped — preventing it from
+## overriding a subsequent transition that starts after the cancel.
 func cancel_transition() -> void:
 	if _tween and _tween.is_valid():
 		_tween.kill()
 	_transitioning = false
+	_transition_gen += 1
+	if _overlay:
+		_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
 ## Auto-apply safe area to every scene root under the tree root.
@@ -147,6 +165,7 @@ func _do_navigate(factory: Callable, setup: Callable, free_old: bool) -> void:
 		return
 	AppTheme.clear_screen_shake()
 	_transitioning = true
+	var expected_gen: int = _transition_gen
 	FeedbackManager.stop()
 	_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	_overlay.color = _get_fade_color(0.0)
@@ -168,9 +187,14 @@ func _do_navigate(factory: Callable, setup: Callable, free_old: bool) -> void:
 			if old_scene:
 				get_tree().root.remove_child(old_scene)
 				_nav_stack.push_back(old_scene)
-		# Wait two frames so the new scene fully initialises and renders behind the overlay
+		# Wait two frames so the new scene fully initialises and renders behind the overlay.
+		# The generation check ensures a cancel_transition() between here and the
+		# callback does not start a stale fade-in over a newer transition.
 		get_tree().process_frame.connect(func() -> void:
-			get_tree().process_frame.connect(_fade_in, CONNECT_ONE_SHOT)
+			get_tree().process_frame.connect(func() -> void:
+				if _transition_gen == expected_gen:
+					_fade_in()
+			, CONNECT_ONE_SHOT)
 		, CONNECT_ONE_SHOT)
 	)
 
