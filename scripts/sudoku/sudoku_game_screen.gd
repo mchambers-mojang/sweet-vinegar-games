@@ -30,6 +30,9 @@ var is_killer: bool = false
 var _pending_killer_data: Dictionary = {}
 ## Background generation thread for Killer puzzles.
 var _killer_gen_thread: Thread = null
+## Set to true before joining the thread during teardown so the deferred
+## completion callback is a no-op if it fires after the screen exits the tree.
+var _generation_cancelled: bool = false
 ## Cage constraint checker (nil for standard/AK/AKing Sudoku).
 var _killer_constraint: KillerConstraint = null
 ## Tween that drives the generating spinner animation.
@@ -198,6 +201,20 @@ func resume_game(data: Dictionary) -> void:
 	begin_session(data)
 
 
+func _exit_tree() -> void:
+	# Signal any running generation thread to discard its result, then join it
+	# so the thread cannot outlive this node and its deferred callback cannot
+	# target a freed/exited node.
+	_generation_cancelled = true
+	if _killer_gen_thread != null:
+		_killer_gen_thread.wait_to_finish()
+		_killer_gen_thread = null
+	if _spinner_tween != null:
+		_spinner_tween.kill()
+		_spinner_tween = null
+	super._exit_tree()
+
+
 # ---------------------------------------------------------------------------
 # Killer generation (background thread)
 # ---------------------------------------------------------------------------
@@ -218,11 +235,14 @@ func _run_killer_generation() -> void:
 		"difficulty":  result.get("difficulty", difficulty),
 		"random_seed": gen_seed,
 	}
-	call_deferred("_on_killer_generation_complete")
+	if not _generation_cancelled:
+		call_deferred("_on_killer_generation_complete")
 
 
 ## Called on the main thread after killer generation finishes.
 func _on_killer_generation_complete() -> void:
+	if _generation_cancelled:
+		return
 	if _killer_gen_thread:
 		_killer_gen_thread.wait_to_finish()
 		_killer_gen_thread = null
