@@ -630,9 +630,7 @@ func test_lifecycle_transition_failed_generation_redirect() -> void:
 	# Kill the pending fade-out tween to prevent the async factory (scene load)
 	# from running after the test completes.  Reset _transitioning so the second
 	# emit below can be a clean CONNECT_ONE_SHOT check.
-	if SceneTransition._tween and SceneTransition._tween.is_valid():
-		SceneTransition._tween.kill()
-	SceneTransition._transitioning = false
+	SceneTransition.cancel_transition()
 
 	# CONNECT_ONE_SHOT: a second transition_completed must NOT call navigate() again.
 	# If the handler were still connected, navigate() would set _transitioning = true.

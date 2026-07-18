@@ -109,6 +109,15 @@ func _fade_in() -> void:
 	)
 
 
+## Cancel any in-progress transition tween and mark the overlay idle.
+## Use this in tests to prevent the async scene-load factory from running
+## after a navigate() call whose full lifecycle is not needed.
+func cancel_transition() -> void:
+	if _tween and _tween.is_valid():
+		_tween.kill()
+	_transitioning = false
+
+
 ## Auto-apply safe area to every scene root under the tree root.
 ## Skips nodes that set the "skip_safe_area" metadata flag to true.
 ## Safe to call on autoloads — they simply won't have a MarginContainer child.
