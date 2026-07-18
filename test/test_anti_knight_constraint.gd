@@ -168,19 +168,20 @@ func test_solver_constrained_empty_constraints_matches_standard() -> void:
 
 
 # ---------------------------------------------------------------------------
-# SudokuLogic — constraint field and PlaceResult.constraint_conflicts
+# SudokuLogic — constraints array and PlaceResult.constraint_conflicts
 # ---------------------------------------------------------------------------
 
-func test_logic_default_no_constraint() -> void:
+func test_logic_default_constraints_empty() -> void:
 	var logic := SudokuLogic.new()
-	assert_null(logic.constraint, "Default SudokuLogic should have no constraint")
+	assert_eq(logic.constraints.size(), 0, "Default SudokuLogic should have no constraints")
 
 
 func test_logic_accepts_constraint() -> void:
 	var c := AntiKnightScript.new()
-	var logic := SudokuLogic.new(false, true, c)
-	assert_not_null(logic.constraint, "Logic should store the provided constraint")
-	assert_eq(logic.constraint.get_id(), "anti_knight")
+	var logic := SudokuLogic.new()
+	logic.constraints = [c]
+	assert_eq(logic.constraints.size(), 1, "Logic should store the provided constraint")
+	assert_eq(logic.constraints[0].get_id(), "anti_knight")
 
 
 func test_place_result_has_constraint_conflicts_field() -> void:
@@ -197,7 +198,8 @@ func test_no_conflict_reported_in_strict_mode() -> void:
 	var solution: Array[int] = []
 	solution.assign(SudokuGenerator.SEED_GRID)
 	var c := AntiKnightScript.new()
-	var logic := SudokuLogic.new(true, true, c)
+	var logic := SudokuLogic.new(true)
+	logic.constraints = [c]
 	logic._setup_from_arrays(0, puzzle, solution)
 	# Place the correct value at index 0 (no conflict possible in strict mode path).
 	var r := logic.place_number(0, solution[0])
