@@ -180,9 +180,10 @@ func _collect_state() -> Dictionary:
 
 func _collect_replay_payload() -> Dictionary:
 	var replay := {}
+	for i in range(_replay_hooks.size() - 1, -1, -1):
+		if not _replay_hooks[i].is_valid():
+			_replay_hooks.remove_at(i)
 	for hook in _replay_hooks:
-		if not hook.is_valid():
-			continue
 		var value = hook.call()
 		if value is Dictionary:
 			replay.merge(value, true)

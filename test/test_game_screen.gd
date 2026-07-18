@@ -13,6 +13,7 @@ extends GutTest
 const FAILED_GENERATION_TEST_PLANTED_SAVE := {
 	"difficulty": 0, "random_seed": 99, "elapsed_time": 10.0, "replay_id": "old-id"
 }
+const SudokuMenuConfig := preload("res://assets/menu/sudoku_menu.tres")
 
 
 # ---------------------------------------------------------------------------
@@ -204,9 +205,17 @@ var stats: MockStats
 var sound: MockSound
 var haptic: MockHaptic
 var screen: TestScreen
+var _had_sudoku_rules := false
+var _was_sudoku_registered := false
+var _original_sudoku_rules: Dictionary = {}
 
 
 func before_each() -> void:
+	_had_sudoku_rules = GameRulesRegistry._rules.has(SudokuMenuConfig.game_id)
+	_was_sudoku_registered = GameRulesRegistry._registered.has(SudokuMenuConfig.game_id)
+	_original_sudoku_rules = GameRulesRegistry._rules.get(
+			SudokuMenuConfig.game_id, {}).duplicate(true)
+	GameRulesRegistry.register_rules(SudokuMenuConfig.game_id, SudokuMenuConfig.game_rules)
 	recorder = MockRecorder.new()
 	storage = MockStorage.new()
 	crash = MockCrash.new()
@@ -223,6 +232,14 @@ func before_each() -> void:
 
 func after_each() -> void:
 	screen.free()
+	if _had_sudoku_rules:
+		GameRulesRegistry._rules[SudokuMenuConfig.game_id] = _original_sudoku_rules
+	else:
+		GameRulesRegistry._rules.erase(SudokuMenuConfig.game_id)
+	if _was_sudoku_registered:
+		GameRulesRegistry._registered[SudokuMenuConfig.game_id] = true
+	else:
+		GameRulesRegistry._registered.erase(SudokuMenuConfig.game_id)
 
 
 # ---------------------------------------------------------------------------
@@ -433,35 +450,6 @@ class TestSudokuFailScreen extends "res://scripts/sudoku/sudoku_game_screen.gd":
 		abort_called = true
 
 
-## SudokuGameScreen subclass for the full scene-tree lifecycle integration test.
-## Overrides UI-heavy methods that would crash without @onready scene nodes,
-## tracks save_progress calls, and returns null from _get_save_adapter() so
-## _try_auto_resume() uses MockSaves (_saves) instead of the real file-backed
-## SudokuSaveAdapter — making planted data detectable.
-## _abort_generation_failure() is intentionally NOT overridden: the production
-## handler calls SceneTransition.navigate(), so the test verifies navigation by
-## observing SceneTransition._transitioning rather than a stub counter.
-class TestSudokuFailScreenTree extends "res://scripts/sudoku/sudoku_game_screen.gd":
-	var save_progress_call_count := 0
-
-	## Prevent @onready node wiring from crashing (board, buttons etc. are null).
-	func _on_game_screen_ready() -> void:
-		pass
-
-	## Prevent AppTheme / UI node access inside _apply_theme().
-	func _apply_game_theme() -> void:
-		pass
-
-	## Use MockSaves (_saves) instead of the real file-backed SudokuSaveAdapter
-	## so planted save data is visible to _try_auto_resume() without touching disk.
-	func _get_save_adapter() -> GameSaveAdapter:
-		return null
-
-	## Track calls without writing to disk or crashing on null logic.
-	func save_progress() -> void:
-		save_progress_call_count += 1
-
-
 func test_suppress_auto_resume_flag_prevents_try_auto_resume() -> void:
 	# Base-class guarantee: _suppress_auto_resume blocks _try_auto_resume.
 	saves.data["test_game"] = {"dummy": true}
@@ -550,40 +538,40 @@ func test_lifecycle_transition_failed_generation_redirect() -> void:
 
 	var screen_ref_holder := {"ref": null}
 
-	# Save state for cleanup after both transitions.
-	var gut_runner := get_tree().current_scene
+	# Save state for cleanup after both transitions. GUT does not guarantee that
+	# current_scene is populated when tests run from the command line.
+	var previous_scene := get_tree().current_scene
 	var original_nav_stack := SceneTransition._nav_stack.duplicate()
 	SceneTransition._nav_stack.clear()
 
-	# Protection against the redirect freeing the GUT runner.
-	# _do_navigate(free_old=false) removes the GUT runner from the tree and
-	# pushes it onto _nav_stack during the originating tween callback.
-	# The redirect (free_old=true) frees everything in _nav_stack when its tween
-	# fires.  This ONE_SHOT handler fires synchronously on transition_completed
-	# (still in the same frame as the originating fade-in), clearing nav_stack
-	# before the deferred _abort_generation_failure fires in the next idle step
-	# and starts the redirect tween — so the redirect's free loop finds nothing.
+	# If GUT has a current scene, protect it from the redirect's free_old path.
 	SceneTransition.transition_completed.connect(func() -> void:
 		SceneTransition._nav_stack.clear()
 	, CONNECT_ONE_SHOT)
 
-	# Start the originating navigation through the real _do_navigate() pipeline.
-	# free_old=false keeps the GUT runner alive (pushed to nav_stack) rather
-	# than freeing it; the protection handler above clears nav_stack before the
-	# redirect tween can free the GUT runner.
+	# Use the real packed scene so @onready bindings and production _ready()
+	# behavior are exercised. Dependencies are replaced before attachment.
 	SceneTransition._do_navigate(
 		func() -> Node:
-			var s := TestSudokuFailScreenTree.new(
-				mock_recorder, MockStorage.new(), MockCrash.new(), MockAnalytics.new(),
-				MockAchievements.new(), mock_saves, mock_stats, MockSound.new(), MockHaptic.new()
-			)
-			s.constraints = [BlockAllAtIndexConstraint.new()]
-			# Use a shared holder dict because GDScript 4 lambdas capture by value
-			# — direct variable assignment inside a lambda cannot update the outer scope.
+			var s = load(Scenes.SUDOKU_GAME).instantiate()
+			s._recorder = mock_recorder
+			s._storage = MockStorage.new()
+			s._crash = MockCrash.new()
+			s._analytics = MockAnalytics.new()
+			s._achievements = MockAchievements.new()
+			s._saves = mock_saves
+			s._stats = mock_stats
+			s._sound = MockSound.new()
+			s._haptic = MockHaptic.new()
+			var test_constraints: Array[SudokuConstraint] = [BlockAllAtIndexConstraint.new()]
+			s.constraints = test_constraints
 			screen_ref_holder["ref"] = s
 			return s,
-		func(_s: Node) -> void:
-			screen_ref_holder["ref"].start_new_game(0),
+		func(s) -> void:
+			# Use MockSaves for the deferred auto-resume check instead of the
+			# file-backed adapter cached by GameScreen._ready().
+			s._save_adapter = null
+			s.start_new_game(0),
 		false
 	)
 
@@ -595,14 +583,12 @@ func test_lifecycle_transition_failed_generation_redirect() -> void:
 	# begin_session() calls push_error after the failed _setup_game; consume it.
 	assert_push_error("setup failed to initialize game state")
 
-	assert_true((screen_ref_holder["ref"] as TestSudokuFailScreenTree)._suppress_auto_resume,
+	assert_true(screen_ref_holder["ref"]._suppress_auto_resume,
 			"_suppress_auto_resume must be set synchronously in _setup_game")
 	assert_false(mock_recorder.started,
 			"replay must not start before redirect completes")
 	assert_eq(mock_stats.counters.get("general.games_played", 0), 0,
 			"games_played must not be incremented before redirect completes")
-	assert_eq((screen_ref_holder["ref"] as TestSudokuFailScreenTree).save_progress_call_count, 0,
-			"save_progress must not be called before redirect completes")
 	# Redirect has NOT started yet: _abort_generation_failure is deferred.
 	assert_false(SceneTransition.is_transitioning,
 			"redirect must not start synchronously — _abort_generation_failure is deferred")
@@ -635,11 +621,10 @@ func test_lifecycle_transition_failed_generation_redirect() -> void:
 			"CONNECT_ONE_SHOT must prevent a second navigate() call on re-emit")
 
 	# Restore test environment: the redirect loaded the Sudoku menu as current_scene.
-	# Re-add the GUT runner (removed from tree by _do_navigate) so subsequent
-	# tests are unaffected.
 	var loaded_menu := get_tree().current_scene
-	get_tree().root.add_child(gut_runner)
-	get_tree().current_scene = gut_runner
+	if previous_scene and not previous_scene.is_inside_tree():
+		get_tree().root.add_child(previous_scene)
+	get_tree().current_scene = previous_scene
 	if loaded_menu:
 		loaded_menu.queue_free()
 	SceneTransition._nav_stack = original_nav_stack
