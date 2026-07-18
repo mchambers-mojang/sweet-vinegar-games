@@ -404,3 +404,28 @@ func test_init_new_game_returns_true_for_standard_sudoku() -> void:
 	assert_eq(logic.puzzle.size(), 81,
 		"puzzle must be fully initialised on success")
 
+
+# ---------------------------------------------------------------------------
+# 15. Focused regression: constrained generate() targets +3 clues per
+#     difficulty so Anti-Knight tiers remain comparable to Standard.
+# ---------------------------------------------------------------------------
+
+func test_constrained_generate_has_more_clues_than_standard_target() -> void:
+	# With constraints active, _remove_cells targets CLUE_TARGETS[diff] + 3
+	# so the puzzle retains more givens. Without the +3 adjustment the generator
+	# would remove cells down to the standard target (38 for EASY), making
+	# Anti-Knight puzzles harder than intended.
+	var gen := SudokuGenerator.new()
+	var c := AntiKnightConstraint.new()
+	var result := gen.generate(SudokuSolver.Difficulty.EASY, 1, [c])
+	assert_false(result.is_empty(),
+		"generate() must succeed for Anti-Knight Easy")
+	var puzzle: Array = result["puzzle"]
+	var clue_count := 0
+	for v in puzzle:
+		if v != 0:
+			clue_count += 1
+	var standard_target: int = SudokuGenerator.CLUE_TARGETS[SudokuSolver.Difficulty.EASY]
+	assert_true(clue_count > standard_target,
+		"Anti-Knight Easy clue count (%d) must exceed standard target (%d)" % [clue_count, standard_target])
+
