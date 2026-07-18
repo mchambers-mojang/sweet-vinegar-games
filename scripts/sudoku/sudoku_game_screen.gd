@@ -5,6 +5,11 @@ extends GameScreen
 # Pure game-rule logic — no UI, no autoloads
 var logic: SudokuLogic = null
 
+## Variant-rule constraints forwarded to SudokuLogic on each new game.
+## Set before launch() / start_new_game() to enable variant rules.
+## An empty array (default) produces standard Sudoku behaviour.
+var constraints: Array[SudokuConstraint] = []
+
 # UI-only state
 var difficulty: int = 0
 var rule_set: int = 0   # 0 = Standard, 1 = Anti-Knight
@@ -204,9 +209,29 @@ func _get_settings_snapshot() -> Dictionary:
 func _setup_game(saved_data: Dictionary) -> void:
 	var strict_mode: bool = GameRulesRegistry.get_rule("sudoku", "error_mode") == "strict"
 	var auto_remove: bool = GameRulesRegistry.get_rule("sudoku", "auto_remove_pencil_marks")
-	logic = SudokuLogic.new(strict_mode, auto_remove, _make_constraint())
+	logic = SudokuLogic.new(strict_mode, auto_remove)
+	var c := _make_constraint()
+	logic.constraints = [c] if c != null else constraints
 	if saved_data.is_empty():
-		logic.init_new_game(difficulty, random_seed)
+		if not logic.init_new_game(difficulty, random_seed):
+			# Generation failed (e.g. unsatisfiable constraints).
+			# Suppress deferred auto-resume so saved data isn't loaded over the
+			# failed state, then queue a navigate-back once the active fade
+			# transition completes (or immediately when no transition is running).
+			_suppress_auto_resume = true
+			if SceneTransition.is_transitioning:
+				# CONNECT_DEFERRED is required here: transition_completed fires
+				# from inside the _fade_in() tween callback, and calling
+				# navigate() synchronously from within that callback prevents
+				# the new redirect tween from being processed by Godot.
+				# Deferring ensures _abort_generation_failure runs in the next
+				# idle step — after the tween callback returns — so navigate()
+				# creates the redirect tween in a normal game-loop context.
+				SceneTransition.transition_completed.connect(
+						_abort_generation_failure, CONNECT_ONE_SHOT | CONNECT_DEFERRED)
+			else:
+				_abort_generation_failure()
+			return
 		difficulty = logic.difficulty
 		difficulty_label.text = DIFFICULTY_NAMES[logic.difficulty]
 		board.load_puzzle(logic.puzzle)
@@ -499,6 +524,13 @@ func _on_back_pressed() -> void:
 		_stats.set_counter("general", "current_win_streak", 0)
 		_achievements.check_stats()
 	_save_current_state()
+	SceneTransition.navigate(Scenes.SUDOKU_MENU)
+
+
+## Called when init_new_game() fails (e.g. unsatisfiable constraints).
+## Navigates back to the Sudoku menu. Invoked either directly (when no
+## transition is active) or via SceneTransition.transition_completed.
+func _abort_generation_failure() -> void:
 	SceneTransition.navigate(Scenes.SUDOKU_MENU)
 
 

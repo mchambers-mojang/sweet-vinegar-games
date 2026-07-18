@@ -9,6 +9,7 @@ const ACTIVE_REPLAY_PATH := "user://active_replay.json"
 const SAVE_INTERVAL := 2.0
 const SECONDS_TO_MS := 1000.0
 
+var active_replay_path: String = ACTIVE_REPLAY_PATH
 var _active_replay: Dictionary = {}
 var _id_rng := RandomNumberGenerator.new()
 var _active_sequence: int = 0
@@ -21,6 +22,12 @@ func _ready() -> void:
 	_load_active_replay()
 	CrashCollector.register_replay_hook(get_crash_recovery_payload)
 	GameEvents.move_made.connect(_on_game_events_move_made)
+
+
+func _exit_tree() -> void:
+	CrashCollector.unregister_replay_hook(get_crash_recovery_payload)
+	if GameEvents.move_made.is_connected(_on_game_events_move_made):
+		GameEvents.move_made.disconnect(_on_game_events_move_made)
 
 
 func _process(delta: float) -> void:
@@ -113,7 +120,7 @@ func _save_active_replay() -> void:
 	if _active_replay.is_empty():
 		_clear_active_replay_file()
 		return
-	var file := FileAccess.open(ACTIVE_REPLAY_PATH, FileAccess.WRITE)
+	var file := FileAccess.open(active_replay_path, FileAccess.WRITE)
 	if file == null:
 		return
 	file.store_string(JSON.stringify(_active_replay))
@@ -121,9 +128,9 @@ func _save_active_replay() -> void:
 
 func _load_active_replay() -> void:
 	_active_replay = {}
-	if not FileAccess.file_exists(ACTIVE_REPLAY_PATH):
+	if not FileAccess.file_exists(active_replay_path):
 		return
-	var file := FileAccess.open(ACTIVE_REPLAY_PATH, FileAccess.READ)
+	var file := FileAccess.open(active_replay_path, FileAccess.READ)
 	if file == null:
 		return
 	var parsed = JSON.parse_string(file.get_as_text())
@@ -132,8 +139,8 @@ func _load_active_replay() -> void:
 
 
 func _clear_active_replay_file() -> void:
-	if FileAccess.file_exists(ACTIVE_REPLAY_PATH):
-		DirAccess.remove_absolute(ACTIVE_REPLAY_PATH)
+	if FileAccess.file_exists(active_replay_path):
+		DirAccess.remove_absolute(active_replay_path)
 
 
 func _get_game_version() -> String:

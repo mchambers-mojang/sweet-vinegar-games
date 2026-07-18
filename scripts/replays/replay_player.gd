@@ -51,12 +51,12 @@ func _load_replay(replay: Dictionary) -> void:
 	_replay = replay
 	var header: Dictionary = _replay.get("header", {})
 	var game_mode := str(header.get("game_mode", ""))
-	_initial_state = header.get("initial_state", {})
 
 	_adapter = _create_adapter(game_mode)
 	if _adapter == null:
 		push_error("ReplayPlayer: Unknown game mode '%s'" % game_mode)
 		return
+	_initial_state = _adapter.get_initial_state(_replay)
 
 	# Build the board visual and add it to the container.
 	# add_child() triggers _ready() synchronously on the new node when the

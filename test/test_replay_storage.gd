@@ -3,17 +3,40 @@ extends GutTest
 ## Unit tests for ReplayStorage — persistence, indexing, import/export, and pending playback.
 
 const StorageScript := preload("res://scripts/replays/replay_storage.gd")
+const TEST_ROOT := "user://test_replay_storage/"
 
 var storage: Node
 
 
 func before_each() -> void:
+	_remove_test_data()
 	storage = Node.new()
 	storage.set_script(StorageScript)
+	storage.replays_dir = TEST_ROOT + "replays/"
+	storage.replays_index_path = TEST_ROOT + "replays_index.json"
+	storage.legacy_replays_path = TEST_ROOT + "replays.json"
 	add_child_autofree(storage)
-	# Override internal state after _ready (avoids filesystem side-effects)
 	storage._replay_index = [] as Array[Dictionary]
 	storage._pending_playback = {}
+
+
+func after_each() -> void:
+	_remove_test_data()
+
+
+func _remove_test_data() -> void:
+	if not DirAccess.dir_exists_absolute(TEST_ROOT):
+		return
+	var dir := DirAccess.open(TEST_ROOT)
+	for file in dir.get_files():
+		DirAccess.remove_absolute(TEST_ROOT + file)
+	for child_dir in dir.get_directories():
+		var child_path := TEST_ROOT + child_dir + "/"
+		var child := DirAccess.open(child_path)
+		for file in child.get_files():
+			DirAccess.remove_absolute(child_path + file)
+		DirAccess.remove_absolute(child_path)
+	DirAccess.remove_absolute(TEST_ROOT)
 
 
 # --- Helpers ---

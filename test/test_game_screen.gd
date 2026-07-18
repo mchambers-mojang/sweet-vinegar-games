@@ -7,6 +7,14 @@ extends GutTest
 ## pass mock instances and call begin_session() / save_progress() / clear_save()
 ## directly on the node — _ready() is never required.
 
+## Reference save data for failed-generation lifecycle integration tests.
+## Used by test_lifecycle_transition_failed_generation_redirect to plant a
+## resumable save that _try_auto_resume would load if not suppressed.
+const FAILED_GENERATION_TEST_PLANTED_SAVE := {
+	"difficulty": 0, "random_seed": 99, "elapsed_time": 10.0, "replay_id": "old-id"
+}
+const SudokuMenuConfig := preload("res://assets/menu/sudoku_menu.tres")
+
 
 # ---------------------------------------------------------------------------
 # Mock helpers (identical to the ones that previously lived in
@@ -169,14 +177,18 @@ class MockHaptic:
 # Minimal concrete GameScreen subclass for testing
 # ---------------------------------------------------------------------------
 
-class TestScreen extends GameScreen:
+class TestScreen extends "res://scripts/game_screen.gd":
 	var game_id := "test_game"
+	var initialized := true
 
 	func _get_game_id() -> String:
 		return game_id
 
 	func _serialize_state() -> Dictionary:
 		return {"dummy": true}
+
+	func _is_initialized() -> bool:
+		return initialized
 
 
 # ---------------------------------------------------------------------------
@@ -193,9 +205,17 @@ var stats: MockStats
 var sound: MockSound
 var haptic: MockHaptic
 var screen: TestScreen
+var _had_sudoku_rules := false
+var _was_sudoku_registered := false
+var _original_sudoku_rules: Dictionary = {}
 
 
 func before_each() -> void:
+	_had_sudoku_rules = GameRulesRegistry._rules.has(SudokuMenuConfig.game_id)
+	_was_sudoku_registered = GameRulesRegistry._registered.has(SudokuMenuConfig.game_id)
+	_original_sudoku_rules = GameRulesRegistry._rules.get(
+			SudokuMenuConfig.game_id, {}).duplicate(true)
+	GameRulesRegistry.register_rules(SudokuMenuConfig.game_id, SudokuMenuConfig.game_rules)
 	recorder = MockRecorder.new()
 	storage = MockStorage.new()
 	crash = MockCrash.new()
@@ -212,6 +232,14 @@ func before_each() -> void:
 
 func after_each() -> void:
 	screen.free()
+	if _had_sudoku_rules:
+		GameRulesRegistry._rules[SudokuMenuConfig.game_id] = _original_sudoku_rules
+	else:
+		GameRulesRegistry._rules.erase(SudokuMenuConfig.game_id)
+	if _was_sudoku_registered:
+		GameRulesRegistry._registered[SudokuMenuConfig.game_id] = true
+	else:
+		GameRulesRegistry._registered.erase(SudokuMenuConfig.game_id)
 
 
 # ---------------------------------------------------------------------------
@@ -307,6 +335,17 @@ func test_begin_session_new_saves_progress() -> void:
 	assert_true(saves.data.has("test_game"))
 
 
+func test_begin_session_stops_when_setup_does_not_initialize() -> void:
+	screen.initialized = false
+
+	screen.begin_session()
+
+	assert_push_error("setup failed to initialize game state")
+	assert_false(recorder.started)
+	assert_false(saves.data.has("test_game"))
+	assert_eq(stats.counters.get("general.games_played", 0), 0)
+
+
 # ---------------------------------------------------------------------------
 # begin_session() — resume
 # ---------------------------------------------------------------------------
@@ -373,3 +412,219 @@ func test_clear_save_delegates_to_saves() -> void:
 	saves.data["test_game"] = {"dummy": true}
 	screen.clear_save()
 	assert_false(saves.data.has("test_game"))
+
+
+func test_all_game_screen_scripts_compile() -> void:
+	var paths := [
+		"res://scripts/blockudoku/blockudoku_game_screen.gd",
+		"res://scripts/shikaku/shikaku_game_screen.gd",
+		"res://scripts/sudoku/sudoku_game_screen.gd",
+		"res://carom/scripts/carom_arena.gd",
+	]
+	for path in paths:
+		var script := load(path) as GDScript
+		assert_not_null(script, "%s should load" % path)
+		assert_true(script.can_instantiate(), "%s should compile" % path)
+
+
+# ---------------------------------------------------------------------------
+# Generation-failure redirect: suppress auto-resume and ceremony
+# ---------------------------------------------------------------------------
+
+## Unsatisfiable constraint — every value at index 0 is illegal, so no
+## valid 9x9 grid can be produced.  Used to force init_new_game() failure.
+class BlockAllAtIndexConstraint extends SudokuConstraint:
+	func is_valid(grid: Array[int], index: int, value: int) -> bool:
+		return index != 0
+
+	func get_id() -> String:
+		return "block_all_0"
+
+
+## SudokuGameScreen subclass that captures the abort-navigation call
+## without touching SceneTransition / scene tree.
+class TestSudokuFailScreen extends "res://scripts/sudoku/sudoku_game_screen.gd":
+	var abort_called := false
+
+	func _abort_generation_failure() -> void:
+		abort_called = true
+
+
+func test_suppress_auto_resume_flag_prevents_try_auto_resume() -> void:
+	# Base-class guarantee: _suppress_auto_resume blocks _try_auto_resume.
+	saves.data["test_game"] = {"dummy": true}
+	screen._suppress_auto_resume = true
+	screen.initialized = false
+
+	screen._try_auto_resume()
+
+	assert_false(screen._is_initialized(),
+			"_try_auto_resume must not initialize the screen when _suppress_auto_resume is true")
+	assert_true(saves.data.has("test_game") and saves.data["test_game"] == {"dummy": true},
+			"_try_auto_resume must leave saved data untouched when suppressed")
+
+
+func test_failed_generation_suppresses_auto_resume_and_no_ceremony() -> void:
+	# Integration regression: launching through the real SudokuGameScreen /
+	# SudokuLogic setup path with an unsatisfiable constraint must:
+	#   • set _suppress_auto_resume so saved data cannot be auto-resumed, and
+	#   • NOT run any session ceremony (no replay, stats, or save writes).
+	# Saved game data is planted to prove _try_auto_resume won't pick it up.
+
+	var mock_recorder := MockRecorder.new()
+	var mock_saves := MockSaves.new()
+	var mock_stats := MockStats.new()
+	# Plant a saved game; _try_auto_resume would normally resume this.
+	mock_saves.data["sudoku"] = {
+		"difficulty": 0, "random_seed": 1, "elapsed_time": 5.0, "replay_id": "old"
+	}
+
+	var s := TestSudokuFailScreen.new(
+		mock_recorder, MockStorage.new(), MockCrash.new(), MockAnalytics.new(),
+		MockAchievements.new(), mock_saves, mock_stats, MockSound.new(), MockHaptic.new()
+	)
+	s.constraints = [BlockAllAtIndexConstraint.new()]
+
+	# Trigger the real new-game path: begin_session → _setup_game → init_new_game fails.
+	s.start_new_game(0)
+
+	# begin_session() calls push_error after _setup_game() returns with _is_initialized() false.
+	assert_push_error("setup failed to initialize game state")
+
+	# No ceremony must have run.
+	assert_false(mock_recorder.started,
+			"replay must not be started after failed generation")
+	assert_eq(mock_stats.counters.get("sudoku.games_started", 0), 0,
+			"games_started stat must not be incremented after failed generation")
+	assert_eq(mock_stats.counters.get("general.games_played", 0), 0,
+			"general games_played stat must not be incremented after failed generation")
+
+	# abort handler must have been triggered (menu redirect requested).
+	assert_true(s.abort_called,
+			"_abort_generation_failure must be called when generation fails")
+
+	# auto-resume must be suppressed.
+	assert_true(s._suppress_auto_resume,
+			"_suppress_auto_resume must be true after a failed generation")
+
+	# _try_auto_resume must not resume the planted save.
+	s._try_auto_resume()
+	assert_false(s._is_initialized(),
+			"_try_auto_resume must not resume the game when suppressed after failed launch")
+
+	s.free()
+
+
+func test_lifecycle_transition_failed_generation_redirect() -> void:
+	# Full lifecycle regression: the originating navigation runs through the
+	# real SceneTransition._do_navigate() pipeline — fade-out tween, scene
+	# attach + setup callback, 2-frame wait, fade-in tween, transition_completed
+	# signal — not manually arranged state and a direct _fade_in() call.
+	# Both the originating transition and the resulting redirect (to the Sudoku
+	# menu) are then awaited to completion.
+	#
+	# _abort_generation_failure is connected CONNECT_ONE_SHOT | CONNECT_DEFERRED
+	# in _setup_game: it fires in the NEXT idle step (not synchronously from
+	# within the _fade_in() tween callback).  Calling navigate() synchronously
+	# from inside a tween callback prevents the new redirect tween from being
+	# processed by Godot; the deferred connection avoids that race.
+	# One process-frame gap (below) lets the deferred abort fire so that the
+	# redirect's is_transitioning flag is set before the second await.
+
+	var mock_recorder := MockRecorder.new()
+	var mock_saves := MockSaves.new()
+	var mock_stats := MockStats.new()
+	mock_saves.data["sudoku"] = FAILED_GENERATION_TEST_PLANTED_SAVE.duplicate()
+
+	var screen_ref_holder := {"ref": null}
+
+	# Save state for cleanup after both transitions. GUT does not guarantee that
+	# current_scene is populated when tests run from the command line.
+	var previous_scene := get_tree().current_scene
+	var original_nav_stack := SceneTransition._nav_stack.duplicate()
+	SceneTransition._nav_stack.clear()
+
+	# If GUT has a current scene, protect it from the redirect's free_old path.
+	SceneTransition.transition_completed.connect(func() -> void:
+		SceneTransition._nav_stack.clear()
+	, CONNECT_ONE_SHOT)
+
+	# Use the real packed scene so @onready bindings and production _ready()
+	# behavior are exercised. Dependencies are replaced before attachment.
+	SceneTransition._do_navigate(
+		func() -> Node:
+			var s = load(Scenes.SUDOKU_GAME).instantiate()
+			s._recorder = mock_recorder
+			s._storage = MockStorage.new()
+			s._crash = MockCrash.new()
+			s._analytics = MockAnalytics.new()
+			s._achievements = MockAchievements.new()
+			s._saves = mock_saves
+			s._stats = mock_stats
+			s._sound = MockSound.new()
+			s._haptic = MockHaptic.new()
+			var test_constraints: Array[SudokuConstraint] = [BlockAllAtIndexConstraint.new()]
+			s.constraints = test_constraints
+			screen_ref_holder["ref"] = s
+			return s,
+		func(s) -> void:
+			# Use MockSaves for the deferred auto-resume check instead of the
+			# file-backed adapter cached by GameScreen._ready().
+			s._save_adapter = null
+			s.start_new_game(0),
+		false
+	)
+
+	# Await the originating transition (fade-out → attach → 2-frame wait → fade-in).
+	# When transition_completed fires: the protection handler (sync) clears nav_stack;
+	# _abort_generation_failure is scheduled as deferred — it runs next idle step.
+	await SceneTransition.transition_completed
+
+	# begin_session() calls push_error after the failed _setup_game; consume it.
+	assert_push_error("setup failed to initialize game state")
+
+	assert_true(screen_ref_holder["ref"]._suppress_auto_resume,
+			"_suppress_auto_resume must be set synchronously in _setup_game")
+	assert_false(mock_recorder.started,
+			"replay must not start before redirect completes")
+	assert_eq(mock_stats.counters.get("general.games_played", 0), 0,
+			"games_played must not be incremented before redirect completes")
+	# Redirect has NOT started yet: _abort_generation_failure is deferred.
+	assert_false(SceneTransition.is_transitioning,
+			"redirect must not start synchronously — _abort_generation_failure is deferred")
+
+	# One idle step for the deferred _abort_generation_failure to fire.
+	# After this frame the production abort handler has called navigate(SUDOKU_MENU)
+	# and the redirect transition is running.
+	await get_tree().process_frame
+
+	assert_true(SceneTransition.is_transitioning,
+			"navigate(SUDOKU_MENU) must have started the redirect transition")
+
+	# Await the redirect transition (fade-out → Sudoku menu loads → fade-in).
+	await SceneTransition.transition_completed
+
+	assert_false(mock_recorder.started,
+			"replay must not start after redirect")
+	assert_eq(mock_stats.counters.get("general.games_played", 0), 0,
+			"games_played must remain 0 after redirect")
+	assert_false(mock_recorder.flushed,
+			"replay flush must not occur during failed launch")
+	assert_eq(mock_saves.data.get("sudoku"), FAILED_GENERATION_TEST_PLANTED_SAVE,
+			"planted save must be untouched — no resume or save write occurred")
+
+	# CONNECT_ONE_SHOT: _abort_generation_failure was consumed on the deferred
+	# first-transition emit.  After the redirect's fade-in, _transitioning is
+	# false; a stale connected handler would call navigate() again (→ true).
+	SceneTransition.transition_completed.emit()
+	assert_false(SceneTransition.is_transitioning,
+			"CONNECT_ONE_SHOT must prevent a second navigate() call on re-emit")
+
+	# Restore test environment: the redirect loaded the Sudoku menu as current_scene.
+	var loaded_menu := get_tree().current_scene
+	if previous_scene and not previous_scene.is_inside_tree():
+		get_tree().root.add_child(previous_scene)
+	get_tree().current_scene = previous_scene
+	if loaded_menu:
+		loaded_menu.queue_free()
+	SceneTransition._nav_stack = original_nav_stack

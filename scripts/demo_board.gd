@@ -46,8 +46,8 @@ func _draw() -> void:
 	const COLS := 3
 	const ROWS := 3
 
-	var board_size := min(size.x, size.y)
-	var cell_size := board_size / float(COLS)
+	var board_size: float = minf(size.x, size.y)
+	var cell_size: float = board_size / float(COLS)
 	var offset := Vector2((size.x - board_size) / 2.0, (size.y - board_size) / 2.0)
 
 	# Fill background
@@ -88,11 +88,11 @@ func _draw() -> void:
 
 		var text: String = cell_texts[i]
 		if not text.is_empty() and cell_colors[i] != Color.TRANSPARENT:
-			var fs := pencil_fs if is_pencil[i] else normal_fs
-			var ascent := font.get_ascent(fs)
-			var string_w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-			var tx := rect.position.x + (cell_size - string_w) / 2.0
-			var ty := rect.position.y + (cell_size + ascent) / 2.0
+			var fs: int = pencil_fs if is_pencil[i] else normal_fs
+			var ascent: float = font.get_ascent(fs)
+			var string_w: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+			var tx: float = rect.position.x + (cell_size - string_w) / 2.0
+			var ty: float = rect.position.y + (cell_size + ascent) / 2.0
 			draw_string(font, Vector2(tx, ty), text,
 				HORIZONTAL_ALIGNMENT_LEFT, -1, fs, cell_colors[i])
 
@@ -105,10 +105,10 @@ func _draw() -> void:
 
 	# Inner horizontal lines (thin)
 	for r in range(1, ROWS):
-		var y := offset.y + r * cell_size
+		var y: float = offset.y + r * cell_size
 		draw_line(Vector2(offset.x, y), Vector2(offset.x + board_size, y), _grid_thin, thin)
 
 	# Inner vertical lines (thin)
 	for c in range(1, COLS):
-		var x := offset.x + c * cell_size
+		var x: float = offset.x + c * cell_size
 		draw_line(Vector2(x, offset.y), Vector2(x, offset.y + board_size), _grid_thin, thin)

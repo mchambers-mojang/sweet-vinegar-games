@@ -6,17 +6,11 @@
 [node name="CaromMenu" instance=ExtResource("1")]
 script = ExtResource("2")
 
-[node name="MarginContainer/VBoxContainer/TitleLabel" parent="."]
-text = "Carom"
-
 [node name="SubtitleLabel" type="Label" parent="MarginContainer/VBoxContainer" index=4]
 layout_mode = 2
 text = "Mounted turrets. Neon ricochets. Single-player prototype."
 horizontal_alignment = 1
 autowrap_mode = 3
-
-[node name="MarginContainer/VBoxContainer/NewGameButton" parent="."]
-text = "Play"
 
 [node name="OnlineButton" type="Button" parent="MarginContainer/VBoxContainer" index=7]
 layout_mode = 2

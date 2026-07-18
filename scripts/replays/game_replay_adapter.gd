@@ -2,10 +2,19 @@ class_name GameReplayAdapter extends RefCounted
 
 ## Base interface for game-specific replay adapters.
 ## Each game provides one concrete subclass that knows how to:
+##   - Normalize legacy initial state from replay metadata
 ##   - Set up the visual board from the initial state
 ##   - Apply a single replay frame to the board
 ##   - Reset the board back to initial state (enables backward scrubbing)
 ##   - Report which event types are visually meaningful
+
+## Return the initial state used to build and reset the replay visual.
+## Games may override this to recover legacy recordings from other metadata.
+func get_initial_state(replay: Dictionary) -> Dictionary:
+	var header: Dictionary = replay.get("header", {})
+	var initial_state: Dictionary = header.get("initial_state", {})
+	return initial_state.duplicate(true)
+
 
 ## Called once when playback starts.
 ## Create and configure the game's board/visual, then return it.

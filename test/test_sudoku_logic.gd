@@ -52,7 +52,8 @@ func _fill_all_except(skip_index: int) -> void:
 # ---------------------------------------------------------------------------
 
 func test_new_game_initializes_state() -> void:
-	logic.init_new_game(SudokuSolver.Difficulty.EASY, 42)
+	var ok := logic.init_new_game(SudokuSolver.Difficulty.EASY, 42)
+	assert_true(ok, "init_new_game should return true on success")
 	assert_eq(logic.puzzle.size(), 81, "puzzle should have 81 cells")
 	assert_eq(logic.solution.size(), 81, "solution should have 81 cells")
 	assert_eq(logic.current_grid.size(), 81, "current_grid should have 81 cells")

@@ -5,6 +5,3 @@
 
 [node name="BlockudokuMenu" instance=ExtResource("1")]
 script = ExtResource("2")
-
-[node name="MarginContainer/VBoxContainer/TitleLabel" parent="."]
-text = "Blockudoku"
