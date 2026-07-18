@@ -496,6 +496,28 @@ func pick_unsolved_cell() -> int:
 	return candidates[0]
 
 
+## Returns all cell indices (non-given, non-empty) that violate any active
+## constraint relative to another placed cell.  Intended for free-mode error
+## highlighting; returns an empty array when no constraints are active.
+func get_constraint_errors() -> Array[int]:
+	if constraints.is_empty():
+		return []
+	var errors: Dictionary = {}
+	for i in GRID_CELLS:
+		if current_grid[i] == 0:
+			continue
+		var val := current_grid[i]
+		for constraint in constraints:
+			for j in constraint.get_affected_indices(i):
+				if current_grid[j] == val:
+					errors[i] = true
+					errors[j] = true
+	var result: Array[int] = []
+	for idx in errors.keys():
+		result.append(int(idx))
+	return result
+
+
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------

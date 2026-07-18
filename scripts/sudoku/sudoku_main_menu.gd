@@ -2,15 +2,18 @@ extends GameMenu
 
 ## Sudoku main menu — config-driven via assets/menu/sudoku_menu.tres
 ##
-## Extends GameMenu with a second "Rule Set" dropdown (Standard / Anti-Knight)
+## Extends GameMenu with a "Rule Set" dropdown (Standard / Anti-Knight / Anti-King)
 ## injected dynamically below the existing DifficultyButton row.
 ## The selected rule set is forwarded to the game screen via LaunchParams.rule_set.
 
 const RULE_SET_STANDARD := 0
 const RULE_SET_ANTI_KNIGHT := 1
+const RULE_SET_ANTI_KING := 2
 
 const ANTI_KNIGHT_MODES := PackedStringArray(["antiknight_easy", "antiknight_medium", "antiknight_hard", "antiknight_expert"])
 const ANTI_KNIGHT_LABELS := PackedStringArray(["Anti-Knight Easy", "Anti-Knight Medium", "Anti-Knight Hard", "Anti-Knight Expert"])
+const ANTI_KING_MODES := PackedStringArray(["antiking_easy", "antiking_medium", "antiking_hard", "antiking_expert"])
+const ANTI_KING_LABELS := PackedStringArray(["Anti-King Easy", "Anti-King Medium", "Anti-King Hard", "Anti-King Expert"])
 
 var _rule_set_index: int = RULE_SET_STANDARD
 var _rule_set_button: OptionButton = null
@@ -29,8 +32,8 @@ func _on_menu_ready() -> void:
 	_inject_rule_set_row()
 
 
-## Injects an HBoxContainer with "Rule Set:" label and OptionButton (Standard / Anti-Knight)
-## directly below the DifficultyRow in the menu VBoxContainer.
+## Injects an HBoxContainer with "Rule Set:" label and OptionButton
+## (Standard / Anti-Knight / Anti-King) directly below the DifficultyRow.
 func _inject_rule_set_row() -> void:
 	var diff_btn := get_node_or_null("%DifficultyButton") as OptionButton
 	if diff_btn == null:
@@ -50,6 +53,7 @@ func _inject_rule_set_row() -> void:
 	_rule_set_button = OptionButton.new()
 	_rule_set_button.add_item("Standard")
 	_rule_set_button.add_item("Anti-Knight")
+	_rule_set_button.add_item("Anti-King")
 	_rule_set_button.selected = _rule_set_index
 	_rule_set_button.item_selected.connect(func(idx: int) -> void: _rule_set_index = idx)
 	row.add_child(_rule_set_button)
@@ -69,17 +73,17 @@ func _start_game() -> void:
 	)
 
 
-## Override _setup_leaderboard_button to add Anti-Knight modes alongside standard modes.
+## Override _setup_leaderboard_button to add Anti-Knight and Anti-King modes.
 func _setup_leaderboard_button(stats_btn: Button) -> void:
 	if not config or config.leaderboard_modes.is_empty():
 		return
 
-	# Build combined mode + label lists: standard first, then anti-knight.
+	# Build combined mode + label lists: standard first, then variants.
 	var modes: PackedStringArray = PackedStringArray()
 	var labels: PackedStringArray = PackedStringArray()
 	var opt_btn := get_node_or_null("%DifficultyButton") as OptionButton
 
-	# Standard modes (from config, skip empty Evil slot)
+	# Standard modes (from config, skip empty Evil slot — Evil difficulty has no leaderboard support)
 	for i in range(config.leaderboard_modes.size()):
 		var m: String = config.leaderboard_modes[i]
 		if m.is_empty():
@@ -95,6 +99,11 @@ func _setup_leaderboard_button(stats_btn: Button) -> void:
 		modes.append(ANTI_KNIGHT_MODES[i])
 		labels.append(ANTI_KNIGHT_LABELS[i])
 
+	# Anti-King modes
+	for i in range(ANTI_KING_MODES.size()):
+		modes.append(ANTI_KING_MODES[i])
+		labels.append(ANTI_KING_LABELS[i])
+
 	if modes.is_empty():
 		return
 
@@ -104,15 +113,15 @@ func _setup_leaderboard_button(stats_btn: Button) -> void:
 	btn.pressed.connect(func() -> void:
 		# Pre-select: map current (rule_set, difficulty) to the combined modes list.
 		var diff_idx := _get_current_option_index()
+		var standard_modes_count := 0
+		for m in config.leaderboard_modes:
+			if not m.is_empty():
+				standard_modes_count += 1
 		var selected_lb_idx := 0
 		if _rule_set_index == RULE_SET_ANTI_KNIGHT:
-			# Count non-empty standard modes to find where anti-knight entries start
-			# in the combined modes list (empty slots like "evil" are excluded).
-			var standard_modes_count := 0
-			for m in config.leaderboard_modes:
-				if not m.is_empty():
-					standard_modes_count += 1
 			selected_lb_idx = standard_modes_count + mini(diff_idx, ANTI_KNIGHT_MODES.size() - 1)
+		elif _rule_set_index == RULE_SET_ANTI_KING:
+			selected_lb_idx = standard_modes_count + ANTI_KNIGHT_MODES.size() + mini(diff_idx, ANTI_KING_MODES.size() - 1)
 		else:
 			# Map diff_idx to the non-empty standard modes index
 			var count := 0

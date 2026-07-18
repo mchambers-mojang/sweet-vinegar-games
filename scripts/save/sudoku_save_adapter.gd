@@ -14,7 +14,7 @@ func get_difficulty() -> int:
 	return int(restore().get("difficulty", 0))
 
 
-## Return the saved rule set index (0 = Standard, 1 = Anti-Knight), or 0 if no save.
+## Return the saved rule set index (0 = Standard, 1 = Anti-Knight, 2 = Anti-King), or 0 if no save.
 func get_rule_set() -> int:
 	return int(restore().get("rule_set", 0))
 
