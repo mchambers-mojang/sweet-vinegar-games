@@ -24,6 +24,12 @@ func _ready() -> void:
 	GameEvents.move_made.connect(_on_game_events_move_made)
 
 
+func _exit_tree() -> void:
+	CrashCollector.unregister_replay_hook(get_crash_recovery_payload)
+	if GameEvents.move_made.is_connected(_on_game_events_move_made):
+		GameEvents.move_made.disconnect(_on_game_events_move_made)
+
+
 func _process(delta: float) -> void:
 	if not _dirty:
 		return

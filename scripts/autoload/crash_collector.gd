@@ -170,7 +170,7 @@ func _collect_state() -> Dictionary:
 		"scene": _get_current_scene_path(),
 	}
 	for provider in _state_providers:
-		if provider.is_null():
+		if not provider.is_valid():
 			continue
 		var value = provider.call()
 		if value is Dictionary:
@@ -181,7 +181,7 @@ func _collect_state() -> Dictionary:
 func _collect_replay_payload() -> Dictionary:
 	var replay := {}
 	for hook in _replay_hooks:
-		if hook.is_null():
+		if not hook.is_valid():
 			continue
 		var value = hook.call()
 		if value is Dictionary:
