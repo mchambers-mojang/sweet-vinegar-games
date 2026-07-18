@@ -229,8 +229,9 @@ func _on_killer_generation_complete() -> void:
 	_show_generating_spinner(false)
 	var puzzle = _pending_killer_data.get("puzzle", [])
 	if (puzzle as Array).size() != 81:
-		# Generator exhausted all attempts and returned {} — treat the same as
-		# a standard generation failure: discard state and navigate back to menu.
+		# Generator exhausted all attempts and returned {} — .get() above yields an
+		# empty array, so the size check catches any invalid or missing puzzle.
+		# Treat as a standard generation failure: discard state and navigate back to menu.
 		_pending_killer_data = {}
 		_suppress_auto_resume = true
 		if SceneTransition.is_transitioning:
