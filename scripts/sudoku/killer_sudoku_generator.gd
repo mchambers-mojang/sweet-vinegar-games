@@ -17,6 +17,10 @@ const KillerSudokuSolverScript := preload("res://scripts/sudoku/killer_sudoku_so
 ## scene exited the tree).  It is polled at the start of each attempt and at
 ## each pass of the give-minimization loop, so teardown can join the generation
 ## thread without waiting for the full attempt budget to exhaust.
+##
+## Returns a [Dictionary] with keys [code]puzzle[/code], [code]solution[/code],
+## [code]cages[/code], and [code]difficulty[/code] on success, or an empty
+## [Dictionary] if all attempts were exhausted or [param cancel_check] fired.
 func generate(difficulty: int, seed: int = -1, cancel_check: Callable = Callable()) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	if seed >= 0:
