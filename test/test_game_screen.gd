@@ -634,60 +634,75 @@ func test_lifecycle_transition_failed_generation_redirect() -> void:
 # Killer generation thread lifecycle
 # ---------------------------------------------------------------------------
 
-## SudokuGameScreen subclass with a trivial generation override so lifecycle
-## tests complete in milliseconds rather than waiting for the real generator.
+## SudokuGameScreen subclass that overrides @onready setup and the generation
+## loop so tree-attachment/removal lifecycle tests complete in milliseconds.
 class ThreadLifecycleScreen extends "res://scripts/sudoku/sudoku_game_screen.gd":
-	## Delay long enough that the main thread can call _exit_tree() while the
-	## thread is still sleeping, exercising the join path. 20 ms is negligible
-	## for the test suite but reliably outlasts the few µs before _exit_tree().
-	const LIFECYCLE_DELAY_MS := 20
+	## Set once the generation thread has actually started executing.
 	var generation_ran := false
+	## Set when the thread exits because it observed _generation_cancelled.
+	var generation_exited_early := false
+
+	func _ready() -> void:
+		pass  # Prevent @onready errors when attached without a full scene.
 
 	func _abort_generation_failure() -> void:
 		pass  # Suppress navigation side-effects in unit tests.
 
 	func _run_killer_generation() -> void:
-		# Short delay so _exit_tree() reliably fires while the thread is alive.
-		OS.delay_msec(LIFECYCLE_DELAY_MS)
 		generation_ran = true
-		if not _generation_cancelled:
-			call_deferred("_on_killer_generation_complete")
+		# Poll the cancellation flag cooperatively (1 ms intervals) so that
+		# _exit_tree() can join the thread promptly without blocking for the
+		# full generation budget.
+		while not _generation_cancelled:
+			OS.delay_msec(1)
+		generation_exited_early = true
+		# Do not call_deferred — generation was cancelled.
 
 
 func test_exit_tree_joins_killer_generation_thread_and_sets_cancelled() -> void:
-	# Regression: _exit_tree() must join the background Killer generation
-	# thread so the thread cannot outlive its owner and a deferred callback
-	# cannot target an exited/freed node.
+	# Regression: removing the node from the tree (real tree teardown) must set
+	# the cancellation flag and join the thread so it cannot outlive its owner.
+	# Cooperative cancellation means the join returns well under 200 ms even
+	# though the test thread would otherwise loop indefinitely.
 	var s := ThreadLifecycleScreen.new(
 		MockRecorder.new(), MockStorage.new(), MockCrash.new(), MockAnalytics.new(),
 		MockAchievements.new(), MockSaves.new(), MockStats.new(), MockSound.new(), MockHaptic.new()
 	)
+	add_child(s)
 	s._killer_gen_thread = Thread.new()
 	s._killer_gen_thread.start(s._run_killer_generation)
-	assert_not_null(s._killer_gen_thread, "thread must be running before teardown")
 
-	# Simulate scene removal — must block until the thread completes.
-	s._exit_tree()
+	# Wait until the thread has actually started before triggering teardown.
+	await get_tree().create_timer(0.05).timeout
+	assert_true(s.generation_ran, "thread must be running before teardown")
+
+	var start_ms := Time.get_ticks_msec()
+	remove_child(s)  # Triggers the real _exit_tree() notification path.
+	var elapsed_ms := Time.get_ticks_msec() - start_ms
 
 	assert_true(s._generation_cancelled,
 			"_exit_tree must set the cancellation flag")
 	assert_null(s._killer_gen_thread,
 			"_exit_tree must join and clear the thread reference")
-	assert_true(s.generation_ran,
-			"thread must have run to completion (joined, not abandoned)")
+	assert_true(s.generation_exited_early,
+			"thread must have exited cooperatively on cancellation")
+	assert_lt(elapsed_ms, 200,
+			"teardown must not block for the full generation budget (cooperative cancellation)")
 	s.free()
 
 
 func test_exit_tree_sets_cancelled_flag_when_no_thread_running() -> void:
-	# _exit_tree() must set the cancellation flag even when no thread is active.
-	var s := TestSudokuFailScreen.new(
+	# Removing the node from the tree must set the cancellation flag even when
+	# no generation thread is active.
+	var s := ThreadLifecycleScreen.new(
 		MockRecorder.new(), MockStorage.new(), MockCrash.new(), MockAnalytics.new(),
 		MockAchievements.new(), MockSaves.new(), MockStats.new(), MockSound.new(), MockHaptic.new()
 	)
 	assert_false(s._generation_cancelled, "flag must start false")
 	assert_null(s._killer_gen_thread, "thread must start null")
+	add_child(s)
 
-	s._exit_tree()
+	remove_child(s)  # Triggers the real _exit_tree() notification path.
 
 	assert_true(s._generation_cancelled,
 			"_exit_tree must set the cancellation flag when there is no thread")
@@ -698,7 +713,7 @@ func test_exit_tree_sets_cancelled_flag_when_no_thread_running() -> void:
 func test_killer_generation_complete_is_noop_when_cancelled() -> void:
 	# Regression: _on_killer_generation_complete must not call begin_session()
 	# or _abort_generation_failure() when the cancellation flag is set, guarding
-	# against a deferred callback firing after scene teardown.
+	# against a deferred callback queued just before scene exit.
 	var s := TestSudokuFailScreen.new(
 		MockRecorder.new(), MockStorage.new(), MockCrash.new(), MockAnalytics.new(),
 		MockAchievements.new(), MockSaves.new(), MockStats.new(), MockSound.new(), MockHaptic.new()

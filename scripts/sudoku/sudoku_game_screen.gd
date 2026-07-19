@@ -227,7 +227,7 @@ func _run_killer_generation() -> void:
 	rng.randomize()
 	var gen_seed := int(Time.get_ticks_usec()) ^ rng.randi()
 	var gen := KillerSudokuGenerator.new()
-	var result: Dictionary = gen.generate(difficulty, gen_seed)
+	var result: Dictionary = gen.generate(difficulty, gen_seed, func() -> bool: return _generation_cancelled)
 	_pending_killer_data = {
 		"puzzle":      result.get("puzzle", []),
 		"solution":    result.get("solution", []),
