@@ -634,50 +634,35 @@ func test_lifecycle_transition_failed_generation_redirect() -> void:
 # Killer generation thread lifecycle
 # ---------------------------------------------------------------------------
 
-## SudokuGameScreen subclass that overrides @onready setup and the generation
-## loop so tree-attachment/removal lifecycle tests complete in milliseconds.
+## SudokuGameScreen subclass that overrides @onready setup only.
+## _run_killer_generation() is intentionally NOT overridden: these tests use the
+## production path (KillerSudokuGenerator + SudokuSolver) so that cooperative
+## cancellation inside the solver and removal loops is exercised.
 class ThreadLifecycleScreen extends "res://scripts/sudoku/sudoku_game_screen.gd":
-	## Set once the generation thread has actually started executing.
-	var generation_ran := false
-	## Set when the thread exits because it observed _generation_cancelled.
-	var generation_exited_early := false
-
 	func _ready() -> void:
 		pass  # Prevent @onready errors when attached without a full scene.
 
 	func _abort_generation_failure() -> void:
 		pass  # Suppress navigation side-effects in unit tests.
 
-	func _run_killer_generation() -> void:
-		generation_ran = true
-		# Poll the cancellation flag cooperatively (1 ms intervals) so that
-		# _exit_tree() can join the thread promptly without blocking for the
-		# full generation budget.
-		while not _generation_cancelled:
-			OS.delay_msec(1)
-		generation_exited_early = true
-		# Do not call_deferred — generation was cancelled.
-
 
 ## Seconds to wait after starting the thread before triggering teardown.
-## 50 ms is ample for any OS scheduler to switch to the new thread; the test
-## thread itself only sleeps in 1 ms increments so it will be running well
-## before this timer fires.
+## 50 ms is ample for any OS scheduler to switch to the new thread and for
+## it to reach the first cancel_check poll inside the solver loops.
 const THREAD_START_WAIT_SEC := 0.05
 
 ## Maximum ms _exit_tree() may block when joining a cooperatively-cancelled
-## thread.  Each poll interval in ThreadLifecycleScreen is 1 ms, so the join
-## should complete in a handful of ms; 200 ms provides a wide CI margin while
-## still detecting any accidental regression to full-budget blocking.
+## thread.  Cancellation is polled inside every backtracking recursion and
+## removal loop, so the join should complete in a handful of ms; 200 ms
+## provides a wide CI margin while still detecting any accidental regression
+## to full-budget blocking.
 const MAX_COOPERATIVE_TEARDOWN_MS := 200
 
 
 func test_exit_tree_joins_killer_generation_thread_and_sets_cancelled() -> void:
 	# Regression: removing the node from the tree (real tree teardown) must set
-	# the cancellation flag and join the thread so it cannot outlive its owner.
-	# Cooperative cancellation means the join returns well under
-	# MAX_COOPERATIVE_TEARDOWN_MS even though the test thread would otherwise
-	# loop indefinitely.
+	# the cancellation flag and join the production generation thread (including
+	# its solver loops) promptly via cooperative cancellation.
 	var s := ThreadLifecycleScreen.new(
 		MockRecorder.new(), MockStorage.new(), MockCrash.new(), MockAnalytics.new(),
 		MockAchievements.new(), MockSaves.new(), MockStats.new(), MockSound.new(), MockHaptic.new()
@@ -686,9 +671,9 @@ func test_exit_tree_joins_killer_generation_thread_and_sets_cancelled() -> void:
 	s._killer_gen_thread = Thread.new()
 	s._killer_gen_thread.start(s._run_killer_generation)
 
-	# Wait until the thread has actually started before triggering teardown.
+	# Wait for the thread to be scheduled and reach the solver loops before
+	# triggering teardown.
 	await get_tree().create_timer(THREAD_START_WAIT_SEC).timeout
-	assert_true(s.generation_ran, "thread must be running before teardown")
 
 	var start_ms := Time.get_ticks_msec()
 	remove_child(s)  # Triggers the real _exit_tree() notification path.
@@ -698,10 +683,8 @@ func test_exit_tree_joins_killer_generation_thread_and_sets_cancelled() -> void:
 			"_exit_tree must set the cancellation flag")
 	assert_null(s._killer_gen_thread,
 			"_exit_tree must join and clear the thread reference")
-	assert_true(s.generation_exited_early,
-			"thread must have exited cooperatively on cancellation")
 	assert_lt(elapsed_ms, MAX_COOPERATIVE_TEARDOWN_MS,
-			"teardown must not block for the full generation budget (cooperative cancellation)")
+			"teardown must not block for the full generation budget (cooperative cancellation in solver loops)")
 	s.free()
 
 

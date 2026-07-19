@@ -30,6 +30,8 @@ var is_killer: bool = false
 var _pending_killer_data: Dictionary = {}
 ## Background generation thread for Killer puzzles.
 var _killer_gen_thread: Thread = null
+## Mutex protecting _generation_cancelled from concurrent main-thread/worker-thread access.
+var _generation_mutex: Mutex = Mutex.new()
 ## Set to true before joining the thread during teardown so the deferred
 ## completion callback is a no-op if it fires after the screen exits the tree.
 var _generation_cancelled: bool = false
@@ -202,10 +204,9 @@ func resume_game(data: Dictionary) -> void:
 
 
 func _exit_tree() -> void:
-	# Signal any running generation thread to discard its result, then join it
-	# so the thread cannot outlive this node and its deferred callback cannot
-	# target a freed/exited node.
-	_generation_cancelled = true
+	# Set the cancellation flag under the mutex, then release the mutex before
+	# joining so the worker thread can still acquire it for its cancel_check polls.
+	_set_generation_cancelled()
 	if _killer_gen_thread != null:
 		_killer_gen_thread.wait_to_finish()
 		_killer_gen_thread = null
@@ -213,6 +214,23 @@ func _exit_tree() -> void:
 		_spinner_tween.kill()
 		_spinner_tween = null
 	super._exit_tree()
+
+
+## Mutex-protected write: sets _generation_cancelled to true.
+## Call this from the main thread before joining the worker thread.
+func _set_generation_cancelled() -> void:
+	_generation_mutex.lock()
+	_generation_cancelled = true
+	_generation_mutex.unlock()
+
+
+## Mutex-protected read: returns the current value of _generation_cancelled.
+## Safe to call from any thread.
+func _get_generation_cancelled() -> bool:
+	_generation_mutex.lock()
+	var val := _generation_cancelled
+	_generation_mutex.unlock()
+	return val
 
 
 # ---------------------------------------------------------------------------
@@ -227,7 +245,7 @@ func _run_killer_generation() -> void:
 	rng.randomize()
 	var gen_seed := int(Time.get_ticks_usec()) ^ rng.randi()
 	var gen := KillerSudokuGenerator.new()
-	var result: Dictionary = gen.generate(difficulty, gen_seed, func() -> bool: return _generation_cancelled)
+	var result: Dictionary = gen.generate(difficulty, gen_seed, func() -> bool: return _get_generation_cancelled())
 	_pending_killer_data = {
 		"puzzle":      result.get("puzzle", []),
 		"solution":    result.get("solution", []),
@@ -235,13 +253,13 @@ func _run_killer_generation() -> void:
 		"difficulty":  result.get("difficulty", difficulty),
 		"random_seed": gen_seed,
 	}
-	if not _generation_cancelled:
+	if not _get_generation_cancelled():
 		call_deferred("_on_killer_generation_complete")
 
 
 ## Called on the main thread after killer generation finishes.
 func _on_killer_generation_complete() -> void:
-	if _generation_cancelled:
+	if _get_generation_cancelled():
 		return
 	if _killer_gen_thread:
 		_killer_gen_thread.wait_to_finish()
