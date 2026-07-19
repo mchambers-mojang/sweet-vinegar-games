@@ -88,6 +88,8 @@ func _minimize_givens(puzzle: Array[int], constraint, rng: RandomNumberGenerator
 			return []
 		removed_any = false
 		for index in indices:
+			if cancel_check.is_valid() and cancel_check.call():
+				return []
 			if minimized[index] == 0:
 				continue
 			var backup := int(minimized[index])
