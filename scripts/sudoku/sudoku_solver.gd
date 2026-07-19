@@ -92,7 +92,9 @@ static func solve_brute_force(grid: Array[int], max_solutions: int = 2, constrai
 					return []
 	var solutions: Array[Array] = []
 	var work := grid.duplicate()
-	_backtrack_mrv(work, solutions, max_solutions, constraints, cancel_check)
+	# Validate the callable once here; pass the result as a plain bool to avoid
+	# repeated is_valid() calls inside the recursive backtracking hot path.
+	_backtrack_mrv(work, solutions, max_solutions, constraints, cancel_check, cancel_check.is_valid())
 	return solutions
 
 
@@ -136,10 +138,10 @@ static func is_complete_grid_valid(grid: Array[int], constraints: Array) -> bool
 	return true
 
 
-static func _backtrack_mrv(grid: Array[int], solutions: Array[Array], max_solutions: int, constraints: Array = [], cancel_check: Callable = Callable()) -> void:
+static func _backtrack_mrv(grid: Array[int], solutions: Array[Array], max_solutions: int, constraints: Array = [], cancel_check: Callable = Callable(), do_cancel: bool = false) -> void:
 	if solutions.size() >= max_solutions:
 		return
-	if cancel_check.is_valid() and cancel_check.call():
+	if do_cancel and cancel_check.call():
 		return  # Cooperative cancellation
 
 	var pos := _find_mrv_cell(grid, constraints)
@@ -156,9 +158,11 @@ static func _backtrack_mrv(grid: Array[int], solutions: Array[Array], max_soluti
 	var candidates := get_candidates(grid, pos, constraints)
 	for val in candidates:
 		grid[pos] = val
-		_backtrack_mrv(grid, solutions, max_solutions, constraints, cancel_check)
+		_backtrack_mrv(grid, solutions, max_solutions, constraints, cancel_check, do_cancel)
 		grid[pos] = 0
 		if solutions.size() >= max_solutions:
+			return
+		if do_cancel and cancel_check.call():
 			return
 
 
