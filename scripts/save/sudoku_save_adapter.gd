@@ -19,6 +19,11 @@ func get_rule_set() -> int:
 	return int(restore().get("rule_set", 0))
 
 
+## Return true when the saved game is a Killer Sudoku.
+func get_is_killer() -> bool:
+	return bool(restore().get("is_killer", false))
+
+
 ## Upgrade save data from an older schema version.
 func _migrate(data: Dictionary, _from_version: int) -> Dictionary:
 	# v0 → v1: no schema changes required; version stamp is added by
@@ -27,6 +32,7 @@ func _migrate(data: Dictionary, _from_version: int) -> Dictionary:
 
 
 ## A valid sudoku save must contain a 81-element puzzle array.
+## For Killer saves, the cages array must also be present and non-empty.
 ## Corrupted or structurally invalid data is treated as no-save.
 func _can_resume_from(data: Dictionary) -> bool:
 	if data.is_empty():
@@ -35,4 +41,10 @@ func _can_resume_from(data: Dictionary) -> bool:
 	if not (puzzle is Array) or (puzzle as Array).size() != 81:
 		push_warning("SudokuSaveAdapter: corrupted save — invalid puzzle array")
 		return false
+	# Validate cage data for killer saves
+	if data.get("is_killer", false):
+		var cages = data.get("killer_cages", null)
+		if not (cages is Array) or (cages as Array).is_empty():
+			push_warning("SudokuSaveAdapter: corrupted killer save — missing cage data")
+			return false
 	return true

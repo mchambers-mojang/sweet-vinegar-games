@@ -6,7 +6,7 @@ const KillerSudokuSolverScript := preload("res://scripts/sudoku/killer_sudoku_so
 
 
 class DuplicateDigitGenerator extends KillerSudokuGeneratorScript:
-	func _create_puzzle_with_minimal_givens(full_grid: Array[int], _constraint, _difficulty: int, _rng: RandomNumberGenerator) -> Array[int]:
+	func _create_puzzle_with_minimal_givens(full_grid: Array[int], _constraint, _difficulty: int, _rng: RandomNumberGenerator, _cancel_check: Callable = Callable()) -> Array[int]:
 		var invalid: Array[int] = []
 		invalid.assign(full_grid.duplicate())
 		invalid[0] = invalid[1]

@@ -222,7 +222,8 @@ func _reorder_stacks(grid: Array[int], order: Array) -> Array[int]:
 ## Pass constraints to verify uniqueness under variant rules.
 ## Constrained variants target 3 more clues so difficulty tiers remain
 ## comparable to standard Sudoku despite the additional constraint.
-func _remove_cells(full_grid: Array[int], target_difficulty: SudokuSolver.Difficulty, rng: RandomNumberGenerator, constraints: Array = []) -> Array[int]:
+## Pass [param cancel_check] to allow cooperative cancellation during the removal loop.
+func _remove_cells(full_grid: Array[int], target_difficulty: SudokuSolver.Difficulty, rng: RandomNumberGenerator, constraints: Array = [], cancel_check: Callable = Callable()) -> Array[int]:
 	var puzzle: Array[int] = []
 	puzzle.assign(full_grid.duplicate())
 	var target_clues: int = CLUE_TARGETS[target_difficulty]
@@ -235,6 +236,9 @@ func _remove_cells(full_grid: Array[int], target_difficulty: SudokuSolver.Diffic
 
 	var removed_count := 0
 	for idx in indices:
+		if cancel_check.is_valid() and cancel_check.call():
+			return []
+
 		if puzzle[idx] == 0:
 			continue
 
@@ -243,7 +247,9 @@ func _remove_cells(full_grid: Array[int], target_difficulty: SudokuSolver.Diffic
 		removed_count += 1
 
 		# Check unique solution
-		var solutions := SudokuSolver.solve_brute_force(puzzle, 2, constraints)
+		var solutions := SudokuSolver.solve_brute_force(puzzle, 2, constraints, cancel_check)
+		if cancel_check.is_valid() and cancel_check.call():
+			return []
 		if solutions.size() != 1:
 			puzzle[idx] = backup
 			removed_count -= 1

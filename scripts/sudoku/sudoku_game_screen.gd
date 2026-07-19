@@ -12,7 +12,7 @@ var constraints: Array[SudokuConstraint] = []
 
 # UI-only state
 var difficulty: int = 0
-var rule_set: int = 0   # 0 = Standard, 1 = Anti-Knight, 2 = Anti-King
+var rule_set: int = 0   # 0 = Standard, 1 = Anti-Knight, 2 = Anti-King, 3 = Killer
 var _can_continue_after_failure: bool = false
 var is_paused: bool = false
 var notes_mode: bool = false
@@ -21,6 +21,24 @@ var notes_mode: bool = false
 const RULE_SET_STANDARD := 0
 const RULE_SET_ANTI_KNIGHT := 1
 const RULE_SET_ANTI_KING := 2
+const RULE_SET_KILLER := 3
+
+# Killer Sudoku state
+## True when the current game is a Killer Sudoku.
+var is_killer: bool = false
+## Pre-generated killer data, set by the generation thread, consumed by _setup_game().
+var _pending_killer_data: Dictionary = {}
+## Background generation thread for Killer puzzles.
+var _killer_gen_thread: Thread = null
+## Mutex protecting _generation_cancelled from concurrent main-thread/worker-thread access.
+var _generation_mutex: Mutex = Mutex.new()
+## Set to true before joining the thread during teardown so the deferred
+## completion callback is a no-op if it fires after the screen exits the tree.
+var _generation_cancelled: bool = false
+## Cage constraint checker (nil for standard/AK/AKing Sudoku).
+var _killer_constraint: KillerConstraint = null
+## Tween that drives the generating spinner animation.
+var _spinner_tween: Tween = null
 
 # Cheat auto-solve
 var _cheat_active: bool = false
@@ -161,16 +179,141 @@ func start_new_game(diff: int) -> void:
 
 func launch(params: LaunchParams) -> void:
 	rule_set = params.rule_set
-	start_new_game(params.option_value)
+	if rule_set == RULE_SET_KILLER:
+		# Killer Sudoku — generate in background thread then begin session
+		is_killer = true
+		difficulty = params.option_value
+		_can_continue_after_failure = false
+		is_paused = false
+		notes_mode = false
+		_show_generating_spinner(true)
+		_killer_gen_thread = Thread.new()
+		_killer_gen_thread.start(_run_killer_generation)
+	else:
+		start_new_game(params.option_value)
 
 
 func resume_game(data: Dictionary) -> void:
 	difficulty = data.get("difficulty", 0)
 	rule_set = data.get("rule_set", 0)
+	is_killer = data.get("is_killer", false)
 	_can_continue_after_failure = data.get("can_continue_after_failure", false)
 	is_paused = false
 	notes_mode = false
 	begin_session(data)
+
+
+func _exit_tree() -> void:
+	# Set the cancellation flag under the mutex, then release the mutex before
+	# joining so the worker thread can still acquire it for its cancel_check polls.
+	_set_generation_cancelled()
+	if _killer_gen_thread != null:
+		_killer_gen_thread.wait_to_finish()
+		_killer_gen_thread = null
+	if _spinner_tween != null:
+		_spinner_tween.kill()
+		_spinner_tween = null
+	super._exit_tree()
+
+
+## Mutex-protected write: sets _generation_cancelled to true.
+## Call this from the main thread before joining the worker thread.
+func _set_generation_cancelled() -> void:
+	_generation_mutex.lock()
+	_generation_cancelled = true
+	_generation_mutex.unlock()
+
+
+## Mutex-protected read: returns the current value of _generation_cancelled.
+## Safe to call from any thread.
+func _get_generation_cancelled() -> bool:
+	_generation_mutex.lock()
+	var val := _generation_cancelled
+	_generation_mutex.unlock()
+	return val
+
+
+# ---------------------------------------------------------------------------
+# Killer generation (background thread)
+# ---------------------------------------------------------------------------
+
+## Runs in a background thread: generate a complete Killer Sudoku puzzle with cages.
+## Uses KillerSudokuGenerator which prefers zero-given puzzles and falls back to
+## minimal givens when cage constraints alone cannot ensure uniqueness.
+func _run_killer_generation() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var gen_seed := int(Time.get_ticks_usec()) ^ rng.randi()
+	var gen := KillerSudokuGenerator.new()
+	var result: Dictionary = gen.generate(difficulty, gen_seed, func() -> bool: return _get_generation_cancelled())
+	_pending_killer_data = {
+		"puzzle":      result.get("puzzle", []),
+		"solution":    result.get("solution", []),
+		"cages":       result.get("cages", []),
+		"difficulty":  result.get("difficulty", difficulty),
+		"random_seed": gen_seed,
+	}
+	if not _get_generation_cancelled():
+		call_deferred("_on_killer_generation_complete")
+
+
+## Called on the main thread after killer generation finishes.
+func _on_killer_generation_complete() -> void:
+	if _get_generation_cancelled():
+		return
+	if _killer_gen_thread:
+		_killer_gen_thread.wait_to_finish()
+		_killer_gen_thread = null
+	_show_generating_spinner(false)
+	var puzzle = _pending_killer_data.get("puzzle", [])
+	if (puzzle as Array).size() != 81:
+		# Generator exhausted all attempts and returned {} — .get() above yields an
+		# empty array, so the size check catches any invalid or missing puzzle.
+		# Treat as a standard generation failure: discard state and navigate back to menu.
+		_pending_killer_data = {}
+		_suppress_auto_resume = true
+		if SceneTransition.is_transitioning:
+			SceneTransition.transition_completed.connect(
+					_abort_generation_failure, CONNECT_ONE_SHOT | CONNECT_DEFERRED)
+		else:
+			_abort_generation_failure()
+		return
+	begin_session()
+
+
+## Show or hide the "Generating…" overlay label with animated cycling dots.
+## Creates the label on first use so the game scene needs no extra node.
+func _show_generating_spinner(visible: bool) -> void:
+	var overlay := get_node_or_null("_GeneratingOverlay")
+	if overlay == null:
+		if not visible:
+			return
+		var lbl := Label.new()
+		lbl.name = "_GeneratingOverlay"
+		lbl.text = "Generating Killer puzzle"
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		lbl.z_index = 10
+		var style := StyleBoxFlat.new()
+		style.bg_color = AppTheme.get_color("background")
+		style.bg_color.a = 0.85
+		lbl.add_theme_stylebox_override("panel", style)
+		add_child(lbl)
+		overlay = lbl
+		lbl.set_meta("dot_frame", 0)
+		_spinner_tween = create_tween().set_loops()
+		_spinner_tween.tween_callback(func() -> void:
+			if is_instance_valid(lbl) and lbl.visible:
+				var frame: int = lbl.get_meta("dot_frame", 0)
+				frame = (frame + 1) % 4
+				lbl.set_meta("dot_frame", frame)
+				lbl.text = "Generating Killer puzzle" + ".".repeat(frame)
+		).set_delay(0.4)
+	overlay.visible = visible
+	if not visible and _spinner_tween != null:
+		_spinner_tween.kill()
+		_spinner_tween = null
 
 
 # --- Session ceremony hooks ---
@@ -211,42 +354,68 @@ func _setup_game(saved_data: Dictionary) -> void:
 	var strict_mode: bool = GameRulesRegistry.get_rule("sudoku", "error_mode") == "strict"
 	var auto_remove: bool = GameRulesRegistry.get_rule("sudoku", "auto_remove_pencil_marks")
 	logic = SudokuLogic.new(strict_mode, auto_remove)
-	var c := _make_constraint()
-	logic.constraints = [c] if c != null else constraints
-	if saved_data.is_empty():
-		if not logic.init_new_game(difficulty, random_seed):
-			# Generation failed (e.g. unsatisfiable constraints).
-			# Suppress deferred auto-resume so saved data isn't loaded over the
-			# failed state, then queue a navigate-back once the active fade
-			# transition completes (or immediately when no transition is running).
-			_suppress_auto_resume = true
-			if SceneTransition.is_transitioning:
-				# CONNECT_DEFERRED is required here: transition_completed fires
-				# from inside the _fade_in() tween callback, and calling
-				# navigate() synchronously from within that callback prevents
-				# the new redirect tween from being processed by Godot.
-				# Deferring ensures _abort_generation_failure runs in the next
-				# idle step — after the tween callback returns — so navigate()
-				# creates the redirect tween in a normal game-loop context.
-				SceneTransition.transition_completed.connect(
-						_abort_generation_failure, CONNECT_ONE_SHOT | CONNECT_DEFERRED)
-			else:
-				_abort_generation_failure()
-			return
+	_killer_constraint = null
+
+	if is_killer and saved_data.is_empty():
+		# New Killer game — initialise from pre-generated thread data
+		logic.init_from_killer_data(_pending_killer_data)
+		_pending_killer_data = {}
+		_killer_constraint = KillerConstraint.new(logic.killer_cages)
+		logic.constraints = [_killer_constraint]
 		difficulty = logic.difficulty
 		difficulty_label.text = _difficulty_label_text(logic.difficulty)
 		board.load_puzzle(logic.puzzle)
-	else:
+		board.set_cages(logic.killer_cages)
+	elif is_killer and not saved_data.is_empty():
+		# Resumed Killer game — restore from save
 		logic.init_from_save(saved_data)
+		_killer_constraint = KillerConstraint.new(logic.killer_cages)
+		logic.constraints = [_killer_constraint]
 		difficulty = logic.difficulty
-		# Legacy fallback: old saves had no random_seed field.
 		if random_seed == 0:
 			random_seed = _derive_seed_from_puzzle(logic.puzzle)
 		difficulty_label.text = _difficulty_label_text(logic.difficulty)
 		_load_board_from_logic()
+		board.set_cages(logic.killer_cages)
 		if logic.is_failed and _is_board_locked():
-			# Re-show the fail dialog for failed saves so players can choose Continue/Menu.
 			call_deferred("_show_fail_dialog")
+	else:
+		var c := _make_constraint()
+		logic.constraints = [c] if c != null else constraints
+		if saved_data.is_empty():
+			if not logic.init_new_game(difficulty, random_seed):
+				# Generation failed (e.g. unsatisfiable constraints).
+				# Suppress deferred auto-resume so saved data isn't loaded over the
+				# failed state, then queue a navigate-back once the active fade
+				# transition completes (or immediately when no transition is running).
+				_suppress_auto_resume = true
+				if SceneTransition.is_transitioning:
+					# CONNECT_DEFERRED is required here: transition_completed fires
+					# from inside the _fade_in() tween callback, and calling
+					# navigate() synchronously from within that callback prevents
+					# the new redirect tween from being processed by Godot.
+					# Deferring ensures _abort_generation_failure runs in the next
+					# idle step — after the tween callback returns — so navigate()
+					# creates the redirect tween in a normal game-loop context.
+					SceneTransition.transition_completed.connect(
+							_abort_generation_failure, CONNECT_ONE_SHOT | CONNECT_DEFERRED)
+				else:
+					_abort_generation_failure()
+				return
+			difficulty = logic.difficulty
+			difficulty_label.text = _difficulty_label_text(logic.difficulty)
+			board.load_puzzle(logic.puzzle)
+		else:
+			logic.init_from_save(saved_data)
+			difficulty = logic.difficulty
+			# Legacy fallback: old saves had no random_seed field.
+			if random_seed == 0:
+				random_seed = _derive_seed_from_puzzle(logic.puzzle)
+			difficulty_label.text = _difficulty_label_text(logic.difficulty)
+			_load_board_from_logic()
+			if logic.is_failed and _is_board_locked():
+				# Re-show the fail dialog for failed saves so players can choose Continue/Menu.
+				call_deferred("_show_fail_dialog")
 	_update_strikes_display()
 	_update_button_states()
 	_update_number_completion()
@@ -906,10 +1075,18 @@ func _show_win_dialog() -> void:
 func _restart_same_game() -> void:
 	var diff := difficulty
 	var rs := rule_set
-	SceneTransition.navigate(Scenes.SUDOKU_GAME, func(game_scene: Node) -> void:
-		game_scene.rule_set = rs
-		game_scene.start_new_game(diff)
-	)
+	if rs == RULE_SET_KILLER:
+		SceneTransition.navigate(Scenes.SUDOKU_GAME, func(game_scene: Node) -> void:
+			var mock_params := LaunchParams.new()
+			mock_params.rule_set = rs
+			mock_params.option_value = diff
+			game_scene.launch(mock_params)
+		)
+	else:
+		SceneTransition.navigate(Scenes.SUDOKU_GAME, func(game_scene: Node) -> void:
+			game_scene.rule_set = rs
+			game_scene.start_new_game(diff)
+		)
 
 
 func _setup_number_buttons() -> void:
@@ -1106,6 +1283,8 @@ func _log_game_over_analytics(won: bool) -> void:
 			mode = "antiknight_" + diff_mode
 		elif rule_set == RULE_SET_ANTI_KING:
 			mode = "antiking_" + diff_mode
+		elif rule_set == RULE_SET_KILLER:
+			mode = "killer_" + diff_mode
 		else:
 			mode = diff_mode
 		GameEvents.leaderboard_score_ready.emit("sudoku", mode, elapsed_time)
@@ -1127,6 +1306,8 @@ func _difficulty_label_text(diff: int) -> String:
 		return "Anti-Knight – " + base
 	elif rule_set == RULE_SET_ANTI_KING:
 		return "Anti-King – " + base
+	elif rule_set == RULE_SET_KILLER:
+		return "Killer – " + base
 	return base
 
 
@@ -1143,9 +1324,14 @@ func _make_constraint() -> SudokuConstraint:
 ## Refreshes the is_error state of all non-given cells based on active constraints.
 ## Called in free mode after any board change when constraints are active.
 func _refresh_constraint_errors() -> void:
-	if logic == null or logic.constraints.is_empty():
+	if logic == null:
 		return
 	if GameRulesRegistry.get_rule("sudoku", "error_mode") == "strict":
+		return
+	if is_killer:
+		_refresh_killer_errors()
+		return
+	if logic.constraints.is_empty():
 		return
 	var error_set: Dictionary = {}
 	for idx in logic.get_constraint_errors():
@@ -1155,6 +1341,39 @@ func _refresh_constraint_errors() -> void:
 		if cell.is_given:
 			continue
 		cell.set_error(error_set.has(i))
+
+
+## Refreshes cage error highlighting for Killer Sudoku.
+## A cage is highlighted in full when it contains duplicate digits OR when all
+## cells are filled but the total does not match the cage sum.  Both conditions
+## flag the entire cage so wrong-sum cages are not silently missed.
+func _refresh_killer_errors() -> void:
+	if _killer_constraint == null or logic == null:
+		return
+	# Build per-cell error set from cage validation
+	var error_cells: Dictionary = {}
+	for cage in _killer_constraint.get_cages():
+		var cells: Array = cage["cells"]
+		var target_sum: int = cage["sum"]
+		var seen_digits: Dictionary = {}
+		var cage_sum := 0
+		var empty_count := 0
+		var has_duplicate := false
+		for idx in cells:
+			var digit := int(logic.current_grid[idx])
+			if digit == 0:
+				empty_count += 1
+				continue
+			cage_sum += digit
+			if seen_digits.has(digit):
+				has_duplicate = true
+			seen_digits[digit] = true
+		var wrong_sum := empty_count == 0 and cage_sum != target_sum
+		if has_duplicate or wrong_sum:
+			for idx in cells:
+				error_cells[idx] = true
+	for i in 81:
+		board.cells[i].set_error(error_cells.has(i))
 
 
 func _apply_theme() -> void:
@@ -1196,6 +1415,8 @@ func _record_sudoku_completion(diff: int, time: float, was_strict: bool, won: bo
 		best_key = "best_ak_d%d" % diff
 	elif rule_set == RULE_SET_ANTI_KING:
 		best_key = "best_aking_d%d" % diff
+	elif rule_set == RULE_SET_KILLER:
+		best_key = "best_killer_d%d" % diff
 	else:
 		best_key = "best_d%d" % diff
 	var best: float = float(_stats.get_counter("sudoku", best_key))
@@ -1221,6 +1442,8 @@ func _get_best_time(diff: int) -> float:
 		key = "best_ak_d%d" % diff
 	elif rule_set == RULE_SET_ANTI_KING:
 		key = "best_aking_d%d" % diff
+	elif rule_set == RULE_SET_KILLER:
+		key = "best_killer_d%d" % diff
 	else:
 		key = "best_d%d" % diff
 	var best_ms: int = _stats.get_counter("sudoku", key)
