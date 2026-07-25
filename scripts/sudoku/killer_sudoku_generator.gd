@@ -42,8 +42,10 @@ func generate(difficulty: int, seed: int = -1, cancel_check: Callable = Callable
 			continue
 
 		var solver = KillerSudokuSolverScript.new(constraint)
-		solver.analyze(puzzle)
-		if solver.is_unique and solver.solve_logic(puzzle.duplicate()):
+		solver.analyze(puzzle, cancel_check)
+		if cancel_check.is_valid() and cancel_check.call():
+			return {}
+		if solver.is_unique and solver.solve_logic(puzzle.duplicate(), null, cancel_check):
 			return {
 				"puzzle": puzzle,
 				"solution": full_grid,

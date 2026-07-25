@@ -13,6 +13,14 @@ class DuplicateDigitGenerator extends KillerSudokuGeneratorScript:
 		return invalid
 
 
+## Generator subclass that bypasses the expensive give-minimization phase by
+## returning the full grid directly.  This lets the loop reach solver.analyze()
+## within the very first attempt so cancellation during analysis is exercised.
+class AnalysisCancelGenerator extends KillerSudokuGeneratorScript:
+	func _create_puzzle_with_minimal_givens(full_grid: Array[int], _constraint, _difficulty: int, _rng: RandomNumberGenerator, _cancel_check: Callable = Callable()) -> Array[int]:
+		return full_grid.duplicate()
+
+
 func test_generation_pipeline_returns_unique_logic_solvable_puzzle() -> void:
 	var generator := KillerSudokuGeneratorScript.new()
 	var result: Dictionary = generator.generate(SudokuSolver.Difficulty.EASY, 9)
@@ -70,6 +78,26 @@ func test_fallback_adds_only_needed_givens_for_uniqueness() -> void:
 func test_generate_returns_empty_result_when_attempts_are_rejected() -> void:
 	var result: Dictionary = DuplicateDigitGenerator.new().generate(SudokuSolver.Difficulty.EASY, 9)
 	assert_false(result.has("puzzle"))
+
+
+func test_generate_returns_empty_when_cancelled_during_analysis() -> void:
+	# Regression: cancel_check must be propagated through solver.analyze() so
+	# that cancellation fired during the final brute-force uniqueness check (or
+	# logic solve) causes generate() to return {} rather than blocking until
+	# analysis completes.
+	#
+	# AnalysisCancelGenerator skips give-minimization, so the loop reaches
+	# solver.analyze() on the very first attempt.  The cancel_check returns false
+	# on the first poll (the loop-start guard) and true on all subsequent polls,
+	# which fires inside solve_brute_force() called from analyze().
+	var call_count := 0
+	var cancel := func() -> bool:
+		call_count += 1
+		return call_count > 1  # Let the first (loop-guard) poll pass; cancel inside analyze().
+
+	var result := AnalysisCancelGenerator.new().generate(SudokuSolver.Difficulty.EASY, 9, cancel)
+	assert_false(result.has("puzzle"),
+			"generate() must return {} when cancelled during solver analysis")
 
 
 func _count_givens(puzzle: Array) -> int:

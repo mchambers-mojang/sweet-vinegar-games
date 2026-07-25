@@ -43,8 +43,8 @@ func solve_logic(grid: Array[int], p_constraint = null, cancel_check: Callable =
 	return _is_complete(grid)
 
 
-func analyze(puzzle: Array[int]) -> void:
-	var solutions := SudokuSolver.solve_brute_force(puzzle, 2, [constraint])
+func analyze(puzzle: Array[int], cancel_check: Callable = Callable()) -> void:
+	var solutions := SudokuSolver.solve_brute_force(puzzle, 2, [constraint], cancel_check)
 	is_unique = solutions.size() == 1
 	if is_unique:
 		solution = []
@@ -52,9 +52,12 @@ func analyze(puzzle: Array[int]) -> void:
 	else:
 		solution.clear()
 
+	if cancel_check.is_valid() and cancel_check.call():
+		return
+
 	var work: Array[int] = []
 	work.assign(puzzle.duplicate())
-	var logic_solved := solve_logic(work)
+	var logic_solved := solve_logic(work, null, cancel_check)
 	difficulty = rate_difficulty(puzzle, logic_solved)
 
 
