@@ -90,10 +90,15 @@ func test_generate_returns_empty_when_cancelled_during_analysis() -> void:
 	# solver.analyze() on the very first attempt.  The cancel_check returns false
 	# on the first poll (the loop-start guard) and true on all subsequent polls,
 	# which fires inside solve_brute_force() called from analyze().
-	var call_count := 0
+	#
+	# NOTE: Use an Array as a reference-type counter.  GDScript lambdas do not
+	# reliably mutate captured primitive locals across calls (Godot 4.6.3), so
+	# an int counter would stay at 0 inside the lambda and cancellation would
+	# never fire.
+	var state := [0]  # state[0] = call count; Array is a reference type.
 	var cancel := func() -> bool:
-		call_count += 1
-		return call_count > 1  # Let the first (loop-guard) poll pass; cancel inside analyze().
+		state[0] += 1
+		return state[0] > 1  # Let the first (loop-guard) poll pass; cancel inside analyze().
 
 	var result := AnalysisCancelGenerator.new().generate(SudokuSolver.Difficulty.EASY, 9, cancel)
 	assert_false(result.has("puzzle"),
