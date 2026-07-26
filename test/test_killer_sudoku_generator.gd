@@ -103,6 +103,13 @@ func test_generate_returns_empty_when_cancelled_during_analysis() -> void:
 	var result := AnalysisCancelGenerator.new().generate(SudokuSolver.Difficulty.EASY, 9, cancel)
 	assert_false(result.has("puzzle"),
 			"generate() must return {} when cancelled during solver analysis")
+	# state[0] starts at 0; the loop-start guard increments it to 1 (returns false,
+	# letting the attempt continue).  If cancellation fired inside analyze() as
+	# intended, the callable will have been invoked at least once more (state[0] >= 2).
+	# A value of exactly 1 would mean cancellation only ever reached the loop-start
+	# guard, which would indicate the code path being tested was not exercised.
+	assert_gt(state[0], 1,
+			"cancel_check must fire more than once, confirming it was invoked inside analyze() not only at the loop-start guard")
 
 
 func _count_givens(puzzle: Array) -> int:
