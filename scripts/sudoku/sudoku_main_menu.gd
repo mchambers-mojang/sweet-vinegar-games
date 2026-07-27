@@ -2,18 +2,21 @@ extends GameMenu
 
 ## Sudoku main menu — config-driven via assets/menu/sudoku_menu.tres
 ##
-## Extends GameMenu with a "Rule Set" dropdown (Standard / Anti-Knight / Anti-King)
+## Extends GameMenu with a "Rule Set" dropdown (Standard / Anti-Knight / Anti-King / Killer)
 ## injected dynamically below the existing DifficultyButton row.
 ## The selected rule set is forwarded to the game screen via LaunchParams.rule_set.
 
 const RULE_SET_STANDARD := 0
 const RULE_SET_ANTI_KNIGHT := 1
 const RULE_SET_ANTI_KING := 2
+const RULE_SET_KILLER := 3
 
 const ANTI_KNIGHT_MODES := PackedStringArray(["antiknight_easy", "antiknight_medium", "antiknight_hard", "antiknight_expert"])
 const ANTI_KNIGHT_LABELS := PackedStringArray(["Anti-Knight Easy", "Anti-Knight Medium", "Anti-Knight Hard", "Anti-Knight Expert"])
 const ANTI_KING_MODES := PackedStringArray(["antiking_easy", "antiking_medium", "antiking_hard", "antiking_expert"])
 const ANTI_KING_LABELS := PackedStringArray(["Anti-King Easy", "Anti-King Medium", "Anti-King Hard", "Anti-King Expert"])
+const KILLER_MODES := PackedStringArray(["killer_easy", "killer_medium", "killer_hard", "killer_expert"])
+const KILLER_LABELS := PackedStringArray(["Killer Easy", "Killer Medium", "Killer Hard", "Killer Expert"])
 
 var _rule_set_index: int = RULE_SET_STANDARD
 var _rule_set_button: OptionButton = null
@@ -33,7 +36,7 @@ func _on_menu_ready() -> void:
 
 
 ## Injects an HBoxContainer with "Rule Set:" label and OptionButton
-## (Standard / Anti-Knight / Anti-King) directly below the DifficultyRow.
+## (Standard / Anti-Knight / Anti-King / Killer) directly below the DifficultyRow.
 func _inject_rule_set_row() -> void:
 	var diff_btn := get_node_or_null("%DifficultyButton") as OptionButton
 	if diff_btn == null:
@@ -54,8 +57,9 @@ func _inject_rule_set_row() -> void:
 	_rule_set_button.add_item("Standard")
 	_rule_set_button.add_item("Anti-Knight")
 	_rule_set_button.add_item("Anti-King")
+	_rule_set_button.add_item("Killer")
 	_rule_set_button.selected = _rule_set_index
-	_rule_set_button.item_selected.connect(func(idx: int) -> void: _rule_set_index = idx)
+	_rule_set_button.item_selected.connect(_on_rule_set_changed)
 	row.add_child(_rule_set_button)
 
 	vbox.add_child(row)
@@ -73,7 +77,7 @@ func _start_game() -> void:
 	)
 
 
-## Override _setup_leaderboard_button to add Anti-Knight and Anti-King modes.
+## Override _setup_leaderboard_button to add Anti-Knight, Anti-King and Killer modes.
 func _setup_leaderboard_button(stats_btn: Button) -> void:
 	if not config or config.leaderboard_modes.is_empty():
 		return
@@ -104,6 +108,11 @@ func _setup_leaderboard_button(stats_btn: Button) -> void:
 		modes.append(ANTI_KING_MODES[i])
 		labels.append(ANTI_KING_LABELS[i])
 
+	# Killer modes
+	for i in range(KILLER_MODES.size()):
+		modes.append(KILLER_MODES[i])
+		labels.append(KILLER_LABELS[i])
+
 	if modes.is_empty():
 		return
 
@@ -122,6 +131,8 @@ func _setup_leaderboard_button(stats_btn: Button) -> void:
 			selected_lb_idx = standard_modes_count + mini(diff_idx, ANTI_KNIGHT_MODES.size() - 1)
 		elif _rule_set_index == RULE_SET_ANTI_KING:
 			selected_lb_idx = standard_modes_count + ANTI_KNIGHT_MODES.size() + mini(diff_idx, ANTI_KING_MODES.size() - 1)
+		elif _rule_set_index == RULE_SET_KILLER:
+			selected_lb_idx = standard_modes_count + ANTI_KNIGHT_MODES.size() + ANTI_KING_MODES.size() + mini(diff_idx, KILLER_MODES.size() - 1)
 		else:
 			# Map diff_idx to the non-empty standard modes index
 			var count := 0
@@ -145,3 +156,24 @@ func _setup_leaderboard_button(stats_btn: Button) -> void:
 		var vbox := find_child("VBoxContainer", true, false)
 		if vbox:
 			vbox.add_child(btn)
+
+
+# ---------------------------------------------------------------------------
+# Private helpers
+# ---------------------------------------------------------------------------
+
+func _on_rule_set_changed(index: int) -> void:
+	_rule_set_index = index
+	_update_difficulty_options(index)
+
+
+## Hide the "Evil" difficulty when Killer is selected (no Killer–Evil mode).
+func _update_difficulty_options(rule_idx: int) -> void:
+	var diff_btn := get_node_or_null("%DifficultyButton") as OptionButton
+	if not diff_btn:
+		return
+	var is_killer := rule_idx == RULE_SET_KILLER
+	# Item 4 is "Evil" — disable/enable based on rule set
+	diff_btn.set_item_disabled(4, is_killer)
+	if is_killer and diff_btn.selected == 4:
+		diff_btn.selected = 3  # Clamp to Expert

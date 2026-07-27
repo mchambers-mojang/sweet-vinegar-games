@@ -628,3 +628,101 @@ func test_lifecycle_transition_failed_generation_redirect() -> void:
 	if loaded_menu:
 		loaded_menu.queue_free()
 	SceneTransition._nav_stack = original_nav_stack
+
+
+# ---------------------------------------------------------------------------
+# Killer generation thread lifecycle
+# ---------------------------------------------------------------------------
+
+## SudokuGameScreen subclass that overrides @onready setup only.
+## _run_killer_generation() is intentionally NOT overridden: these tests use the
+## production path (KillerSudokuGenerator + SudokuSolver) so that cooperative
+## cancellation inside the solver and removal loops is exercised.
+class ThreadLifecycleScreen extends "res://scripts/sudoku/sudoku_game_screen.gd":
+	func _ready() -> void:
+		pass  # Prevent @onready errors when attached without a full scene.
+
+	func _abort_generation_failure() -> void:
+		pass  # Suppress navigation side-effects in unit tests.
+
+
+## Seconds to wait after starting the thread before triggering teardown.
+## 50 ms is ample for any OS scheduler to switch to the new thread and for
+## it to reach the first cancel_check poll inside the solver loops.
+const THREAD_START_WAIT_SEC := 0.05
+
+## Maximum ms _exit_tree() may block when joining a cooperatively-cancelled
+## thread.  Cancellation is polled inside every backtracking recursion and
+## removal loop, so the join should complete in a handful of ms; 200 ms
+## provides a wide CI margin while still detecting any accidental regression
+## to full-budget blocking.
+const MAX_COOPERATIVE_TEARDOWN_MS := 200
+
+
+func test_exit_tree_joins_killer_generation_thread_and_sets_cancelled() -> void:
+	# Regression: removing the node from the tree (real tree teardown) must set
+	# the cancellation flag and join the production generation thread (including
+	# its solver loops) promptly via cooperative cancellation.
+	var s := ThreadLifecycleScreen.new(
+		MockRecorder.new(), MockStorage.new(), MockCrash.new(), MockAnalytics.new(),
+		MockAchievements.new(), MockSaves.new(), MockStats.new(), MockSound.new(), MockHaptic.new()
+	)
+	add_child(s)
+	s._killer_gen_thread = Thread.new()
+	s._killer_gen_thread.start(s._run_killer_generation)
+
+	# Wait for the thread to be scheduled and reach the solver loops before
+	# triggering teardown.
+	await get_tree().create_timer(THREAD_START_WAIT_SEC).timeout
+
+	var start_ms := Time.get_ticks_msec()
+	remove_child(s)  # Triggers the real _exit_tree() notification path.
+	var elapsed_ms := Time.get_ticks_msec() - start_ms
+
+	assert_true(s._generation_cancelled,
+			"_exit_tree must set the cancellation flag")
+	assert_null(s._killer_gen_thread,
+			"_exit_tree must join and clear the thread reference")
+	assert_lt(elapsed_ms, MAX_COOPERATIVE_TEARDOWN_MS,
+			"teardown must not block for the full generation budget (cooperative cancellation in solver loops)")
+	s.free()
+
+
+func test_exit_tree_sets_cancelled_flag_when_no_thread_running() -> void:
+	# Removing the node from the tree must set the cancellation flag even when
+	# no generation thread is active.
+	var s := ThreadLifecycleScreen.new(
+		MockRecorder.new(), MockStorage.new(), MockCrash.new(), MockAnalytics.new(),
+		MockAchievements.new(), MockSaves.new(), MockStats.new(), MockSound.new(), MockHaptic.new()
+	)
+	assert_false(s._generation_cancelled, "flag must start false")
+	assert_null(s._killer_gen_thread, "thread must start null")
+	add_child(s)
+
+	remove_child(s)  # Triggers the real _exit_tree() notification path.
+
+	assert_true(s._generation_cancelled,
+			"_exit_tree must set the cancellation flag when there is no thread")
+	assert_null(s._killer_gen_thread, "thread reference must remain null")
+	s.free()
+
+
+func test_killer_generation_complete_is_noop_when_cancelled() -> void:
+	# Regression: _on_killer_generation_complete must not call begin_session()
+	# or _abort_generation_failure() when the cancellation flag is set, guarding
+	# against a deferred callback queued just before scene exit.
+	var s := TestSudokuFailScreen.new(
+		MockRecorder.new(), MockStorage.new(), MockCrash.new(), MockAnalytics.new(),
+		MockAchievements.new(), MockSaves.new(), MockStats.new(), MockSound.new(), MockHaptic.new()
+	)
+	s._generation_cancelled = true
+	# An empty pending_killer_data dict means no 81-cell puzzle array is present.
+	# The normal (non-cancelled) path checks puzzle size and calls _abort_generation_failure.
+	s._pending_killer_data = {}
+
+	s._on_killer_generation_complete()
+
+	assert_false(s.abort_called,
+			"_abort_generation_failure must not run when generation is cancelled")
+	s.free()
+

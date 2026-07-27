@@ -18,7 +18,7 @@ func _init(p_constraint = null) -> void:
 	constraint = p_constraint
 
 
-func solve_logic(grid: Array[int], p_constraint = null) -> bool:
+func solve_logic(grid: Array[int], p_constraint = null, cancel_check: Callable = Callable()) -> bool:
 	if p_constraint != null:
 		constraint = p_constraint
 	techniques_used.clear()
@@ -26,6 +26,8 @@ func solve_logic(grid: Array[int], p_constraint = null) -> bool:
 		return false
 
 	while true:
+		if cancel_check.is_valid() and cancel_check.call():
+			return false  # Cooperative cancellation
 		var candidates := _build_candidates(grid)
 		if _has_dead_cell(grid, candidates):
 			return false
@@ -41,8 +43,8 @@ func solve_logic(grid: Array[int], p_constraint = null) -> bool:
 	return _is_complete(grid)
 
 
-func analyze(puzzle: Array[int]) -> void:
-	var solutions := SudokuSolver.solve_brute_force(puzzle, 2, [constraint])
+func analyze(puzzle: Array[int], cancel_check: Callable = Callable()) -> void:
+	var solutions := SudokuSolver.solve_brute_force(puzzle, 2, [constraint], cancel_check)
 	is_unique = solutions.size() == 1
 	if is_unique:
 		solution = []
@@ -50,9 +52,12 @@ func analyze(puzzle: Array[int]) -> void:
 	else:
 		solution.clear()
 
+	if cancel_check.is_valid() and cancel_check.call():
+		return
+
 	var work: Array[int] = []
 	work.assign(puzzle.duplicate())
-	var logic_solved := solve_logic(work)
+	var logic_solved := solve_logic(work, null, cancel_check)
 	difficulty = rate_difficulty(puzzle, logic_solved)
 
 

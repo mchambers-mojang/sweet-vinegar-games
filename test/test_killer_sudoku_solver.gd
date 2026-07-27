@@ -21,3 +21,22 @@ func test_hidden_singles_do_not_treat_cages_as_units() -> void:
 	assert_false(solver._apply_hidden_singles(grid, candidates))
 	assert_eq(grid[0], 0)
 	assert_eq(grid[1], 0)
+
+
+func test_analyze_respects_cancel_check() -> void:
+	# Regression: analyze() must propagate cancel_check so that brute-force and
+	# logic-solving inside it can be interrupted before the full solve completes.
+	var solver := KillerSudokuSolverScript.new(KillerConstraintScript.new([]))
+	var puzzle: Array[int] = []
+	puzzle.resize(81)
+	puzzle.fill(0)
+
+	# A cancel_check that fires immediately on the first poll.
+	var cancel := func() -> bool: return true
+
+	solver.analyze(puzzle, cancel)
+
+	# Brute-force was cancelled before it could confirm uniqueness, so is_unique
+	# must remain false (its default) rather than flipping to true.
+	assert_false(solver.is_unique,
+			"analyze() cancelled before brute-force completes must leave is_unique false")
