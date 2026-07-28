@@ -503,6 +503,34 @@ func test_evil_sudoku_win_submits_leaderboard_score() -> void:
 	sudoku.free()
 
 
+func test_anti_king_launch_generates_and_renders_puzzle() -> void:
+	var sudoku = load(Scenes.SUDOKU_GAME).instantiate()
+	sudoku._recorder = MockRecorder.new()
+	sudoku._storage = MockStorage.new()
+	sudoku._crash = MockCrash.new()
+	sudoku._analytics = MockAnalytics.new()
+	sudoku._achievements = MockAchievements.new()
+	sudoku._saves = MockSaves.new()
+	sudoku._stats = MockStats.new()
+	sudoku._sound = MockSound.new()
+	sudoku._haptic = MockHaptic.new()
+	sudoku._suppress_auto_resume = true
+	add_child_autofree(sudoku)
+	sudoku._save_adapter = null
+	var params := LaunchParams.new()
+	params.option_value = SudokuSolver.Difficulty.MEDIUM
+	params.rule_set = sudoku.RULE_SET_ANTI_KING
+
+	sudoku.launch(params)
+
+	assert_eq(sudoku.rule_set, sudoku.RULE_SET_ANTI_KING)
+	assert_true(sudoku._is_initialized(), "Anti-King launch must initialize game logic")
+	assert_eq(sudoku.board.get_current_grid(), sudoku.logic.puzzle,
+			"Anti-King launch must render the generated puzzle")
+	assert_true(sudoku.logic.puzzle.count(0) < 81,
+			"Anti-King puzzle must contain visible givens")
+
+
 # ---------------------------------------------------------------------------
 # Generation-failure redirect: suppress auto-resume and ceremony
 # ---------------------------------------------------------------------------

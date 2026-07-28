@@ -373,7 +373,7 @@ func _setup_game(saved_data: Dictionary) -> void:
 		logic.init_from_killer_data(_pending_killer_data)
 		_pending_killer_data = {}
 		_killer_constraint = KillerConstraint.new(logic.killer_cages)
-		logic.constraints = [_killer_constraint]
+		logic.constraints.append(_killer_constraint)
 		difficulty = logic.difficulty
 		difficulty_label.text = _difficulty_label_text(logic.difficulty)
 		board.load_puzzle(logic.puzzle)
@@ -382,7 +382,7 @@ func _setup_game(saved_data: Dictionary) -> void:
 		# Resumed Killer game — restore from save
 		logic.init_from_save(saved_data)
 		_killer_constraint = KillerConstraint.new(logic.killer_cages)
-		logic.constraints = [_killer_constraint]
+		logic.constraints.append(_killer_constraint)
 		difficulty = logic.difficulty
 		if random_seed == 0:
 			random_seed = _derive_seed_from_puzzle(logic.puzzle)
@@ -393,7 +393,10 @@ func _setup_game(saved_data: Dictionary) -> void:
 			call_deferred("_show_fail_dialog")
 	else:
 		var c := _make_constraint()
-		logic.constraints = [c] if c != null else constraints
+		if c != null:
+			logic.constraints.append(c)
+		else:
+			logic.constraints.assign(constraints)
 		if saved_data.is_empty():
 			if not logic.init_new_game(difficulty, random_seed):
 				# Generation failed (e.g. unsatisfiable constraints).
