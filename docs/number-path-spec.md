@@ -1,9 +1,9 @@
 # Number Path — Implementation Specification
 
-**Status:** Proposed  
-**Working title:** Number Path  
-**Classification:** Game  
-**Game ID:** `number_path`  
+**Status:** Proposed
+**Working title:** Number Path
+**Classification:** Game
+**Game ID:** `number_path`
 **Ownership:** Isolated feature implementation; shared Collection registration is deferred to `logic-games-integration-spec.md`.
 
 ## Outcome

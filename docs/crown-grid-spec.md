@@ -1,9 +1,9 @@
 # Crown Grid — Implementation Specification
 
-**Status:** Proposed  
-**Working title:** Crown Grid  
-**Classification:** Game  
-**Game ID:** `crown_grid`  
+**Status:** Proposed
+**Working title:** Crown Grid
+**Classification:** Game
+**Game ID:** `crown_grid`
 **Ownership:** Isolated feature implementation; shared Collection registration is deferred to `logic-games-integration-spec.md`.
 
 ## Outcome

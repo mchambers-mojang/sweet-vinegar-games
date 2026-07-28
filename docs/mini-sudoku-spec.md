@@ -1,10 +1,10 @@
 # Mini Sudoku — Implementation Specification
 
-**Status:** Proposed  
-**Working title:** Mini Sudoku  
-**Classification:** Mode within Sudoku  
-**Game ID:** `sudoku`  
-**Mode key:** `mini`  
+**Status:** Proposed
+**Working title:** Mini Sudoku
+**Classification:** Mode within Sudoku
+**Game ID:** `sudoku`
+**Mode key:** `mini`
 **Ownership:** Sudoku engine generalization and Mode implementation; shared Collection registration is deferred to `logic-games-integration-spec.md`.
 
 ## Outcome

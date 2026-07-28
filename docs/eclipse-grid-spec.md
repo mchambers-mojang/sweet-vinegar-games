@@ -1,9 +1,9 @@
 # Eclipse Grid — Implementation Specification
 
-**Status:** Proposed  
-**Working title:** Eclipse Grid  
-**Classification:** Game  
-**Game ID:** `eclipse_grid`  
+**Status:** Proposed
+**Working title:** Eclipse Grid
+**Classification:** Game
+**Game ID:** `eclipse_grid`
 **Ownership:** Isolated feature implementation; shared Collection registration is deferred to `logic-games-integration-spec.md`.
 
 ## Outcome

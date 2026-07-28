@@ -1,8 +1,8 @@
 # Generative Logic Games — Final Integration Specification
 
-**Status:** Proposed  
-**Classification:** Collection integration  
-**Prerequisites:** Crown Grid, Eclipse Grid, Number Path, Mini Sudoku, and Shikaku Shapes feature branches are merged.  
+**Status:** Proposed
+**Classification:** Collection integration
+**Prerequisites:** Crown Grid, Eclipse Grid, Number Path, Mini Sudoku, and Shikaku Shapes feature branches are merged.
 **Ownership:** Shared registration, cross-Game compatibility, and end-to-end validation only.
 
 ## Outcome

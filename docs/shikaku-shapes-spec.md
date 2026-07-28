@@ -1,10 +1,10 @@
 # Shikaku Shapes — Implementation Specification
 
-**Status:** Proposed  
-**Working title:** Shikaku Shapes  
-**Classification:** Mode within Shikaku  
-**Game ID:** `shikaku`  
-**Mode key:** `shapes`  
+**Status:** Proposed
+**Working title:** Shikaku Shapes
+**Classification:** Mode within Shikaku
+**Game ID:** `shikaku`
+**Mode key:** `shapes`
 **Ownership:** Shikaku clue-model generalization and Mode implementation; shared Collection registration is deferred to `logic-games-integration-spec.md`.
 
 ## Outcome
