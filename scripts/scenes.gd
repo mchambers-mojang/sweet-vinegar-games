@@ -25,6 +25,11 @@ const SHIKAKU_MENU := "res://scenes/shikaku_menu.tscn"
 const SHIKAKU_GAME := "res://scenes/shikaku_game.tscn"
 const SHIKAKU_STATS := "res://scenes/shikaku_stats.tscn"
 
+# Eclipse Grid
+const ECLIPSE_GRID_MENU := "res://scenes/eclipse_grid_menu.tscn"
+const ECLIPSE_GRID_GAME := "res://scenes/eclipse_grid_game.tscn"
+const ECLIPSE_GRID_STATS := "res://scenes/eclipse_grid_stats.tscn"
+
 # Carom
 const CAROM_MENU := "res://scenes/carom_menu.tscn"
 const CAROM_ONLINE_MENU := "res://carom/scenes/carom_online_menu.tscn"

@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="MenuConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/menu/menu_config.gd" id="1_eclipse"]
+
+[resource]
+script = ExtResource("1_eclipse")
+game_id = "eclipse_grid"
+display_name = "Eclipse Grid"
+help_topic = "eclipse_grid"
+menu_scene_path = "res://scenes/eclipse_grid_menu.tscn"
+game_scene_path = "res://scenes/eclipse_grid_game.tscn"
+stats_scene_path = "res://scenes/eclipse_grid_stats.tscn"
+has_save_support = true
+start_button_unique_name = "NewGameButton"
+option_button_unique_name = "SizeButton"
+option_default_index = 0
+option_values = PackedInt32Array(4, 6, 8, 10)
+abandon_stat_save_key = "size"
+abandon_stat_prefix = "abandoned_s"
+abandon_stat_default = 4
+title_color_key = ""
+game_rules = {}
+leaderboard_modes = PackedStringArray("4", "6", "8", "10")
+leaderboard_is_time_based = true
