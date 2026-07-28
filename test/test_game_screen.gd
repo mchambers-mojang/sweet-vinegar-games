@@ -427,6 +427,60 @@ func test_all_game_screen_scripts_compile() -> void:
 		assert_true(script.can_instantiate(), "%s should compile" % path)
 
 
+func test_killer_resume_restores_progress_and_pencil_marks_to_board() -> void:
+	var puzzle: Array[int] = []
+	puzzle.resize(81)
+	puzzle.fill(0)
+	puzzle[7] = 8
+	var solution: Array[int] = []
+	solution.resize(81)
+	solution.fill(1)
+	var current_grid: Array[int] = puzzle.duplicate()
+	current_grid[2] = 3
+	current_grid[80] = 9
+	var saved_data := {
+		"puzzle": puzzle,
+		"solution": solution,
+		"current_grid": current_grid,
+		"pencil_marks": {"4": [2, 6]},
+		"cell_colors": {},
+		"difficulty": 2,
+		"strikes": 1,
+		"is_failed": false,
+		"hints_used": 1,
+		"is_killer": true,
+		"killer_cages": [{"cells": [0, 1, 2], "sum": 10}],
+		"elapsed_time": 923.0,
+		"random_seed": 12345,
+		"replay_id": "existing",
+		"rule_set": 3,
+	}
+	var sudoku = load(Scenes.SUDOKU_GAME).instantiate()
+	sudoku._recorder = MockRecorder.new()
+	sudoku._storage = MockStorage.new()
+	sudoku._crash = MockCrash.new()
+	sudoku._analytics = MockAnalytics.new()
+	sudoku._achievements = MockAchievements.new()
+	sudoku._saves = MockSaves.new()
+	sudoku._stats = MockStats.new()
+	sudoku._sound = MockSound.new()
+	sudoku._haptic = MockHaptic.new()
+	sudoku._suppress_auto_resume = true
+	add_child_autofree(sudoku)
+	sudoku._save_adapter = null
+
+	sudoku.resume_game(saved_data)
+
+	assert_eq(sudoku.logic.current_grid, current_grid,
+			"resume must preserve the saved Killer grid")
+	assert_eq(sudoku.board.cells[2].value, 3,
+			"resume must render player-entered values")
+	assert_eq(sudoku.board.cells[80].value, 9,
+			"resume must finish rendering the entire board")
+	assert_eq(sudoku.board.cells[4].pencil_marks, [2, 6],
+			"resume must render saved pencil marks")
+
+
 # ---------------------------------------------------------------------------
 # Generation-failure redirect: suppress auto-resume and ceremony
 # ---------------------------------------------------------------------------
@@ -725,4 +779,3 @@ func test_killer_generation_complete_is_noop_when_cancelled() -> void:
 	assert_false(s.abort_called,
 			"_abort_generation_failure must not run when generation is cancelled")
 	s.free()
-

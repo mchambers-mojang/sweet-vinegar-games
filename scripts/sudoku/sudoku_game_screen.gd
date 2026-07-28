@@ -543,8 +543,7 @@ func _handle_number_first_cell_tap(index: int) -> void:
 	if notes_mode:
 		var pr := logic.toggle_pencil_mark(index, _selected_number)
 		if pr.valid:
-			cell.pencil_marks = (logic.pencil_marks[index] as Array).duplicate()
-			cell.queue_redraw()
+			cell.set_pencil_marks(logic.pencil_marks[index])
 			_sound.play_pencil()
 			_haptic.vibrate_light()
 	else:
@@ -599,8 +598,7 @@ func _place_or_note_number(number: int) -> void:
 	if notes_mode:
 		var pr := logic.toggle_pencil_mark(index, number)
 		if pr.valid:
-			cell.pencil_marks = (logic.pencil_marks[index] as Array).duplicate()
-			cell.queue_redraw()
+			cell.set_pencil_marks(logic.pencil_marks[index])
 			_sound.play_pencil()
 			_haptic.vibrate_light()
 	else:
@@ -667,8 +665,7 @@ func _on_erase_pressed() -> void:
 		return
 	cell.value = 0
 	cell.is_error = false
-	cell.pencil_marks = []
-	cell.queue_redraw()
+	cell.set_pencil_marks([])
 	_sound.play_erase()
 	_haptic.vibrate_light()
 	_update_number_completion()
@@ -803,7 +800,7 @@ func _sync_cell_display(cell_index: int) -> void:
 	var cell := board.cells[cell_index]
 	cell.value = logic.current_grid[cell_index]
 	cell.is_error = false
-	cell.pencil_marks = (logic.pencil_marks[cell_index] as Array).duplicate()
+	cell.set_pencil_marks(logic.pencil_marks[cell_index])
 	cell.cell_color = logic.colors[cell_index]
 	cell.queue_redraw()
 
@@ -813,7 +810,7 @@ func _load_board_from_logic() -> void:
 		var cell := board.cells[i]
 		cell.is_given = logic.puzzle[i] != 0
 		cell.value = logic.current_grid[i]
-		cell.pencil_marks = (logic.pencil_marks[i] as Array).duplicate()
+		cell.set_pencil_marks(logic.pencil_marks[i])
 		cell.cell_color = logic.colors[i]
 		cell.is_error = false
 		cell.queue_redraw()
@@ -1198,8 +1195,7 @@ func _apply_number_to_multi_selection(number: int) -> void:
 		if notes_mode:
 			var pr := logic.toggle_pencil_mark(idx, number)
 			if pr.valid:
-				cell.pencil_marks = (logic.pencil_marks[idx] as Array).duplicate()
-				cell.queue_redraw()
+				cell.set_pencil_marks(logic.pencil_marks[idx])
 		else:
 			var result := logic.place_number(idx, number)
 			if not result.valid:

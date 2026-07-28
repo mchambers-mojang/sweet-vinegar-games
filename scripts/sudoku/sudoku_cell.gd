@@ -73,6 +73,14 @@ func set_pencil_mark(val: int, active: bool) -> void:
 	queue_redraw()
 
 
+func set_pencil_marks(marks: Array) -> void:
+	pencil_marks.clear()
+	for mark in marks:
+		pencil_marks.append(int(mark))
+	pencil_marks.sort()
+	queue_redraw()
+
+
 func toggle_pencil_mark(val: int) -> void:
 	if val in pencil_marks:
 		pencil_marks.erase(val)
