@@ -1,6 +1,27 @@
 class_name ShikakuLogic
 extends RefCounted
 
+## Mode constants (carried through LaunchParams.rule_set)
+const RULE_SET_STANDARD := 0
+const RULE_SET_SHAPES := 1
+
+## Shape constants — used in anchor dictionaries.
+## SHAPE_ABSENT and SHAPE_ANY have identical validation semantics (any shape is
+## accepted) but differ in presentation: ABSENT shows nothing, ANY shows "?" icon.
+const SHAPE_ABSENT := 0
+const SHAPE_ANY := 1
+const SHAPE_SQUARE := 2  ## width == height
+const SHAPE_TALL := 3    ## height > width
+const SHAPE_WIDE := 4    ## width > height
+
+const SHAPE_ICONS := {
+	SHAPE_ABSENT: "",
+	SHAPE_ANY: "?",
+	SHAPE_SQUARE: "□",
+	SHAPE_TALL: "↕",
+	SHAPE_WIDE: "↔",
+}
+
 const LEGACY_SEED_HASH_INITIAL := 23
 const LEGACY_SEED_HASH_MULTIPLIER := 31
 const LEGACY_SEED_HASH_X_FACTOR := 7
@@ -9,7 +30,11 @@ const MAX_HINTS_ALLOWED := 1
 
 var grid_width: int = 0
 var grid_height: int = 0
-var numbers: Dictionary = {}  # Vector2i -> int
+var mode: int = RULE_SET_STANDARD
+## Primary clue storage: { Vector2i -> {area: int, shape: int} }
+## area == 0: no area constraint; shape == SHAPE_ABSENT: no shape constraint.
+## Every anchor must have area > 0 OR shape != SHAPE_ABSENT.
+var anchors: Dictionary = {}
 var solution: Array[Rect2i] = []
 var placed_rects: Array[Rect2i] = []
 var is_completed: bool = false
@@ -24,6 +49,17 @@ var undo_stack: Array[Dictionary]:
 var redo_stack: Array[Dictionary]:
 	get:
 		return _undo_stack.get_redo_entries()
+
+## Backward-compat property: returns area values for area-carrying anchors.
+var numbers: Dictionary:
+	get:
+		var nums: Dictionary = {}
+		for pos in anchors:
+			var a: Dictionary = anchors[pos]
+			var area: int = int(a.get("area", 0))
+			if area > 0:
+				nums[pos] = area
+		return nums
 
 var random_seed: int = 0
 
@@ -51,13 +87,14 @@ class UndoRedoResult:
 	var rect: Dictionary = {}
 
 
-func init_new_game(width: int, height: int, seed_value: int) -> void:
+func init_new_game(width: int, height: int, seed_value: int, p_mode: int = RULE_SET_STANDARD) -> void:
 	grid_width = width
 	grid_height = height
+	mode = p_mode
 	random_seed = seed_value
 	_rng.seed = seed_value
-	var generated: Dictionary = ShikakuGenerator.generate(width, height, seed_value)
-	numbers = generated.get("numbers", {})
+	var generated: Dictionary = ShikakuGenerator.generate(width, height, seed_value, mode)
+	anchors = generated.get("anchors", {})
 	solution = generated.get("solution", [] as Array[Rect2i])
 	placed_rects.clear()
 	is_completed = false
@@ -68,7 +105,8 @@ func init_new_game(width: int, height: int, seed_value: int) -> void:
 func init_from_save(data: Dictionary) -> void:
 	grid_width = int(data.get("width", 10))
 	grid_height = int(data.get("height", 10))
-	numbers = _deserialize_numbers(data.get("numbers", {}))
+	mode = int(data.get("mode", RULE_SET_STANDARD))
+	anchors = _deserialize_anchors(data)
 	solution = _deserialize_rects(data.get("solution", []))
 	placed_rects = _deserialize_rects(data.get("placed_rects", []))
 	hints_used = int(data.get("hints_used", 0))
@@ -77,7 +115,7 @@ func init_from_save(data: Dictionary) -> void:
 	_undo_stack.load_entries(undo_entries, redo_entries)
 	random_seed = int(data.get("random_seed", 0))
 	if random_seed == 0:
-		random_seed = _derive_seed_from_numbers(numbers)
+		random_seed = _derive_seed_from_anchors(anchors)
 	_rng.seed = random_seed
 	_recompute_completion()
 
@@ -86,7 +124,8 @@ func serialize() -> Dictionary:
 	return {
 		"width": grid_width,
 		"height": grid_height,
-		"numbers": _serialize_numbers(numbers),
+		"mode": mode,
+		"anchors": _serialize_anchors(anchors),
 		"solution": _serialize_rects(solution),
 		"placed_rects": _serialize_rects(placed_rects),
 		"hints_used": hints_used,
@@ -224,6 +263,7 @@ func get_coverage_at(x: int, y: int) -> int:
 	return count
 
 
+## Validate a candidate rectangle against anchor constraints.
 func _is_valid_placement(rect: Rect2i) -> bool:
 	if rect.size.x <= 0 or rect.size.y <= 0:
 		return false
@@ -238,17 +278,37 @@ func _is_valid_placement(rect: Rect2i) -> bool:
 			if get_coverage_at(col, row) > 0:
 				return false
 	var area := rect.size.x * rect.size.y
-	var number_count: int = 0
+	var anchor_count: int = 0
 	for row in range(rect.position.y, rect.position.y + rect.size.y):
 		for col in range(rect.position.x, rect.position.x + rect.size.x):
 			var pos := Vector2i(col, row)
-			if numbers.has(pos):
-				number_count += 1
-				if int(numbers[pos]) != area:
+			if anchors.has(pos):
+				anchor_count += 1
+				if anchor_count > 1:
 					return false
-	if number_count != 1:
+				var anchor: Dictionary = anchors[pos]
+				var anchor_area: int = int(anchor.get("area", 0))
+				var anchor_shape: int = int(anchor.get("shape", SHAPE_ABSENT))
+				if anchor_area > 0 and anchor_area != area:
+					return false
+				if not _rect_matches_shape(rect, anchor_shape):
+					return false
+	if anchor_count != 1:
 		return false
 	return true
+
+
+func _rect_matches_shape(rect: Rect2i, shape: int) -> bool:
+	match shape:
+		SHAPE_ABSENT, SHAPE_ANY:
+			return true
+		SHAPE_SQUARE:
+			return rect.size.x == rect.size.y
+		SHAPE_TALL:
+			return rect.size.y > rect.size.x
+		SHAPE_WIDE:
+			return rect.size.x > rect.size.y
+	return false
 
 
 func _has_rect(target: Rect2i) -> bool:
@@ -266,7 +326,7 @@ func _remove_last_matching(target: Rect2i) -> void:
 
 
 func _recompute_completion() -> void:
-	is_completed = is_fully_covered() and ShikakuSolver.validate(grid_width, grid_height, numbers, placed_rects)
+	is_completed = is_fully_covered() and ShikakuSolver.validate_anchors(grid_width, grid_height, anchors, placed_rects)
 
 
 func _rect_to_dict(rect: Rect2i) -> Dictionary:
@@ -277,23 +337,59 @@ func _dict_to_rect(data: Dictionary) -> Rect2i:
 	return Rect2i(int(data.get("x", 0)), int(data.get("y", 0)), int(data.get("w", 1)), int(data.get("h", 1)))
 
 
-func _serialize_numbers(nums: Dictionary) -> Dictionary:
+## Serialize anchors to { "col,row": {area, shape} }.
+func _serialize_anchors(a: Dictionary) -> Dictionary:
 	var result: Dictionary = {}
-	for pos in nums.keys():
+	for pos in a.keys():
 		var cell: Vector2i = pos
-		result["%d,%d" % [cell.x, cell.y]] = int(nums[pos])
+		var anchor: Dictionary = a[pos]
+		result["%d,%d" % [cell.x, cell.y]] = {
+			"area": int(anchor.get("area", 0)),
+			"shape": int(anchor.get("shape", SHAPE_ABSENT)),
+		}
 	return result
 
 
-func _deserialize_numbers(data: Dictionary) -> Dictionary:
+## Deserialize anchors from a save dict, supporting both new (anchors) and
+## legacy (numbers) formats.
+func _deserialize_anchors(data: Dictionary) -> Dictionary:
 	var result: Dictionary = {}
-	for key in data.keys():
-		if key is Vector2i:
-			result[key] = int(data[key])
-			continue
-		var parts: PackedStringArray = str(key).split(",")
-		if parts.size() == 2:
-			result[Vector2i(int(parts[0]), int(parts[1]))] = int(data[key])
+	# New format: anchors dict.
+	var raw_anchors = data.get("anchors", null)
+	if raw_anchors is Dictionary and not raw_anchors.is_empty():
+		for key in raw_anchors.keys():
+			var pos: Vector2i
+			if key is Vector2i:
+				pos = key
+			else:
+				var parts: PackedStringArray = str(key).split(",")
+				if parts.size() != 2:
+					continue
+				pos = Vector2i(int(parts[0]), int(parts[1]))
+			var entry = raw_anchors[key]
+			if entry is Dictionary:
+				result[pos] = {
+					"area": int(entry.get("area", 0)),
+					"shape": int(entry.get("shape", SHAPE_ABSENT)),
+				}
+			elif entry is int or entry is float:
+				# Anchors dict stored as plain int (shouldn't happen, but be safe)
+				result[pos] = {"area": int(entry), "shape": SHAPE_ABSENT}
+		return result
+
+	# Legacy format: numbers dict { "col,row": int }.
+	var raw_numbers = data.get("numbers", null)
+	if raw_numbers is Dictionary:
+		for key in raw_numbers.keys():
+			var pos: Vector2i
+			if key is Vector2i:
+				pos = key
+			else:
+				var parts: PackedStringArray = str(key).split(",")
+				if parts.size() != 2:
+					continue
+				pos = Vector2i(int(parts[0]), int(parts[1]))
+			result[pos] = {"area": int(raw_numbers[key]), "shape": SHAPE_ABSENT}
 	return result
 
 
@@ -339,17 +435,19 @@ func _deserialize_action_stack(data: Variant) -> Array[Dictionary]:
 	return result
 
 
-func _derive_seed_from_numbers(nums: Dictionary) -> int:
+func _derive_seed_from_anchors(a: Dictionary) -> int:
 	var keys: Array[Vector2i] = []
-	for key in nums.keys():
+	for key in a.keys():
 		keys.append(key)
-	keys.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
-		if a.y == b.y:
-			return a.x < b.x
-		return a.y < b.y
+	keys.sort_custom(func(av: Vector2i, bv: Vector2i) -> bool:
+		if av.y == bv.y:
+			return av.x < bv.x
+		return av.y < bv.y
 	)
 	var seed := LEGACY_SEED_HASH_INITIAL
 	for key in keys:
 		var pos: Vector2i = key
-		seed = int((seed * LEGACY_SEED_HASH_MULTIPLIER + pos.x * LEGACY_SEED_HASH_X_FACTOR + pos.y * LEGACY_SEED_HASH_Y_FACTOR + int(nums[pos])) & 0x7fffffff)
+		var anchor: Dictionary = a[pos]
+		var area: int = int(anchor.get("area", 0))
+		seed = int((seed * LEGACY_SEED_HASH_MULTIPLIER + pos.x * LEGACY_SEED_HASH_X_FACTOR + pos.y * LEGACY_SEED_HASH_Y_FACTOR + area) & 0x7fffffff)
 	return seed

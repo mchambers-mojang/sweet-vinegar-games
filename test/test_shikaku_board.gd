@@ -12,7 +12,10 @@ func before_each() -> void:
 	board.set_script(BoardScript)
 	board.size = Vector2(300, 300)
 	add_child_autofree(board)
-	board.setup(5, 5, {Vector2i(1, 1): 6, Vector2i(3, 0): 4})
+	board.setup(5, 5, {
+		Vector2i(1, 1): {"area": 6, "shape": ShikakuLogic.SHAPE_ABSENT},
+		Vector2i(3, 0): {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT},
+	})
 
 
 # --- Setup ---
@@ -27,8 +30,33 @@ func test_setup_numbers() -> void:
 	assert_eq(board.numbers[Vector2i(3, 0)], 4)
 
 
+func test_setup_anchors() -> void:
+	var a11: Dictionary = board.anchors.get(Vector2i(1, 1), {})
+	assert_eq(int(a11.get("area", 0)), 6)
+	assert_eq(int(a11.get("shape", -1)), ShikakuLogic.SHAPE_ABSENT)
+
+
 func test_setup_empty_rects() -> void:
 	assert_eq(board.placed_rects.size(), 0)
+
+
+# --- Legacy format auto-detection ---
+
+func test_setup_legacy_int_format() -> void:
+	board.setup(5, 5, {Vector2i(2, 3): 8, Vector2i(0, 0): 4})
+	assert_eq(board.numbers[Vector2i(2, 3)], 8)
+	assert_eq(board.numbers[Vector2i(0, 0)], 4)
+
+
+# --- Shape-only anchor ---
+
+func test_setup_shape_only_anchor() -> void:
+	board.setup(4, 4, {Vector2i(0, 0): {"area": 0, "shape": ShikakuLogic.SHAPE_TALL}})
+	var a: Dictionary = board.anchors.get(Vector2i(0, 0), {})
+	assert_eq(int(a.get("area", -1)), 0)
+	assert_eq(int(a.get("shape", -1)), ShikakuLogic.SHAPE_TALL)
+	# Numbers property only shows area-carrying anchors.
+	assert_false(board.numbers.has(Vector2i(0, 0)))
 
 
 # --- Placement ---
@@ -91,10 +119,10 @@ func test_remove_add_sequence_indices() -> void:
 	assert_eq(board.placed_rects[1], Rect2i(0, 2, 2, 2))  # C
 
 
-# --- Numbers deserialization ---
+# --- Numbers deserialization (legacy compat) ---
 
 func test_numbers_from_string_keys() -> void:
-	# Simulates what the replay viewer does after JSON parse
+	# Simulates what the replay viewer does after JSON parse (old format)
 	var numbers_data := {"2,3": 8.0, "0,0": 4.0}
 	var numbers: Dictionary = {}
 	for key in numbers_data.keys():

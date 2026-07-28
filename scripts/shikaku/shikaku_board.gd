@@ -1,16 +1,30 @@
 class_name ShikakuBoard
 extends Control
 
-## The Shikaku grid UI — draws grid lines, numbers, and placed rectangles
+## The Shikaku grid UI — draws grid lines, anchors (area/shape clues), and placed rectangles.
+## Accepts generalized anchor dictionaries { Vector2i -> {area: int, shape: int} }
+## as well as legacy numbers dictionaries { Vector2i -> int } (auto-converted).
 
 signal rectangle_placed(rect: Rect2i)
 signal rectangle_tapped(index: int)
 
 var grid_width: int = 10
 var grid_height: int = 10
-var numbers: Dictionary = {}  # Vector2i -> int
+## Primary anchor storage: { Vector2i -> {area: int, shape: int} }
+var anchors: Dictionary = {}
 var placed_rects: Array[Rect2i] = []
 var rect_colors: Array[Color] = []
+
+## Backward-compat computed property: { Vector2i -> int } for area-carrying anchors.
+var numbers: Dictionary:
+	get:
+		var nums: Dictionary = {}
+		for pos in anchors:
+			var a: Dictionary = anchors[pos]
+			var area: int = int(a.get("area", 0))
+			if area > 0:
+				nums[pos] = area
+		return nums
 
 # Drag state
 var _dragging: bool = false
@@ -43,14 +57,28 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 
-func setup(w: int, h: int, nums: Dictionary) -> void:
+## Set up the board with generalized anchors or a legacy numbers dict.
+## a: { Vector2i -> {area, shape} }  OR  { Vector2i -> int }  (auto-detected)
+func setup(w: int, h: int, a: Dictionary) -> void:
 	grid_width = w
 	grid_height = h
-	numbers = nums
+	anchors = _normalize_anchors(a)
 	placed_rects.clear()
 	rect_colors.clear()
 	_color_index = 0
 	queue_redraw()
+
+
+## Convert legacy { Vector2i -> int } or mixed dicts to { Vector2i -> {area, shape} }.
+func _normalize_anchors(a: Dictionary) -> Dictionary:
+	var result: Dictionary = {}
+	for pos in a.keys():
+		var val = a[pos]
+		if val is Dictionary:
+			result[pos] = val
+		elif val is int or val is float:
+			result[pos] = {"area": int(val), "shape": ShikakuLogic.SHAPE_ABSENT}
+	return result
 
 
 func _get_cell_size() -> float:
@@ -142,7 +170,6 @@ func _gui_input(event: InputEvent) -> void:
 
 	if pressed:
 		var cell := _pos_to_cell(pos)
-		# Check if tapping an existing rectangle
 		var tapped_idx := _find_rect_at(cell)
 		if tapped_idx >= 0:
 			rectangle_tapped.emit(tapped_idx)
@@ -160,7 +187,6 @@ func _gui_input(event: InputEvent) -> void:
 		DragEffect.unsuppress()
 		_drag_end = _pos_to_cell(pos)
 		_update_drag_preview()
-		# Only place if drag covers more than a single cell (prevents accidental 1x1 on tap)
 		if _drag_preview.size.x > 0 and _drag_preview.size.y > 0:
 			if _drag_preview.size.x > 1 or _drag_preview.size.y > 1 or not is_touch:
 				rectangle_placed.emit(_drag_preview)
@@ -170,7 +196,6 @@ func _gui_input(event: InputEvent) -> void:
 
 
 func _find_rect_at(cell: Vector2i) -> int:
-	# Search in reverse order (last placed = on top)
 	for i in range(placed_rects.size() - 1, -1, -1):
 		if placed_rects[i].has_point(cell):
 			return i
@@ -243,15 +268,10 @@ func _draw() -> void:
 		var border_rect_pos := origin + Vector2(border_rect.position.x * cell_size, border_rect.position.y * cell_size)
 		var border_rect_size := Vector2(border_rect.size.x * cell_size, border_rect.size.y * cell_size)
 		var bw := RECT_BORDER if not neon_mode else 1.5
-		# Top
 		draw_rect(Rect2(border_rect_pos, Vector2(border_rect_size.x, bw)), border_color)
-		# Bottom
 		draw_rect(Rect2(border_rect_pos + Vector2(0, border_rect_size.y - bw), Vector2(border_rect_size.x, bw)), border_color)
-		# Left
 		draw_rect(Rect2(border_rect_pos, Vector2(bw, border_rect_size.y)), border_color)
-		# Right
 		draw_rect(Rect2(border_rect_pos + Vector2(border_rect_size.x - bw, 0), Vector2(bw, border_rect_size.y)), border_color)
-		# Extra glow pass for neon
 		if neon_mode:
 			var border_glow := Color(border_color.r * 0.3, border_color.g * 0.3, border_color.b * 0.3, 0.25)
 			draw_rect(Rect2(border_rect_pos - Vector2(2, 2), border_rect_size + Vector2(4, 4)), border_glow, false, 3.0)
@@ -262,7 +282,6 @@ func _draw() -> void:
 		var preview_size := Vector2(_drag_preview.size.x * cell_size, _drag_preview.size.y * cell_size)
 		var preview_color := Color(0.5, 0.8, 1.0, 0.25)
 		draw_rect(Rect2(preview_pos, preview_size), preview_color)
-		# Preview border
 		var pb := Color(0.5, 0.8, 1.0, 0.7)
 		draw_rect(Rect2(preview_pos, Vector2(preview_size.x, 2)), pb)
 		draw_rect(Rect2(preview_pos + Vector2(0, preview_size.y - 2), Vector2(preview_size.x, 2)), pb)
@@ -289,18 +308,48 @@ func _draw() -> void:
 		var outline_glow := Color(0.0, 0.6, 0.6, 0.25)
 		draw_rect(Rect2(origin - Vector2(3, 3), Vector2(cell_size * grid_width + 6, cell_size * grid_height + 6)), outline_glow, false, 5.0)
 
-	# Numbers
+	# Anchor clues (area numbers and/or shape icons)
 	var font := ThemeDB.fallback_font
-	var font_size := int(cell_size * 0.55)
 	var text_color := tm.get_color("text_given")
-	for pos in numbers.keys():
-		var val: int = numbers[pos]
-		var text := str(val)
-		var text_size := font.get_string_size(text, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size)
+	for pos in anchors.keys():
+		var anchor: Dictionary = anchors[pos]
+		var anchor_area: int = int(anchor.get("area", 0))
+		var anchor_shape: int = int(anchor.get("shape", ShikakuLogic.SHAPE_ABSENT))
+		var has_area := anchor_area > 0
+		var has_shape := anchor_shape != ShikakuLogic.SHAPE_ABSENT
 		var cell_origin := origin + Vector2(pos.x * cell_size, pos.y * cell_size)
-		var text_pos := cell_origin + (Vector2(cell_size, cell_size) - text_size) / 2.0
-		text_pos.y += text_size.y * 0.85
-		draw_string(font, text_pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, text_color)
+
+		if has_area and not has_shape:
+			# Area only: full-size number centered in cell.
+			var font_size := int(cell_size * 0.55)
+			var text := str(anchor_area)
+			var text_size := font.get_string_size(text, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size)
+			var text_pos := cell_origin + (Vector2(cell_size, cell_size) - text_size) / 2.0
+			text_pos.y += text_size.y * 0.85
+			draw_string(font, text_pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, text_color)
+		elif has_shape and not has_area:
+			# Shape only: large shape icon centered in cell.
+			var font_size := int(cell_size * 0.55)
+			var icon := str(ShikakuLogic.SHAPE_ICONS.get(anchor_shape, "?"))
+			var text_size := font.get_string_size(icon, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size)
+			var text_pos := cell_origin + (Vector2(cell_size, cell_size) - text_size) / 2.0
+			text_pos.y += text_size.y * 0.85
+			draw_string(font, text_pos, icon, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, text_color)
+		elif has_area and has_shape:
+			# Both: area number in top half, shape icon in bottom half (smaller font).
+			var font_size := int(cell_size * 0.38)
+			var area_text := str(anchor_area)
+			var shape_icon := str(ShikakuLogic.SHAPE_ICONS.get(anchor_shape, "?"))
+			# Area number (upper portion of cell)
+			var area_size := font.get_string_size(area_text, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size)
+			var area_pos := cell_origin + Vector2((cell_size - area_size.x) / 2.0, cell_size * 0.05)
+			area_pos.y += area_size.y
+			draw_string(font, area_pos, area_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, text_color)
+			# Shape icon (lower portion of cell)
+			var icon_size := font.get_string_size(shape_icon, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size)
+			var icon_pos := cell_origin + Vector2((cell_size - icon_size.x) / 2.0, cell_size * 0.52)
+			icon_pos.y += icon_size.y
+			draw_string(font, icon_pos, shape_icon, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, text_color)
 
 
 ## Flash all cells for win celebration
@@ -308,7 +357,6 @@ func flash_all(color: Color, duration: float) -> void:
 	var original_modulate := modulate
 	modulate = Color(1.2, 1.1, 0.8)
 
-	# Neon win celebration: bursts on each rectangle
 	if AppTheme.is_neon:
 		var cell_size := _get_cell_size()
 		var origin := _get_grid_origin()

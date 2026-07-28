@@ -8,7 +8,10 @@ func before_each() -> void:
 	logic.init_from_save({
 		"width": 2,
 		"height": 2,
-		"numbers": {"0,0": 2, "0,1": 2},
+		"anchors": {
+			"0,0": {"area": 2, "shape": ShikakuLogic.SHAPE_ABSENT},
+			"0,1": {"area": 2, "shape": ShikakuLogic.SHAPE_ABSENT},
+		},
 		"solution": [
 			{"x": 0, "y": 0, "w": 2, "h": 1},
 			{"x": 0, "y": 1, "w": 2, "h": 1},
@@ -21,9 +24,9 @@ func before_each() -> void:
 func test_new_game_generates_valid_puzzle() -> void:
 	var fresh := ShikakuLogic.new()
 	fresh.init_new_game(5, 5, 42)
-	assert_true(fresh.numbers.size() > 0)
+	assert_true(fresh.anchors.size() > 0)
 	assert_true(fresh.solution.size() > 0)
-	assert_true(ShikakuSolver.validate(fresh.grid_width, fresh.grid_height, fresh.numbers, fresh.solution))
+	assert_true(ShikakuSolver.validate_anchors(fresh.grid_width, fresh.grid_height, fresh.anchors, fresh.solution))
 
 
 func test_place_valid_rectangle() -> void:
@@ -99,12 +102,38 @@ func test_serialize_deserialize_roundtrip() -> void:
 
 	assert_eq(restored.grid_width, logic.grid_width)
 	assert_eq(restored.grid_height, logic.grid_height)
-	assert_eq(restored.numbers, logic.numbers)
+	assert_eq(restored.anchors, logic.anchors)
 	assert_eq(restored.solution, logic.solution)
 	assert_eq(restored.placed_rects, logic.placed_rects)
 	assert_eq(restored.undo_stack, logic.undo_stack)
 	assert_eq(restored.redo_stack, logic.redo_stack)
 	assert_eq(restored.hints_used, logic.hints_used)
+
+
+func test_legacy_numbers_migrate_to_anchors() -> void:
+	var legacy := ShikakuLogic.new()
+	legacy.init_from_save({
+		"width": 2,
+		"height": 2,
+		"numbers": {"0,0": 2, "0,1": 2},
+		"solution": [
+			{"x": 0, "y": 0, "w": 2, "h": 1},
+			{"x": 0, "y": 1, "w": 2, "h": 1},
+		],
+		"placed_rects": [],
+		"random_seed": 1234,
+	})
+	assert_eq(legacy.anchors.size(), 2)
+	var a00: Dictionary = legacy.anchors.get(Vector2i(0, 0), {})
+	assert_eq(int(a00.get("area", 0)), 2)
+	assert_eq(int(a00.get("shape", -1)), ShikakuLogic.SHAPE_ABSENT)
+	assert_eq(legacy.mode, ShikakuLogic.RULE_SET_STANDARD)
+
+
+func test_numbers_property_returns_area_only_anchors() -> void:
+	var nums: Dictionary = logic.numbers
+	assert_true(nums.has(Vector2i(0, 0)))
+	assert_eq(nums[Vector2i(0, 0)], 2)
 
 
 func test_coverage_tracking() -> void:
@@ -124,7 +153,11 @@ func test_redo_stack_cleared_on_new_action() -> void:
 	puzzle.init_from_save({
 		"width": 3,
 		"height": 2,
-		"numbers": {"0,0": 2, "1,0": 2, "2,0": 2},
+		"anchors": {
+			"0,0": {"area": 2, "shape": ShikakuLogic.SHAPE_ABSENT},
+			"1,0": {"area": 2, "shape": ShikakuLogic.SHAPE_ABSENT},
+			"2,0": {"area": 2, "shape": ShikakuLogic.SHAPE_ABSENT},
+		},
 		"solution": [
 			{"x": 0, "y": 0, "w": 1, "h": 2},
 			{"x": 1, "y": 0, "w": 1, "h": 2},

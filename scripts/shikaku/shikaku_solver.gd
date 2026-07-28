@@ -1,48 +1,51 @@
 class_name ShikakuSolver
 extends RefCounted
 
-## Validates player solutions and solves puzzles for hints
+## Validates player solutions and solves puzzles for hints.
+## Supports both area-only anchors (Standard mode) and generalized
+## anchor clues with optional area and/or shape constraints (Shapes mode).
+
+## Maximum rectangle area enumerated when no area constraint is given.
+const MAX_UNCONSTRAINED_AREA := 8
 
 
-## Check if a set of rectangles is a valid solution for the given puzzle
-## numbers: { Vector2i -> int }
-## rectangles: Array[Rect2i]
-static func validate(width: int, height: int, numbers: Dictionary, rectangles: Array[Rect2i]) -> bool:
-	# Check: every cell is covered exactly once
+## Check if a set of rectangles is a valid solution for the given puzzle.
+## anchors: { Vector2i -> {area: int, shape: int} }
+## area == 0 means no area constraint; shape == SHAPE_ABSENT means no shape constraint.
+static func validate_anchors(width: int, height: int, anchors: Dictionary, rectangles: Array[Rect2i]) -> bool:
 	var coverage := PackedByteArray()
 	coverage.resize(width * height)
 	coverage.fill(0)
 
 	for rect in rectangles:
-		# Bounds check
 		if rect.position.x < 0 or rect.position.y < 0:
 			return false
 		if rect.position.x + rect.size.x > width or rect.position.y + rect.size.y > height:
 			return false
 
-		var area := rect.size.x * rect.size.y
-
-		# Check: rectangle contains exactly one number and it equals the area
-		var found_number := false
+		var rect_area := rect.size.x * rect.size.y
+		var found_anchor := false
 		for r in range(rect.position.y, rect.position.y + rect.size.y):
 			for c in range(rect.position.x, rect.position.x + rect.size.x):
 				var idx := r * width + c
 				if coverage[idx] != 0:
-					return false  # Overlap
+					return false
 				coverage[idx] = 1
-
 				var pos := Vector2i(c, r)
-				if numbers.has(pos):
-					if found_number:
-						return false  # Two numbers in one rectangle
-					if numbers[pos] != area:
-						return false  # Number doesn't match area
-					found_number = true
+				if anchors.has(pos):
+					if found_anchor:
+						return false
+					found_anchor = true
+					var anchor: Dictionary = anchors[pos]
+					var anchor_area: int = int(anchor.get("area", 0))
+					var anchor_shape: int = int(anchor.get("shape", ShikakuLogic.SHAPE_ABSENT))
+					if anchor_area > 0 and anchor_area != rect_area:
+						return false
+					if not _shape_matches(rect.size.x, rect.size.y, anchor_shape):
+						return false
+		if not found_anchor:
+			return false
 
-		if not found_number:
-			return false  # Rectangle has no number
-
-	# Check all cells covered
 	for i in coverage.size():
 		if coverage[i] == 0:
 			return false
@@ -50,32 +53,79 @@ static func validate(width: int, height: int, numbers: Dictionary, rectangles: A
 	return true
 
 
-## Solve the puzzle and return a valid solution, or empty array if unsolvable
-## Uses backtracking with constraint propagation
-static func solve(width: int, height: int, numbers: Dictionary) -> Array[Rect2i]:
+## Legacy backward-compatible validate using a numbers dict { Vector2i -> int }.
+static func validate(width: int, height: int, numbers: Dictionary, rectangles: Array[Rect2i]) -> bool:
+	var anchors: Dictionary = {}
+	for pos in numbers.keys():
+		anchors[pos] = {"area": int(numbers[pos]), "shape": ShikakuLogic.SHAPE_ABSENT}
+	return validate_anchors(width, height, anchors, rectangles)
+
+
+## Solve the puzzle and return one valid solution, or empty array if unsolvable.
+## anchors: { Vector2i -> {area: int, shape: int} }
+static func solve_with_anchors(width: int, height: int, anchors: Dictionary) -> Array[Rect2i]:
 	var covered := PackedByteArray()
 	covered.resize(width * height)
 	covered.fill(0)
 
-	# Convert number positions to an array for ordering
-	var num_entries: Array[Dictionary] = []
-	for pos in numbers.keys():
-		num_entries.append({"pos": pos, "area": numbers[pos]})
-
-	# Sort by area (smaller first = more constrained = faster pruning)
-	num_entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		return a["area"] < b["area"]
-	)
-
+	var entries: Array[Dictionary] = _build_entries(anchors)
 	var result: Array[Rect2i] = []
-	if _backtrack(width, height, num_entries, 0, covered, result):
+	if _backtrack(width, height, entries, 0, covered, result):
 		return result
 	return []
 
 
-static func _backtrack(width: int, height: int, entries: Array[Dictionary], idx: int, covered: PackedByteArray, result: Array[Rect2i]) -> bool:
+## Backward-compatible solve using a numbers dict { Vector2i -> int }.
+static func solve(width: int, height: int, numbers: Dictionary) -> Array[Rect2i]:
+	var anchors: Dictionary = {}
+	for pos in numbers.keys():
+		anchors[pos] = {"area": int(numbers[pos]), "shape": ShikakuLogic.SHAPE_ABSENT}
+	return solve_with_anchors(width, height, anchors)
+
+
+## Count the number of valid solutions (up to max_count).
+## Returns early once max_count solutions are found.
+## anchors: { Vector2i -> {area: int, shape: int} }
+static func count_solutions(width: int, height: int, anchors: Dictionary, max_count: int = 2) -> int:
+	var covered := PackedByteArray()
+	covered.resize(width * height)
+	covered.fill(0)
+	var entries: Array[Dictionary] = _build_entries(anchors)
+	var count := [0]
+	_count_backtrack(width, height, entries, 0, covered, count, max_count)
+	return count[0]
+
+
+## Build sorted entry list from anchors dict for backtracking.
+static func _build_entries(anchors: Dictionary) -> Array[Dictionary]:
+	var entries: Array[Dictionary] = []
+	for pos in anchors.keys():
+		var anchor: Dictionary = anchors[pos]
+		entries.append({"pos": pos, "anchor": anchor})
+	# Sort: area-constrained first (more constrained = faster pruning),
+	# then shape-constrained, then unconstrained.
+	entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var aa: Dictionary = a["anchor"]
+		var ba: Dictionary = b["anchor"]
+		var a_area: int = int(aa.get("area", 0))
+		var b_area: int = int(ba.get("area", 0))
+		var a_shape: int = int(aa.get("shape", ShikakuLogic.SHAPE_ABSENT))
+		var b_shape: int = int(ba.get("shape", ShikakuLogic.SHAPE_ABSENT))
+		var a_score: int = (1 if a_area > 0 else 0) + (1 if a_shape > ShikakuLogic.SHAPE_ABSENT else 0)
+		var b_score: int = (1 if b_area > 0 else 0) + (1 if b_shape > ShikakuLogic.SHAPE_ABSENT else 0)
+		if a_score != b_score:
+			return a_score > b_score
+		if a_area > 0 and b_area > 0:
+			return a_area < b_area
+		return false
+	)
+	return entries
+
+
+static func _backtrack(
+		width: int, height: int, entries: Array[Dictionary],
+		idx: int, covered: PackedByteArray, result: Array[Rect2i]) -> bool:
 	if idx >= entries.size():
-		# All numbers placed — check if fully covered
 		for i in covered.size():
 			if covered[i] == 0:
 				return false
@@ -83,21 +133,17 @@ static func _backtrack(width: int, height: int, entries: Array[Dictionary], idx:
 
 	var entry := entries[idx]
 	var pos: Vector2i = entry["pos"]
-	var area: int = entry["area"]
+	var anchor: Dictionary = entry["anchor"]
 
-	# Skip if this cell is already covered by a previous rectangle
 	if covered[pos.y * width + pos.x] != 0:
 		return _backtrack(width, height, entries, idx + 1, covered, result)
 
-	# Enumerate all rectangles of the correct area that contain this number's position
-	var rects := _enumerate_rects_containing(pos, area, width, height, covered)
+	var rects := _enumerate_rects_for_anchor(pos, anchor, width, height, covered)
 
 	for rect in rects:
-		# Place rectangle
 		_mark_covered(rect, width, covered, 1)
 		result.append(rect)
 
-		# Check: no other number in this rectangle (besides the current one)
 		var conflict := false
 		for e_idx in range(entries.size()):
 			if e_idx == idx:
@@ -111,34 +157,123 @@ static func _backtrack(width: int, height: int, entries: Array[Dictionary], idx:
 			if _backtrack(width, height, entries, idx + 1, covered, result):
 				return true
 
-		# Undo
 		result.pop_back()
 		_mark_covered(rect, width, covered, 0)
 
 	return false
 
 
-static func _enumerate_rects_containing(pos: Vector2i, area: int, width: int, height: int, covered: PackedByteArray) -> Array[Rect2i]:
+static func _count_backtrack(
+		width: int, height: int, entries: Array[Dictionary],
+		idx: int, covered: PackedByteArray, count: Array, max_count: int) -> void:
+	if count[0] >= max_count:
+		return
+
+	if idx >= entries.size():
+		for i in covered.size():
+			if covered[i] == 0:
+				return
+		count[0] += 1
+		return
+
+	var entry := entries[idx]
+	var pos: Vector2i = entry["pos"]
+	var anchor: Dictionary = entry["anchor"]
+
+	if covered[pos.y * width + pos.x] != 0:
+		_count_backtrack(width, height, entries, idx + 1, covered, count, max_count)
+		return
+
+	var rects := _enumerate_rects_for_anchor(pos, anchor, width, height, covered)
+
+	for rect in rects:
+		if count[0] >= max_count:
+			return
+		_mark_covered(rect, width, covered, 1)
+
+		var conflict := false
+		for e_idx in range(entries.size()):
+			if e_idx == idx:
+				continue
+			var other_pos: Vector2i = entries[e_idx]["pos"]
+			if rect.has_point(other_pos):
+				conflict = true
+				break
+
+		if not conflict:
+			_count_backtrack(width, height, entries, idx + 1, covered, count, max_count)
+
+		_mark_covered(rect, width, covered, 0)
+
+
+## Enumerate all candidate rectangles for a given anchor position and clue.
+static func _enumerate_rects_for_anchor(
+		pos: Vector2i, anchor: Dictionary,
+		width: int, height: int, covered: PackedByteArray) -> Array[Rect2i]:
+	var anchor_area: int = int(anchor.get("area", 0))
+	var anchor_shape: int = int(anchor.get("shape", ShikakuLogic.SHAPE_ABSENT))
 	var rects: Array[Rect2i] = []
 
-	# Find all (w, h) factor pairs of area
+	if anchor_area > 0:
+		# Area-constrained: enumerate all (w,h) factor pairs of that area.
+		for w in range(1, anchor_area + 1):
+			if anchor_area % w != 0:
+				continue
+			var h := anchor_area / w
+			if not _shape_matches(w, h, anchor_shape):
+				continue
+			_collect_rects_containing(pos, w, h, width, height, covered, rects)
+	else:
+		# No area constraint: enumerate all rectangles of area 1..MAX up to grid bounds.
+		for a in range(1, MAX_UNCONSTRAINED_AREA + 1):
+			for w in range(1, a + 1):
+				if a % w != 0:
+					continue
+				var h := a / w
+				if not _shape_matches(w, h, anchor_shape):
+					continue
+				_collect_rects_containing(pos, w, h, width, height, covered, rects)
+
+	return rects
+
+
+static func _collect_rects_containing(
+		pos: Vector2i, w: int, h: int,
+		width: int, height: int, covered: PackedByteArray,
+		out: Array[Rect2i]) -> void:
+	var min_col := maxi(0, pos.x - w + 1)
+	var max_col := mini(width - w, pos.x)
+	var min_row := maxi(0, pos.y - h + 1)
+	var max_row := mini(height - h, pos.y)
+	for r in range(min_row, max_row + 1):
+		for c in range(min_col, max_col + 1):
+			var rect := Rect2i(c, r, w, h)
+			if _rect_is_clear(rect, width, covered):
+				out.append(rect)
+
+
+## True when a w×h rectangle satisfies the given shape constraint.
+static func _shape_matches(w: int, h: int, shape: int) -> bool:
+	match shape:
+		ShikakuLogic.SHAPE_ABSENT, ShikakuLogic.SHAPE_ANY:
+			return true
+		ShikakuLogic.SHAPE_SQUARE:
+			return w == h
+		ShikakuLogic.SHAPE_TALL:
+			return h > w
+		ShikakuLogic.SHAPE_WIDE:
+			return w > h
+	return false
+
+
+## Enumerate rectangles of exact area containing pos (backward-compat helper).
+static func _enumerate_rects_containing(pos: Vector2i, area: int, width: int, height: int, covered: PackedByteArray) -> Array[Rect2i]:
+	var rects: Array[Rect2i] = []
 	for w in range(1, area + 1):
 		if area % w != 0:
 			continue
 		var h := area / w
-
-		# Find all positions where a w×h rect contains pos
-		var min_col := maxi(0, pos.x - w + 1)
-		var max_col := mini(width - w, pos.x)
-		var min_row := maxi(0, pos.y - h + 1)
-		var max_row := mini(height - h, pos.y)
-
-		for r in range(min_row, max_row + 1):
-			for c in range(min_col, max_col + 1):
-				var rect := Rect2i(c, r, w, h)
-				if _rect_is_clear(rect, width, covered):
-					rects.append(rect)
-
+		_collect_rects_containing(pos, w, h, width, height, covered, rects)
 	return rects
 
 

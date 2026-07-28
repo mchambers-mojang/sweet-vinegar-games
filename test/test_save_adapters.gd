@@ -253,7 +253,8 @@ func test_shikaku_adapter_get_grid_width_default_when_no_save() -> void:
 
 func test_restore_if_resumable_returns_data_when_valid() -> void:
 	var adapter := ShikakuSaveAdapter.new()
-	adapter.save({"width": 10, "height": 10, "is_completed": false})
+	var anchors := {"5,5": {"area": 10, "shape": 0}}
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors})
 	var data: Dictionary = adapter.restore_if_resumable()
 	assert_false(data.is_empty(), "restore_if_resumable must return data for a valid save")
 	assert_eq(data["width"], 10)

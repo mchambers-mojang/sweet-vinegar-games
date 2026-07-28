@@ -8,6 +8,7 @@ const SIZE_NAMES := {5: "5×5", 7: "7×7", 8: "8×8", 10: "10×10", 12: "12×12"
 # Game state
 var grid_width: int = 10
 var grid_height: int = 10
+var mode: int = ShikakuLogic.RULE_SET_STANDARD
 var is_paused: bool = false
 var logic: ShikakuLogic = ShikakuLogic.new()
 
@@ -43,7 +44,7 @@ func _get_save_adapter() -> GameSaveAdapter:
 
 
 func _is_initialized() -> bool:
-	return not logic.numbers.is_empty()
+	return not logic.anchors.is_empty()
 
 
 func _is_completed() -> bool:
@@ -54,6 +55,7 @@ func _serialize_state() -> Dictionary:
 	var data: Dictionary = logic.serialize()
 	data["elapsed_time"] = elapsed_time
 	data["replay_id"] = replay_id
+	data["mode"] = mode
 	return data
 
 
@@ -89,19 +91,21 @@ func _on_game_screen_ready() -> void:
 	_update_button_states()
 
 
-func start_new_game(w: int, h: int) -> void:
+func start_new_game(w: int, h: int, p_mode: int = ShikakuLogic.RULE_SET_STANDARD) -> void:
 	grid_width = w
 	grid_height = h
+	mode = p_mode
 	begin_session()
 
 
 func launch(params: LaunchParams) -> void:
-	start_new_game(params.option_value, params.option_value)
+	start_new_game(params.option_value, params.option_value, params.rule_set)
 
 
 func resume_game(data: Dictionary) -> void:
 	grid_width = data.get("width", 10)
 	grid_height = data.get("height", 10)
+	mode = int(data.get("mode", ShikakuLogic.RULE_SET_STANDARD))
 	begin_session(data)
 
 
@@ -112,18 +116,20 @@ func _should_tick_timer() -> bool:
 
 
 func _get_start_crash_params() -> Dictionary:
-	return {"width": grid_width, "height": grid_height}
+	return {"width": grid_width, "height": grid_height, "mode": mode}
 
 
 func _get_resume_crash_params(saved_data: Dictionary) -> Dictionary:
-	return {"width": saved_data.get("width", 10), "height": saved_data.get("height", 10)}
+	return {"width": saved_data.get("width", 10), "height": saved_data.get("height", 10), "mode": saved_data.get("mode", 0)}
 
 
 func _get_initial_state() -> Dictionary:
+	var serialized := logic.serialize()
 	return {
 		"width": grid_width,
 		"height": grid_height,
-		"numbers": logic.serialize().get("numbers", {}),
+		"mode": mode,
+		"anchors": serialized.get("anchors", {}),
 	}
 
 
@@ -133,13 +139,14 @@ func _get_settings_snapshot() -> Dictionary:
 
 func _setup_game(saved_data: Dictionary) -> void:
 	if saved_data.is_empty():
-		logic.init_new_game(grid_width, grid_height, random_seed)
+		logic.init_new_game(grid_width, grid_height, random_seed, mode)
 	else:
 		logic.init_from_save(saved_data)
 	grid_width = logic.grid_width
 	grid_height = logic.grid_height
+	mode = logic.mode
 	random_seed = logic.random_seed
-	board.setup(grid_width, grid_height, logic.numbers)
+	board.setup(grid_width, grid_height, logic.anchors)
 	for rect in logic.placed_rects:
 		board.add_rect(rect)
 	size_label.text = SIZE_NAMES.get(grid_width, "%dx%d" % [grid_width, grid_height])
@@ -148,7 +155,11 @@ func _setup_game(saved_data: Dictionary) -> void:
 
 func _increment_stats() -> void:
 	_stats.increment_counter("shikaku", "games_started")
-	_stats.increment_counter("shikaku", "started_s%d" % grid_width)
+	var size_key := "started_s%d" % grid_width
+	if mode == ShikakuLogic.RULE_SET_SHAPES:
+		_stats.increment_counter("shikaku", "started_shapes_s%d" % grid_width)
+	else:
+		_stats.increment_counter("shikaku", size_key)
 
 
 func _get_analytics_params() -> Dictionary:
@@ -324,12 +335,18 @@ func _on_back() -> void:
 
 func _handle_win() -> void:
 	GameEvents.game_ended.emit("shikaku", "win", elapsed_time)
-	# Leaderboard: submit completion time for board sizes with registered boards (5/7/10/14).
-	if grid_width in [5, 7, 10, 14]:
-		GameEvents.leaderboard_score_ready.emit("shikaku", str(grid_width), elapsed_time)
+	# Leaderboard: emit with mode-aware key.
+	# Standard: use raw size string (e.g. "5"); Shapes: use "shapes_5".
+	var lb_key: String
+	if mode == ShikakuLogic.RULE_SET_SHAPES:
+		lb_key = "shapes_%d" % grid_width
+	else:
+		lb_key = str(grid_width)
+	GameEvents.leaderboard_score_ready.emit("shikaku", lb_key, elapsed_time)
 	var completed: Dictionary = _recorder.finish_session("win", logic.placed_rects.size(), elapsed_time, {
 		"width": grid_width,
 		"height": grid_height,
+		"mode": mode,
 		"hints_used": logic.hints_used,
 	})
 	_storage.save_replay(completed)
@@ -346,6 +363,7 @@ func _handle_win() -> void:
 		"won": true,
 		"width": grid_width,
 		"height": grid_height,
+		"mode": mode,
 		"elapsed_time": elapsed_time,
 		"hints_used": logic.hints_used,
 	})
@@ -370,7 +388,8 @@ func _handle_win() -> void:
 
 
 func _is_new_best_time() -> bool:
-	var best_ms: int = _stats.get_counter("shikaku", "best_s%d" % grid_width)
+	var mode_prefix := "shapes_" if mode == ShikakuLogic.RULE_SET_SHAPES else ""
+	var best_ms: int = _stats.get_counter("shikaku", "best_%ss%d" % [mode_prefix, grid_width])
 	return best_ms == 0 or elapsed_time < (float(best_ms) / 1000.0)
 
 
@@ -420,8 +439,9 @@ func _show_win_dialog() -> void:
 func _restart_same_game() -> void:
 	var w := grid_width
 	var h := grid_height
+	var m := mode
 	SceneTransition.navigate(Scenes.SHIKAKU_GAME, func(game_scene: Node) -> void:
-		game_scene.start_new_game(w, h)
+		game_scene.start_new_game(w, h, m)
 	)
 
 
@@ -460,17 +480,20 @@ func _rect_from_dict(data: Dictionary) -> Rect2i:
 
 
 func _record_shikaku_completion(grid_size: int, time: float) -> void:
+	var mode_prefix := "shapes_" if mode == ShikakuLogic.RULE_SET_SHAPES else ""
 	_stats.record("shikaku", {
 		"type": "completion",
 		"grid_size": grid_size,
 		"time": time,
+		"mode": mode,
 	})
-	_stats.increment_counter("shikaku", "completed_s%d" % grid_size)
+	_stats.increment_counter("shikaku", "completed_%ss%d" % [mode_prefix, grid_size])
 	# Best time (stored as ms int)
-	var best_ms: int = _stats.get_counter("shikaku", "best_s%d" % grid_size)
+	var best_key := "best_%ss%d" % [mode_prefix, grid_size]
+	var best_ms: int = _stats.get_counter("shikaku", best_key)
 	var time_ms := int(time * 1000)
 	if best_ms == 0 or time_ms < best_ms:
-		_stats.set_counter("shikaku", "best_s%d" % grid_size, time_ms)
+		_stats.set_counter("shikaku", best_key, time_ms)
 	# Streak
 	var streak: int = _stats.get_counter("shikaku", "current_streak") + 1
 	_stats.set_counter("shikaku", "current_streak", streak)
