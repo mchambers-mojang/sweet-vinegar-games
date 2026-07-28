@@ -399,7 +399,7 @@ func test_sudoku_config_leaderboard_modes() -> void:
 	assert_eq(cfg.leaderboard_modes[1], "medium")
 	assert_eq(cfg.leaderboard_modes[2], "hard")
 	assert_eq(cfg.leaderboard_modes[3], "expert")
-	assert_eq(cfg.leaderboard_modes[4], "")  # evil — no server leaderboard
+	assert_eq(cfg.leaderboard_modes[4], "evil")
 	assert_true(cfg.leaderboard_is_time_based)
 
 

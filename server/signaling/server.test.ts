@@ -583,6 +583,15 @@ describe('Score Endpoints', () => {
     expect(atMax.status).toBe(200);
   });
 
+  test('POST /scores accepts Evil Sudoku times', async () => {
+    const res = await httpRequest({
+      method: 'POST', port, path: '/scores',
+      body: { device_id: TEST_UUID, game: 'sudoku', mode: 'evil', value: 120 },
+    });
+    expect(res.status).toBe(200);
+    expect((res.body as Record<string, unknown>).accepted).toBe(true);
+  });
+
   test('POST /scores rejects unknown game:mode combo', async () => {
     const res = await httpRequest({
       method: 'POST', port, path: '/scores',
@@ -857,4 +866,3 @@ describe('openDb — mount point validation', () => {
     expect(valid).toContain(JOURNAL_MODE);
   });
 });
-

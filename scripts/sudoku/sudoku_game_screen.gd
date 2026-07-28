@@ -113,6 +113,18 @@ func _get_save_adapter() -> GameSaveAdapter:
 	return SudokuSaveAdapter.new()
 
 
+func _get_help_topic() -> String:
+	match rule_set:
+		RULE_SET_ANTI_KNIGHT:
+			return "sudoku_anti_knight"
+		RULE_SET_ANTI_KING:
+			return "sudoku_anti_king"
+		RULE_SET_KILLER:
+			return "sudoku_killer"
+		_:
+			return "sudoku"
+
+
 func _is_initialized() -> bool:
 	return logic != null and not logic.puzzle.is_empty()
 
@@ -1271,8 +1283,9 @@ func _is_board_locked() -> bool:
 
 func _log_game_over_analytics(won: bool) -> void:
 	GameEvents.game_ended.emit("sudoku", "win" if won else "game_over", elapsed_time)
-	# Leaderboard: submit completion time for easy/medium/hard/expert (indices 0-3).
-	if won and difficulty <= 3:
+	var leaderboard_supported := difficulty <= SudokuSolver.Difficulty.EXPERT or (
+			rule_set == RULE_SET_STANDARD and difficulty == SudokuSolver.Difficulty.EVIL)
+	if won and leaderboard_supported:
 		var diff_mode: String = DIFFICULTY_NAMES[difficulty].to_lower()
 		var mode: String
 		if rule_set == RULE_SET_ANTI_KNIGHT:

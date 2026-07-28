@@ -481,6 +481,28 @@ func test_killer_resume_restores_progress_and_pencil_marks_to_board() -> void:
 			"resume must render saved pencil marks")
 
 
+func test_evil_sudoku_win_submits_leaderboard_score() -> void:
+	var sudoku := TestSudokuFailScreen.new(
+		MockRecorder.new(), MockStorage.new(), MockCrash.new(), MockAnalytics.new(),
+		MockAchievements.new(), MockSaves.new(), MockStats.new(), MockSound.new(), MockHaptic.new()
+	)
+	sudoku.logic = SudokuLogic.new(false, true)
+	sudoku.difficulty = SudokuSolver.Difficulty.EVIL
+	sudoku.rule_set = sudoku.RULE_SET_STANDARD
+	sudoku.elapsed_time = 600.0
+	var submissions: Array = []
+	var capture := func(game_id: String, mode: String, value: float) -> void:
+		submissions.append([game_id, mode, value])
+	GameEvents.leaderboard_score_ready.connect(capture)
+
+	sudoku._log_game_over_analytics(true)
+
+	GameEvents.leaderboard_score_ready.disconnect(capture)
+	assert_eq(submissions, [["sudoku", "evil", 600.0]],
+			"winning Evil Sudoku must submit to the Evil leaderboard")
+	sudoku.free()
+
+
 # ---------------------------------------------------------------------------
 # Generation-failure redirect: suppress auto-resume and ceremony
 # ---------------------------------------------------------------------------

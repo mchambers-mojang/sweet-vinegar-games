@@ -30,6 +30,18 @@ func _get_save_adapter() -> GameSaveAdapter:
 	return SudokuSaveAdapter.new()
 
 
+func _get_help_topic() -> String:
+	match _rule_set_index:
+		RULE_SET_ANTI_KNIGHT:
+			return "sudoku_anti_knight"
+		RULE_SET_ANTI_KING:
+			return "sudoku_anti_king"
+		RULE_SET_KILLER:
+			return "sudoku_killer"
+		_:
+			return "sudoku"
+
+
 func _on_menu_ready() -> void:
 	super._on_menu_ready()
 	_inject_rule_set_row()
@@ -87,7 +99,7 @@ func _setup_leaderboard_button(stats_btn: Button) -> void:
 	var labels: PackedStringArray = PackedStringArray()
 	var opt_btn := get_node_or_null("%DifficultyButton") as OptionButton
 
-	# Standard modes (from config, skip empty Evil slot — Evil difficulty has no leaderboard support)
+	# Standard modes
 	for i in range(config.leaderboard_modes.size()):
 		var m: String = config.leaderboard_modes[i]
 		if m.is_empty():

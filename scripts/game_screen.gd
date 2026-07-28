@@ -346,13 +346,12 @@ func _setup_help_button() -> void:
 	var settings_btn := _find_settings_button()
 	if not settings_btn:
 		return
-	var topic := _get_help_topic()
-	if topic.is_empty():
+	if _get_help_topic().is_empty():
 		return
 	var btn := Button.new()
 	btn.text = "?"
 	btn.custom_minimum_size = Vector2(36, 0)
-	btn.pressed.connect(func() -> void: HowToPlay.show_for(self, topic))
+	btn.pressed.connect(func() -> void: HowToPlay.show_for(self, _get_help_topic()))
 	var parent := settings_btn.get_parent()
 	if parent:
 		parent.add_child(btn)
