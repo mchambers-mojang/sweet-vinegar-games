@@ -25,6 +25,11 @@ const SHIKAKU_MENU := "res://scenes/shikaku_menu.tscn"
 const SHIKAKU_GAME := "res://scenes/shikaku_game.tscn"
 const SHIKAKU_STATS := "res://scenes/shikaku_stats.tscn"
 
+# Number Path
+const NUMBER_PATH_MENU := "res://scenes/number_path_menu.tscn"
+const NUMBER_PATH_GAME := "res://scenes/number_path_game.tscn"
+const NUMBER_PATH_STATS := "res://scenes/number_path_stats.tscn"
+
 # Carom
 const CAROM_MENU := "res://scenes/carom_menu.tscn"
 const CAROM_ONLINE_MENU := "res://carom/scenes/carom_online_menu.tscn"
