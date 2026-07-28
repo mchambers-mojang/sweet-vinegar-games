@@ -35,15 +35,15 @@ const TIER_MIN_RANK := {
 	TIER_EASY: CrownGridSolver.RANK_SINGLE,
 	TIER_MEDIUM: CrownGridSolver.RANK_COMBINED,
 	TIER_HARD: CrownGridSolver.RANK_LOCKED,
-	TIER_EXPERT: CrownGridSolver.RANK_CHAIN,
+	TIER_EXPERT: CrownGridSolver.RANK_LOCKED,  # 9×9 with locked-candidate logic
 }
 
-# Max rank allowed per tier (Easy must not exceed rank 1, etc.)
+# Max rank allowed per tier
 const TIER_MAX_RANK := {
 	TIER_EASY: CrownGridSolver.RANK_SINGLE,
 	TIER_MEDIUM: CrownGridSolver.RANK_COMBINED,
 	TIER_HARD: CrownGridSolver.RANK_LOCKED,
-	TIER_EXPERT: CrownGridSolver.RANK_CHAIN,
+	TIER_EXPERT: CrownGridSolver.RANK_CHAIN,  # chain steps are valid on 9×9
 }
 
 const MAX_OUTER_ATTEMPTS := 500

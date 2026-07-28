@@ -362,28 +362,70 @@ static func _find_locked_subset(
 # ---------------------------------------------------------------------------
 
 static func _try_rank4_chain(size: int, regions: PackedInt32Array, cands: Dictionary) -> SolveStep:
-	# Simulate applying rank-1/2/3 eliminations one step at a time and look for
-	# a chain that eventually yields an exclusion not reachable in a single pass.
-	var sim_cands := _clone_cands(cands)
-	var chain_cells: Array[Vector2i] = []
-	var chain_steps := 0
+	# Forcing-chain detection: for each candidate cell, temporarily assume
+	# it is excluded, then simulate rank-1/2/3 propagation. If 3+ steps
+	# fire and they expose an exclusion common to ALL assumed starting cells
+	# (or a definite crown), that exclusion is logically forced.
+	# This is a lightweight implementation; it detects simple forcing chains.
+	var candidate_list: Array = cands.keys()
+	if candidate_list.size() > size * size:
+		return null  # Too large to evaluate quickly
 
-	for _iter in range(size * 2):
-		var step := _try_rank1_singles(size, regions, sim_cands)
-		if step == null:
-			step = _try_rank2_combined(size, regions, sim_cands)
-		if step == null:
+	# Map: excluded_cell → list of cells that become forced-excluded
+	var forced_map: Dictionary = {}
+
+	for assumed_cell in candidate_list:
+		var sim_cands := _clone_cands(cands)
+		sim_cands.erase(assumed_cell)
+
+		var chain_steps := 0
+		var newly_excluded: Array[Vector2i] = []
+
+		for _iter in range(size * 3):
+			var step := _try_rank1_singles(size, regions, sim_cands)
+			if step == null:
+				step = _try_rank2_combined(size, regions, sim_cands)
+			if step == null:
+				step = _try_rank3_locked(size, regions, sim_cands)
+			if step == null:
+				break
+			chain_steps += 1
+			for cell in step.affected_cells:
+				var v := cell as Vector2i
+				sim_cands.erase(v)
+				if step.result == CrownGridSolver.CELL_EXCLUDED and cands.has(v) and v != assumed_cell:
+					if not newly_excluded.has(v):
+						newly_excluded.append(v)
+
+		if chain_steps >= 2 and not newly_excluded.is_empty():
+			forced_map[assumed_cell] = newly_excluded
+
+	# Find cells that are excluded regardless of which starting assumption is made
+	# i.e., cells excluded in ALL forced_map entries → these are rank-4 forced
+	if forced_map.size() < 2:
+		return null
+
+	var intersection: Array[Vector2i] = []
+	var first := true
+	for _key in forced_map:
+		var excluded_list: Array = forced_map[_key]
+		if first:
+			for v in excluded_list:
+				intersection.append(v as Vector2i)
+			first = false
+		else:
+			var keep: Array[Vector2i] = []
+			for v in intersection:
+				if excluded_list.has(v):
+					keep.append(v)
+			intersection = keep
+		if intersection.is_empty():
 			break
-		chain_steps += 1
-		for cell in step.affected_cells:
-			sim_cands.erase(cell)
-			if not cands.has(cell):
-				continue
-			chain_cells.append(cell)
-		if chain_steps >= 3 and not chain_cells.is_empty():
-			return SolveStep.new(
-				"Chain of %d dependent eliminations" % chain_steps,
-				chain_cells, CELL_EXCLUDED, RANK_CHAIN)
+
+	if not intersection.is_empty():
+		return SolveStep.new(
+			"Chain of 3+ dependent eliminations (forcing chain)",
+			intersection, CELL_EXCLUDED, RANK_CHAIN)
 
 	return null
 
