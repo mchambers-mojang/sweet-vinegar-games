@@ -11,12 +11,12 @@ const RULE_SET_ANTI_KNIGHT := 1
 const RULE_SET_ANTI_KING := 2
 const RULE_SET_KILLER := 3
 
-const ANTI_KNIGHT_MODES := PackedStringArray(["antiknight_easy", "antiknight_medium", "antiknight_hard", "antiknight_expert"])
-const ANTI_KNIGHT_LABELS := PackedStringArray(["Anti-Knight Easy", "Anti-Knight Medium", "Anti-Knight Hard", "Anti-Knight Expert"])
-const ANTI_KING_MODES := PackedStringArray(["antiking_easy", "antiking_medium", "antiking_hard", "antiking_expert"])
-const ANTI_KING_LABELS := PackedStringArray(["Anti-King Easy", "Anti-King Medium", "Anti-King Hard", "Anti-King Expert"])
-const KILLER_MODES := PackedStringArray(["killer_easy", "killer_medium", "killer_hard", "killer_expert"])
-const KILLER_LABELS := PackedStringArray(["Killer Easy", "Killer Medium", "Killer Hard", "Killer Expert"])
+const ANTI_KNIGHT_MODES := ["antiknight_easy", "antiknight_medium", "antiknight_hard", "antiknight_expert"]
+const ANTI_KNIGHT_LABELS := ["Anti-Knight Easy", "Anti-Knight Medium", "Anti-Knight Hard", "Anti-Knight Expert"]
+const ANTI_KING_MODES := ["antiking_easy", "antiking_medium", "antiking_hard", "antiking_expert"]
+const ANTI_KING_LABELS := ["Anti-King Easy", "Anti-King Medium", "Anti-King Hard", "Anti-King Expert"]
+const KILLER_MODES := ["killer_easy", "killer_medium", "killer_hard", "killer_expert"]
+const KILLER_LABELS := ["Killer Easy", "Killer Medium", "Killer Hard", "Killer Expert"]
 
 var _rule_set_index: int = RULE_SET_STANDARD
 var _rule_set_button: OptionButton = null

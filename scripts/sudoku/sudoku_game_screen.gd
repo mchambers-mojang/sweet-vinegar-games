@@ -1277,7 +1277,7 @@ func _log_game_over_analytics(won: bool) -> void:
 	GameEvents.game_ended.emit("sudoku", "win" if won else "game_over", elapsed_time)
 	# Leaderboard: submit completion time for easy/medium/hard/expert (indices 0-3).
 	if won and difficulty <= 3:
-		var diff_mode := DIFFICULTY_NAMES[difficulty].to_lower()
+		var diff_mode: String = DIFFICULTY_NAMES[difficulty].to_lower()
 		var mode: String
 		if rule_set == RULE_SET_ANTI_KNIGHT:
 			mode = "antiknight_" + diff_mode
@@ -1301,7 +1301,7 @@ func _log_game_over_analytics(won: bool) -> void:
 
 ## Returns the display label for the current difficulty (prepends rule set name when active).
 func _difficulty_label_text(diff: int) -> String:
-	var base := DIFFICULTY_NAMES[diff]
+	var base: String = DIFFICULTY_NAMES[diff]
 	if rule_set == RULE_SET_ANTI_KNIGHT:
 		return "Anti-Knight – " + base
 	elif rule_set == RULE_SET_ANTI_KING:
@@ -1450,4 +1450,3 @@ func _get_best_time(diff: int) -> float:
 	if best_ms == 0:
 		return -1.0
 	return float(best_ms) / 1000.0
-

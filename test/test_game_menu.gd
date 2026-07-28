@@ -422,6 +422,16 @@ func test_blockudoku_config_leaderboard_modes() -> void:
 	assert_false(cfg.leaderboard_is_time_based)
 
 
+func test_sudoku_main_menu_script_loads() -> void:
+	var menu_script := load("res://scripts/sudoku/sudoku_main_menu.gd")
+	assert_not_null(menu_script, "Sudoku Game Menu script must parse and load")
+
+
+func test_sudoku_game_screen_script_loads() -> void:
+	var game_script := load("res://scripts/sudoku/sudoku_game_screen.gd")
+	assert_not_null(game_script, "Sudoku Game Screen script must parse and load")
+
+
 # ---------------------------------------------------------------------------
 # LaunchParams — defaults and property assignment
 # ---------------------------------------------------------------------------
@@ -471,4 +481,3 @@ func test_build_launch_params_online_is_false_by_default() -> void:
 	var cfg := MenuConfigScript.new()
 	var p := cfg.build_launch_params(2)
 	assert_false(p.online)
-
