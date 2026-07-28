@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="MenuConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/menu/menu_config.gd" id="1_crowngrid"]
+
+[resource]
+script = ExtResource("1_crowngrid")
+game_id = "crown_grid"
+display_name = "Crown Grid"
+help_topic = "crown_grid"
+menu_scene_path = "res://scenes/crown_grid_menu.tscn"
+game_scene_path = "res://scenes/crown_grid_game.tscn"
+stats_scene_path = "res://scenes/crown_grid_stats.tscn"
+has_save_support = true
+start_button_unique_name = "NewGameButton"
+option_button_unique_name = "TierButton"
+option_default_index = 0
+option_values = PackedInt32Array(0, 1, 2, 3)
+abandon_stat_save_key = "tier"
+abandon_stat_prefix = "abandoned_t"
+abandon_stat_default = 0
+title_color_key = ""
+game_rules = {}
+leaderboard_modes = PackedStringArray("easy", "medium", "hard", "expert")
+leaderboard_is_time_based = true

@@ -1,0 +1,28 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/components/base_menu.tscn" id="1"]
+[ext_resource type="Script" path="res://scripts/crown_grid/crown_grid_menu.gd" id="2"]
+
+[node name="CrownGridMenu" instance=ExtResource("1")]
+script = ExtResource("2")
+
+[node name="TierRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer" index=6]
+layout_mode = 2
+alignment = 1
+
+[node name="TierLabel" type="Label" parent="MarginContainer/VBoxContainer/TierRow"]
+layout_mode = 2
+text = "Difficulty: "
+
+[node name="TierButton" type="OptionButton" parent="MarginContainer/VBoxContainer/TierRow"]
+unique_name_in_owner = true
+layout_mode = 2
+item_count = 4
+popup/item_0/text = "Easy (6×6)"
+popup/item_1/text = "Medium (7×7)"
+popup/item_1/id = 1
+popup/item_2/text = "Hard (8×8)"
+popup/item_2/id = 2
+popup/item_3/text = "Expert (9×9)"
+popup/item_3/id = 3
+selected = 0
