@@ -179,6 +179,17 @@ export function deletePlayerScores(
   }
 }
 
+export function deletePlayerScore(
+  db: Database.Database,
+  device_id: string,
+  game: string,
+  mode: string
+): void {
+  db.prepare(
+    'DELETE FROM scores WHERE device_id = ? AND game = ? AND mode = ?'
+  ).run(device_id, game, mode);
+}
+
 export function getLeaderboard(
   db: Database.Database,
   game: string,

@@ -673,6 +673,29 @@ describe('Delete Scores Endpoint', () => {
     expect(body.player_score).toBe(150);
   });
 
+  test('DELETE /scores/:device_id with game and mode removes only that board', async () => {
+    const res = await httpRequest({
+      method: 'DELETE',
+      port,
+      path: `/scores/${TEST_UUID}?game=sudoku&mode=easy`,
+    });
+    expect(res.status).toBe(204);
+
+    const easy = await httpRequest({
+      method: 'GET',
+      port,
+      path: `/leaderboard?game=sudoku&mode=easy&device_id=${TEST_UUID}`,
+    });
+    expect((easy.body as Record<string, unknown>).player_score).toBeNull();
+
+    const medium = await httpRequest({
+      method: 'GET',
+      port,
+      path: `/leaderboard?game=sudoku&mode=medium&device_id=${TEST_UUID}`,
+    });
+    expect((medium.body as Record<string, unknown>).player_score).toBe(200);
+  });
+
   test('DELETE /scores/:device_id with purge_profile=true also removes the player profile', async () => {
     const res = await httpRequest({ method: 'DELETE', port, path: `/scores/${TEST_UUID}?purge_profile=true` });
     expect(res.status).toBe(204);
