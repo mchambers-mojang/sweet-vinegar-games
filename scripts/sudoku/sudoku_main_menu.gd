@@ -2,7 +2,7 @@ extends GameMenu
 
 ## Sudoku main menu — config-driven via assets/menu/sudoku_menu.tres
 ##
-## Extends GameMenu with a "Rule Set" dropdown (Standard / Anti-Knight / Anti-King / Killer)
+## Extends GameMenu with a "Rule Set" dropdown (Standard / Anti-Knight / Anti-King / Killer / Mini)
 ## injected dynamically below the existing DifficultyButton row.
 ## The selected rule set is forwarded to the game screen via LaunchParams.rule_set.
 
@@ -10,6 +10,7 @@ const RULE_SET_STANDARD := 0
 const RULE_SET_ANTI_KNIGHT := 1
 const RULE_SET_ANTI_KING := 2
 const RULE_SET_KILLER := 3
+const RULE_SET_MINI := 4
 
 const ANTI_KNIGHT_MODES := PackedStringArray(["antiknight_easy", "antiknight_medium", "antiknight_hard", "antiknight_expert"])
 const ANTI_KNIGHT_LABELS := PackedStringArray(["Anti-Knight Easy", "Anti-Knight Medium", "Anti-Knight Hard", "Anti-Knight Expert"])
@@ -17,6 +18,8 @@ const ANTI_KING_MODES := PackedStringArray(["antiking_easy", "antiking_medium", 
 const ANTI_KING_LABELS := PackedStringArray(["Anti-King Easy", "Anti-King Medium", "Anti-King Hard", "Anti-King Expert"])
 const KILLER_MODES := PackedStringArray(["killer_easy", "killer_medium", "killer_hard", "killer_expert"])
 const KILLER_LABELS := PackedStringArray(["Killer Easy", "Killer Medium", "Killer Hard", "Killer Expert"])
+const MINI_MODES := PackedStringArray(["mini"])
+const MINI_LABELS := PackedStringArray(["Mini 6×6"])
 
 var _rule_set_index: int = RULE_SET_STANDARD
 var _rule_set_button: OptionButton = null
@@ -36,7 +39,7 @@ func _on_menu_ready() -> void:
 
 
 ## Injects an HBoxContainer with "Rule Set:" label and OptionButton
-## (Standard / Anti-Knight / Anti-King / Killer) directly below the DifficultyRow.
+## (Standard / Anti-Knight / Anti-King / Killer / Mini) directly below the DifficultyRow.
 func _inject_rule_set_row() -> void:
 	var diff_btn := get_node_or_null("%DifficultyButton") as OptionButton
 	if diff_btn == null:
@@ -58,6 +61,7 @@ func _inject_rule_set_row() -> void:
 	_rule_set_button.add_item("Anti-Knight")
 	_rule_set_button.add_item("Anti-King")
 	_rule_set_button.add_item("Killer")
+	_rule_set_button.add_item("Mini 6×6")
 	_rule_set_button.selected = _rule_set_index
 	_rule_set_button.item_selected.connect(_on_rule_set_changed)
 	row.add_child(_rule_set_button)
@@ -72,12 +76,15 @@ func _start_game() -> void:
 		return
 	var params := config.build_launch_params(_get_current_option_value())
 	params.rule_set = _rule_set_index
+	# Mini always uses difficulty 0 (quick-play), ignoring the difficulty selector.
+	if _rule_set_index == RULE_SET_MINI:
+		params.option_value = 0
 	SceneTransition.navigate(config.game_scene_path, func(game_scene: Node) -> void:
 		game_scene.launch(params)
 	)
 
 
-## Override _setup_leaderboard_button to add Anti-Knight, Anti-King and Killer modes.
+## Override _setup_leaderboard_button to add Anti-Knight, Anti-King, Killer, and Mini modes.
 func _setup_leaderboard_button(stats_btn: Button) -> void:
 	if not config or config.leaderboard_modes.is_empty():
 		return
@@ -113,6 +120,11 @@ func _setup_leaderboard_button(stats_btn: Button) -> void:
 		modes.append(KILLER_MODES[i])
 		labels.append(KILLER_LABELS[i])
 
+	# Mini modes
+	for i in range(MINI_MODES.size()):
+		modes.append(MINI_MODES[i])
+		labels.append(MINI_LABELS[i])
+
 	if modes.is_empty():
 		return
 
@@ -133,6 +145,8 @@ func _setup_leaderboard_button(stats_btn: Button) -> void:
 			selected_lb_idx = standard_modes_count + ANTI_KNIGHT_MODES.size() + mini(diff_idx, ANTI_KING_MODES.size() - 1)
 		elif _rule_set_index == RULE_SET_KILLER:
 			selected_lb_idx = standard_modes_count + ANTI_KNIGHT_MODES.size() + ANTI_KING_MODES.size() + mini(diff_idx, KILLER_MODES.size() - 1)
+		elif _rule_set_index == RULE_SET_MINI:
+			selected_lb_idx = standard_modes_count + ANTI_KNIGHT_MODES.size() + ANTI_KING_MODES.size() + KILLER_MODES.size()
 		else:
 			# Map diff_idx to the non-empty standard modes index
 			var count := 0
@@ -167,13 +181,23 @@ func _on_rule_set_changed(index: int) -> void:
 	_update_difficulty_options(index)
 
 
-## Hide the "Evil" difficulty when Killer is selected (no Killer–Evil mode).
+## Update the difficulty selector based on the active rule set.
+## Mini hides the difficulty row entirely (one quick-play level only).
+## Killer disables the Evil difficulty (no Killer–Evil mode exists).
 func _update_difficulty_options(rule_idx: int) -> void:
 	var diff_btn := get_node_or_null("%DifficultyButton") as OptionButton
 	if not diff_btn:
 		return
+	var diff_row: Node = diff_btn.get_parent()
+
+	var is_mini := rule_idx == RULE_SET_MINI
 	var is_killer := rule_idx == RULE_SET_KILLER
-	# Item 4 is "Evil" — disable/enable based on rule set
-	diff_btn.set_item_disabled(4, is_killer)
-	if is_killer and diff_btn.selected == 4:
+
+	# Hide the whole difficulty row for Mini (single quick-play level)
+	if diff_row:
+		diff_row.visible = not is_mini
+
+	# Disable/enable Evil for Killer
+	diff_btn.set_item_disabled(4, is_killer or is_mini)
+	if (is_killer or is_mini) and diff_btn.selected == 4:
 		diff_btn.selected = 3  # Clamp to Expert

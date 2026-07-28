@@ -39,37 +39,46 @@ var constraints: Array = []
 ## Check if placing val at index is valid in the grid.
 ## Pass a non-empty constraints array to enforce variant rules in addition to
 ## the standard row/column/box checks.
-static func is_valid_placement(grid: Array[int], index: int, val: int, constraints: Array = []) -> bool:
-	var row := index / 9
-	var col := index % 9
-	var box_row := (row / 3) * 3
-	var box_col := (col / 3) * 3
+## Pass spec to use a non-9×9 grid; defaults to standard_9×9 when null.
+static func is_valid_placement(grid: Array[int], index: int, val: int, constraints: Array = [], spec: SudokuGridSpec = null) -> bool:
+	var s := spec if spec != null else SudokuGridSpec.STANDARD_9X9
+	var n := s.size
+	var row := index / n
+	var col := index % n
+	var box_row := (row / s.region_h) * s.region_h
+	var box_col := (col / s.region_w) * s.region_w
+	var box_cells := s.region_h * s.region_w
 
-	for i in 9:
+	for i in n:
 		# Check row
-		if grid[row * 9 + i] == val:
+		if grid[row * n + i] == val:
 			return false
 		# Check column
-		if grid[i * 9 + col] == val:
+		if grid[i * n + col] == val:
 			return false
-		# Check 3x3 box
-		var br := box_row + i / 3
-		var bc := box_col + i % 3
-		if grid[br * 9 + bc] == val:
+
+	# Check region (box)
+	for i in box_cells:
+		var br := box_row + i / s.region_w
+		var bc := box_col + i % s.region_w
+		if grid[br * n + bc] == val:
 			return false
+
 	for c in constraints:
 		if not c.is_valid(grid, index, val):
 			return false
 	return true
 
 
-## Get all candidates for a cell
-static func get_candidates(grid: Array[int], index: int, constraints: Array = []) -> Array[int]:
+## Get all candidates for a cell.
+## Pass spec to use a non-9×9 grid; defaults to standard_9×9 when null.
+static func get_candidates(grid: Array[int], index: int, constraints: Array = [], spec: SudokuGridSpec = null) -> Array[int]:
 	if grid[index] != 0:
 		return []
+	var s := spec if spec != null else SudokuGridSpec.STANDARD_9X9
 	var candidates: Array[int] = []
-	for val in range(1, 10):
-		if is_valid_placement(grid, index, val, constraints):
+	for val in range(s.sym_min, s.sym_max + 1):
+		if is_valid_placement(grid, index, val, constraints, s):
 			candidates.append(val)
 	return candidates
 
@@ -77,16 +86,18 @@ static func get_candidates(grid: Array[int], index: int, constraints: Array = []
 ## Brute-force solve using backtracking with MRV heuristic. Returns number of solutions found (stops at max_solutions).
 ## Pass [param cancel_check] to allow cooperative cancellation: the callable is polled at the
 ## start of each recursive call and returns [code]true[/code] when the caller wants to abort.
-static func solve_brute_force(grid: Array[int], max_solutions: int = 2, constraints: Array = [], cancel_check: Callable = Callable()) -> Array[Array]:
+## Pass spec to use a non-9×9 grid; defaults to standard_9×9 when null.
+static func solve_brute_force(grid: Array[int], max_solutions: int = 2, constraints: Array = [], cancel_check: Callable = Callable(), spec: SudokuGridSpec = null) -> Array[Array]:
+	var s := spec if spec != null else SudokuGridSpec.STANDARD_9X9
 	# Validate any pre-filled cells (givens) before entering backtracking.
 	# A constraint-invalid given can never be part of a valid solution, so
 	# skip the entire search rather than enumerating all completions.
 	if not constraints.is_empty():
-		for i in 81:
+		for i in s.cell_count:
 			if grid[i] != 0:
 				var val := grid[i]
 				grid[i] = 0
-				var ok := is_valid_placement(grid, i, val, constraints)
+				var ok := is_valid_placement(grid, i, val, constraints, s)
 				grid[i] = val
 				if not ok:
 					return []
@@ -94,20 +105,21 @@ static func solve_brute_force(grid: Array[int], max_solutions: int = 2, constrai
 	var work := grid.duplicate()
 	# Validate the callable once here; pass the result as a plain bool to avoid
 	# repeated is_valid() calls inside the recursive backtracking hot path.
-	_backtrack_mrv(work, solutions, max_solutions, constraints, cancel_check, cancel_check.is_valid())
+	_backtrack_mrv(work, solutions, max_solutions, constraints, cancel_check, cancel_check.is_valid(), s)
 	return solutions
 
 
-static func _find_mrv_cell(grid: Array[int], constraints: Array = []) -> int:
+static func _find_mrv_cell(grid: Array[int], constraints: Array = [], spec: SudokuGridSpec = null) -> int:
 	## Find the empty cell with the fewest candidates (MRV heuristic)
+	var s := spec if spec != null else SudokuGridSpec.STANDARD_9X9
 	var best_pos := -1
-	var best_count := 10
-	for i in 81:
+	var best_count := s.sym_max + 1
+	for i in s.cell_count:
 		if grid[i] != 0:
 			continue
 		var count := 0
-		for v in range(1, 10):
-			if is_valid_placement(grid, i, v, constraints):
+		for v in range(s.sym_min, s.sym_max + 1):
+			if is_valid_placement(grid, i, v, constraints, s):
 				count += 1
 		if count == 0:
 			return -2  # Dead end — no candidates
@@ -123,42 +135,43 @@ static func _find_mrv_cell(grid: Array[int], constraints: Array = []) -> int:
 ## Temporarily clears each cell to evaluate placement validity against the
 ## remaining grid, which is the same test the backtracking solver uses during fill.
 ## Always returns true when constraints is empty (standard Sudoku path).
-static func is_complete_grid_valid(grid: Array[int], constraints: Array) -> bool:
+static func is_complete_grid_valid(grid: Array[int], constraints: Array, spec: SudokuGridSpec = null) -> bool:
 	if constraints.is_empty():
 		return true
-	for i in 81:
+	var s := spec if spec != null else SudokuGridSpec.STANDARD_9X9
+	for i in s.cell_count:
 		if grid[i] == 0:
 			continue
 		var val := grid[i]
 		grid[i] = 0
-		var ok := is_valid_placement(grid, i, val, constraints)
+		var ok := is_valid_placement(grid, i, val, constraints, s)
 		grid[i] = val
 		if not ok:
 			return false
 	return true
 
 
-static func _backtrack_mrv(grid: Array[int], solutions: Array[Array], max_solutions: int, constraints: Array = [], cancel_check: Callable = Callable(), do_cancel: bool = false) -> void:
+static func _backtrack_mrv(grid: Array[int], solutions: Array[Array], max_solutions: int, constraints: Array = [], cancel_check: Callable = Callable(), do_cancel: bool = false, spec: SudokuGridSpec = null) -> void:
 	if solutions.size() >= max_solutions:
 		return
 	if do_cancel and cancel_check.call():
 		return  # Cooperative cancellation
 
-	var pos := _find_mrv_cell(grid, constraints)
+	var pos := _find_mrv_cell(grid, constraints, spec)
 	if pos == -1:
 		# No empty cells - validate all filled cells (including givens) against
 		# constraints before recording this as a solution.
-		if is_complete_grid_valid(grid, constraints):
+		if is_complete_grid_valid(grid, constraints, spec):
 			solutions.append(grid.duplicate())
 		return
 	if pos == -2:
 		# Dead end
 		return
 
-	var candidates := get_candidates(grid, pos, constraints)
+	var candidates := get_candidates(grid, pos, constraints, spec)
 	for val in candidates:
 		grid[pos] = val
-		_backtrack_mrv(grid, solutions, max_solutions, constraints, cancel_check, do_cancel)
+		_backtrack_mrv(grid, solutions, max_solutions, constraints, cancel_check, do_cancel, spec)
 		grid[pos] = 0
 		if solutions.size() >= max_solutions:
 			return
@@ -170,25 +183,27 @@ static func _backtrack_mrv(grid: Array[int], solutions: Array[Array], max_soluti
 ## Returns true if the puzzle was fully solved using logic alone.
 ## Pass p_constraints to filter candidates and propagate constraint side-effects
 ## after each placement; an empty array reproduces standard behaviour.
-func solve_logic(grid: Array[int], p_constraints: Array = []) -> bool:
+## Pass p_spec to use a non-9×9 grid; defaults to standard_9×9 when null.
+func solve_logic(grid: Array[int], p_constraints: Array = [], p_spec: SudokuGridSpec = null) -> bool:
+	var s := p_spec if p_spec != null else SudokuGridSpec.STANDARD_9X9
 	techniques_used.clear()
 	# Validate any pre-filled cells (givens) against constraints before solving.
 	# An invalid given means no solution can exist.
 	if not p_constraints.is_empty():
-		for i in 81:
+		for i in s.cell_count:
 			if grid[i] != 0:
 				var val := grid[i]
 				grid[i] = 0
-				var ok := is_valid_placement(grid, i, val, p_constraints)
+				var ok := is_valid_placement(grid, i, val, p_constraints, s)
 				grid[i] = val
 				if not ok:
 					return false
 	var candidates: Array[Array] = []
-	candidates.resize(81)
+	candidates.resize(s.cell_count)
 	# Initialize candidates respecting any active constraints
-	for i in 81:
+	for i in s.cell_count:
 		if grid[i] == 0:
-			candidates[i] = get_candidates(grid, i, p_constraints)
+			candidates[i] = get_candidates(grid, i, p_constraints, s)
 		else:
 			candidates[i] = []
 
@@ -197,11 +212,11 @@ func solve_logic(grid: Array[int], p_constraints: Array = []) -> bool:
 		progress = false
 
 		# Naked singles
-		for i in 81:
+		for i in s.cell_count:
 			if grid[i] == 0 and candidates[i].size() == 1:
 				var placed_val: int = candidates[i][0]
 				grid[i] = placed_val
-				_update_candidates_after_placement(candidates, grid, i, placed_val, p_constraints)
+				_update_candidates_after_placement(candidates, grid, i, placed_val, p_constraints, s)
 				candidates[i] = []
 				progress = true
 				if not Technique.NAKED_SINGLE in techniques_used:
@@ -211,74 +226,80 @@ func solve_logic(grid: Array[int], p_constraints: Array = []) -> bool:
 			continue
 
 		# Hidden singles
-		if _apply_hidden_singles(grid, candidates, p_constraints):
+		if _apply_hidden_singles(grid, candidates, p_constraints, s):
 			progress = true
 			continue
 
 		# Naked pairs
-		if _apply_naked_pairs(grid, candidates):
+		if _apply_naked_pairs(grid, candidates, s):
 			progress = true
 			continue
 
 		# Naked triples
-		if _apply_naked_triples(grid, candidates):
+		if _apply_naked_triples(grid, candidates, s):
 			progress = true
 			continue
 
 		# Hidden pairs
-		if _apply_hidden_pairs(grid, candidates):
+		if _apply_hidden_pairs(grid, candidates, s):
 			progress = true
 			continue
 
 		# Pointing pairs / box-line reduction
-		if _apply_pointing_pairs(grid, candidates):
+		if _apply_pointing_pairs(grid, candidates, s):
 			progress = true
 			continue
 
 		# X-Wing
-		if _apply_x_wing(grid, candidates):
+		if _apply_x_wing(grid, candidates, s):
 			progress = true
 			continue
 
 	# Check if fully solved and the completed grid satisfies all constraints
-	for i in 81:
+	for i in s.cell_count:
 		if grid[i] == 0:
 			return false
-	return is_complete_grid_valid(grid, p_constraints)
+	return is_complete_grid_valid(grid, p_constraints, s)
 
 
 ## Eliminate a value from candidates in the same row, column, and box
-static func _eliminate_candidates(candidates: Array[Array], grid: Array[int], index: int, val: int) -> void:
-	var row := index / 9
-	var col := index % 9
-	var box_row := (row / 3) * 3
-	var box_col := (col / 3) * 3
+static func _eliminate_candidates(candidates: Array[Array], grid: Array[int], index: int, val: int, spec: SudokuGridSpec = null) -> void:
+	var s := spec if spec != null else SudokuGridSpec.STANDARD_9X9
+	var n := s.size
+	var row := index / n
+	var col := index % n
+	var box_row := (row / s.region_h) * s.region_h
+	var box_col := (col / s.region_w) * s.region_w
+	var box_cells := s.region_h * s.region_w
 
-	for i in 9:
-		candidates[row * 9 + i].erase(val)
-		candidates[i * 9 + col].erase(val)
-		var br := box_row + i / 3
-		var bc := box_col + i % 3
-		candidates[br * 9 + bc].erase(val)
+	for i in n:
+		candidates[row * n + i].erase(val)
+		candidates[i * n + col].erase(val)
+
+	for i in box_cells:
+		var br := box_row + i / s.region_w
+		var bc := box_col + i % s.region_w
+		candidates[br * n + bc].erase(val)
 
 
 ## Standard elimination plus re-evaluation of any cells linked by constraints.
 ## Constraint-affected cells are re-computed from scratch so that multi-value
 ## constraint effects (e.g. Anti-Knight neighbours) are handled correctly.
-static func _update_candidates_after_placement(candidates: Array[Array], grid: Array[int], index: int, val: int, p_constraints: Array) -> void:
-	_eliminate_candidates(candidates, grid, index, val)
+static func _update_candidates_after_placement(candidates: Array[Array], grid: Array[int], index: int, val: int, p_constraints: Array, spec: SudokuGridSpec = null) -> void:
+	_eliminate_candidates(candidates, grid, index, val, spec)
 	for c in p_constraints:
 		for affected_idx in c.get_affected_indices(index):
 			if grid[affected_idx] == 0:
-				candidates[affected_idx] = get_candidates(grid, affected_idx, p_constraints)
+				candidates[affected_idx] = get_candidates(grid, affected_idx, p_constraints, spec)
 
 
 ## Hidden singles: a value can only go in one place in a row/col/box
-func _apply_hidden_singles(grid: Array[int], candidates: Array[Array], p_constraints: Array = []) -> bool:
+func _apply_hidden_singles(grid: Array[int], candidates: Array[Array], p_constraints: Array = [], spec: SudokuGridSpec = null) -> bool:
+	var s := spec if spec != null else SudokuGridSpec.STANDARD_9X9
 	var found := false
 	# Check each unit (row, col, box)
-	for unit in _get_all_units():
-		for val in range(1, 10):
+	for unit in _get_all_units(s):
+		for val in range(s.sym_min, s.sym_max + 1):
 			var positions: Array[int] = []
 			for idx in unit:
 				if grid[idx] == 0 and val in candidates[idx]:
@@ -286,7 +307,7 @@ func _apply_hidden_singles(grid: Array[int], candidates: Array[Array], p_constra
 			if positions.size() == 1:
 				var idx := positions[0]
 				grid[idx] = val
-				_update_candidates_after_placement(candidates, grid, idx, val, p_constraints)
+				_update_candidates_after_placement(candidates, grid, idx, val, p_constraints, s)
 				candidates[idx] = []
 				found = true
 				if not Technique.HIDDEN_SINGLE in techniques_used:
@@ -295,9 +316,10 @@ func _apply_hidden_singles(grid: Array[int], candidates: Array[Array], p_constra
 
 
 ## Naked pairs: two cells in a unit with the same two candidates
-func _apply_naked_pairs(grid: Array[int], candidates: Array[Array]) -> bool:
+func _apply_naked_pairs(grid: Array[int], candidates: Array[Array], spec: SudokuGridSpec = null) -> bool:
+	var s := spec if spec != null else SudokuGridSpec.STANDARD_9X9
 	var found := false
-	for unit in _get_all_units():
+	for unit in _get_all_units(s):
 		var pairs: Array[int] = []
 		for idx in unit:
 			if candidates[idx].size() == 2:
@@ -326,9 +348,10 @@ func _apply_naked_pairs(grid: Array[int], candidates: Array[Array]) -> bool:
 
 
 ## Naked triples: three cells in a unit whose combined candidates are exactly 3 values
-func _apply_naked_triples(grid: Array[int], candidates: Array[Array]) -> bool:
+func _apply_naked_triples(grid: Array[int], candidates: Array[Array], spec: SudokuGridSpec = null) -> bool:
+	var s := spec if spec != null else SudokuGridSpec.STANDARD_9X9
 	var found := false
-	for unit in _get_all_units():
+	for unit in _get_all_units(s):
 		var cells: Array[int] = []
 		for idx in unit:
 			if grid[idx] == 0 and candidates[idx].size() >= 2 and candidates[idx].size() <= 3:
@@ -364,11 +387,12 @@ func _apply_naked_triples(grid: Array[int], candidates: Array[Array]) -> bool:
 
 
 ## Hidden pairs: two values that only appear in two cells in a unit
-func _apply_hidden_pairs(grid: Array[int], candidates: Array[Array]) -> bool:
+func _apply_hidden_pairs(grid: Array[int], candidates: Array[Array], spec: SudokuGridSpec = null) -> bool:
+	var s := spec if spec != null else SudokuGridSpec.STANDARD_9X9
 	var found := false
-	for unit in _get_all_units():
-		for v1 in range(1, 10):
-			for v2 in range(v1 + 1, 10):
+	for unit in _get_all_units(s):
+		for v1 in range(s.sym_min, s.sym_max + 1):
+			for v2 in range(v1 + 1, s.sym_max + 1):
 				var positions: Array[int] = []
 				for idx in unit:
 					if grid[idx] == 0 and (v1 in candidates[idx] or v2 in candidates[idx]):
@@ -396,29 +420,31 @@ func _apply_hidden_pairs(grid: Array[int], candidates: Array[Array]) -> bool:
 
 
 ## Pointing pairs: candidates in a box restricted to one row/col
-func _apply_pointing_pairs(grid: Array[int], candidates: Array[Array]) -> bool:
+func _apply_pointing_pairs(grid: Array[int], candidates: Array[Array], spec: SudokuGridSpec = null) -> bool:
+	var s := spec if spec != null else SudokuGridSpec.STANDARD_9X9
+	var n := s.size
 	var found := false
-	for box_row in range(0, 9, 3):
-		for box_col in range(0, 9, 3):
-			for val in range(1, 10):
+	for box_row in range(0, n, s.region_h):
+		for box_col in range(0, n, s.region_w):
+			for val in range(s.sym_min, s.sym_max + 1):
 				var positions: Array[int] = []
-				for r in range(box_row, box_row + 3):
-					for c in range(box_col, box_col + 3):
-						var idx := r * 9 + c
+				for r in range(box_row, box_row + s.region_h):
+					for c in range(box_col, box_col + s.region_w):
+						var idx := r * n + c
 						if grid[idx] == 0 and val in candidates[idx]:
 							positions.append(idx)
-				if positions.size() < 2 or positions.size() > 3:
+				if positions.size() < 2 or positions.size() > s.region_w:
 					continue
 				# Check if all in same row
 				var same_row := true
-				var pr: int = positions[0] / 9
+				var pr: int = positions[0] / n
 				for p in positions:
-					if p / 9 != pr:
+					if p / n != pr:
 						same_row = false
 						break
 				if same_row:
-					for c in 9:
-						var row_idx := pr * 9 + c
+					for c in n:
+						var row_idx := pr * n + c
 						if not row_idx in positions and grid[row_idx] == 0 and val in candidates[row_idx]:
 							candidates[row_idx].erase(val)
 							found = true
@@ -426,14 +452,14 @@ func _apply_pointing_pairs(grid: Array[int], candidates: Array[Array]) -> bool:
 								techniques_used.append(Technique.POINTING_PAIR)
 				# Check if all in same col
 				var same_col := true
-				var pc: int = positions[0] % 9
+				var pc: int = positions[0] % n
 				for p in positions:
-					if p % 9 != pc:
+					if p % n != pc:
 						same_col = false
 						break
 				if same_col:
-					for r in 9:
-						var col_idx := r * 9 + pc
+					for r in n:
+						var col_idx := r * n + pc
 						if not col_idx in positions and grid[col_idx] == 0 and val in candidates[col_idx]:
 							candidates[col_idx].erase(val)
 							found = true
@@ -443,93 +469,99 @@ func _apply_pointing_pairs(grid: Array[int], candidates: Array[Array]) -> bool:
 
 
 ## X-Wing: a value appears in exactly 2 positions in two rows, aligned in columns
-func _apply_x_wing(grid: Array[int], candidates: Array[Array]) -> bool:
+func _apply_x_wing(grid: Array[int], candidates: Array[Array], spec: SudokuGridSpec = null) -> bool:
+	var s := spec if spec != null else SudokuGridSpec.STANDARD_9X9
+	var n := s.size
 	var found := false
-	for val in range(1, 10):
+	for val in range(s.sym_min, s.sym_max + 1):
 		# Check rows
 		var row_positions: Array[Array] = []
-		row_positions.resize(9)
-		for r in 9:
+		row_positions.resize(n)
+		for r in n:
 			row_positions[r] = []
-			for c in 9:
-				var idx := r * 9 + c
+			for c in n:
+				var idx := r * n + c
 				if grid[idx] == 0 and val in candidates[idx]:
 					row_positions[r].append(c)
-		for r1 in range(9):
+		for r1 in range(n):
 			if row_positions[r1].size() != 2:
 				continue
-			for r2 in range(r1 + 1, 9):
+			for r2 in range(r1 + 1, n):
 				if row_positions[r2] == row_positions[r1]:
 					var c1: int = row_positions[r1][0]
 					var c2: int = row_positions[r1][1]
-					for r in 9:
+					for r in n:
 						if r != r1 and r != r2:
-							if val in candidates[r * 9 + c1]:
-								candidates[r * 9 + c1].erase(val)
+							if val in candidates[r * n + c1]:
+								candidates[r * n + c1].erase(val)
 								found = true
-							if val in candidates[r * 9 + c2]:
-								candidates[r * 9 + c2].erase(val)
+							if val in candidates[r * n + c2]:
+								candidates[r * n + c2].erase(val)
 								found = true
 					if found and not Technique.X_WING in techniques_used:
 						techniques_used.append(Technique.X_WING)
 		# Check columns
 		var col_positions: Array[Array] = []
-		col_positions.resize(9)
-		for c in 9:
+		col_positions.resize(n)
+		for c in n:
 			col_positions[c] = []
-			for r in 9:
-				var col_scan_idx := r * 9 + c
+			for r in n:
+				var col_scan_idx := r * n + c
 				if grid[col_scan_idx] == 0 and val in candidates[col_scan_idx]:
 					col_positions[c].append(r)
-		for c1 in range(9):
+		for c1 in range(n):
 			if col_positions[c1].size() != 2:
 				continue
-			for c2 in range(c1 + 1, 9):
+			for c2 in range(c1 + 1, n):
 				if col_positions[c2] == col_positions[c1]:
 					var r1: int = col_positions[c1][0]
 					var r2: int = col_positions[c1][1]
-					for c in 9:
+					for c in n:
 						if c != c1 and c != c2:
-							if val in candidates[r1 * 9 + c]:
-								candidates[r1 * 9 + c].erase(val)
+							if val in candidates[r1 * n + c]:
+								candidates[r1 * n + c].erase(val)
 								found = true
-							if val in candidates[r2 * 9 + c]:
-								candidates[r2 * 9 + c].erase(val)
+							if val in candidates[r2 * n + c]:
+								candidates[r2 * n + c].erase(val)
 								found = true
 					if found and not Technique.X_WING in techniques_used:
 						techniques_used.append(Technique.X_WING)
 	return found
 
 
-## Get all 27 units (9 rows + 9 cols + 9 boxes)
-static func _get_all_units() -> Array[Array]:
+## Get all units (rows + cols + regions) for the given spec.
+## Defaults to standard_9×9 units when spec is null.
+static func _get_all_units(spec: SudokuGridSpec = null) -> Array[Array]:
+	var s := spec if spec != null else SudokuGridSpec.STANDARD_9X9
+	var n := s.size
 	var units: Array[Array] = []
 	# Rows
-	for r in 9:
+	for r in n:
 		var unit: Array[int] = []
-		for c in 9:
-			unit.append(r * 9 + c)
+		for c in n:
+			unit.append(r * n + c)
 		units.append(unit)
 	# Columns
-	for c in 9:
+	for c in n:
 		var col_unit: Array[int] = []
-		for r in 9:
-			col_unit.append(r * 9 + c)
+		for r in n:
+			col_unit.append(r * n + c)
 		units.append(col_unit)
-	# Boxes
-	for br in range(0, 9, 3):
-		for bc in range(0, 9, 3):
+	# Regions (boxes)
+	for br in range(0, n, s.region_h):
+		for bc in range(0, n, s.region_w):
 			var box_unit: Array[int] = []
-			for r in range(br, br + 3):
-				for c in range(bc, bc + 3):
-					box_unit.append(r * 9 + c)
+			for r in range(br, br + s.region_h):
+				for c in range(bc, bc + s.region_w):
+					box_unit.append(r * n + c)
 			units.append(box_unit)
 	return units
 
 
-## Check if a completed grid is valid
-static func is_valid_grid(grid: Array[int]) -> bool:
-	for unit in _get_all_units():
+## Check if a completed grid is valid.
+## Pass spec to use a non-9×9 grid; defaults to standard_9×9 when null.
+static func is_valid_grid(grid: Array[int], spec: SudokuGridSpec = null) -> bool:
+	for unit in _get_all_units(spec):
 		var seen: Array[int] = []
 		for idx in unit:
 			if grid[idx] == 0:
@@ -560,10 +592,12 @@ func rate_difficulty() -> Difficulty:
 ## Full solve and rate: solves a copy, checks uniqueness, rates difficulty.
 ## Pass constraints explicitly or set the instance constraints field before
 ## calling.  The explicit parameter takes precedence when non-empty.
-func analyze(puzzle: Array[int], p_constraints: Array = []) -> void:
+## Pass p_spec to use a non-9×9 grid; defaults to standard_9×9 when null.
+func analyze(puzzle: Array[int], p_constraints: Array = [], p_spec: SudokuGridSpec = null) -> void:
 	var active: Array = p_constraints if not p_constraints.is_empty() else constraints
+	var s := p_spec if p_spec != null else SudokuGridSpec.STANDARD_9X9
 	# Check uniqueness with brute force (respects any active constraints)
-	var solutions := solve_brute_force(puzzle, 2, active)
+	var solutions := solve_brute_force(puzzle, 2, active, Callable(), s)
 	is_unique = solutions.size() == 1
 	if is_unique:
 		solution = []
@@ -572,5 +606,5 @@ func analyze(puzzle: Array[int], p_constraints: Array = []) -> void:
 	# Rate difficulty with logic solver (constraints filter candidates identically)
 	var work: Array[int] = []
 	work.assign(puzzle.duplicate())
-	solve_logic(work, active)
+	solve_logic(work, active, s)
 	difficulty = rate_difficulty()
