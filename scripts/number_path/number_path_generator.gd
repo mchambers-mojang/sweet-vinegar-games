@@ -21,18 +21,18 @@ const TIER_SIZES := {
 
 ## Tier → minimum checkpoints (including start and end)
 const TIER_CHECKPOINT_COUNT := {
-	NumberPathLogic.TIER_EASY: 4,
-	NumberPathLogic.TIER_MEDIUM: 4,
-	NumberPathLogic.TIER_HARD: 5,
-	NumberPathLogic.TIER_EXPERT: 6,
+	NumberPathLogic.TIER_EASY: 6,
+	NumberPathLogic.TIER_MEDIUM: 7,
+	NumberPathLogic.TIER_HARD: 7,
+	NumberPathLogic.TIER_EXPERT: 8,
 }
 
 ## Tier → barrier count
 const TIER_BARRIER_COUNT := {
 	NumberPathLogic.TIER_EASY: 0,
 	NumberPathLogic.TIER_MEDIUM: 0,
-	NumberPathLogic.TIER_HARD: 6,
-	NumberPathLogic.TIER_EXPERT: 12,
+	NumberPathLogic.TIER_HARD: 8,
+	NumberPathLogic.TIER_EXPERT: 14,
 }
 
 ## Tier → required maximum solver rank
