@@ -145,9 +145,11 @@ func test_strict_mode_rejects_wrong_value() -> void:
 		# First cycle gives the correct PLUS — no rejection
 		assert_false(result.rejected)
 		assert_eq(result.new_value, PLUS)
-		# Second cycle: PLUS → wrong MINUS — should be rejected
+		# Second cycle: PLUS (correct) → MINUS (wrong) → advances to EMPTY (erase).
+		# Strict mode must not reject the erasure of a correct glyph.
 		var r2: EclipseGridLogic.SetGlyphResult = logic.cycle_cell(2)
-		assert_true(r2.rejected)
+		assert_false(r2.rejected, "Cycling past a wrong value to EMPTY must not be rejected")
+		assert_eq(r2.new_value, EMPTY, "Advancing past wrong MINUS should produce EMPTY (erase)")
 	else:
 		# correct_val == MINUS: first cycle skips over wrong PLUS, lands on correct MINUS
 		assert_false(result.rejected)
