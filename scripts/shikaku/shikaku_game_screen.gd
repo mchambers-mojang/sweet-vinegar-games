@@ -251,6 +251,7 @@ func _get_initial_state() -> Dictionary:
 		"height": grid_height,
 		"mode": mode,
 		"anchors": serialized.get("anchors", {}),
+		"placed_rects": serialized.get("placed_rects", []),
 	}
 
 

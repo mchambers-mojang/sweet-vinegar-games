@@ -134,8 +134,12 @@ func _build_single_anchor_description(anchor: Dictionary, pos: Vector2i) -> Stri
 ## text as its accessible name.
 func _setup_accessible_labels() -> void:
 	# Remove stale labels from a previous setup() call.
+	# Use remove_child + queue_free so the node is immediately detached from the
+	# tree (ensuring get_children() no longer returns it) while ownership cleanup
+	# is deferred safely.
 	for child in get_children():
 		if child.is_in_group("shikaku_accessible_label"):
+			remove_child(child)
 			child.queue_free()
 	for pos in anchors.keys():
 		var anchor: Dictionary = anchors[pos]

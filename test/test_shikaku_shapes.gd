@@ -645,3 +645,29 @@ func test_enumerate_rects_returns_empty_when_cancelled_with_area_constraint() ->
 		Vector2i(2, 2), anchor, 5, 5, covered, cancel_check)
 	assert_true(rects.is_empty(),
 		"_enumerate_rects_for_anchor must return [] when cancel fires in area-constrained branch")
+
+
+# ---------------------------------------------------------------------------
+# Fix (current batch) — count_solutions returns -1 (not 0) on cancellation
+# during area-constrained candidate enumeration
+# ---------------------------------------------------------------------------
+
+func test_count_solutions_returns_minus_one_when_cancelled_during_area_constrained_enumeration() -> void:
+	# Before this fix, cancellation inside _enumerate_rects_for_anchor caused it
+	# to return [].  _count_backtrack then saw zero candidates and returned without
+	# setting cancelled[0]=true, so count_solutions returned 0 instead of -1.
+	# The post-enumeration cancel re-poll now propagates the flag correctly.
+	# Use a cancel_check that passes the first top-of-function poll but fires
+	# on subsequent calls (including the one inside area-constrained enumeration).
+	var call_count := [0]
+	var cancel_check := func() -> bool:
+		call_count[0] += 1
+		return call_count[0] > 1  # First call passes; all subsequent calls cancel
+	var anchors := {
+		Vector2i(0, 0): {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT},
+		Vector2i(2, 0): {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT},
+	}
+	var result := ShikakuSolver.count_solutions(4, 2, anchors, 2, cancel_check)
+	assert_eq(result, -1,
+		"count_solutions must return -1 (not 0) when cancelled during area-constrained enumeration")
+

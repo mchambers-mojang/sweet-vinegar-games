@@ -448,6 +448,30 @@ func test_shikaku_adapter_can_resume_false_for_legacy_noninteger_key_after_migra
 
 
 # ---------------------------------------------------------------------------
+# Fix — migration rejects whole save on any invalid entry (Issue 1)
+# ---------------------------------------------------------------------------
+
+func test_shikaku_adapter_migration_rejects_whole_save_on_partial_corruption() -> void:
+	# _migrate must not silently drop the invalid entry and accept the valid one.
+	# A mixed legacy save (one valid + one malformed key) must not be resumable.
+	var adapter := ShikakuSaveAdapter.new()
+	adapter.save({"width": 10, "height": 10, "is_completed": false,
+		"numbers": {"0,0": 4, "abc,def": 6}})
+	assert_false(adapter.can_resume(),
+		"Partial corruption in legacy numbers must cause the whole save to be rejected")
+
+
+func test_shikaku_adapter_migration_rejects_whole_save_on_float_value() -> void:
+	# _migrate must not silently drop the float entry and keep the valid int entry.
+	# If any value is non-int the migration must abort (return data unchanged).
+	var adapter := ShikakuSaveAdapter.new()
+	adapter.save({"width": 10, "height": 10, "is_completed": false,
+		"numbers": {"0,0": 4, "2,2": 6.5}})
+	assert_false(adapter.can_resume(),
+		"Float value in legacy numbers must cause the whole save to be rejected")
+
+
+# ---------------------------------------------------------------------------
 # GameSaveAdapter — restore_if_resumable (avoids double load)
 # ---------------------------------------------------------------------------
 

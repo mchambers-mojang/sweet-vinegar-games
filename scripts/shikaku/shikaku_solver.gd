@@ -352,6 +352,11 @@ static func _count_backtrack(
 		return
 
 	var rects := _enumerate_rects_for_anchor(pos, anchor, width, height, covered, cancel_check)
+	# Propagate cancellation flag: _enumerate_rects_for_anchor returns [] when
+	# cancelled, which is indistinguishable from "no candidates" unless we re-poll.
+	if do_cancel and cancel_check.call():
+		cancelled[0] = true
+		return
 
 	for rect in rects:
 		if count[0] >= max_count or cancelled[0]:

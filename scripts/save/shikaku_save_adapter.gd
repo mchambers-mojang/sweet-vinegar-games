@@ -22,6 +22,8 @@ func get_mode() -> int:
 
 ## Upgrade save data from an older schema version.
 ## v0 → v1: 'numbers' dict migrated to 'anchors' (area-only) on next save.
+## If ANY entry in 'numbers' is malformed the whole migration is rejected
+## (data returned unchanged) so _can_resume_from can catch the corruption.
 func _migrate(data: Dictionary, _from_version: int) -> Dictionary:
 	if data.has("numbers") and not data.has("anchors"):
 		var numbers: Dictionary = data.get("numbers", {})
@@ -34,15 +36,18 @@ func _migrate(data: Dictionary, _from_version: int) -> Dictionary:
 				else:
 					var parts: PackedStringArray = str(key).split(",")
 					if parts.size() != 2:
-						continue
+						push_warning("ShikakuSaveAdapter: migration aborted — malformed key '%s'" % str(key))
+						return data
 					var col_str := parts[0].strip_edges()
 					var row_str := parts[1].strip_edges()
 					if not col_str.is_valid_int() or not row_str.is_valid_int():
-						continue
+						push_warning("ShikakuSaveAdapter: migration aborted — non-integer key '%s'" % str(key))
+						return data
 					pos = Vector2i(int(col_str), int(row_str))
 				var val = numbers[key]
 				if not (val is int):
-					continue
+					push_warning("ShikakuSaveAdapter: migration aborted — non-integer value for key '%s'" % str(key))
+					return data
 				anchors["%d,%d" % [pos.x, pos.y]] = {
 					"area": val as int,
 					"shape": ShikakuLogic.SHAPE_ABSENT,

@@ -103,6 +103,22 @@ func reset_to_state(initial_state: Dictionary, visual: Control) -> void:
 				}
 
 	board.setup(w, h, anchors)
+
+	# Restore placed rectangles from initial state so that resumed-session
+	# replays start with the correct board state and removal indices match.
+	var placed_data = initial_state.get("placed_rects", null)
+	if placed_data is Array:
+		for entry in placed_data as Array:
+			if entry is Dictionary:
+				var d := entry as Dictionary
+				var rect := Rect2i(
+					int(d.get("x", 0)),
+					int(d.get("y", 0)),
+					int(d.get("w", 1)),
+					int(d.get("h", 1)),
+				)
+				board.add_rect(rect)
+
 	board.queue_redraw()
 
 
