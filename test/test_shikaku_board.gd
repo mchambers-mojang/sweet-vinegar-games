@@ -228,3 +228,49 @@ func test_setup_clears_error_state() -> void:
 	board.setup(5, 5, {Vector2i(1, 1): {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT}})
 	assert_true(board.rect_is_wrong.is_empty(),
 		"rect_is_wrong must be cleared on setup()")
+
+
+# ---------------------------------------------------------------------------
+# Fix 3 — per-anchor accessible Label controls for screen readers
+# ---------------------------------------------------------------------------
+
+func test_setup_creates_per_anchor_accessible_labels() -> void:
+	# before_each sets up with 2 anchors at (1,1) and (3,0).
+	var labels: Array = []
+	for child in board.get_children():
+		if child.is_in_group("shikaku_accessible_label"):
+			labels.append(child)
+	assert_eq(labels.size(), 2, "setup must create exactly one accessible Label per anchor")
+
+
+func test_accessible_labels_have_focus_mode_all() -> void:
+	for child in board.get_children():
+		if not child.is_in_group("shikaku_accessible_label"):
+			continue
+		var lbl: Label = child as Label
+		assert_eq(lbl.focus_mode, Control.FOCUS_ALL,
+			"Per-anchor accessible label must be keyboard-focusable (FOCUS_ALL)")
+
+
+func test_accessible_labels_text_is_non_empty() -> void:
+	for child in board.get_children():
+		if not child.is_in_group("shikaku_accessible_label"):
+			continue
+		var lbl: Label = child as Label
+		assert_false(lbl.text.is_empty(),
+			"Per-anchor accessible label must carry a non-empty description text")
+
+
+func test_accessible_labels_recreated_on_setup() -> void:
+	# Calling setup() again must replace the old labels with new ones.
+	board.setup(4, 4, {
+		Vector2i(0, 0): {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT},
+		Vector2i(2, 2): {"area": 4, "shape": ShikakuLogic.SHAPE_SQUARE},
+		Vector2i(3, 3): {"area": 0, "shape": ShikakuLogic.SHAPE_TALL},
+	})
+	var labels: Array = []
+	for child in board.get_children():
+		if child.is_in_group("shikaku_accessible_label"):
+			labels.append(child)
+	assert_eq(labels.size(), 3,
+		"Calling setup() again must create exactly one label per new anchor")

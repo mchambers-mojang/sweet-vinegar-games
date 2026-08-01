@@ -17,6 +17,18 @@ var _cheat_active: bool = false
 var _cheat_timer: float = 0.0
 const CHEAT_INTERVAL := 0.3
 
+# Background generation state (follows the KillerSudoku thread pattern)
+## Pre-generated puzzle data stored by the generation thread.
+var _pending_shikaku_data: Dictionary = {}
+## Background generation thread (non-null while generation is running).
+var _gen_thread: Thread = null
+## Mutex protecting _generation_cancelled.
+var _generation_mutex: Mutex = Mutex.new()
+## Set to true before joining the thread so deferred callbacks become no-ops.
+var _generation_cancelled: bool = false
+## Tween driving the "Generating…" spinner animation.
+var _spinner_tween: Tween = null
+
 # Node references
 @onready var board: ShikakuBoard = %ShikakuBoard
 @onready var size_label: Label = %SizeLabel
@@ -95,7 +107,11 @@ func start_new_game(w: int, h: int, p_mode: int = ShikakuLogic.RULE_SET_STANDARD
 	grid_width = w
 	grid_height = h
 	mode = p_mode
-	begin_session()
+	_set_generation_cancelled(false)
+	_show_generating_spinner(true)
+	_gen_thread = Thread.new()
+	_gen_thread.start(_run_generation)
+	# begin_session() is called by _on_generation_complete() after the thread finishes.
 
 
 func launch(params: LaunchParams) -> void:
@@ -107,6 +123,111 @@ func resume_game(data: Dictionary) -> void:
 	grid_height = data.get("height", 10)
 	mode = int(data.get("mode", ShikakuLogic.RULE_SET_STANDARD))
 	begin_session(data)
+
+
+# --- Background generation (follows the KillerSudokuGenerator thread pattern) ---
+
+func _exit_tree() -> void:
+	# Signal cancellation under the mutex so the worker can poll it, then join.
+	_set_generation_cancelled(true)
+	if _gen_thread != null:
+		_gen_thread.wait_to_finish()
+		_gen_thread = null
+	if _spinner_tween != null:
+		_spinner_tween.kill()
+		_spinner_tween = null
+	super._exit_tree()
+
+
+## Mutex-protected write: sets the cancellation flag.
+func _set_generation_cancelled(val: bool) -> void:
+	_generation_mutex.lock()
+	_generation_cancelled = val
+	_generation_mutex.unlock()
+
+
+## Mutex-protected read: returns the current cancellation flag.
+## Safe to call from any thread.
+func _get_generation_cancelled() -> bool:
+	_generation_mutex.lock()
+	var val := _generation_cancelled
+	_generation_mutex.unlock()
+	return val
+
+
+## Runs in a background thread: generates a complete Shikaku puzzle.
+func _run_generation() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var gen_seed := int(Time.get_ticks_usec()) ^ rng.randi()
+	var result: Dictionary = ShikakuGenerator.generate(
+		grid_width, grid_height, gen_seed, mode,
+		func() -> bool: return _get_generation_cancelled()
+	)
+	if result.is_empty():
+		_pending_shikaku_data = {}
+	else:
+		_pending_shikaku_data = result.duplicate()
+		_pending_shikaku_data["random_seed"] = gen_seed
+	if not _get_generation_cancelled():
+		call_deferred("_on_generation_complete")
+
+
+## Called on the main thread after generation finishes.
+func _on_generation_complete() -> void:
+	if _get_generation_cancelled():
+		return
+	if _gen_thread != null:
+		_gen_thread.wait_to_finish()
+		_gen_thread = null
+	_show_generating_spinner(false)
+	if _pending_shikaku_data.is_empty():
+		_suppress_auto_resume = true
+		if SceneTransition.is_transitioning:
+			SceneTransition.transition_completed.connect(
+				_abort_generation_failure, CONNECT_ONE_SHOT | CONNECT_DEFERRED)
+		else:
+			_abort_generation_failure()
+		return
+	begin_session()
+
+
+func _abort_generation_failure() -> void:
+	SceneTransition.navigate(Scenes.SHIKAKU_MENU)
+
+
+## Show or hide the "Generating…" overlay label with animated cycling dots.
+func _show_generating_spinner(visible: bool) -> void:
+	var overlay := get_node_or_null("_GeneratingOverlay")
+	if overlay == null:
+		if not visible:
+			return
+		var lbl := Label.new()
+		lbl.name = "_GeneratingOverlay"
+		lbl.text = "Generating puzzle"
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		lbl.z_index = 10
+		var style := StyleBoxFlat.new()
+		style.bg_color = AppTheme.get_color("background")
+		style.bg_color.a = 0.85
+		lbl.add_theme_stylebox_override("panel", style)
+		add_child(lbl)
+		overlay = lbl
+		lbl.set_meta("dot_frame", 0)
+		_spinner_tween = create_tween().set_loops()
+		_spinner_tween.tween_callback(func() -> void:
+			if is_instance_valid(lbl) and lbl.visible:
+				var frame: int = lbl.get_meta("dot_frame", 0)
+				frame = (frame + 1) % 4
+				lbl.set_meta("dot_frame", frame)
+				lbl.text = "Generating puzzle" + ".".repeat(frame)
+		).set_delay(0.4)
+	overlay.visible = visible
+	if not visible and _spinner_tween != null:
+		_spinner_tween.kill()
+		_spinner_tween = null
 
 
 # --- Session ceremony hooks ---
@@ -139,7 +260,11 @@ func _get_settings_snapshot() -> Dictionary:
 
 func _setup_game(saved_data: Dictionary) -> void:
 	if saved_data.is_empty():
-		logic.init_new_game(grid_width, grid_height, random_seed, mode)
+		# New game — use pre-generated puzzle data produced by _run_generation().
+		var gen_seed := int(_pending_shikaku_data.get("random_seed", random_seed))
+		random_seed = gen_seed
+		logic.init_from_generated(_pending_shikaku_data, gen_seed, mode)
+		_pending_shikaku_data = {}
 	else:
 		logic.init_from_save(saved_data)
 	grid_width = logic.grid_width
@@ -301,6 +426,13 @@ func _on_hint() -> void:
 	if result.rect.is_empty():
 		return
 	_crash.register_user_action("shikaku_hint_used")
+	# Remove any wrong placements that were cleared to unblock the hint rect.
+	for removed in result.removed_rects:
+		var removed_rect: Rect2i = _rect_from_dict(removed)
+		for i in range(board.placed_rects.size() - 1, -1, -1):
+			if board.placed_rects[i] == removed_rect:
+				board.remove_rect(i)
+				break
 	var hint_rect: Rect2i = _rect_from_dict(result.rect)
 	_recorder.record_input(elapsed_time, "rectangle_placed", {
 		"x": hint_rect.position.x,

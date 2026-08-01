@@ -89,6 +89,9 @@ class RemoveRectResult:
 
 class HintResult:
 	var rect: Dictionary = {}
+	## Rects removed to unblock the hint placement (wrong placements cleared
+	## so the solution rect could be placed). Board must remove them too.
+	var removed_rects: Array[Dictionary] = []
 	var game_won: bool = false
 
 
@@ -106,6 +109,23 @@ func init_new_game(width: int, height: int, seed_value: int, p_mode: int = RULE_
 	var generated: Dictionary = ShikakuGenerator.generate(width, height, seed_value, mode, cancel_check)
 	anchors = generated.get("anchors", {})
 	solution = generated.get("solution", [] as Array[Rect2i])
+	placed_rects.clear()
+	is_completed = false
+	hints_used = 0
+	_undo_stack.clear()
+
+
+## Initialise state from data pre-generated in a background thread.
+## data: returned by ShikakuGenerator.generate() — must contain "anchors" and "solution".
+## seed_value: the seed used during generation (stored for save/resume determinism).
+func init_from_generated(data: Dictionary, seed_value: int, p_mode: int) -> void:
+	grid_width = int(data.get("width", grid_width))
+	grid_height = int(data.get("height", grid_height))
+	mode = p_mode
+	random_seed = seed_value
+	_rng.seed = seed_value
+	anchors = data.get("anchors", {})
+	solution = data.get("solution", [] as Array[Rect2i])
 	placed_rects.clear()
 	is_completed = false
 	hints_used = 0
@@ -190,6 +210,20 @@ func use_hint() -> HintResult:
 	var start_idx := _rng.randi_range(0, candidates.size() - 1)
 	for i in range(candidates.size()):
 		var picked: Rect2i = candidates[(start_idx + i) % candidates.size()]
+		# Identify wrong placements that overlap the chosen solution rect and
+		# remove them so the hint can always succeed.  Wrong placements are
+		# placed rects that are not part of the solution.
+		var wrong_blocking: Array[Rect2i] = []
+		for pr in placed_rects:
+			if not solution.has(pr) and picked.intersects(pr):
+				wrong_blocking.append(pr)
+		for wr in wrong_blocking:
+			placed_rects.erase(wr)
+			result.removed_rects.append(_rect_to_dict(wr))
+		# If wrong-placement removals were needed, clear the undo/redo stacks so
+		# history remains consistent (the atomic hint operation is not undoable).
+		if not wrong_blocking.is_empty():
+			_undo_stack.clear()
 		var place_result: PlaceRectResult = place_rectangle(picked.position.x, picked.position.y, picked.size.x, picked.size.y)
 		if place_result.valid:
 			hints_used += 1

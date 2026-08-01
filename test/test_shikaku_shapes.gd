@@ -541,3 +541,46 @@ func test_standard_generation_not_empty_for_common_seeds() -> void:
 	for seed in [1, 2, 3, 42, 100]:
 		var gen := ShikakuGenerator.generate(5, 5, seed, ShikakuLogic.RULE_SET_STANDARD)
 		assert_false(gen.is_empty(), "Standard generate must succeed for seed=%d" % seed)
+
+
+# ---------------------------------------------------------------------------
+# Fix 5 — Standard generation verifies human-solvability
+# ---------------------------------------------------------------------------
+
+func test_standard_generated_puzzles_are_human_solvable() -> void:
+	# Before this fix the generator only checked uniqueness; now it also checks
+	# is_human_solvable() before returning.
+	for seed in [1, 7, 42]:
+		var gen := ShikakuGenerator.generate(5, 5, seed, ShikakuLogic.RULE_SET_STANDARD)
+		if gen.is_empty():
+			continue
+		var anchors: Dictionary = gen.get("anchors", {})
+		var result := ShikakuSolver.is_human_solvable(5, 5, anchors)
+		assert_true(result,
+			"Standard 5×5 seed=%d must be human-solvable after Fix 5" % seed)
+
+
+# ---------------------------------------------------------------------------
+# Fix 6 — Solver propagation: cell-ownership eliminates ambiguous candidates
+# ---------------------------------------------------------------------------
+
+func test_cell_ownership_resolves_ambiguous_candidates() -> void:
+	# 3×2 grid with two unconstrained (SHAPE_ANY, area=0) anchors.
+	#
+	# Neither anchor is forced by Phase 1 alone:
+	#   (0,0) valid candidates: {1×1@(0,0), 1×2@(0,0)}  (2 options)
+	#   (1,0) valid candidates: {1×1@(1,0), 2×1@(1,0), 1×2@(1,0), 2×2@(1,0)} (4 options)
+	#
+	# Phase 2 resolves it via cell-ownership:
+	#   Cell (0,1) can only be reached by anchor (0,0) via 1×2@(0,0) — uniquely owned.
+	#   Restricting (0,0) to candidates containing (0,1) yields {1×2@(0,0)} → placed.
+	#   Cell (2,1) can only be reached by anchor (1,0) via 2×2@(1,0) → placed.
+	#
+	# The unique solution is (0,0,1,2) + (1,0,2,2).
+	# The old Phase-1-only solver returned false for this puzzle.
+	var anchors := {
+		Vector2i(0, 0): {"area": 0, "shape": ShikakuLogic.SHAPE_ANY},
+		Vector2i(1, 0): {"area": 0, "shape": ShikakuLogic.SHAPE_ANY},
+	}
+	assert_true(ShikakuSolver.is_human_solvable(3, 2, anchors),
+		"Cell-ownership pass must identify this puzzle as human-solvable")

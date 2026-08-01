@@ -98,11 +98,17 @@ static func count_solutions(width: int, height: int, anchors: Dictionary, max_co
 	return count[0]
 
 
-## Check whether the puzzle can be solved by forced-placement logic alone
-## (no backtracking / guessing). Returns true if every anchor can be resolved
-## to a unique valid rectangle given successive placements.
-## A rectangle is valid only if it covers no other unplaced anchor, matching the
-## constraint used in the backtracking solver.
+## Check whether the puzzle can be solved by human-style deduction alone
+## (no backtracking / guessing). Uses two propagation passes per iteration:
+##
+## Phase 1 — Forced single candidate: if an anchor has exactly one valid
+## rectangle (given already-placed rects and other unplaced anchors), place it.
+##
+## Phase 2 — Cell-ownership elimination: for each uncovered cell, compute which
+## anchors have at least one valid candidate containing that cell.  If only one
+## anchor can cover a cell, restrict that anchor's candidates to those containing
+## the cell; if this reduces the anchor to a single candidate, place it.
+##
 ## Returns false when cancelled (conservative: treated as not human-solvable).
 static func is_human_solvable(width: int, height: int, anchors: Dictionary, cancel_check: Callable = Callable()) -> bool:
 	var do_cancel := cancel_check.is_valid()
@@ -119,6 +125,10 @@ static func is_human_solvable(width: int, height: int, anchors: Dictionary, canc
 		if do_cancel and cancel_check.call():
 			return false
 		changed = false
+
+		# ------------------------------------------------------------------
+		# Phase 1: Forced single candidate
+		# ------------------------------------------------------------------
 		for i in range(entries.size()):
 			if placed[i] != 0:
 				continue
@@ -126,23 +136,59 @@ static func is_human_solvable(width: int, height: int, anchors: Dictionary, canc
 			var all_rects := _enumerate_rects_for_anchor(pos, entries[i]["anchor"], width, height, covered, cancel_check)
 			if all_rects.is_empty() and do_cancel and cancel_check.call():
 				return false
-			# Filter out rects that would capture another unplaced anchor.
-			var valid_rects: Array[Rect2i] = []
-			for rect in all_rects:
-				var conflict := false
-				for j in range(entries.size()):
-					if j == i or placed[j] != 0:
-						continue
-					if rect.has_point(entries[j]["pos"] as Vector2i):
-						conflict = true
-						break
-				if not conflict:
-					valid_rects.append(rect)
+			var valid_rects: Array[Rect2i] = _filter_anchor_candidates(all_rects, i, entries, placed)
 			if valid_rects.size() == 1:
 				_mark_covered(valid_rects[0], width, covered, 1)
 				placed[i] = 1
 				changed = true
 			elif valid_rects.is_empty():
+				return false
+
+		if changed:
+			continue
+
+		# ------------------------------------------------------------------
+		# Phase 2: Cell-ownership elimination
+		# Build map: uncovered cell → set of anchor indices that can reach it.
+		# ------------------------------------------------------------------
+		var cell_owners: Dictionary = {}  # Vector2i -> Array[int]
+		for i in range(entries.size()):
+			if placed[i] != 0:
+				continue
+			var pos: Vector2i = entries[i]["pos"]
+			var all_rects := _enumerate_rects_for_anchor(pos, entries[i]["anchor"], width, height, covered, cancel_check)
+			if do_cancel and cancel_check.call():
+				return false
+			var valid_rects: Array[Rect2i] = _filter_anchor_candidates(all_rects, i, entries, placed)
+			for rect in valid_rects:
+				for r in range(rect.position.y, rect.position.y + rect.size.y):
+					for c in range(rect.position.x, rect.position.x + rect.size.x):
+						var cell := Vector2i(c, r)
+						if not cell_owners.has(cell):
+							cell_owners[cell] = []
+						(cell_owners[cell] as Array).append(i)
+
+		# For each cell that only one anchor can cover, restrict that anchor.
+		for cell in cell_owners.keys():
+			var owners: Array = cell_owners[cell] as Array
+			if owners.size() != 1:
+				continue
+			var owner_idx: int = owners[0]
+			if placed[owner_idx] != 0:
+				continue
+			var pos: Vector2i = entries[owner_idx]["pos"]
+			var all_rects := _enumerate_rects_for_anchor(pos, entries[owner_idx]["anchor"], width, height, covered, cancel_check)
+			var valid_rects: Array[Rect2i] = _filter_anchor_candidates(all_rects, owner_idx, entries, placed)
+			# Keep only candidates that contain the uniquely-owned cell.
+			var restricted: Array[Rect2i] = []
+			for rect in valid_rects:
+				if rect.has_point(cell as Vector2i):
+					restricted.append(rect)
+			if restricted.size() == 1:
+				_mark_covered(restricted[0], width, covered, 1)
+				placed[owner_idx] = 1
+				changed = true
+			elif restricted.is_empty():
 				return false
 
 	for i in range(placed.size()):
@@ -175,6 +221,25 @@ static func _build_entries(anchors: Dictionary) -> Array[Dictionary]:
 		return false
 	)
 	return entries
+
+
+## Filter candidate rectangles for anchor [param idx]: remove any that would
+## capture another unplaced anchor's position.
+static func _filter_anchor_candidates(
+		rects: Array[Rect2i], idx: int,
+		entries: Array[Dictionary], placed: PackedByteArray) -> Array[Rect2i]:
+	var result: Array[Rect2i] = []
+	for rect in rects:
+		var conflict := false
+		for j in range(entries.size()):
+			if j == idx or placed[j] != 0:
+				continue
+			if rect.has_point(entries[j]["pos"] as Vector2i):
+				conflict = true
+				break
+		if not conflict:
+			result.append(rect)
+	return result
 
 
 static func _backtrack(

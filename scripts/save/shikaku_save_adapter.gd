@@ -75,6 +75,34 @@ func _can_resume_from(data: Dictionary) -> bool:
 	if not has_anchors and not has_numbers:
 		push_warning("ShikakuSaveAdapter: corrupted save — no anchor clues found")
 		return false
+	# Validate legacy numbers dict when no new-format anchors are present.
+	if not has_anchors and has_numbers:
+		var raw_numbers: Dictionary = data["numbers"] as Dictionary
+		for key in raw_numbers.keys():
+			var pos: Vector2i
+			if key is Vector2i:
+				pos = key as Vector2i
+			else:
+				var parts: PackedStringArray = str(key).split(",")
+				if parts.size() != 2:
+					push_warning("ShikakuSaveAdapter: corrupted save — malformed legacy number key '%s'" % str(key))
+					return false
+				var col_str := parts[0].strip_edges()
+				var row_str := parts[1].strip_edges()
+				if not col_str.is_valid_int() or not row_str.is_valid_int():
+					push_warning("ShikakuSaveAdapter: corrupted save — non-integer legacy number key '%s'" % str(key))
+					return false
+				pos = Vector2i(int(col_str), int(row_str))
+			if pos.x < 0 or pos.x >= grid_w or pos.y < 0 or pos.y >= grid_h:
+				push_warning("ShikakuSaveAdapter: corrupted save — legacy number position out of bounds %s" % str(pos))
+				return false
+			var val = raw_numbers[key]
+			if not (val is int) and not (val is float):
+				push_warning("ShikakuSaveAdapter: corrupted save — legacy number value not a number")
+				return false
+			if int(val) <= 0:
+				push_warning("ShikakuSaveAdapter: corrupted save — legacy number value must be positive")
+				return false
 	# Deep-validate each anchor when present in new format.
 	if has_anchors:
 		var raw_anchors: Dictionary = data["anchors"] as Dictionary
@@ -118,27 +146,37 @@ func _can_resume_from(data: Dictionary) -> bool:
 				push_warning("ShikakuSaveAdapter: corrupted save — anchor position %s out of bounds" % str(pos))
 				return false
 
-	# Validate solution rects if present.
+	# Validate solution rects if present — reject non-Array values outright.
 	var raw_solution = data.get("solution", null)
-	if raw_solution is Array and not (raw_solution as Array).is_empty():
+	if raw_solution != null:
+		if not (raw_solution is Array):
+			push_warning("ShikakuSaveAdapter: corrupted save — solution must be an Array")
+			return false
 		for entry in raw_solution as Array:
 			if not _validate_rect_entry(entry, grid_w, grid_h, "solution"):
 				return false
 
-	# Validate placed_rects if present.
+	# Validate placed_rects if present — reject non-Array values outright.
 	var raw_placed = data.get("placed_rects", null)
-	if raw_placed is Array and not (raw_placed as Array).is_empty():
+	if raw_placed != null:
+		if not (raw_placed is Array):
+			push_warning("ShikakuSaveAdapter: corrupted save — placed_rects must be an Array")
+			return false
 		for entry in raw_placed as Array:
 			if not _validate_rect_entry(entry, grid_w, grid_h, "placed_rects"):
 				return false
 
-	# Validate undo/redo history entries if present.
+	# Validate undo/redo history entries if present — reject non-Array values outright.
 	for stack_key in ["undo_stack", "redo_stack"]:
 		var raw_stack = data.get(stack_key, null)
-		if raw_stack is Array:
-			for entry in raw_stack as Array:
-				if not _validate_history_entry(entry, grid_w, grid_h, stack_key):
-					return false
+		if raw_stack == null:
+			continue
+		if not (raw_stack is Array):
+			push_warning("ShikakuSaveAdapter: corrupted save — %s must be an Array" % stack_key)
+			return false
+		for entry in raw_stack as Array:
+			if not _validate_history_entry(entry, grid_w, grid_h, stack_key):
+				return false
 
 	return true
 
@@ -150,10 +188,19 @@ func _validate_rect_entry(entry: Variant, grid_w: int, grid_h: int, context: Str
 		push_warning("ShikakuSaveAdapter: corrupted save — %s entry not a Dictionary" % context)
 		return false
 	var d: Dictionary = entry as Dictionary
-	var x := int(d.get("x", -1))
-	var y := int(d.get("y", -1))
-	var rw := int(d.get("w", 0))
-	var rh := int(d.get("h", 0))
+	# Require numeric types to avoid coercive int("garbage") == 0 silent failures.
+	var x_raw = d.get("x")
+	var y_raw = d.get("y")
+	var rw_raw = d.get("w")
+	var rh_raw = d.get("h")
+	if not (x_raw is int or x_raw is float) or not (y_raw is int or y_raw is float) \
+			or not (rw_raw is int or rw_raw is float) or not (rh_raw is int or rh_raw is float):
+		push_warning("ShikakuSaveAdapter: corrupted save — %s rect has non-numeric field" % context)
+		return false
+	var x: int = int(x_raw)
+	var y: int = int(y_raw)
+	var rw: int = int(rw_raw)
+	var rh: int = int(rh_raw)
 	if rw <= 0 or rh <= 0:
 		push_warning("ShikakuSaveAdapter: corrupted save — %s rect has non-positive dimensions" % context)
 		return false

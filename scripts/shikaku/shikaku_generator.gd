@@ -30,8 +30,8 @@ static func generate(width: int, height: int, seed: int = -1, rule_set: int = Sh
 	if rule_set == ShikakuLogic.RULE_SET_SHAPES:
 		return _generate_shapes(width, height, rng, cancel_check)
 
-	# Standard mode: verify uniqueness, retrying until a uniquely-solvable
-	# puzzle is found or MAX_STANDARD_ATTEMPTS is exhausted.
+	# Standard mode: verify uniqueness and human-solvability, retrying until a
+	# valid puzzle is found or MAX_STANDARD_ATTEMPTS is exhausted.
 	for _attempt in range(MAX_STANDARD_ATTEMPTS):
 		if cancel_check.is_valid() and cancel_check.call():
 			return {}
@@ -44,13 +44,18 @@ static func generate(width: int, height: int, seed: int = -1, rule_set: int = Sh
 		var n := ShikakuSolver.count_solutions(width, height, anchors, 2, cancel_check)
 		if n == -1:
 			return {}
-		if n == 1:
-			return {
-				"width": width,
-				"height": height,
-				"anchors": anchors,
-				"solution": solution,
-			}
+		if n != 1:
+			continue
+		if not ShikakuSolver.is_human_solvable(width, height, anchors, cancel_check):
+			if cancel_check.is_valid() and cancel_check.call():
+				return {}
+			continue
+		return {
+			"width": width,
+			"height": height,
+			"anchors": anchors,
+			"solution": solution,
+		}
 	return {}
 
 

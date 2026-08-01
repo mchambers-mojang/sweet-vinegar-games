@@ -77,6 +77,7 @@ func setup(w: int, h: int, a: Dictionary) -> void:
 	# so screen readers can access the full clue set without requiring mouse hover.
 	_full_anchor_description = _build_anchor_description()
 	tooltip_text = _full_anchor_description
+	_setup_accessible_labels()
 	queue_redraw()
 
 
@@ -111,6 +112,74 @@ func _build_anchor_description() -> String:
 			continue
 		parts.append(desc)
 	return "; ".join(parts)
+
+
+## Build a description for a single anchor (used for per-anchor accessible labels).
+func _build_single_anchor_description(anchor: Dictionary, pos: Vector2i) -> String:
+	var area: int = int(anchor.get("area", 0))
+	var shape: int = int(anchor.get("shape", ShikakuLogic.SHAPE_ABSENT))
+	var shape_name: String = str(ShikakuLogic.SHAPE_NAMES.get(shape, ""))
+	if area > 0 and shape != ShikakuLogic.SHAPE_ABSENT:
+		return "%s, %d cells at (%d,%d)" % [shape_name, area, pos.x, pos.y]
+	elif area > 0:
+		return "%d cells at (%d,%d)" % [area, pos.x, pos.y]
+	elif shape != ShikakuLogic.SHAPE_ABSENT:
+		return "%s at (%d,%d)" % [shape_name, pos.x, pos.y]
+	return ""
+
+
+## Create (or recreate) per-anchor transparent Label controls so that screen
+## readers can navigate directly to individual clues via keyboard focus (Tab).
+## Each Label is invisible to sighted users but focusable and carries the clue
+## text as its accessible name.
+func _setup_accessible_labels() -> void:
+	# Remove stale labels from a previous setup() call.
+	for child in get_children():
+		if child.is_in_group("shikaku_accessible_label"):
+			child.queue_free()
+	for pos in anchors.keys():
+		var anchor: Dictionary = anchors[pos]
+		var desc := _build_single_anchor_description(anchor, pos)
+		if desc.is_empty():
+			continue
+		var lbl := Label.new()
+		lbl.add_to_group("shikaku_accessible_label")
+		lbl.text = desc
+		lbl.tooltip_text = desc
+		lbl.focus_mode = Control.FOCUS_ALL
+		lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		# Visually transparent: text colour with zero alpha so the label does
+		# not obscure the drawn grid, but the control remains in the scene tree
+		# and is discoverable by assistive technologies.
+		lbl.add_theme_color_override("font_color", Color(0.0, 0.0, 0.0, 0.0))
+		lbl.set_meta("anchor_pos", pos)
+		add_child(lbl)
+	_update_accessible_label_positions()
+
+
+## Reposition all per-anchor accessible labels to match the current cell layout.
+## Called on setup and whenever the board is resized.
+func _update_accessible_label_positions() -> void:
+	if grid_width <= 0 or grid_height <= 0:
+		return
+	var cell_size := _get_cell_size()
+	var origin := _get_grid_origin()
+	for child in get_children():
+		if not child.is_in_group("shikaku_accessible_label"):
+			continue
+		var lbl: Label = child as Label
+		var pos: Vector2i = lbl.get_meta("anchor_pos", Vector2i(-1, -1))
+		if pos.x < 0:
+			continue
+		var cell_px := origin + Vector2(pos.x * cell_size, pos.y * cell_size)
+		lbl.position = cell_px
+		lbl.custom_minimum_size = Vector2(cell_size, cell_size)
+		lbl.size = Vector2(cell_size, cell_size)
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_RESIZED:
+		_update_accessible_label_positions()
 
 
 ## Mark which placed rects are wrong (not in the solution).

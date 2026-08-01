@@ -350,6 +350,45 @@ func test_shikaku_adapter_can_resume_false_for_non_integer_anchor_key() -> void:
 	assert_false(adapter.can_resume(), "Non-integer anchor key must not be resumable")
 
 
+# Fix 2 (extended) — non-array fields and coercive rect parsing
+
+func test_shikaku_adapter_can_resume_false_for_solution_as_non_array() -> void:
+	# Fixing the bypass: a non-Array solution value must be rejected outright
+	# rather than silently skipped (the old code only ran validation if is Array).
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"3,3": {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT}}
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors,
+		"solution": "not_an_array"})
+	assert_false(adapter.can_resume(), "Non-Array solution value must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_undo_stack_as_non_array() -> void:
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"3,3": {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT}}
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors,
+		"undo_stack": 42})
+	assert_false(adapter.can_resume(), "Non-Array undo_stack value must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_legacy_numbers_malformed_key() -> void:
+	# Key without comma triggers legacy validation path (no valid anchor added by _migrate).
+	var adapter := ShikakuSaveAdapter.new()
+	adapter.save({"width": 10, "height": 10, "is_completed": false,
+		"numbers": {"garbage": 4}})
+	assert_false(adapter.can_resume(), "Legacy numbers with malformed key must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_rect_with_string_coordinate() -> void:
+	# Coercive-parsing fix: int("garbage") == 0 in GDScript, so "garbage" x-coordinate
+	# must be rejected via the type check rather than silently parsed as x=0.
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"3,3": {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT}}
+	var bad_solution := [{"x": "garbage", "y": 0, "w": 2, "h": 2}]
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors,
+		"solution": bad_solution})
+	assert_false(adapter.can_resume(), "Rect with string coordinate must not be resumable")
+
+
 # ---------------------------------------------------------------------------
 # GameSaveAdapter — restore_if_resumable (avoids double load)
 # ---------------------------------------------------------------------------

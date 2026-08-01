@@ -289,3 +289,61 @@ func test_get_unplaced_solution_rects_returns_remaining() -> void:
 func test_get_unplaced_solution_rects_all_when_none_placed() -> void:
 	var unplaced := logic.get_unplaced_solution_rects()
 	assert_eq(unplaced.size(), logic.solution.size())
+
+
+# ---------------------------------------------------------------------------
+# Fix 1 — init_from_generated populates fields without running the generator
+# ---------------------------------------------------------------------------
+
+func test_init_from_generated_sets_correct_fields() -> void:
+	var data := ShikakuGenerator.generate(5, 5, 42, ShikakuLogic.RULE_SET_STANDARD)
+	assert_false(data.is_empty(), "generate must succeed for seed=42 (prerequisite)")
+	var l := ShikakuLogic.new()
+	l.init_from_generated(data, 42, ShikakuLogic.RULE_SET_STANDARD)
+	assert_eq(l.grid_width, 5, "init_from_generated must set grid_width")
+	assert_eq(l.grid_height, 5, "init_from_generated must set grid_height")
+	assert_eq(l.mode, ShikakuLogic.RULE_SET_STANDARD, "init_from_generated must set mode")
+	assert_eq(l.random_seed, 42, "init_from_generated must store the seed")
+	assert_true(l.anchors.size() > 0, "init_from_generated must populate anchors")
+	assert_true(l.solution.size() > 0, "init_from_generated must populate solution")
+	assert_true(l.placed_rects.is_empty(), "init_from_generated must start with no placed rects")
+	assert_false(l.is_completed, "init_from_generated must start as not completed")
+	assert_eq(l.hints_used, 0, "init_from_generated must start with zero hints used")
+
+
+# ---------------------------------------------------------------------------
+# Fix 4 — hint removes blocking wrong placements and reports them
+# ---------------------------------------------------------------------------
+
+func test_hint_removed_rects_populated_when_wrong_placements_cleared() -> void:
+	# 4×1 grid, two SHAPE_ANY anchors, solution = [(0,0,2,1), (2,0,2,1)].
+	# Block BOTH solution rects with locally-valid 1×1 wrong placements.
+	# use_hint must clear the blocking placement for whichever candidate it tries
+	# first, and report it in removed_rects.
+	var l := ShikakuLogic.new()
+	l.init_from_save({
+		"width": 4,
+		"height": 1,
+		"anchors": {
+			"0,0": {"area": 0, "shape": ShikakuLogic.SHAPE_ANY},
+			"2,0": {"area": 0, "shape": ShikakuLogic.SHAPE_ANY},
+		},
+		"solution": [
+			{"x": 0, "y": 0, "w": 2, "h": 1},
+			{"x": 2, "y": 0, "w": 2, "h": 1},
+		],
+		"placed_rects": [],
+		"random_seed": 1234,
+	})
+	# Place two wrong 1×1 rects — each blocks one solution rect.
+	var w1: ShikakuLogic.PlaceRectResult = l.place_rectangle(0, 0, 1, 1)
+	assert_true(w1.valid, "Wrong 1×1 at (0,0) must be locally valid for SHAPE_ANY anchor")
+	var w2: ShikakuLogic.PlaceRectResult = l.place_rectangle(2, 0, 1, 1)
+	assert_true(w2.valid, "Wrong 1×1 at (2,0) must be locally valid for SHAPE_ANY anchor")
+	# Hint must clear whichever blocking rect overlaps the chosen solution rect
+	# and return a non-empty hint with at least one removed rect.
+	var hint_result: ShikakuLogic.HintResult = l.use_hint()
+	assert_false(hint_result.rect.is_empty(),
+		"Hint must succeed even when all solution rects are initially blocked")
+	assert_true(hint_result.removed_rects.size() > 0,
+		"Hint must populate removed_rects when it had to clear a wrong placement")
