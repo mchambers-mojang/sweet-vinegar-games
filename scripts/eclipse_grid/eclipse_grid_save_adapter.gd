@@ -86,8 +86,8 @@ func _can_resume_from(data: Dictionary) -> bool:
 	if not _validate_undo_stack(data.get("redo_stack", null), expected, "redo_stack"):
 		return false
 
-	# --- pre_rejection (optional; dict of cell-index strings → glyph ints) ---
-	if not _validate_pre_rejection(data.get("pre_rejection", null), expected, "pre_rejection"):
+	# --- rejected_cells (optional; dict of cell-index strings → PLUS or MINUS ints) ---
+	if not _validate_rejected_cells(data.get("rejected_cells", null), expected, "rejected_cells"):
 		return false
 
 	return not bool(data.get("is_completed", false))
@@ -201,9 +201,9 @@ func _validate_undo_stack(v: Variant, max_idx: int, label: String) -> bool:
 	return true
 
 
-## Validate that a pre_rejection dict maps string cell-index keys to valid glyph ints.
-## A missing (null) entry is accepted (old saves without pre_rejection are valid).
-func _validate_pre_rejection(v: Variant, max_idx: int, label: String) -> bool:
+## Validate that a rejected_cells dict maps string cell-index keys to PLUS or MINUS ints.
+## A missing (null) entry is accepted (old saves without rejected_cells are valid).
+func _validate_rejected_cells(v: Variant, max_idx: int, label: String) -> bool:
 	if v == null:
 		return true  # omitted is fine
 	if typeof(v) != TYPE_DICTIONARY:
@@ -222,7 +222,8 @@ func _validate_pre_rejection(v: Variant, max_idx: int, label: String) -> bool:
 			push_warning("EclipseGridSaveAdapter: %s key %d out of range" % [label, idx])
 			return false
 		var val: Variant = d[key]
-		if typeof(val) != TYPE_INT or not (int(val) in _VALID_GLYPHS):
-			push_warning("EclipseGridSaveAdapter: %s value at key %s is invalid" % [label, key])
+		if typeof(val) != TYPE_INT \
+				or (int(val) != EclipseGridSolver.PLUS and int(val) != EclipseGridSolver.MINUS):
+			push_warning("EclipseGridSaveAdapter: %s value at key %s must be PLUS or MINUS" % [label, key])
 			return false
 	return true

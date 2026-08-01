@@ -45,10 +45,11 @@ var assistance_mode: int = ASSIST_FREE
 
 var _undo_stack: UndoStack = UndoStack.new()
 
-## Tracks the pre-rejection cell value for cells in strict mode where a wrong
-## glyph was placed but not recorded in the undo stack.  Cleared when the cell
-## receives an accepted placement or is restored via undo.
-var _pre_rejection: Dictionary = {}
+## Tracks the last-rejected glyph for cells in strict mode where a wrong
+## glyph was entered.  The rejected glyph is stored here instead of in
+## cells[], keeping cells[] at the last accepted (visible) value.  Cleared
+## when the cell receives an accepted placement or is restored via undo.
+var _rejected_cells: Dictionary = {}
 
 var undo_stack: Array[Dictionary]:
 	get:
@@ -104,7 +105,7 @@ func init_new_game(puzzle_size: int, seed_value: int, generated: Dictionary = {}
 
 	_apply_generated_data(data)
 	_undo_stack.clear()
-	_pre_rejection.clear()
+	_rejected_cells.clear()
 	is_completed = false
 	hints_used = 0
 
@@ -128,7 +129,7 @@ func init_from_save(data: Dictionary) -> void:
 	var undo_entries := _deserialize_undo_stack(data.get("undo_stack", []))
 	var redo_entries := _deserialize_undo_stack(data.get("redo_stack", []))
 	_undo_stack.load_entries(undo_entries, redo_entries)
-	_pre_rejection = _deserialize_pre_rejection(data.get("pre_rejection", {}))
+	_rejected_cells = _deserialize_rejected_cells(data.get("rejected_cells", {}))
 
 	_recompute_completion()
 
@@ -148,7 +149,7 @@ func serialize() -> Dictionary:
 		"assistance_mode": assistance_mode,
 		"undo_stack": _serialize_undo_stack(_undo_stack.get_undo_entries()),
 		"redo_stack": _serialize_undo_stack(_undo_stack.get_redo_entries()),
-		"pre_rejection": _serialize_pre_rejection(_pre_rejection),
+		"rejected_cells": _serialize_rejected_cells(_rejected_cells),
 	}
 
 
@@ -168,38 +169,34 @@ func cycle_cell(index: int) -> SetGlyphResult:
 	if is_completed:
 		return result
 
-	var old_val: int = cells[index]
-	var new_val: int = _next_value(old_val)
+	# Advance the cycle from the rejected position (if any) rather than from
+	# the visible accepted value.  This lets the player keep tapping through
+	# wrong choices without the cycle restarting from EMPTY each time.
+	var cycle_from: int = _rejected_cells.get(index, cells[index])
+	var new_val: int = _next_value(cycle_from)
 
-	result.old_value = old_val
+	# result.old_value always reflects the visible (accepted) board state.
+	result.old_value = cells[index]
 
-	# Strict mode: place the value but mark it as rejected when wrong.
-	# Placing the wrong value keeps the cycle advancing so the player can
-	# reach the correct value on the next tap (EMPTY → PLUS wrong → rejected →
-	# tap again → MINUS).  EMPTY (erase) is always accepted silently.
-	# Rejected placements are NOT added to the undo history so that undo always
-	# returns to the last accepted state, never to an intermediate rejected glyph.
+	# Strict mode: EMPTY (erase) is always accepted; any non-EMPTY wrong entry
+	# is recorded in _rejected_cells without touching cells[], so the board
+	# never renders a rejected glyph.
 	if assistance_mode == ASSIST_STRICT and new_val != EMPTY:
 		if not solution.is_empty() and new_val != solution[index]:
 			result.new_value = new_val
 			result.rejected = true
-			if not _pre_rejection.has(index):
-				_pre_rejection[index] = old_val  # Remember value before rejection chain
-			cells[index] = new_val
+			_rejected_cells[index] = new_val
+			# cells[index] is intentionally NOT updated — keeps the last accepted value
 			return result
 
-	# Accepted placement: use the pre-rejection value as old_value if this cell
-	# was in a rejected state, so undo skips back past the rejected glyph.
-	var undo_old_val: int = old_val
-	if _pre_rejection.has(index):
-		undo_old_val = int(_pre_rejection[index])
-		_pre_rejection.erase(index)
-
+	# Accepted placement: clear any pending rejected cycle position.
+	_rejected_cells.erase(index)
 	result.new_value = new_val
 
 	# Avoid phantom no-op undo entries (e.g. EMPTY → rejections → EMPTY erase).
-	if undo_old_val != new_val:
-		_undo_stack.push({"index": index, "old_value": undo_old_val, "new_value": new_val})
+	# old_value for undo is cells[index] — always the clean accepted state.
+	if cells[index] != new_val:
+		_undo_stack.push({"index": index, "old_value": cells[index], "new_value": new_val})
 	cells[index] = new_val
 	_recompute_completion()
 	result.game_won = is_completed
@@ -212,7 +209,7 @@ func set_cell_direct(index: int, value: int) -> void:
 	if index < 0 or index >= cells.size():
 		return
 	cells[index] = value
-	_pre_rejection.erase(index)
+	_rejected_cells.erase(index)
 	_recompute_completion()
 
 
@@ -226,6 +223,8 @@ func use_hint() -> HintResult:
 	# incorrectly (free mode) is reset to EMPTY so the solver derives deductions
 	# from a consistent, solution-compatible state rather than propagating player
 	# mistakes into incorrect hint values.
+	# cells[] never holds rejected glyphs (strict mode keeps them in _rejected_cells),
+	# so no additional cleaning is required here.
 	var clean_cells: Array[int] = cells.duplicate()
 	for i in clean_cells.size():
 		if clean_cells[i] != EMPTY and clean_cells[i] != solution[i]:
@@ -255,14 +254,9 @@ func use_hint() -> HintResult:
 	result.index = idx
 	result.value = val
 
-	# If this cell had a pending rejected value in strict mode, the undo entry's
-	# old_value must be the pre-rejection state so that undo doesn't restore the
-	# wrong glyph back to the board.
-	var undo_old_val: int = cells[idx]
-	if _pre_rejection.has(idx):
-		undo_old_val = int(_pre_rejection[idx])
-		_pre_rejection.erase(idx)
-	_undo_stack.push({"index": idx, "old_value": undo_old_val, "new_value": val})
+	# cells[idx] is always the accepted state — use it directly as undo old_value.
+	_rejected_cells.erase(idx)
+	_undo_stack.push({"index": idx, "old_value": cells[idx], "new_value": val})
 	cells[idx] = val
 	hints_used += 1
 	_recompute_completion()
@@ -282,7 +276,7 @@ func undo() -> UndoRedoResult:
 	var old_val: int = int(entry.get("old_value", EMPTY))
 	var new_val: int = int(entry.get("new_value", EMPTY))
 	cells[idx] = old_val
-	_pre_rejection.erase(idx)  # Clear any pending rejection for this cell
+	_rejected_cells.erase(idx)  # Clear any pending rejected cycle position
 	_recompute_completion()
 	result.index = idx
 	result.old_value = new_val
@@ -523,17 +517,18 @@ func _deserialize_undo_stack(data: Variant) -> Array[Dictionary]:
 	return result
 
 
-## Serialize _pre_rejection as {"idx": glyph_int, ...} using string keys.
-func _serialize_pre_rejection(pr: Dictionary) -> Dictionary:
+## Serialize _rejected_cells as {"idx": glyph_int, ...} using string keys.
+## Values are always PLUS or MINUS (never EMPTY).
+func _serialize_rejected_cells(rc: Dictionary) -> Dictionary:
 	var out: Dictionary = {}
-	for key in pr.keys():
-		out[str(int(key))] = int(pr[key])
+	for key in rc.keys():
+		out[str(int(key))] = int(rc[key])
 	return out
 
 
-## Restore _pre_rejection from serialized form.  Unknown or invalid entries
-## are silently dropped (saves from older schema versions have no pre_rejection).
-func _deserialize_pre_rejection(data: Variant) -> Dictionary:
+## Restore _rejected_cells from serialized form.  Unknown or invalid entries
+## are silently dropped (saves without rejected_cells use an empty dict).
+func _deserialize_rejected_cells(data: Variant) -> Dictionary:
 	var result: Dictionary = {}
 	if not (data is Dictionary):
 		return result
@@ -543,6 +538,6 @@ func _deserialize_pre_rejection(data: Variant) -> Dictionary:
 		if idx < 0 or idx >= max_idx:
 			continue
 		var val: int = int(data[key])
-		if val == EMPTY or val == PLUS or val == MINUS:
+		if val == PLUS or val == MINUS:
 			result[idx] = val
 	return result

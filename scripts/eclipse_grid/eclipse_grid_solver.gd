@@ -653,13 +653,18 @@ static func _relation_chain_rank3(
 	return null
 
 
-## Cross-line Rank-3 technique: enumerate all valid line completions, filter by
-## LOCAL perpendicular-dimension compatibility (quota + no-three at position `line`
-## + adjacent perpendicular relations with FILLED neighbors), and return the first
-## cell whose value is unanimous across all cross-compatible completions.
-## The perpendicular compatibility step makes this genuinely cross-dimensional and
-## finds deductions that single-line Rank-1/2 exhaustion cannot.
-## Does NOT modify cells[].
+## Rank-3 technique: in-line relation-driven enumeration.
+## Enumerates all valid completions of a line and returns the first cell whose
+## value is identical in every valid completion (consensus forcing).
+##
+## Only attempts lines that have at least one in-line relation (EQ or NEQ clue)
+## with both its endpoints among the line's empty cells.  Without such a relation
+## the Rank-1/2 techniques are already exhaustive for this line, so this function
+## returns null rather than duplicating their work.
+##
+## The consensus is computed using only in-line constraints: quota balance, no-three
+## consecutive, and EQ/NEQ clues within the line.  No cross-line checks are
+## performed — those belong to Rank 4.  Does NOT modify cells[].
 static func _line_propagate_rank3(
 		size: int,
 		cells: Array[int],
@@ -682,8 +687,8 @@ static func _line_propagate_rank3(
 			_:     empties.append(i)
 
 	var k := empties.size()
-	if k < 2:
-		return null  # Rank 1/2 handles 0–1 empty cells
+	if k < 3:
+		return null  # Rank 2 covers k=2; Rank 1 covers k≤1
 
 	var half := size / 2
 	var plus_needed  := half - plus_count
@@ -692,10 +697,27 @@ static func _line_propagate_rank3(
 	if plus_needed < 0 or minus_needed < 0 or plus_needed + minus_needed != k:
 		return null  # Quota already violated or impossible
 
+	# Require at least one in-line relation clue with both endpoints in the empty set.
+	# Relations are only between adjacent cells, so only consecutive empties qualify.
+	var rel_dict := h_relations if is_row else v_relations
+	var has_inline_rel := false
+	for j in range(k - 1):
+		if empties[j + 1] == empties[j] + 1:
+			var rel_pos: Vector2i
+			if is_row:
+				rel_pos = Vector2i(empties[j], line)
+			else:
+				rel_pos = Vector2i(line, empties[j])
+			if rel_dict.has(rel_pos):
+				has_inline_rel = true
+				break
+	if not has_inline_rel:
+		return null
+
 	# forced_val[j] tracks the consensus value for empties[j] across valid completions:
-	#   -1    = no cross-compatible completion seen yet
-	#   PLUS/MINUS = all cross-compatible completions agree on this value
-	#   EMPTY = completions disagree → not universally forced
+	#   -1         = no valid completion seen yet
+	#   PLUS/MINUS = all valid completions agree on this value
+	#   EMPTY      = completions disagree → not universally forced
 	var forced_val: Array[int] = []
 	forced_val.resize(k)
 	forced_val.fill(-1)
@@ -719,112 +741,11 @@ static func _line_propagate_rank3(
 		if not valid:
 			continue
 
-		# Validate in-line relations
+		# Validate in-line relation clues only
 		if not _line_check_relations(trial, line, is_row, size, h_relations, v_relations):
 			continue
 
-		# Cross-line LOCAL compatibility: for each newly-assigned empty cell, verify that
-		# placing trial[pos] at (line, pos) (if is_row) or (pos, line) (if is_col)
-		# is compatible with the perpendicular dimension's quota, no-three pattern at
-		# position `line`, and adjacent perpendicular relation clues with FILLED neighbors.
-		var cross_ok := true
-		for j in k:
-			var pos := empties[j]    # position along this line (col if is_row, row if is_col)
-			var tv: int = trial[pos]
-
-			# (a) Perpendicular quota: count plus/minus in the perpendicular line for `pos`.
-			var pp := 0
-			var pm := 0
-			for ii in size:
-				var pv: int = cells[ii * size + pos] if is_row else cells[pos * size + ii]
-				if pv == PLUS:   pp += 1
-				elif pv == MINUS: pm += 1
-			if tv == PLUS:  pp += 1
-			else:            pm += 1
-			if pp > half or pm > half:
-				cross_ok = false
-				break
-
-			# (b) No-three in the perpendicular dimension at position `line`
-			# (the row or column position where we are placing tv).
-			var r_perp := line   # perpendicular index: row if is_row, col if is_col
-			if is_row:
-				# Perpendicular = column pos; check three patterns around row r_perp.
-				if r_perp >= 2 \
-						and cells[(r_perp - 1) * size + pos] == tv \
-						and cells[(r_perp - 2) * size + pos] == tv:
-					cross_ok = false
-					break
-				if r_perp >= 1 and r_perp + 1 < size \
-						and cells[(r_perp - 1) * size + pos] == tv \
-						and cells[(r_perp + 1) * size + pos] == tv:
-					cross_ok = false
-					break
-				if r_perp + 2 < size \
-						and cells[(r_perp + 1) * size + pos] == tv \
-						and cells[(r_perp + 2) * size + pos] == tv:
-					cross_ok = false
-					break
-				# (c) Adjacent v-relations at column pos around row r_perp.
-				if r_perp > 0:
-					var vpos := Vector2i(pos, r_perp - 1)
-					if v_relations.has(vpos):
-						var above: int = cells[(r_perp - 1) * size + pos]
-						if above != EMPTY:
-							var rel: int = v_relations[vpos]
-							if (rel == EQ and tv != above) or (rel == NEQ and tv == above):
-								cross_ok = false
-								break
-				if r_perp + 1 < size:
-					var vpos := Vector2i(pos, r_perp)
-					if v_relations.has(vpos):
-						var below: int = cells[(r_perp + 1) * size + pos]
-						if below != EMPTY:
-							var rel: int = v_relations[vpos]
-							if (rel == EQ and tv != below) or (rel == NEQ and tv == below):
-								cross_ok = false
-								break
-			else:
-				# Perpendicular = row pos; check three patterns around col r_perp.
-				if r_perp >= 2 \
-						and cells[pos * size + (r_perp - 1)] == tv \
-						and cells[pos * size + (r_perp - 2)] == tv:
-					cross_ok = false
-					break
-				if r_perp >= 1 and r_perp + 1 < size \
-						and cells[pos * size + (r_perp - 1)] == tv \
-						and cells[pos * size + (r_perp + 1)] == tv:
-					cross_ok = false
-					break
-				if r_perp + 2 < size \
-						and cells[pos * size + (r_perp + 1)] == tv \
-						and cells[pos * size + (r_perp + 2)] == tv:
-					cross_ok = false
-					break
-				# (c) Adjacent h-relations at row pos around col r_perp.
-				if r_perp > 0:
-					var hpos := Vector2i(r_perp - 1, pos)
-					if h_relations.has(hpos):
-						var left: int = cells[pos * size + (r_perp - 1)]
-						if left != EMPTY:
-							var rel: int = h_relations[hpos]
-							if (rel == EQ and tv != left) or (rel == NEQ and tv == left):
-								cross_ok = false
-								break
-				if r_perp + 1 < size:
-					var hpos := Vector2i(r_perp, pos)
-					if h_relations.has(hpos):
-						var right: int = cells[pos * size + (r_perp + 1)]
-						if right != EMPTY:
-							var rel: int = h_relations[hpos]
-							if (rel == EQ and tv != right) or (rel == NEQ and tv == right):
-								cross_ok = false
-								break
-
-		if not cross_ok:
-			continue
-
-		# This completion passed cross-line checks: update consensus.
+		# This completion is in-line valid: update consensus.
 		has_any = true
 		for j in k:
 			var val: int = trial[empties[j]]
@@ -844,7 +765,7 @@ static func _line_propagate_rank3(
 			var ltype := "row" if is_row else "col"
 			var af: Array[int] = [idx]
 			return SolverStep.new(
-				"Rank-3 %s %d: cross-line enumeration forces position %d to %s" % [
+				"Rank-3 %s %d: in-line relation enumeration forces position %d to %s" % [
 					ltype, line, pos_in_line, "+" if forced_val[j] == PLUS else "-"],
 				af, forced_val[j], RANK_3)
 
@@ -896,105 +817,51 @@ static func _popcount(n: int) -> int:
 # Rank 4 techniques
 # ---------------------------------------------------------------------------
 
-## Non-speculative Rank-4 technique: global consistency check.
-## For each row, enumerate all valid row completions (quota + no-three + in-row
-## relations), apply each to a copy of cells[], and keep only those that are
-## globally consistent (is_consistent passes for ALL rows, columns, and relations).
-## Return the first cell whose value is unanimous across ALL globally-consistent
-## completions.  This is strictly stronger than the Rank-3 cross-line check because
-## is_consistent examines every column and every filled relation pair simultaneously,
-## detecting constraints that per-cell local checks miss.
+## Rank-4 technique: single-cell forcing chain.
+## For each empty cell (r, c), places each candidate value (PLUS or MINUS) in a
+## scratch copy of the board, propagates all Rank-1 consequences exhaustively
+## (quota completion, adjacent-pair prevention, sandwich, direct-relation), then
+## calls is_consistent.  If one candidate leads to a contradiction, the opposite
+## value is forced.
+##
+## This is strictly stronger than Rank 3 (which performs only in-line analysis)
+## because the Rank-1 propagation cascades across row/column boundaries, exposing
+## multi-line contradictions that single-line enumeration cannot detect.
 ## Does NOT modify cells[].
 static func _global_quota_chain(
 		size: int,
 		cells: Array[int],
 		h_relations: Dictionary,
 		v_relations: Dictionary) -> SolverStep:
-	var half := size / 2
-
 	for r in size:
-		var row_plus := 0
-		var row_minus := 0
-		var row_empties: Array[int] = []
-		var row_vals: Array[int] = []
 		for c in size:
-			var v: int = cells[r * size + c]
-			row_vals.append(v)
-			match v:
-				PLUS:  row_plus += 1
-				MINUS: row_minus += 1
-				_:     row_empties.append(c)
-
-		var k := row_empties.size()
-		if k == 0:
-			continue  # No empties to fill
-
-		var row_plus_need  := half - row_plus
-		var row_minus_need := half - row_minus
-		if row_plus_need < 0 or row_minus_need < 0:
-			continue
-
-		# forced_val[j]: consensus across all globally-consistent row completions.
-		var forced_val: Array[int] = []
-		forced_val.resize(k)
-		forced_val.fill(-1)
-		var has_any := false
-
-		for mask in range(1 << k):
-			if _popcount(mask) != row_plus_need:
+			var idx := r * size + c
+			if cells[idx] != EMPTY:
 				continue
-
-			# Build a trial row completion
-			var trial_row := row_vals.duplicate()
-			for j in k:
-				trial_row[row_empties[j]] = PLUS if (mask >> j) & 1 else MINUS
-
-			# Check no-three consecutive in this trial row
-			var row_ok := true
-			for i in range(2, size):
-				if trial_row[i] == trial_row[i - 1] \
-						and trial_row[i - 1] == trial_row[i - 2]:
-					row_ok = false
-					break
-			if not row_ok:
-				continue
-
-			# Check in-row relation clues
-			if not _line_check_relations(trial_row, r, true, size,
-					h_relations, v_relations):
-				continue
-
-			# Apply this row completion to a scratch copy and verify global consistency.
-			# is_consistent checks ALL rows and columns for quota and no-three, plus
-			# ALL filled-endpoint relation pairs — including relations between the newly
-			# filled cells and any already-filled perpendicular neighbors.
-			var trial_cells := cells.duplicate()
-			for c in size:
-				trial_cells[r * size + c] = trial_row[c]
-
-			if not is_consistent(size, trial_cells, h_relations, v_relations):
-				continue
-
-			# This completion is globally consistent: update per-column consensus.
-			has_any = true
-			for j in k:
-				var val: int = trial_row[row_empties[j]]
-				if forced_val[j] == -1:
-					forced_val[j] = val
-				elif forced_val[j] != val:
-					forced_val[j] = EMPTY  # Disagreement — not universally forced
-
-		if has_any:
-			for j in k:
-				if forced_val[j] == PLUS or forced_val[j] == MINUS:
-					var c := row_empties[j]
-					var idx := r * size + c
+			for v in [PLUS, MINUS]:
+				var trial: Array[int] = cells.duplicate()
+				trial[idx] = v
+				# Propagate Rank-1 consequences until stable.
+				var changed := true
+				while changed:
+					changed = false
+					var step: SolverStep = _quota_completion(size, trial)
+					if step == null:
+						step = _adjacent_pair_prevention(size, trial)
+					if step == null:
+						step = _sandwich_rule(size, trial)
+					if step == null:
+						step = _direct_relation(size, trial, h_relations, v_relations)
+					if step != null:
+						trial[step.affected_cells[0]] = step.result_value
+						changed = true
+				if not is_consistent(size, trial, h_relations, v_relations):
+					var forced_v := _opposite(v)
 					var af: Array[int] = [idx]
 					return SolverStep.new(
-						"Rank-4 row %d: globally-consistent completions force col %d to %s" % [
-							r, c, "+" if forced_val[j] == PLUS else "-"],
-						af, forced_val[j], RANK_4)
-
+						"Rank-4 forcing chain: (%d,%d)=%s leads to contradiction" % [
+							r, c, "+" if v == PLUS else "-"],
+						af, forced_v, RANK_4)
 	return null
 
 

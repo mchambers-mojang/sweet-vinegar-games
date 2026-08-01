@@ -496,20 +496,13 @@ func test_rank4_step_has_rank4_label() -> void:
 			"Chain step must be labeled RANK_4")
 
 
-func test_rank3_cascade_returns_rank3_step() -> void:
-	## With cross-line checks, _line_propagate_rank3 uses column quota to
-	## eliminate row completions and reach consensus.  This board has
-	## alternating-complete rows 1-5 so each empty column (2,3,4,5) is
-	## already at half-1 of one value: placing the opposite exceeds quota.
+func test_rank3_skips_line_without_inline_relations() -> void:
+	## A line with k≥3 empty cells but NO in-line relation between any two empty
+	## cells must return null from _line_propagate_rank3 (cross-line checks were
+	## removed; only in-line relation constraints drive Rank-3 deductions).
 	##
-	## 6×6 row 0: [-,+,_,_,_,_]  half=3; need 2+ and 2-
-	## Col 2 (rows 1-5): +,-,+,-,+  = 3+, 2-  → placing + would give col 4+ > half=3 → must be MINUS
-	## Col 3 (rows 1-5): -,+,-,+,-  = 2+, 3-  → placing - would give col 4- > half=3 → must be PLUS
-	## Col 4 (rows 1-5): +,-,+,-,+  = 3+, 2-  → must be MINUS
-	## Col 5 (rows 1-5): -,+,-,+,-  = 2+, 3-  → must be PLUS
-	##
-	## Cross-line quota eliminates all completions except [-,+,-,+,-,+].
-	## All 4 empties are uniquely forced; pos 2 = MINUS is returned first.
+	## 6×6 row 0: [-,+,_,_,_,_]  half=3; need 2+ and 2-.
+	## Rows 1–5: fully filled alternating.  No h_relations.
 	var cells: Array[int] = [
 		MINUS, PLUS,  EMPTY, EMPTY, EMPTY, EMPTY,
 		PLUS,  MINUS, PLUS,  MINUS, PLUS,  MINUS,
@@ -520,16 +513,50 @@ func test_rank3_cascade_returns_rank3_step() -> void:
 	]
 	var step: EclipseGridSolver.SolverStep = \
 		EclipseGridSolver._line_propagate_rank3(6, cells, {}, {}, 0, true)
-	# Cross-line quota forces all 4 empties; the function must return a RANK_3 step.
-	assert_not_null(step,
-		"_line_propagate_rank3 must find a cross-line-forced step for this board")
-	if step != null:
-		assert_eq(step.rank, EclipseGridSolver.RANK_3,
-			"Cross-line deduction must be labeled RANK_3")
-		assert_eq(step.result_value, MINUS,
-			"Col 2 must be forced to MINUS by cross-line quota")
-		assert_eq(step.affected_cells[0], 2,
-			"Forced cell is flat index 2 (row 0, col 2)")
+	assert_null(step,
+		"_line_propagate_rank3 must return null for a line with no in-line relation between empty cells")
+
+
+func test_rank3_reachable_through_analyze() -> void:
+	## Board designed so Rank-1 and Rank-2 are fully exhausted but Rank-3's
+	## in-line relation enumeration can force a cell.
+	##
+	## 6×6, half=3.
+	## Row 0: [+, _, _, _, _, -]  (cols 1–4 empty; needs 2+ and 2-)
+	## Row 1: [-, _, _, _, _, +]  (cols 1–4 empty; needs 2+ and 2-)
+	## Rows 2–5: alternating, fully filled.
+	##
+	## Columns 1–4 each have exactly 2 empties (rows 0 and 1) and 1+/1- from
+	## rows 2–5 → both (+,-) and (-,+) are valid for each column → no Rank-1/2
+	## deduction.
+	##
+	## h_relation EQ at Vector2i(1, 0) links col-1 and col-2 of row 0.
+	## In-line enumeration for row 0: the only completion that satisfies
+	##   quota(2+,2-) + no-three(can't put + at col1 — would make +,+,+) + EQ(col1==col2)
+	## is col1=-, col2=-, col3=+, col4=+ → forced Rank-3 step.
+	var cells: Array[int] = [
+		PLUS,  EMPTY, EMPTY, EMPTY, EMPTY, MINUS,
+		MINUS, EMPTY, EMPTY, EMPTY, EMPTY, PLUS,
+		PLUS,  MINUS, PLUS,  MINUS, PLUS,  MINUS,
+		MINUS, PLUS,  MINUS, PLUS,  MINUS, PLUS,
+		PLUS,  MINUS, PLUS,  MINUS, PLUS,  MINUS,
+		MINUS, PLUS,  MINUS, PLUS,  MINUS, PLUS,
+	]
+	var h_rels := { Vector2i(1, 0): EQ }
+	var analysis := EclipseGridSolver.analyze(6, cells, h_rels, {})
+
+	assert_false(analysis.steps.is_empty(), "analyze() must find at least one step")
+	assert_eq(analysis.max_rank, EclipseGridSolver.RANK_3,
+		"Board must require exactly Rank 3 (no Rank-1/2 deduction exists initially)")
+
+	if not analysis.steps.is_empty():
+		var first: EclipseGridSolver.SolverStep = analysis.steps[0]
+		assert_eq(first.rank, EclipseGridSolver.RANK_3,
+			"First step must be Rank-3 (in-line EQ + no-three uniquely forces col-1)")
+		assert_eq(first.result_value, MINUS,
+			"Col-1 of row-0 is forced to MINUS by unique in-line completion")
+		assert_eq(first.affected_cells[0], 1,
+			"Forced cell is flat index 1 (row 0, col 1)")
 
 
 func test_rank3_does_not_mislabel_rank1_in_analyze() -> void:
