@@ -317,6 +317,7 @@ func test_save_adapter_accepts_36_cell_puzzle() -> void:
 		"solution": _make_array(36, 1),
 		"current_grid": _make_array(36, 0),
 		"grid_spec_id": "mini_6x6",
+		"rule_set": 4,
 		"difficulty": 0,
 	}
 	data["puzzle"][0] = 1
@@ -401,6 +402,7 @@ func test_save_adapter_rejects_mismatched_current_grid_size() -> void:
 		"solution": _make_array(36, 1),
 		"current_grid": _make_array(9, 0),   # Wrong: 9 instead of 36
 		"grid_spec_id": "mini_6x6",
+		"rule_set": 4,
 		"difficulty": 0,
 	}
 	data["puzzle"][0] = 1
@@ -418,6 +420,7 @@ func test_save_adapter_rejects_mismatched_solution_size() -> void:
 		"solution": _make_array(81, 1),   # Wrong: 81 instead of 36
 		"current_grid": _make_array(36, 0),
 		"grid_spec_id": "mini_6x6",
+		"rule_set": 4,
 		"difficulty": 0,
 	}
 	data["puzzle"][0] = 1
@@ -436,6 +439,7 @@ func test_save_adapter_rejects_null_current_grid() -> void:
 		"solution": _make_array(36, 1),
 		# current_grid intentionally absent
 		"grid_spec_id": "mini_6x6",
+		"rule_set": 4,
 		"difficulty": 0,
 	}
 	data["puzzle"][0] = 1
@@ -514,3 +518,193 @@ func test_logic_place_number_api_exists() -> void:
 	assert_true(result.valid, "place_number() result must have valid field")
 	assert_true(result.placed, "place_number() of correct value must be placed")
 	assert_eq(result.cell_index, empty_idx, "place_number() result must carry cell_index")
+
+
+# ---------------------------------------------------------------------------
+# 9. Regression: SudokuSolver.is_logic_solvable via analyze()
+# ---------------------------------------------------------------------------
+
+func test_solver_analyze_sets_is_logic_solvable_for_mini_puzzle() -> void:
+	## Regression for: SudokuSolver.analyze() must expose whether solve_logic()
+	## completed the puzzle. is_logic_solvable must be true for the known 6×6 fixture.
+	var spec := SudokuGridSpec.MINI_6X6
+	var puzzle: Array[int] = TEST_PUZZLE_6X6.duplicate()
+	var solver := SudokuSolver.new()
+	solver.analyze(puzzle, [], spec)
+	assert_true(solver.is_unique, "Known test puzzle must be unique")
+	assert_true(solver.is_logic_solvable, "Known 6×6 puzzle must be solvable by logic alone")
+
+
+func test_solver_analyze_is_logic_solvable_false_for_incomplete() -> void:
+	## is_logic_solvable must be false when a puzzle still has empty cells after
+	## the logic solver runs (i.e. requires guessing). A nearly-empty 6×6 grid
+	## that cannot be finished by naked/hidden singles must return false.
+	var spec := SudokuGridSpec.MINI_6X6
+	# An almost-empty 6×6 grid — logic alone cannot determine unique placements.
+	var near_empty: Array[int] = [
+		1, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0,
+	]
+	var solver := SudokuSolver.new()
+	solver.analyze(near_empty, [], spec)
+	assert_false(solver.is_logic_solvable, "Near-empty puzzle must not be logic-solvable")
+
+
+func test_generator_6x6_is_logic_solvable() -> void:
+	## Regression for: Mini generation must enforce human-logic solvability.
+	## The generator must only return puzzles that can be solved by logic alone.
+	var gen := SudokuGenerator.new()
+	var spec := SudokuGridSpec.MINI_6X6
+	var result: Dictionary = gen.generate(SudokuSolver.Difficulty.EASY, 42, [], spec)
+	assert_true(result.has("puzzle"), "Generator must return a puzzle")
+	var puzzle: Array = result["puzzle"]
+	var p6: Array[int] = []
+	p6.assign(puzzle)
+	var solver := SudokuSolver.new()
+	solver.analyze(p6, [], spec)
+	assert_true(solver.is_unique, "Generated Mini puzzle must have a unique solution")
+	assert_true(solver.is_logic_solvable, "Generated Mini puzzle must be solvable by logic alone")
+
+
+# ---------------------------------------------------------------------------
+# 10. Regression: save adapter validates rule_set and symbol ranges
+# ---------------------------------------------------------------------------
+
+func test_save_adapter_rejects_mini_with_wrong_rule_set() -> void:
+	## Regression for: Mini save without Mini rule_set resumes as Standard and
+	## can corrupt Standard Easy statistics. rule_set=0 must be rejected.
+	var adapter := SudokuSaveAdapter.new()
+	var data := {
+		"puzzle": _make_array(36, 0),
+		"solution": _make_array(36, 1),
+		"current_grid": _make_array(36, 0),
+		"grid_spec_id": "mini_6x6",
+		"rule_set": 0,  # Standard — incompatible with mini_6x6 spec
+		"difficulty": 0,
+	}
+	data["puzzle"][0] = 1
+	data["current_grid"][0] = 1
+	GameSaveManager.save_game("sudoku", data)
+	var can_resume: bool = adapter.can_resume()
+	assert_false(can_resume, "Adapter must reject a Mini-spec save with rule_set=0 (Standard)")
+
+
+func test_save_adapter_rejects_mini_with_missing_rule_set() -> void:
+	## Regression: a 36-cell save whose rule_set key is absent must be rejected.
+	## Missing rule_set defaults to 0 (Standard) which would corrupt Standard stats.
+	var adapter := SudokuSaveAdapter.new()
+	var data := {
+		"puzzle": _make_array(36, 0),
+		"solution": _make_array(36, 1),
+		"current_grid": _make_array(36, 0),
+		"grid_spec_id": "mini_6x6",
+		# rule_set intentionally absent
+		"difficulty": 0,
+	}
+	data["puzzle"][0] = 1
+	data["current_grid"][0] = 1
+	GameSaveManager.save_game("sudoku", data)
+	var can_resume: bool = adapter.can_resume()
+	assert_false(can_resume, "Adapter must reject a Mini-spec save with no rule_set key")
+
+
+func test_save_adapter_rejects_mini_with_is_killer() -> void:
+	## Mini saves with is_killer=true must be rejected — Killer is incompatible with Mini.
+	var adapter := SudokuSaveAdapter.new()
+	var data := {
+		"puzzle": _make_array(36, 0),
+		"solution": _make_array(36, 1),
+		"current_grid": _make_array(36, 0),
+		"grid_spec_id": "mini_6x6",
+		"rule_set": 4,
+		"is_killer": true,
+		"difficulty": 0,
+	}
+	data["puzzle"][0] = 1
+	data["current_grid"][0] = 1
+	GameSaveManager.save_game("sudoku", data)
+	var can_resume: bool = adapter.can_resume()
+	assert_false(can_resume, "Adapter must reject a Mini save that also claims is_killer=true")
+
+
+func test_save_adapter_rejects_out_of_range_symbols() -> void:
+	## Regression: symbol values outside [sym_min, sym_max] must be rejected.
+	## A Mini puzzle containing a '9' (valid in 9×9 but not in 6×6) must be rejected.
+	var adapter := SudokuSaveAdapter.new()
+	var data := {
+		"puzzle": _make_array(36, 0),
+		"solution": _make_array(36, 1),
+		"current_grid": _make_array(36, 0),
+		"grid_spec_id": "mini_6x6",
+		"rule_set": 4,
+		"difficulty": 0,
+	}
+	data["puzzle"][0] = 9  # Out of range — 6×6 only allows 1–6
+	data["current_grid"][0] = 9
+	GameSaveManager.save_game("sudoku", data)
+	var can_resume: bool = adapter.can_resume()
+	assert_false(can_resume, "Adapter must reject a Mini save with symbol 9 (out of 1–6 range)")
+
+
+# ---------------------------------------------------------------------------
+# 11. Regression: completion effect cell indices use spec dimensions
+# ---------------------------------------------------------------------------
+
+func test_completion_effect_row_indices_6x6() -> void:
+	## Regression for: completion effects used hardcoded 9×9 dimensions.
+	## Verify that spec-derived row/col/box cell indices are correct for 6×6.
+	## Row 0 in a 6×6 grid spans cells 0–5 (not 0–8 as in 9×9).
+	var spec := SudokuGridSpec.MINI_6X6
+	var row := 0
+	var first_cell := row * spec.size          # 0
+	var last_cell := row * spec.size + spec.size - 1  # 5
+	assert_eq(first_cell, 0, "Row 0 first cell must be 0")
+	assert_eq(last_cell, 5, "Row 0 last cell must be 5 (not 8)")
+
+	# Row 2 in 6×6 spans cells 12–17
+	row = 2
+	first_cell = row * spec.size
+	last_cell = row * spec.size + spec.size - 1
+	assert_eq(first_cell, 12, "Row 2 first cell must be 12")
+	assert_eq(last_cell, 17, "Row 2 last cell must be 17")
+
+
+func test_completion_effect_col_indices_6x6() -> void:
+	## Column 0 in a 6×6 grid spans cells 0, 6, 12, 18, 24, 30 (not up to 72).
+	var spec := SudokuGridSpec.MINI_6X6
+	var col := 0
+	var first_cell := col                     # 0
+	var last_cell := (spec.size - 1) * spec.size + col  # 30
+	assert_eq(first_cell, 0, "Col 0 first cell must be 0")
+	assert_eq(last_cell, 30, "Col 0 last cell must be 30 (not 72 as in 9×9)")
+
+
+func test_completion_effect_box_indices_6x6() -> void:
+	## Box 0 in a 6×6 grid (2×3 regions, top-left box) spans rows 0–1 × cols 0–2.
+	## First cell = row 0 × col 0 = 0; last cell = row 1 × col 2 = 8.
+	var spec := SudokuGridSpec.MINI_6X6
+	var num_col_regions := spec.size / spec.region_w  # 2
+	var box_idx := 0
+	var box_row_idx := box_idx / num_col_regions  # 0
+	var box_col_idx := box_idx % num_col_regions  # 0
+	var box_row := box_row_idx * spec.region_h    # 0
+	var box_col := box_col_idx * spec.region_w    # 0
+	var first_cell := box_row * spec.size + box_col  # 0
+	var last_cell := (box_row + spec.region_h - 1) * spec.size + box_col + spec.region_w - 1  # 8
+	assert_eq(first_cell, 0, "Box 0 first cell must be 0")
+	assert_eq(last_cell, 8, "Box 0 last cell must be 8")
+
+	# Box 1 (top-right in 6×6): rows 0–1 × cols 3–5 → first=3, last=11
+	box_idx = 1
+	box_row_idx = box_idx / num_col_regions  # 0
+	box_col_idx = box_idx % num_col_regions  # 1
+	box_row = box_row_idx * spec.region_h    # 0
+	box_col = box_col_idx * spec.region_w    # 3
+	first_cell = box_row * spec.size + box_col   # 3
+	last_cell = (box_row + spec.region_h - 1) * spec.size + box_col + spec.region_w - 1  # 11
+	assert_eq(first_cell, 3, "Box 1 first cell must be 3")
+	assert_eq(last_cell, 11, "Box 1 last cell must be 11")

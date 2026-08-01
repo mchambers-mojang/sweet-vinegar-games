@@ -43,6 +43,8 @@ func _migrate(data: Dictionary, _from_version: int) -> Dictionary:
 ## A valid sudoku save must contain a puzzle array matching the expected cell count.
 ## Legacy saves with 81 cells and no grid_spec_id are treated as standard_9×9.
 ## Saves with grid_spec_id must match the cell count for that spec.
+## Mini (mini_6x6) saves must carry rule_set=4; saves without it default to Standard
+## and would corrupt Standard statistics, so they are rejected.
 ## For Killer saves, the cages array must also be present and non-empty.
 ## Corrupted or structurally invalid data is treated as no-save.
 func _can_resume_from(data: Dictionary) -> bool:
@@ -80,6 +82,31 @@ func _can_resume_from(data: Dictionary) -> bool:
 	if (solution as Array).size() != spec.cell_count:
 		push_warning("SudokuSaveAdapter: corrupted save — solution has %d cells, expected %d for '%s'" % [(solution as Array).size(), spec.cell_count, spec_id])
 		return false
+
+	# Validate rule_set consistency with the grid spec.
+	# A Mini save (mini_6x6) MUST carry rule_set=4; without it the game would
+	# launch as Standard and incorrectly update Standard Easy statistics.
+	# Mini is incompatible with Killer (is_killer=true).
+	const RULE_SET_MINI := 4
+	var saved_rule_set: int = int(data.get("rule_set", -1))
+	if spec_id == "mini_6x6":
+		if saved_rule_set != RULE_SET_MINI:
+			push_warning("SudokuSaveAdapter: Mini save must have rule_set=4, got %d — not resumable" % saved_rule_set)
+			return false
+		if data.get("is_killer", false):
+			push_warning("SudokuSaveAdapter: Mini save must not have is_killer=true — not resumable")
+			return false
+	elif saved_rule_set == RULE_SET_MINI:
+		push_warning("SudokuSaveAdapter: non-Mini spec '%s' must not have rule_set=4 — not resumable" % spec_id)
+		return false
+
+	# Validate symbol ranges: every non-zero value must be in [sym_min, sym_max].
+	for arr in [puzzle as Array, current_grid as Array, solution as Array]:
+		for v in arr:
+			var vi: int = int(v)
+			if vi != 0 and (vi < spec.sym_min or vi > spec.sym_max):
+				push_warning("SudokuSaveAdapter: corrupted save — symbol %d out of range [%d, %d] for '%s'" % [vi, spec.sym_min, spec.sym_max, spec_id])
+				return false
 
 	# Validate cage data for killer saves
 	if data.get("is_killer", false):

@@ -28,6 +28,9 @@ enum Difficulty {
 ## Result of a solve attempt
 var solution: Array[int] = []
 var is_unique: bool = false
+## True when the puzzle can be completed using logic techniques alone (no guessing).
+## Set by analyze(); remains false until analyze() is called.
+var is_logic_solvable: bool = false
 var techniques_used: Array[Technique] = []
 var difficulty: Difficulty = Difficulty.EASY
 
@@ -603,8 +606,8 @@ func analyze(puzzle: Array[int], p_constraints: Array = [], p_spec: SudokuGridSp
 		solution = []
 		solution.assign(solutions[0])
 
-	# Rate difficulty with logic solver (constraints filter candidates identically)
+	# Rate difficulty with logic solver and track whether logic alone completes it.
 	var work: Array[int] = []
 	work.assign(puzzle.duplicate())
-	solve_logic(work, active, s)
+	is_logic_solvable = solve_logic(work, active, s)
 	difficulty = rate_difficulty()

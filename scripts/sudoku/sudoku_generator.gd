@@ -79,7 +79,11 @@ func generate(difficulty: SudokuSolver.Difficulty, seed: int = -1, constraints: 
 		var solver := SudokuSolver.new()
 		solver.analyze(puzzle, constraints, s)
 
-		if solver.is_unique:
+		# Mini 6×6 additionally requires a human-logic-only solution (no guessing).
+		var acceptable: bool = solver.is_unique
+		if s.id == "mini_6x6":
+			acceptable = acceptable and solver.is_logic_solvable
+		if acceptable:
 			return {
 				"puzzle": puzzle,
 				"solution": solver.solution,
