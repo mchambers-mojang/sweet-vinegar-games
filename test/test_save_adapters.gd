@@ -215,7 +215,8 @@ func test_shikaku_adapter_clear() -> void:
 
 func test_shikaku_adapter_can_resume_with_valid_save() -> void:
 	var adapter := ShikakuSaveAdapter.new()
-	adapter.save({"width": 10, "height": 10, "is_completed": false})
+	var anchors := {"3,3": {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT}}
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors})
 	assert_true(adapter.can_resume())
 
 
@@ -234,6 +235,44 @@ func test_shikaku_adapter_can_resume_false_for_bad_dimensions() -> void:
 	var adapter := ShikakuSaveAdapter.new()
 	adapter.save({"width": 0, "height": 0})
 	assert_false(adapter.can_resume(), "Zero dimensions must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_anchor_out_of_bounds() -> void:
+	var adapter := ShikakuSaveAdapter.new()
+	# Anchor at (20, 20) is outside 10×10 grid.
+	var anchors := {"20,20": {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT}}
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors})
+	assert_false(adapter.can_resume(), "Anchor outside grid bounds must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_negative_area() -> void:
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"3,3": {"area": -1, "shape": ShikakuLogic.SHAPE_ABSENT}}
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors})
+	assert_false(adapter.can_resume(), "Negative area must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_invalid_shape_enum() -> void:
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"3,3": {"area": 4, "shape": 99}}
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors})
+	assert_false(adapter.can_resume(), "Unknown shape enum must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_empty_clue_component() -> void:
+	var adapter := ShikakuSaveAdapter.new()
+	# Anchor with area=0 and shape=ABSENT has no constraint — invalid.
+	var anchors := {"3,3": {"area": 0, "shape": ShikakuLogic.SHAPE_ABSENT}}
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors})
+	assert_false(adapter.can_resume(), "Anchor with no clue component must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_true_for_shape_only_anchor() -> void:
+	var adapter := ShikakuSaveAdapter.new()
+	# Shape-only anchor (area=0, shape=SQUARE) is valid.
+	var anchors := {"2,2": {"area": 0, "shape": ShikakuLogic.SHAPE_SQUARE}}
+	adapter.save({"width": 5, "height": 5, "is_completed": false, "anchors": anchors})
+	assert_true(adapter.can_resume(), "Shape-only anchor must be resumable")
 
 
 func test_shikaku_adapter_get_grid_width() -> void:

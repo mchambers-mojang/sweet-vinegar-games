@@ -326,3 +326,125 @@ func test_shape_icons_are_distinct() -> void:
 func test_shape_absent_has_no_icon() -> void:
 	var icon: String = ShikakuLogic.SHAPE_ICONS.get(ShikakuLogic.SHAPE_ABSENT, "MISSING")
 	assert_eq(icon, "", "SHAPE_ABSENT icon should be empty string")
+
+
+# ---------------------------------------------------------------------------
+# SHAPE_NAMES — accessibility (Fix 5)
+# ---------------------------------------------------------------------------
+
+func test_shape_names_are_non_empty_for_constrained_shapes() -> void:
+	for shape in [ShikakuLogic.SHAPE_SQUARE, ShikakuLogic.SHAPE_TALL, ShikakuLogic.SHAPE_WIDE, ShikakuLogic.SHAPE_ANY]:
+		var name: String = ShikakuLogic.SHAPE_NAMES.get(shape, "")
+		assert_false(name.is_empty(), "SHAPE_NAMES must have non-empty text for shape %d" % shape)
+
+
+func test_shape_names_are_distinct() -> void:
+	var names: Array[String] = []
+	for shape in [ShikakuLogic.SHAPE_SQUARE, ShikakuLogic.SHAPE_TALL, ShikakuLogic.SHAPE_WIDE, ShikakuLogic.SHAPE_ANY]:
+		var name: String = ShikakuLogic.SHAPE_NAMES.get(shape, "")
+		assert_false(names.has(name), "SHAPE_NAMES must be unique: '%s'" % name)
+		names.append(name)
+
+
+func test_shape_absent_has_no_name() -> void:
+	var name: String = ShikakuLogic.SHAPE_NAMES.get(ShikakuLogic.SHAPE_ABSENT, "MISSING")
+	assert_eq(name, "", "SHAPE_ABSENT name should be empty string")
+
+
+# ---------------------------------------------------------------------------
+# Uniqueness — initial full-clue puzzle must be unique (Fix 1)
+# ---------------------------------------------------------------------------
+
+func test_shapes_mode_initial_clues_are_unique() -> void:
+	# All generated Shapes puzzles must have a unique solution even before
+	# any minimization — this verifies the unsound-uniqueness-proof fix.
+	for seed in [1, 2, 3, 10, 42]:
+		var gen := ShikakuGenerator.generate(7, 7, seed, ShikakuLogic.RULE_SET_SHAPES)
+		var anchors: Dictionary = gen.get("anchors", {})
+		assert_true(anchors.size() > 0, "7x7 Shapes seed=%d must produce anchors" % seed)
+		var n := ShikakuSolver.count_solutions(7, 7, anchors, 2)
+		assert_eq(n, 1, "7x7 Shapes seed=%d must have exactly 1 solution after generation" % seed)
+
+
+# ---------------------------------------------------------------------------
+# Human-solvability (Fix 2)
+# ---------------------------------------------------------------------------
+
+func test_shapes_mode_is_human_solvable_small() -> void:
+	# Small grids should yield human-solvable Shapes puzzles.
+	var found_human_solvable := false
+	for seed in range(1, 10):
+		var gen := ShikakuGenerator.generate(5, 5, seed, ShikakuLogic.RULE_SET_SHAPES)
+		var anchors: Dictionary = gen.get("anchors", {})
+		if ShikakuSolver.is_human_solvable(5, 5, anchors):
+			found_human_solvable = true
+			break
+	assert_true(found_human_solvable, "At least one 5x5 Shapes puzzle across seeds 1-9 must be human-solvable")
+
+
+func test_is_human_solvable_forced_area_anchor() -> void:
+	# A 2x2 grid with two area-only anchors whose only valid placement is unique.
+	var anchors := _make_anchors([
+		[Vector2i(0, 0), 2, ShikakuLogic.SHAPE_ABSENT],
+		[Vector2i(0, 1), 2, ShikakuLogic.SHAPE_ABSENT],
+	])
+	# Only valid partition: (0,0,2,1) and (0,1,2,1) — both forced.
+	assert_true(ShikakuSolver.is_human_solvable(2, 2, anchors),
+		"Area-only anchors with unique placement must be human-solvable")
+
+
+func test_is_human_solvable_false_when_ambiguous() -> void:
+	# 2x2 grid, single SHAPE_ANY anchor with no area: could be 1×1, 1×2, 2×1, 2×2 etc.
+	# Multiple options → not forced → not human-solvable.
+	var anchors := _make_anchors([
+		[Vector2i(0, 0), 0, ShikakuLogic.SHAPE_ANY],
+		[Vector2i(1, 1), 0, ShikakuLogic.SHAPE_ANY],
+	])
+	assert_false(ShikakuSolver.is_human_solvable(2, 2, anchors),
+		"Ambiguous shape-only anchors must not be human-solvable")
+
+
+# ---------------------------------------------------------------------------
+# Cancellation (Fix 3)
+# ---------------------------------------------------------------------------
+
+func test_count_solutions_returns_minus_one_when_cancelled() -> void:
+	# Build a puzzle that would take non-trivial time to solve, then cancel immediately.
+	var gen := ShikakuGenerator.generate(5, 5, 42, ShikakuLogic.RULE_SET_SHAPES)
+	var anchors: Dictionary = gen.get("anchors", {})
+	var already_cancelled := true
+	var cancel_check := func() -> bool: return already_cancelled
+	var result := ShikakuSolver.count_solutions(5, 5, anchors, 2, cancel_check)
+	assert_eq(result, -1, "count_solutions must return -1 when cancel_check fires immediately")
+
+
+func test_count_solutions_normal_without_cancellation() -> void:
+	# Without a cancel_check, count_solutions works as before.
+	var gen := ShikakuGenerator.generate(5, 5, 42, ShikakuLogic.RULE_SET_SHAPES)
+	var anchors: Dictionary = gen.get("anchors", {})
+	var n := ShikakuSolver.count_solutions(5, 5, anchors, 2)
+	assert_eq(n, 1, "count_solutions without cancellation must return 1 for a valid puzzle")
+
+
+# ---------------------------------------------------------------------------
+# Unconstrained area enumeration is exhaustive — no static area cap (Fix 1b)
+# ---------------------------------------------------------------------------
+
+func test_shape_only_anchor_can_match_area_above_8() -> void:
+	# A 3x3 SQUARE rect has area 9, which exceeds the old MAX_UNCONSTRAINED_AREA=8.
+	# The solver must still find and validate it.
+	var anchors := _make_anchors([
+		[Vector2i(1, 1), 0, ShikakuLogic.SHAPE_SQUARE],
+	])
+	var rects: Array[Rect2i] = [Rect2i(0, 0, 3, 3)]
+	assert_true(ShikakuSolver.validate_anchors(3, 3, anchors, rects),
+		"validate_anchors must accept 3x3 SQUARE rect (area 9) for a shape-only anchor")
+
+
+func test_solver_finds_unique_solution_with_large_unconstrained_shape() -> void:
+	# 3x3 grid with a single SQUARE shape-only anchor: unique solution is 3×3 rect.
+	var anchors := _make_anchors([
+		[Vector2i(0, 0), 0, ShikakuLogic.SHAPE_SQUARE],
+	])
+	var n := ShikakuSolver.count_solutions(3, 3, anchors, 2)
+	assert_eq(n, 1, "3x3 grid with single SQUARE anchor must have exactly 1 solution")

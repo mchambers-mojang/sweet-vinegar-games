@@ -5,9 +5,6 @@ extends RefCounted
 ## Supports both area-only anchors (Standard mode) and generalized
 ## anchor clues with optional area and/or shape constraints (Shapes mode).
 
-## Maximum rectangle area enumerated when no area constraint is given.
-const MAX_UNCONSTRAINED_AREA := 8
-
 
 ## Check if a set of rectangles is a valid solution for the given puzzle.
 ## anchors: { Vector2i -> {area: int, shape: int} }
@@ -63,14 +60,15 @@ static func validate(width: int, height: int, numbers: Dictionary, rectangles: A
 
 ## Solve the puzzle and return one valid solution, or empty array if unsolvable.
 ## anchors: { Vector2i -> {area: int, shape: int} }
-static func solve_with_anchors(width: int, height: int, anchors: Dictionary) -> Array[Rect2i]:
+## Pass [param cancel_check] to abort early; returns [] if cancelled.
+static func solve_with_anchors(width: int, height: int, anchors: Dictionary, cancel_check: Callable = Callable()) -> Array[Rect2i]:
 	var covered := PackedByteArray()
 	covered.resize(width * height)
 	covered.fill(0)
 
 	var entries: Array[Dictionary] = _build_entries(anchors)
 	var result: Array[Rect2i] = []
-	if _backtrack(width, height, entries, 0, covered, result):
+	if _backtrack(width, height, entries, 0, covered, result, cancel_check, cancel_check.is_valid()):
 		return result
 	return []
 
@@ -86,14 +84,65 @@ static func solve(width: int, height: int, numbers: Dictionary) -> Array[Rect2i]
 ## Count the number of valid solutions (up to max_count).
 ## Returns early once max_count solutions are found.
 ## anchors: { Vector2i -> {area: int, shape: int} }
-static func count_solutions(width: int, height: int, anchors: Dictionary, max_count: int = 2) -> int:
+## Pass [param cancel_check] to abort early; returns -1 if cancelled.
+static func count_solutions(width: int, height: int, anchors: Dictionary, max_count: int = 2, cancel_check: Callable = Callable()) -> int:
 	var covered := PackedByteArray()
 	covered.resize(width * height)
 	covered.fill(0)
 	var entries: Array[Dictionary] = _build_entries(anchors)
 	var count := [0]
-	_count_backtrack(width, height, entries, 0, covered, count, max_count)
+	var cancelled := [false]
+	_count_backtrack(width, height, entries, 0, covered, count, max_count, cancel_check, cancel_check.is_valid(), cancelled)
+	if cancelled[0]:
+		return -1
 	return count[0]
+
+
+## Check whether the puzzle can be solved by forced-placement logic alone
+## (no backtracking / guessing). Returns true if every anchor can be resolved
+## to a unique valid rectangle given successive placements.
+## A rectangle is valid only if it covers no other unplaced anchor, matching the
+## constraint used in the backtracking solver.
+static func is_human_solvable(width: int, height: int, anchors: Dictionary) -> bool:
+	var covered := PackedByteArray()
+	covered.resize(width * height)
+	covered.fill(0)
+	var entries: Array[Dictionary] = _build_entries(anchors)
+	var placed := PackedByteArray()
+	placed.resize(entries.size())
+	placed.fill(0)
+
+	var changed := true
+	while changed:
+		changed = false
+		for i in range(entries.size()):
+			if placed[i] != 0:
+				continue
+			var pos: Vector2i = entries[i]["pos"]
+			var all_rects := _enumerate_rects_for_anchor(pos, entries[i]["anchor"], width, height, covered)
+			# Filter out rects that would capture another unplaced anchor.
+			var valid_rects: Array[Rect2i] = []
+			for rect in all_rects:
+				var conflict := false
+				for j in range(entries.size()):
+					if j == i or placed[j] != 0:
+						continue
+					if rect.has_point(entries[j]["pos"] as Vector2i):
+						conflict = true
+						break
+				if not conflict:
+					valid_rects.append(rect)
+			if valid_rects.size() == 1:
+				_mark_covered(valid_rects[0], width, covered, 1)
+				placed[i] = 1
+				changed = true
+			elif valid_rects.is_empty():
+				return false
+
+	for i in range(placed.size()):
+		if placed[i] == 0:
+			return false
+	return true
 
 
 ## Build sorted entry list from anchors dict for backtracking.
@@ -124,7 +173,11 @@ static func _build_entries(anchors: Dictionary) -> Array[Dictionary]:
 
 static func _backtrack(
 		width: int, height: int, entries: Array[Dictionary],
-		idx: int, covered: PackedByteArray, result: Array[Rect2i]) -> bool:
+		idx: int, covered: PackedByteArray, result: Array[Rect2i],
+		cancel_check: Callable, do_cancel: bool) -> bool:
+	if do_cancel and cancel_check.call():
+		return false
+
 	if idx >= entries.size():
 		for i in covered.size():
 			if covered[i] == 0:
@@ -136,7 +189,7 @@ static func _backtrack(
 	var anchor: Dictionary = entry["anchor"]
 
 	if covered[pos.y * width + pos.x] != 0:
-		return _backtrack(width, height, entries, idx + 1, covered, result)
+		return _backtrack(width, height, entries, idx + 1, covered, result, cancel_check, do_cancel)
 
 	var rects := _enumerate_rects_for_anchor(pos, anchor, width, height, covered)
 
@@ -154,7 +207,7 @@ static func _backtrack(
 				break
 
 		if not conflict:
-			if _backtrack(width, height, entries, idx + 1, covered, result):
+			if _backtrack(width, height, entries, idx + 1, covered, result, cancel_check, do_cancel):
 				return true
 
 		result.pop_back()
@@ -165,8 +218,12 @@ static func _backtrack(
 
 static func _count_backtrack(
 		width: int, height: int, entries: Array[Dictionary],
-		idx: int, covered: PackedByteArray, count: Array, max_count: int) -> void:
+		idx: int, covered: PackedByteArray, count: Array, max_count: int,
+		cancel_check: Callable, do_cancel: bool, cancelled: Array) -> void:
 	if count[0] >= max_count:
+		return
+	if do_cancel and cancel_check.call():
+		cancelled[0] = true
 		return
 
 	if idx >= entries.size():
@@ -181,13 +238,13 @@ static func _count_backtrack(
 	var anchor: Dictionary = entry["anchor"]
 
 	if covered[pos.y * width + pos.x] != 0:
-		_count_backtrack(width, height, entries, idx + 1, covered, count, max_count)
+		_count_backtrack(width, height, entries, idx + 1, covered, count, max_count, cancel_check, do_cancel, cancelled)
 		return
 
 	var rects := _enumerate_rects_for_anchor(pos, anchor, width, height, covered)
 
 	for rect in rects:
-		if count[0] >= max_count:
+		if count[0] >= max_count or cancelled[0]:
 			return
 		_mark_covered(rect, width, covered, 1)
 
@@ -201,7 +258,7 @@ static func _count_backtrack(
 				break
 
 		if not conflict:
-			_count_backtrack(width, height, entries, idx + 1, covered, count, max_count)
+			_count_backtrack(width, height, entries, idx + 1, covered, count, max_count, cancel_check, do_cancel, cancelled)
 
 		_mark_covered(rect, width, covered, 0)
 
@@ -224,12 +281,10 @@ static func _enumerate_rects_for_anchor(
 				continue
 			_collect_rects_containing(pos, w, h, width, height, covered, rects)
 	else:
-		# No area constraint: enumerate all rectangles of area 1..MAX up to grid bounds.
-		for a in range(1, MAX_UNCONSTRAINED_AREA + 1):
-			for w in range(1, a + 1):
-				if a % w != 0:
-					continue
-				var h := a / w
+		# No area constraint: enumerate all (w,h) pairs that fit in the grid.
+		# This must be exhaustive (no area cap) to ensure sound uniqueness checks.
+		for w in range(1, width + 1):
+			for h in range(1, height + 1):
 				if not _shape_matches(w, h, anchor_shape):
 					continue
 				_collect_rects_containing(pos, w, h, width, height, covered, rects)

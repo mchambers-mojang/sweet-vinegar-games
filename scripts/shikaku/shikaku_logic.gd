@@ -22,6 +22,16 @@ const SHAPE_ICONS := {
 	SHAPE_WIDE: "↔",
 }
 
+## Human-readable names for shape constants, used for accessible descriptions
+## (tooltips, screen-reader text, stats, etc.).
+const SHAPE_NAMES := {
+	SHAPE_ABSENT: "",
+	SHAPE_ANY: "Any shape",
+	SHAPE_SQUARE: "Square",
+	SHAPE_TALL: "Tall",
+	SHAPE_WIDE: "Wide",
+}
+
 const LEGACY_SEED_HASH_INITIAL := 23
 const LEGACY_SEED_HASH_MULTIPLIER := 31
 const LEGACY_SEED_HASH_X_FACTOR := 7

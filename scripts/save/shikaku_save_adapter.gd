@@ -46,7 +46,8 @@ func _migrate(data: Dictionary, _from_version: int) -> Dictionary:
 	return data
 
 
-## A valid Shikaku save must have positive dimensions and at least one anchor.
+## A valid Shikaku save must have positive dimensions, at least one well-formed
+## anchor, and every anchor must satisfy the clue-component invariant.
 ## Corrupted or structurally invalid data is treated as no-save.
 func _can_resume_from(data: Dictionary) -> bool:
 	if data.is_empty():
@@ -64,4 +65,42 @@ func _can_resume_from(data: Dictionary) -> bool:
 	if not has_anchors and not has_numbers:
 		push_warning("ShikakuSaveAdapter: corrupted save — no anchor clues found")
 		return false
+	# Deep-validate each anchor when present in new format.
+	if has_anchors:
+		var grid_w: int = w as int
+		var grid_h: int = h as int
+		var raw_anchors: Dictionary = data["anchors"] as Dictionary
+		for key in raw_anchors.keys():
+			var entry = raw_anchors[key]
+			if not (entry is Dictionary):
+				push_warning("ShikakuSaveAdapter: corrupted save — anchor entry not a Dictionary")
+				return false
+			var anchor: Dictionary = entry as Dictionary
+			var area: int = int(anchor.get("area", 0))
+			var shape: int = int(anchor.get("shape", ShikakuLogic.SHAPE_ABSENT))
+			# Area must be non-negative.
+			if area < 0:
+				push_warning("ShikakuSaveAdapter: corrupted save — negative anchor area")
+				return false
+			# Shape must be a known constant.
+			if shape < ShikakuLogic.SHAPE_ABSENT or shape > ShikakuLogic.SHAPE_WIDE:
+				push_warning("ShikakuSaveAdapter: corrupted save — unknown shape enum %d" % shape)
+				return false
+			# Clue-component invariant: must carry at least one constraint.
+			if area == 0 and shape == ShikakuLogic.SHAPE_ABSENT:
+				push_warning("ShikakuSaveAdapter: corrupted save — anchor has no clue component")
+				return false
+			# Anchor position must be within grid bounds.
+			var pos: Vector2i
+			if key is Vector2i:
+				pos = key as Vector2i
+			else:
+				var parts: PackedStringArray = str(key).split(",")
+				if parts.size() != 2:
+					push_warning("ShikakuSaveAdapter: corrupted save — malformed anchor key '%s'" % str(key))
+					return false
+				pos = Vector2i(int(parts[0]), int(parts[1]))
+			if pos.x < 0 or pos.x >= grid_w or pos.y < 0 or pos.y >= grid_h:
+				push_warning("ShikakuSaveAdapter: corrupted save — anchor position %s out of bounds" % str(pos))
+				return false
 	return true

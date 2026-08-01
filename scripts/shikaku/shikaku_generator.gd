@@ -7,30 +7,67 @@ extends RefCounted
 
 const MIN_AREA := 2
 const MAX_AREA := 8
+## Maximum outer attempts to find a human-solvable Shapes puzzle.
+const MAX_OUTER_ATTEMPTS := 8
 
 
 ## Generate a puzzle for the given grid size and rule set.
 ## Returns { "width", "height", "anchors": Dictionary, "solution": Array[Rect2i] }
 ## anchors: { Vector2i -> {area: int, shape: int} }
 ##   area == 0 means no area constraint; shape == ShikakuLogic.SHAPE_ABSENT means no shape constraint.
-static func generate(width: int, height: int, seed: int = -1, rule_set: int = ShikakuLogic.RULE_SET_STANDARD) -> Dictionary:
+##
+## Pass [param cancel_check] to abort early (e.g. when the owning scene exits).
+## Returns an empty Dictionary if cancelled.
+static func generate(width: int, height: int, seed: int = -1, rule_set: int = ShikakuLogic.RULE_SET_STANDARD, cancel_check: Callable = Callable()) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	if seed >= 0:
 		rng.seed = seed
 	else:
 		rng.randomize()
-	var solution := _generate_partition(width, height, rng)
-	var anchors: Dictionary
+
 	if rule_set == ShikakuLogic.RULE_SET_SHAPES:
-		anchors = _derive_shapes_anchors(solution, rng, width, height)
-	else:
-		anchors = _derive_standard_anchors(solution, rng)
+		return _generate_shapes(width, height, rng, cancel_check)
+
+	# Standard mode: single attempt.
+	var solution := _generate_partition(width, height, rng)
+	var anchors := _derive_standard_anchors(solution, rng)
 	return {
 		"width": width,
 		"height": height,
 		"anchors": anchors,
 		"solution": solution,
 	}
+
+
+## Generate a Shapes mode puzzle, retrying until the result is uniquely and
+## human-solvable (or until MAX_OUTER_ATTEMPTS exhausted).
+static func _generate_shapes(width: int, height: int, rng: RandomNumberGenerator, cancel_check: Callable) -> Dictionary:
+	var last_valid: Dictionary = {}
+	for _outer in range(MAX_OUTER_ATTEMPTS):
+		if cancel_check.is_valid() and cancel_check.call():
+			return {}
+		var solution := _generate_partition(width, height, rng)
+		if solution.is_empty():
+			continue
+		# _derive_shapes_anchors returns {} when the initial full-clue puzzle is
+		# not uniquely solvable (unsound base) or when cancelled.
+		var anchors := _derive_shapes_anchors(solution, rng, width, height, cancel_check)
+		if anchors.is_empty():
+			if cancel_check.is_valid() and cancel_check.call():
+				return {}
+			continue
+		var result := {
+			"width": width,
+			"height": height,
+			"anchors": anchors,
+			"solution": solution,
+		}
+		if ShikakuSolver.is_human_solvable(width, height, anchors):
+			return result
+		# Keep as fallback in case human-solvability is never achieved.
+		last_valid = result
+	# Return the last uniquely-solvable puzzle even if it requires guessing.
+	return last_valid
 
 
 ## Derive area-only anchors (Standard mode).
@@ -47,9 +84,10 @@ static func _derive_standard_anchors(solution: Array[Rect2i], rng: RandomNumberG
 ## Derive generalized anchors for Shapes mode.
 ## Each anchor gets its rectangle's shape class, then tries to minimize clues while
 ## preserving a unique solution (area-only, shape-only, or combined).
+## Returns {} if the initial full-clue puzzle is not uniquely solvable, or if cancelled.
 static func _derive_shapes_anchors(
 		solution: Array[Rect2i], rng: RandomNumberGenerator,
-		width: int, height: int) -> Dictionary:
+		width: int, height: int, cancel_check: Callable = Callable()) -> Dictionary:
 	# First pass: assign positions and full area+shape clues.
 	var anchor_data: Array[Dictionary] = []
 	for rect in solution:
@@ -71,8 +109,16 @@ static func _derive_shapes_anchors(
 	for d in anchor_data:
 		anchors[d["pos"]] = {"area": d["area"], "shape": d["shape"]}
 
+	# Verify that the initial full-clue puzzle already has a unique solution.
+	# If not, this partition cannot produce a valid Shapes puzzle — signal failure.
+	var init_count := ShikakuSolver.count_solutions(width, height, anchors, 2, cancel_check)
+	if init_count != 1:
+		return {}
+
 	# Second pass: try to minimize each anchor.
 	for d in anchor_data:
+		if cancel_check.is_valid() and cancel_check.call():
+			return {}
 		var pos: Vector2i = d["pos"]
 		var orig_area: int = d["area"]
 		var orig_shape: int = d["shape"]
@@ -81,14 +127,14 @@ static func _derive_shapes_anchors(
 		if orig_shape != ShikakuLogic.SHAPE_ABSENT and orig_shape != ShikakuLogic.SHAPE_ANY:
 			var test_anchors := anchors.duplicate()
 			test_anchors[pos] = {"area": 0, "shape": orig_shape}
-			if ShikakuSolver.count_solutions(width, height, test_anchors, 2) == 1:
+			if ShikakuSolver.count_solutions(width, height, test_anchors, 2, cancel_check) == 1:
 				anchors[pos] = {"area": 0, "shape": orig_shape}
 				continue
 
 		# Try area-only (drop shape).
 		var test_anchors_ao := anchors.duplicate()
 		test_anchors_ao[pos] = {"area": orig_area, "shape": ShikakuLogic.SHAPE_ABSENT}
-		if ShikakuSolver.count_solutions(width, height, test_anchors_ao, 2) == 1:
+		if ShikakuSolver.count_solutions(width, height, test_anchors_ao, 2, cancel_check) == 1:
 			anchors[pos] = {"area": orig_area, "shape": ShikakuLogic.SHAPE_ABSENT}
 			continue
 

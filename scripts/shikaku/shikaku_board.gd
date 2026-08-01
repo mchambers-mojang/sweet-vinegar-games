@@ -66,6 +66,7 @@ func setup(w: int, h: int, a: Dictionary) -> void:
 	placed_rects.clear()
 	rect_colors.clear()
 	_color_index = 0
+	tooltip_text = ""
 	queue_redraw()
 
 
@@ -157,8 +158,9 @@ func _gui_input(event: InputEvent) -> void:
 			released = not mb.pressed
 			pos = mb.position
 	elif event is InputEventMouseMotion and not is_touch:
+		var mm := event as InputEventMouseMotion
+		_update_anchor_tooltip(mm.position)
 		if _dragging:
-			var mm := event as InputEventMouseMotion
 			_drag_end = _pos_to_cell(mm.position)
 			_update_drag_preview()
 			queue_redraw()
@@ -200,6 +202,27 @@ func _find_rect_at(cell: Vector2i) -> int:
 		if placed_rects[i].has_point(cell):
 			return i
 	return -1
+
+
+## Update tooltip_text to describe the anchor clue (if any) under [param screen_pos].
+## This provides accessible names for shape glyphs to assistive technologies.
+func _update_anchor_tooltip(screen_pos: Vector2) -> void:
+	var cell := _pos_to_cell(screen_pos)
+	var anchor = anchors.get(cell, null)
+	if anchor == null:
+		tooltip_text = ""
+		return
+	var area: int = int((anchor as Dictionary).get("area", 0))
+	var shape: int = int((anchor as Dictionary).get("shape", ShikakuLogic.SHAPE_ABSENT))
+	var shape_name: String = str(ShikakuLogic.SHAPE_NAMES.get(shape, ""))
+	if area > 0 and shape != ShikakuLogic.SHAPE_ABSENT:
+		tooltip_text = "%s, %d cells" % [shape_name, area]
+	elif area > 0:
+		tooltip_text = "%d cells" % area
+	elif shape != ShikakuLogic.SHAPE_ABSENT:
+		tooltip_text = shape_name
+	else:
+		tooltip_text = ""
 
 
 func _update_drag_preview() -> void:
