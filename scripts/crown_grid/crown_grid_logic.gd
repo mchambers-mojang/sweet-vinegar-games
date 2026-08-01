@@ -241,50 +241,62 @@ func use_hint() -> HintResult:
 				if solution.size() == size and int(solution[r]) == c:
 					crowns_by_row[r] = c
 
-	var step := CrownGridSolver.find_next_step(size, regions, crowns_by_row, {})
-	if step == null:
-		return result
+	# Loop to skip past exclusion deductions that are already fully applied.
+	# skipped_excluded accumulates cells from no-op exclusion steps and is passed
+	# to the solver so it advances its candidate view, preventing infinite loops.
+	var skipped_excluded: Dictionary = {}
+	while true:
+		var step := CrownGridSolver.find_next_step(size, regions, crowns_by_row, skipped_excluded)
+		if step == null:
+			break
 
-	if step.result == CrownGridSolver.CELL_CROWN and not step.affected_cells.is_empty():
-		var hint_cell: Vector2i = step.affected_cells[0]
-		result.cell = hint_cell
-		result.new_state = CELL_CROWN
-		var old_states: Dictionary = {}
-		old_states[hint_cell] = int(cells[hint_cell.y * size + hint_cell.x])
-		cells[hint_cell.y * size + hint_cell.x] = CELL_CROWN
-		var auto_marked: Array[Vector2i] = []
-		if auto_mark:
-			auto_marked = _apply_auto_marks(hint_cell.x, hint_cell.y)
-			for cell in auto_marked:
-				old_states[cell] = CELL_EMPTY
-		result.auto_marked = auto_marked
-		_undo_stack.push({
-			"action": "hint_crown",
-			"cell": hint_cell,
-			"auto_marked": auto_marked,
-			"old_states": old_states,
-		})
-		hints_used += 1
-		result.applied = true
-	else:
-		var changed: Array[Vector2i] = []
-		var old_states: Dictionary = {}
-		for cell in step.affected_cells:
-			if cell.x >= 0 and cell.x < size and cell.y >= 0 and cell.y < size:
-				var idx := cell.y * size + cell.x
-				if int(cells[idx]) == CELL_EMPTY:
+		if step.result == CrownGridSolver.CELL_CROWN and not step.affected_cells.is_empty():
+			var hint_cell: Vector2i = step.affected_cells[0]
+			result.cell = hint_cell
+			result.new_state = CELL_CROWN
+			var old_states: Dictionary = {}
+			old_states[hint_cell] = int(cells[hint_cell.y * size + hint_cell.x])
+			cells[hint_cell.y * size + hint_cell.x] = CELL_CROWN
+			var auto_marked: Array[Vector2i] = []
+			if auto_mark:
+				auto_marked = _apply_auto_marks(hint_cell.x, hint_cell.y)
+				for cell in auto_marked:
 					old_states[cell] = CELL_EMPTY
-					cells[idx] = CELL_EXCLUDED
-					changed.append(cell)
-		if not changed.is_empty():
-			result.changed_cells = changed
+			result.auto_marked = auto_marked
 			_undo_stack.push({
-				"action": "hint_exclude",
-				"changed": changed,
+				"action": "hint_crown",
+				"cell": hint_cell,
+				"auto_marked": auto_marked,
 				"old_states": old_states,
 			})
 			hints_used += 1
 			result.applied = true
+			break
+		else:
+			var changed: Array[Vector2i] = []
+			var old_states: Dictionary = {}
+			for cell in step.affected_cells:
+				if cell.x >= 0 and cell.x < size and cell.y >= 0 and cell.y < size:
+					var idx := cell.y * size + cell.x
+					if int(cells[idx]) == CELL_EMPTY:
+						old_states[cell] = CELL_EMPTY
+						cells[idx] = CELL_EXCLUDED
+						changed.append(cell)
+			if not changed.is_empty():
+				result.changed_cells = changed
+				_undo_stack.push({
+					"action": "hint_exclude",
+					"changed": changed,
+					"old_states": old_states,
+				})
+				hints_used += 1
+				result.applied = true
+				break
+			else:
+				# All affected cells already excluded — accumulate them so the
+				# solver advances past this deduction on the next iteration.
+				for cell in step.affected_cells:
+					skipped_excluded[cell] = true
 
 	_recompute_completion()
 	result.game_won = is_completed

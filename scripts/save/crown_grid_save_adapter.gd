@@ -304,7 +304,7 @@ static func _validate_undo_entry(entry: Variant, sz: int = -1) -> bool:
 ## Return true when a single cell coord [x, y] has a corresponding key in old_states.
 ## old_states keys are stored as "x,y" strings.
 static func _validate_cell_in_old_states(cell: Variant, old_states: Variant) -> bool:
-	if not (cell is Array) or (cell as Array).size() < 2:
+	if not (cell is Array) or (cell as Array).size() != 2:
 		return false
 	if not (old_states is Dictionary):
 		return false
@@ -318,7 +318,7 @@ static func _validate_cell_coord(v: Variant, sz: int = -1) -> bool:
 	if not (v is Array):
 		return false
 	var arr := v as Array
-	if arr.size() < 2:
+	if arr.size() != 2:
 		return false
 	if typeof(arr[0]) != TYPE_INT or typeof(arr[1]) != TYPE_INT:
 		return false

@@ -826,3 +826,39 @@ func test_hint_exclude_changed_duplicate_coords_rejected() -> void:
 			"old_states": {"0,1": 0, "1,1": 0}}]
 	assert_false(adapter._can_resume_from(d),
 			"hint_exclude entry with duplicate changed coordinates must be rejected")
+
+
+# ---------------------------------------------------------------------------
+# Non-normalized coordinates: arrays with more than 2 elements must be rejected
+# ---------------------------------------------------------------------------
+
+func test_tap_cell_coord_three_elements_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "tap", "cell": [0, 0, 99], "from": 0, "to": 1,
+			"auto_marked": [], "old_states": {"0,0": 0}}]
+	assert_false(adapter._can_resume_from(d),
+			"tap entry with 3-element cell coord must be rejected")
+
+
+func test_paint_changed_coord_three_elements_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "paint", "changed": [[0, 0, 99]],
+			"old_states": {"0,0": 0}}]
+	assert_false(adapter._can_resume_from(d),
+			"paint entry with 3-element changed coord must be rejected")
+
+
+func test_hint_crown_auto_marked_coord_three_elements_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "hint_crown", "cell": [0, 0],
+			"auto_marked": [[1, 0, 99]], "old_states": {"0,0": 0, "1,0": 0}}]
+	assert_false(adapter._can_resume_from(d),
+			"hint_crown entry with 3-element auto_marked coord must be rejected")
+
+
+func test_hint_exclude_changed_coord_three_elements_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "hint_exclude", "changed": [[0, 1, 99]],
+			"old_states": {"0,1": 0}}]
+	assert_false(adapter._can_resume_from(d),
+			"hint_exclude entry with 3-element changed coord must be rejected")

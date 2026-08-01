@@ -344,17 +344,13 @@ func test_hint_crown_undo_entry_includes_required_fields() -> void:
 ## Regression for Fix 2: undoing a Crown hint that replaced an Excluded note
 ## must restore the Excluded state, not Empty.
 func test_hint_crown_undo_restores_excluded_note() -> void:
-	# Place crowns in rows 0, 1, and 3 (free mode; (2,1) is diag-adjacent to
-	# (1,0) but free mode allows it).  Row 2 then has only (0,2) as the sole
-	# remaining candidate: (1,2) is diag-adj to (2,1), (2,2) and (3,2) are
-	# in used columns.  The player first marks (0,2) Excluded; the hint must
-	# replace that with Crown, and undo must recover the Excluded note.
-	logic.tap_cell(1, 0)  # excluded
-	logic.tap_cell(1, 0)  # crown at (col=1, row=0)
-	logic.tap_cell(2, 1)  # excluded
-	logic.tap_cell(2, 1)  # crown at (col=2, row=1) — free mode allows diag adj
-	logic.tap_cell(3, 3)  # excluded
-	logic.tap_cell(3, 3)  # crown at (col=3, row=3)
+	# With solution [1, 3, 0, 2]: place correct Crowns at (col=1,row=0) and
+	# (col=3,row=1).  Used cols={1,3}, used regions={1,3}; diagonal adjacency
+	# from (3,1) eliminates (2,2), leaving row 2 a naked single at (col=0,row=2).
+	# The player marks (0,2) Excluded first; the hint must replace that with
+	# Crown, and undo must recover the Excluded note.
+	logic.tap_cell(1, 0); logic.tap_cell(1, 0)  # correct Crown (col=1,row=0)
+	logic.tap_cell(3, 1); logic.tap_cell(3, 1)  # correct Crown (col=3,row=1)
 	logic.tap_cell(0, 2)  # player marks (0,2) as Excluded
 	assert_eq(logic.get_cell(0, 2), CrownGridLogic.CELL_EXCLUDED,
 			"Cell (0,2) must be Excluded after one tap")
@@ -420,8 +416,9 @@ func test_hint_ignores_wrong_free_mode_crown() -> void:
 ## Solution = [0, 2, 4, 1, 3, 5] (valid: unique cols, unique regions, no diagonal adj).
 ## On a fresh board, region 0 (col 0, rows 0-4) is locked to col 0 →
 ## rank-2 "region locked to col" fires and suggests excluding (col=0, row=5).
-## Pre-paint (col=0, row=5) as CELL_EXCLUDED; use_hint() must be a no-op.
-func test_hint_noop_exclusion_does_not_increment_hints_used() -> void:
+## Pre-paint (col=0, row=5) as CELL_EXCLUDED; use_hint() must skip that no-op
+## suggestion and find the next actionable deduction — (col=1, row=5).
+func test_hint_skips_pre_applied_exclusion_finds_next_actionable_step() -> void:
 	var sz := 6
 	var solution6: Array[int] = [0, 2, 4, 1, 3, 5]
 	var regions6 := PackedInt32Array()
@@ -434,12 +431,16 @@ func test_hint_noop_exclusion_does_not_increment_hints_used() -> void:
 				regions6[r * sz + c] = 5  # region 5 = row 5 + col 5
 	var logic6 := CrownGridLogic.new()
 	logic6.init_new_game(sz, regions6, solution6)
-	# Pre-paint the cell the solver will suggest excluding so the hint is a no-op.
+	# Pre-apply the solver's first rank-2 exclusion suggestion.
 	var paint: Array[Vector2i] = [Vector2i(0, 5)]  # (col=0, row=5) in region 5
 	logic6.paint_excluded(paint)
 	var prev_hints := logic6.hints_used
 	var hint := logic6.use_hint()
-	assert_false(hint.applied,
-			"No-op exclusion hint must not set applied=true")
-	assert_eq(logic6.hints_used, prev_hints,
-			"hints_used must not increment for a no-op exclusion hint")
+	assert_true(hint.applied,
+			"use_hint() must skip the pre-applied exclusion and find the next step")
+	assert_eq(logic6.hints_used, prev_hints + 1,
+			"hints_used must increment when a new actionable deduction is found")
+	# Region 1 (col 1, rows 0-4) is also locked to col 1 → next rank-2 step
+	# excludes (col=1, row=5).
+	assert_eq(logic6.get_cell(1, 5), CrownGridLogic.CELL_EXCLUDED,
+			"cell (col=1, row=5) must be excluded by the skip-and-find hint")
