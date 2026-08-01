@@ -1,6 +1,6 @@
 import * as http from 'http';
 import Database from 'better-sqlite3';
-import { upsertPlayer, getPlayer, BoardConfigEntry, BOARD_CONFIG, upsertScore, getLeaderboard, deletePlayerScores } from './db';
+import { upsertPlayer, getPlayer, BoardConfigEntry, BOARD_CONFIG, upsertScore, getLeaderboard, deletePlayerScore, deletePlayerScores } from './db';
 
 export const MAX_BODY_BYTES = 4096;
 
@@ -195,7 +195,7 @@ export function handleLeaderboardRequest(
     return true;
   }
 
-  // DELETE /scores/:device_id — remove all scores for a player
+  // DELETE /scores/:device_id — remove all scores, or one board with game + mode
   const scoresDeviceMatch = SCORES_DEVICE_PATH_RE.exec(url);
   if (req.method === 'DELETE' && scoresDeviceMatch) {
     const device_id = scoresDeviceMatch[1];
@@ -212,7 +212,24 @@ export function handleLeaderboardRequest(
     const queryString = url.includes('?') ? url.slice(url.indexOf('?') + 1) : '';
     const params = new URLSearchParams(queryString);
     const purgeProfile = params.get('purge_profile') === 'true';
-    deletePlayerScores(db, device_id, purgeProfile);
+    const game = params.get('game');
+    const mode = params.get('mode');
+    if ((game && !mode) || (!game && mode)) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'game and mode must be provided together' }));
+      return true;
+    }
+    if (game && mode) {
+      if (purgeProfile) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'purge_profile cannot be used with game and mode' }));
+        return true;
+      }
+      if (!resolveGameMode(res, game, mode)) return true;
+      deletePlayerScore(db, device_id, game, mode);
+    } else {
+      deletePlayerScores(db, device_id, purgeProfile);
+    }
     res.writeHead(204);
     res.end();
     return true;
