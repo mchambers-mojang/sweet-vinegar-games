@@ -275,6 +275,8 @@ func test_redo_stack_snapshot_out_of_bounds_rejected() -> void:
 
 func test_valid_undo_stack_accepted() -> void:
 	var d := _valid_save()
+	# current_path must match the undo stack's final post_snapshot
+	d["current_path"] = [{"x": 0, "y": 0}, {"x": 1, "y": 0}]
 	d["undo_stack"] = [{
 		"action": "extend",
 		"pre_snapshot": [{"x": 0, "y": 0}],
@@ -455,6 +457,8 @@ func test_undo_stack_extend_prefix_mismatch_rejected() -> void:
 
 func test_valid_extend_transition_accepted() -> void:
 	var d := _valid_save()
+	# current_path must match the undo stack's final post_snapshot
+	d["current_path"] = [{"x": 0, "y": 0}, {"x": 1, "y": 0}]
 	d["undo_stack"] = [{
 		"action": "extend",
 		"pre_snapshot": [{"x": 0, "y": 0}],
@@ -465,6 +469,8 @@ func test_valid_extend_transition_accepted() -> void:
 
 func test_valid_truncate_transition_accepted() -> void:
 	var d := _valid_save()
+	# current_path must match the undo stack's final post_snapshot after the truncate
+	d["current_path"] = [{"x": 0, "y": 0}, {"x": 1, "y": 0}]
 	# Truncation: pre has 3 cells, post has 2 (removed the last)
 	d["undo_stack"] = [{
 		"action": "truncate",
@@ -472,6 +478,141 @@ func test_valid_truncate_transition_accepted() -> void:
 		"post_snapshot": [{"x": 0, "y": 0}, {"x": 1, "y": 0}],
 	}]
 	assert_true(_check_resume(d), "Valid truncate transition must be accepted")
+
+
+# --- Regression: history stack chaining ---
+
+func test_undo_stack_final_post_not_current_path_rejected() -> void:
+	var d := _valid_save()
+	# current_path stays at [CP1] = (0,0); post_snapshot is (0,0)→(1,0) — mismatch
+	d["undo_stack"] = [{
+		"action": "extend",
+		"pre_snapshot": [{"x": 0, "y": 0}],
+		"post_snapshot": [{"x": 0, "y": 0}, {"x": 1, "y": 0}],
+	}]
+	assert_false(_check_resume(d), "undo final post != current_path must be rejected")
+
+
+func test_redo_stack_final_pre_not_current_path_rejected() -> void:
+	var d := _valid_save()
+	# current_path is (0,0); the redo entry's pre_snapshot is (0,0)→(1,0) — mismatch
+	d["redo_stack"] = [{
+		"action": "extend",
+		"pre_snapshot": [{"x": 0, "y": 0}, {"x": 1, "y": 0}],
+		"post_snapshot": [{"x": 0, "y": 0}, {"x": 1, "y": 0}, {"x": 2, "y": 0}],
+	}]
+	assert_false(_check_resume(d), "redo final pre != current_path must be rejected")
+
+
+func test_undo_stack_consecutive_not_chained_rejected() -> void:
+	var d := _valid_save()
+	# Entry 0: extend (0,0)→(0,0),(1,0) — individually valid
+	# Entry 1: extend (0,0),(1,0),(2,0)→(0,0),(1,0),(2,0),(3,0) — individually valid
+	# Gap: entry[0].post=(0,0),(1,0) != entry[1].pre=(0,0),(1,0),(2,0)
+	d["current_path"] = [{"x": 0, "y": 0}, {"x": 1, "y": 0}, {"x": 2, "y": 0}, {"x": 3, "y": 0}]
+	d["undo_stack"] = [
+		{
+			"action": "extend",
+			"pre_snapshot": [{"x": 0, "y": 0}],
+			"post_snapshot": [{"x": 0, "y": 0}, {"x": 1, "y": 0}],
+		},
+		{
+			"action": "extend",
+			"pre_snapshot": [{"x": 0, "y": 0}, {"x": 1, "y": 0}, {"x": 2, "y": 0}],
+			"post_snapshot": [{"x": 0, "y": 0}, {"x": 1, "y": 0}, {"x": 2, "y": 0}, {"x": 3, "y": 0}],
+		},
+	]
+	assert_false(_check_resume(d), "undo consecutive entries not chained must be rejected")
+
+
+func test_redo_stack_consecutive_not_chained_rejected() -> void:
+	var d := _valid_save()
+	# redo[0] = action3: pre=(0,0)→(1,0)→(2,0), post=(0,0)→(1,0)→(2,0)→(3,0)
+	# redo[1] = action2: pre=(0,0)→(1,0), post=(0,0)→(1,0)→(2,0)
+	# Chaining requires redo[1].post == redo[0].pre. Here redo[1].post=(0,0)→(1,0)→(2,0) == redo[0].pre ✓
+	# To break it: change redo[1].post to something that doesn't match redo[0].pre
+	# current_path must match redo[1].pre = (0,0)→(1,0)
+	d["current_path"] = [{"x": 0, "y": 0}, {"x": 1, "y": 0}]
+	d["redo_stack"] = [
+		{
+			"action": "extend",
+			"pre_snapshot": [{"x": 0, "y": 0}, {"x": 1, "y": 0}, {"x": 2, "y": 0}],
+			"post_snapshot": [{"x": 0, "y": 0}, {"x": 1, "y": 0}, {"x": 2, "y": 0}, {"x": 3, "y": 0}],
+		},
+		{
+			"action": "extend",
+			"pre_snapshot": [{"x": 0, "y": 0}, {"x": 1, "y": 0}],
+			# post should be (0,0)→(1,0)→(2,0) to match redo[0].pre, but we set a mismatch:
+			"post_snapshot": [{"x": 0, "y": 0}, {"x": 1, "y": 0}, {"x": 1, "y": 1}],
+		},
+	]
+	assert_false(_check_resume(d), "redo consecutive entries not chained must be rejected")
+
+
+func test_valid_multi_entry_undo_chain_accepted() -> void:
+	# Two undo entries properly chained; current_path == last post_snapshot.
+	var d := _valid_save()
+	d["current_path"] = [{"x": 0, "y": 0}, {"x": 1, "y": 0}, {"x": 2, "y": 0}]
+	d["undo_stack"] = [
+		{
+			"action": "extend",
+			"pre_snapshot": [{"x": 0, "y": 0}],
+			"post_snapshot": [{"x": 0, "y": 0}, {"x": 1, "y": 0}],
+		},
+		{
+			"action": "extend",
+			"pre_snapshot": [{"x": 0, "y": 0}, {"x": 1, "y": 0}],
+			"post_snapshot": [{"x": 0, "y": 0}, {"x": 1, "y": 0}, {"x": 2, "y": 0}],
+		},
+	]
+	assert_true(_check_resume(d), "Valid multi-entry chained undo_stack must be accepted")
+
+
+func test_valid_multi_entry_redo_chain_accepted() -> void:
+	# Two redo entries properly chained; current_path == last entry's pre_snapshot.
+	# Sequence: action1 (CP1→A), action2 (CP1,A→CP1,A,B) — both undone.
+	# redo[0] = action1: pre=[CP1], post=[CP1,A]
+	# redo[1] = action2: pre=[CP1,A], post=[CP1,A,B]
+	# Chaining: redo[1].post=[CP1,A,B] BUT should == redo[0].pre=[CP1] — that's wrong.
+	# Correct ordering: redo[0]=action2 (last undone first in redo), redo[1]=action1 (first undone)
+	# Wait: undo order is action2 then action1 (LIFO), so redo is pushed [action2, action1].
+	# redo.pop_back() → action1 is applied first. So redo=[action2, action1].
+	# redo[1]=action1: pre=[CP1], post=[CP1,A]. redo[0]=action2: pre=[CP1,A], post=[CP1,A,B].
+	# Chaining: redo[1].post=[CP1,A] == redo[0].pre=[CP1,A] ✓
+	# current_path == redo.last().pre = redo[1].pre = [CP1] ✓
+	var d := _valid_save()
+	d["current_path"] = [{"x": 0, "y": 0}]  # CP1 only — everything undone
+	d["redo_stack"] = [
+		{
+			"action": "extend",
+			"pre_snapshot": [{"x": 0, "y": 0}, {"x": 1, "y": 0}],
+			"post_snapshot": [{"x": 0, "y": 0}, {"x": 1, "y": 0}, {"x": 2, "y": 0}],
+		},
+		{
+			"action": "extend",
+			"pre_snapshot": [{"x": 0, "y": 0}],
+			"post_snapshot": [{"x": 0, "y": 0}, {"x": 1, "y": 0}],
+		},
+	]
+	assert_true(_check_resume(d), "Valid multi-entry chained redo_stack must be accepted")
+
+
+func test_valid_undo_and_redo_both_chained_accepted() -> void:
+	# Partial undo: one action done (in undo), one undone (in redo).
+	# current_path = action1.post = action2.pre
+	var d := _valid_save()
+	d["current_path"] = [{"x": 0, "y": 0}, {"x": 1, "y": 0}]
+	d["undo_stack"] = [{
+		"action": "extend",
+		"pre_snapshot": [{"x": 0, "y": 0}],
+		"post_snapshot": [{"x": 0, "y": 0}, {"x": 1, "y": 0}],
+	}]
+	d["redo_stack"] = [{
+		"action": "extend",
+		"pre_snapshot": [{"x": 0, "y": 0}, {"x": 1, "y": 0}],
+		"post_snapshot": [{"x": 0, "y": 0}, {"x": 1, "y": 0}, {"x": 2, "y": 0}],
+	}]
+	assert_true(_check_resume(d), "Undo and redo stacks both chained to current_path must be accepted")
 
 
 # Helper: write data into the adapter's backing store and call can_resume().

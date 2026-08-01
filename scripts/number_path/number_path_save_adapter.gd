@@ -20,7 +20,10 @@ func _migrate(data: Dictionary, _from_version: int) -> Dictionary:
 
 ## A valid Number Path save must have valid dimensions, tier, non-empty checkpoints in
 ## range, barriers with valid fields (not at board edges), fully-validated solution path,
-## non-empty current path starting at CP1, valid history stacks, and a non-completed game.
+## non-empty current path starting at CP1, valid history stacks with entries individually
+## validated and consecutively chained (undo: post[i]==pre[i+1], redo reverse order),
+## terminal undo post_snapshot == current_path, terminal redo pre_snapshot == current_path,
+## and a non-completed game.
 func _can_resume_from(data: Dictionary) -> bool:
 	if data.is_empty():
 		return false
@@ -125,7 +128,8 @@ func _can_resume_from(data: Dictionary) -> bool:
 	if not _validate_path_data(cp_raw as Array, w as int, h as int, barrier_set, cps_arr):
 		push_warning("NumberPathSaveAdapter: corrupted save — current_path failed validation")
 		return false
-	# Validate undo/redo stacks: action values, required snapshots, valid paths, transitions
+	# Validate undo/redo stacks: action values, required snapshots, valid paths, transitions,
+	# consecutive chaining, and terminal connection to current_path.
 	for stack_key in ["undo_stack", "redo_stack"]:
 		var stack_raw = data.get(stack_key, null)
 		if stack_raw == null:
@@ -160,6 +164,41 @@ func _can_resume_from(data: Dictionary) -> bool:
 			# Transition must be consistent with the recorded action
 			if not _validate_snapshot_transition(action as String, pre_snap as Array, post_snap as Array):
 				push_warning("NumberPathSaveAdapter: corrupted save — %s transition invalid for action '%s'" % [stack_key, action])
+				return false
+	# Undo stack chaining: entry[i].post_snapshot must equal entry[i+1].pre_snapshot, and the
+	# final entry's post_snapshot must equal current_path (it represents the state after the
+	# last recorded action, which is what the player sees now).
+	var undo_raw = data.get("undo_stack", null)
+	if undo_raw is Array:
+		var undo_arr := undo_raw as Array
+		for i in range(undo_arr.size() - 1):
+			var post_i = (undo_arr[i] as Dictionary).get("post_snapshot")
+			var pre_next = (undo_arr[i + 1] as Dictionary).get("pre_snapshot")
+			if not _paths_equal(post_i, pre_next):
+				push_warning("NumberPathSaveAdapter: corrupted save — undo_stack[%d].post_snapshot != undo_stack[%d].pre_snapshot" % [i, i + 1])
+				return false
+		if not undo_arr.is_empty():
+			var last_post = (undo_arr[undo_arr.size() - 1] as Dictionary).get("post_snapshot")
+			if not _paths_equal(last_post, cp_raw):
+				push_warning("NumberPathSaveAdapter: corrupted save — undo_stack final post_snapshot != current_path")
+				return false
+	# Redo stack chaining: entries are stored oldest-first; pop_back() applies the last entry
+	# first, so consecutive redo entries chain in reverse array order:
+	# entry[i+1].post_snapshot must equal entry[i].pre_snapshot. The last entry (next-to-redo)
+	# has pre_snapshot equal to current_path (the state before that action is reapplied).
+	var redo_raw = data.get("redo_stack", null)
+	if redo_raw is Array:
+		var redo_arr := redo_raw as Array
+		for i in range(redo_arr.size() - 1):
+			var post_next = (redo_arr[i + 1] as Dictionary).get("post_snapshot")
+			var pre_i = (redo_arr[i] as Dictionary).get("pre_snapshot")
+			if not _paths_equal(post_next, pre_i):
+				push_warning("NumberPathSaveAdapter: corrupted save — redo_stack[%d].post_snapshot != redo_stack[%d].pre_snapshot" % [i + 1, i])
+				return false
+		if not redo_arr.is_empty():
+			var last_pre = (redo_arr[redo_arr.size() - 1] as Dictionary).get("pre_snapshot")
+			if not _paths_equal(last_pre, cp_raw):
+				push_warning("NumberPathSaveAdapter: corrupted save — redo_stack final pre_snapshot != current_path")
 				return false
 	return true
 
@@ -226,6 +265,25 @@ func _validate_path_data(path_arr: Array, w: int, h: int,
 		seen_cells[cell_key] = true
 		prev_x = exi
 		prev_y = eyi
+	return true
+
+
+## Compare two path arrays (Array of {"x":int,"y":int} Dictionaries) for equality.
+## Returns false if either argument is not an Array, or if their lengths or cell coordinates differ.
+func _paths_equal(a: Variant, b: Variant) -> bool:
+	if not (a is Array) or not (b is Array):
+		return false
+	var arr_a := a as Array
+	var arr_b := b as Array
+	if arr_a.size() != arr_b.size():
+		return false
+	for i in range(arr_a.size()):
+		if not (arr_a[i] is Dictionary) or not (arr_b[i] is Dictionary):
+			return false
+		if int((arr_a[i] as Dictionary).get("x", -1)) != int((arr_b[i] as Dictionary).get("x", -2)):
+			return false
+		if int((arr_a[i] as Dictionary).get("y", -1)) != int((arr_b[i] as Dictionary).get("y", -2)):
+			return false
 	return true
 
 
