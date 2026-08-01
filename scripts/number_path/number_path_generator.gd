@@ -182,13 +182,17 @@ static func _ham_dfs(
 	var head: Vector2i = path[path.size() - 1]
 	var neighbors := _get_free_neighbors(size, head, visited)
 
-	# Warnsdorff: sort by fewest onward neighbors, random tiebreak
+	# Warnsdorff: pre-shuffle with seeded rng for random tiebreaking, then sort
+	# deterministically by degree. Using rng inside sort_custom violates the
+	# strict-ordering contract (the same pair can compare differently between
+	# calls), causing Godot's sort to emit errors and loop indefinitely.
+	for _i in range(neighbors.size() - 1, 0, -1):
+		var _j := rng.randi_range(0, _i)
+		var _tmp := neighbors[_i]
+		neighbors[_i] = neighbors[_j]
+		neighbors[_j] = _tmp
 	neighbors.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
-		var da := _get_free_neighbor_count(size, a, visited)
-		var db := _get_free_neighbor_count(size, b, visited)
-		if da == db:
-			return rng.randi_range(0, 1) == 0
-		return da < db
+		return _get_free_neighbor_count(size, a, visited) < _get_free_neighbor_count(size, b, visited)
 	)
 
 	for nb in neighbors:
