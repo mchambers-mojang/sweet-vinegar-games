@@ -427,10 +427,12 @@ func _on_hint() -> void:
 		return
 	_crash.register_user_action("shikaku_hint_used")
 	# Remove any wrong placements that were cleared to unblock the hint rect.
+	# Each removal must be recorded so replay can reproduce the same board state.
 	for removed in result.removed_rects:
 		var removed_rect: Rect2i = _rect_from_dict(removed)
 		for i in range(board.placed_rects.size() - 1, -1, -1):
 			if board.placed_rects[i] == removed_rect:
+				_recorder.record_input(elapsed_time, "rectangle_removed", {"index": i})
 				board.remove_rect(i)
 				break
 	var hint_rect: Rect2i = _rect_from_dict(result.rect)

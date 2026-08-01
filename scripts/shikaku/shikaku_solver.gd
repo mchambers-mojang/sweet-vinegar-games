@@ -105,9 +105,11 @@ static func count_solutions(width: int, height: int, anchors: Dictionary, max_co
 ## rectangle (given already-placed rects and other unplaced anchors), place it.
 ##
 ## Phase 2 — Cell-ownership elimination: for each uncovered cell, compute which
-## anchors have at least one valid candidate containing that cell.  If only one
-## anchor can cover a cell, restrict that anchor's candidates to those containing
-## the cell; if this reduces the anchor to a single candidate, place it.
+## distinct anchors have at least one valid candidate containing that cell. If
+## only one anchor can cover a cell, restrict that anchor's candidates to those
+## containing the cell.  When this yields a single candidate, place it; when it
+## yields >1 candidates, record the required cell in the entry so subsequent
+## Phase 1 passes can use the narrowed candidate set.
 ##
 ## Returns false when cancelled (conservative: treated as not human-solvable).
 static func is_human_solvable(width: int, height: int, anchors: Dictionary, cancel_check: Callable = Callable()) -> bool:
@@ -137,6 +139,7 @@ static func is_human_solvable(width: int, height: int, anchors: Dictionary, canc
 			if all_rects.is_empty() and do_cancel and cancel_check.call():
 				return false
 			var valid_rects: Array[Rect2i] = _filter_anchor_candidates(all_rects, i, entries, placed)
+			valid_rects = _apply_required_cells(valid_rects, entries[i])
 			if valid_rects.size() == 1:
 				_mark_covered(valid_rects[0], width, covered, 1)
 				placed[i] = 1
@@ -149,7 +152,9 @@ static func is_human_solvable(width: int, height: int, anchors: Dictionary, canc
 
 		# ------------------------------------------------------------------
 		# Phase 2: Cell-ownership elimination
-		# Build map: uncovered cell → set of anchor indices that can reach it.
+		# Build map: uncovered cell → set of DISTINCT anchor indices that can
+		# reach it (deduplicated so an anchor with multiple valid candidates
+		# covering the same cell counts only once).
 		# ------------------------------------------------------------------
 		var cell_owners: Dictionary = {}  # Vector2i -> Array[int]
 		for i in range(entries.size()):
@@ -160,13 +165,19 @@ static func is_human_solvable(width: int, height: int, anchors: Dictionary, canc
 			if do_cancel and cancel_check.call():
 				return false
 			var valid_rects: Array[Rect2i] = _filter_anchor_candidates(all_rects, i, entries, placed)
+			valid_rects = _apply_required_cells(valid_rects, entries[i])
 			for rect in valid_rects:
 				for r in range(rect.position.y, rect.position.y + rect.size.y):
 					for c in range(rect.position.x, rect.position.x + rect.size.x):
 						var cell := Vector2i(c, r)
 						if not cell_owners.has(cell):
 							cell_owners[cell] = []
-						(cell_owners[cell] as Array).append(i)
+						# Deduplicate: record each anchor index at most once
+						# per cell, regardless of how many of its candidates
+						# cover that cell.
+						var owners_list: Array = cell_owners[cell] as Array
+						if not owners_list.has(i):
+							owners_list.append(i)
 
 		# For each cell that only one anchor can cover, restrict that anchor.
 		for cell in cell_owners.keys():
@@ -179,6 +190,7 @@ static func is_human_solvable(width: int, height: int, anchors: Dictionary, canc
 			var pos: Vector2i = entries[owner_idx]["pos"]
 			var all_rects := _enumerate_rects_for_anchor(pos, entries[owner_idx]["anchor"], width, height, covered, cancel_check)
 			var valid_rects: Array[Rect2i] = _filter_anchor_candidates(all_rects, owner_idx, entries, placed)
+			valid_rects = _apply_required_cells(valid_rects, entries[owner_idx])
 			# Keep only candidates that contain the uniquely-owned cell.
 			var restricted: Array[Rect2i] = []
 			for rect in valid_rects:
@@ -188,6 +200,15 @@ static func is_human_solvable(width: int, height: int, anchors: Dictionary, canc
 				_mark_covered(restricted[0], width, covered, 1)
 				placed[owner_idx] = 1
 				changed = true
+			elif restricted.size() > 1:
+				# Cannot place yet, but record that this anchor must cover
+				# this cell so Phase 1 can use the narrowed candidate set.
+				if not entries[owner_idx].has("required_cells"):
+					entries[owner_idx]["required_cells"] = []
+				var req: Array = entries[owner_idx]["required_cells"] as Array
+				if not req.has(cell):
+					req.append(cell)
+					changed = true
 			elif restricted.is_empty():
 				return false
 
@@ -195,6 +216,24 @@ static func is_human_solvable(width: int, height: int, anchors: Dictionary, canc
 		if placed[i] == 0:
 			return false
 	return true
+
+
+## Filter [param rects] to those containing every cell in [param entry]'s
+## "required_cells" list.  Returns [param rects] unchanged when the list is empty.
+static func _apply_required_cells(rects: Array[Rect2i], entry: Dictionary) -> Array[Rect2i]:
+	var req_cells: Array = entry.get("required_cells", [])
+	if req_cells.is_empty():
+		return rects
+	var filtered: Array[Rect2i] = []
+	for rect in rects:
+		var ok := true
+		for cell in req_cells:
+			if not rect.has_point(cell as Vector2i):
+				ok = false
+				break
+		if ok:
+			filtered.append(rect)
+	return filtered
 
 
 ## Build sorted entry list from anchors dict for backtracking.
@@ -348,6 +387,8 @@ static func _enumerate_rects_for_anchor(
 	if anchor_area > 0:
 		# Area-constrained: enumerate all (w,h) factor pairs of that area.
 		for w in range(1, anchor_area + 1):
+			if do_cancel and cancel_check.call():
+				return []
 			if anchor_area % w != 0:
 				continue
 			var h := anchor_area / w

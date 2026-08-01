@@ -390,6 +390,64 @@ func test_shikaku_adapter_can_resume_false_for_rect_with_string_coordinate() -> 
 
 
 # ---------------------------------------------------------------------------
+# Fix 2 (current batch) — strict integer enforcement for anchors and rects
+# ---------------------------------------------------------------------------
+
+func test_shikaku_adapter_can_resume_false_for_float_anchor_area() -> void:
+	# Coercive-parsing fix: int(4.5) == 4 silently truncates; float must be rejected.
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"3,3": {"area": 4.5, "shape": ShikakuLogic.SHAPE_ABSENT}}
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors})
+	assert_false(adapter.can_resume(), "Float anchor area must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_string_anchor_area() -> void:
+	# int("bad") == 0 would silently produce area=0 → invalid clue component.
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"3,3": {"area": "bad", "shape": ShikakuLogic.SHAPE_ABSENT}}
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors})
+	assert_false(adapter.can_resume(), "String anchor area must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_float_anchor_shape() -> void:
+	# int(2.5) == 2 would silently truncate a float shape enum.
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"3,3": {"area": 4, "shape": 2.5}}
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors})
+	assert_false(adapter.can_resume(), "Float anchor shape must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_float_rect_coordinate() -> void:
+	# int(0.5) == 0 would silently truncate a float coordinate.
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"3,3": {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT}}
+	var bad_solution := [{"x": 0.5, "y": 0, "w": 2, "h": 2}]
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors,
+		"solution": bad_solution})
+	assert_false(adapter.can_resume(), "Float rectangle coordinate must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_legacy_float_value() -> void:
+	# Legacy numbers: float values (e.g. 4.5) must be rejected (area must be int).
+	var adapter := ShikakuSaveAdapter.new()
+	adapter.save({"width": 10, "height": 10, "is_completed": false,
+		"numbers": {"2,2": 4.5}})
+	assert_false(adapter.can_resume(), "Legacy number with float value must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_legacy_noninteger_key_after_migrate() -> void:
+	# _migrate must skip non-integer-key legacy entries so they don't silently
+	# become valid anchors (e.g. "abc,def" → int("abc") == 0 → pos (0,0)).
+	var adapter := ShikakuSaveAdapter.new()
+	# A legacy save with ONLY a non-integer key produces no valid anchors after
+	# migration, so _can_resume_from must return false.
+	adapter.save({"width": 10, "height": 10, "is_completed": false,
+		"numbers": {"abc,def": 4}})
+	assert_false(adapter.can_resume(),
+		"Legacy save with only non-integer key must not be resumable after migration")
+
+
+# ---------------------------------------------------------------------------
 # GameSaveAdapter — restore_if_resumable (avoids double load)
 # ---------------------------------------------------------------------------
 

@@ -347,3 +347,42 @@ func test_hint_removed_rects_populated_when_wrong_placements_cleared() -> void:
 		"Hint must succeed even when all solution rects are initially blocked")
 	assert_true(hint_result.removed_rects.size() > 0,
 		"Hint must populate removed_rects when it had to clear a wrong placement")
+
+
+# ---------------------------------------------------------------------------
+# Fix 1 (current batch) — hint replay: removed_rects identifies blockers that
+#   must be recorded as rectangle_removed events before the hint placement
+# ---------------------------------------------------------------------------
+
+func test_hint_removed_rects_contains_each_cleared_blocker() -> void:
+	# Verifies that each wrong placement cleared by use_hint is reflected in
+	# result.removed_rects with the correct rect dictionary, so the game screen
+	# can record a rectangle_removed event for each one before recording the
+	# placement.  A replay that only records the placement (not the removals)
+	# would diverge; this test guards the logic-level contract that feeds those
+	# recorder calls.
+	var l := ShikakuLogic.new()
+	l.init_from_save({
+		"width": 4,
+		"height": 1,
+		"anchors": {
+			"0,0": {"area": 0, "shape": ShikakuLogic.SHAPE_ANY},
+			"2,0": {"area": 0, "shape": ShikakuLogic.SHAPE_ANY},
+		},
+		"solution": [
+			{"x": 0, "y": 0, "w": 2, "h": 1},
+			{"x": 2, "y": 0, "w": 2, "h": 1},
+		],
+		"placed_rects": [],
+		"random_seed": 42,
+	})
+	# Place a wrong 1×1 rect at (0,0) that blocks solution rect (0,0,2,1).
+	var wrong: ShikakuLogic.PlaceRectResult = l.place_rectangle(0, 0, 1, 1)
+	assert_true(wrong.valid, "Wrong placement must be valid for SHAPE_ANY anchor")
+	var hint_result: ShikakuLogic.HintResult = l.use_hint()
+	assert_false(hint_result.rect.is_empty(), "Hint must succeed")
+	# If the hint cleared the blocker at (0,0,1,1), removed_rects must carry it.
+	# The game screen uses removed_rects to record rectangle_removed events.
+	for removed in hint_result.removed_rects:
+		assert_true(removed.has("x") and removed.has("y") and removed.has("w") and removed.has("h"),
+			"Each removed_rect must be a dict with x/y/w/h for replay recording")

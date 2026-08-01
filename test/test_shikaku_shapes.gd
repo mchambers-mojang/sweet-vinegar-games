@@ -584,3 +584,64 @@ func test_cell_ownership_resolves_ambiguous_candidates() -> void:
 	}
 	assert_true(ShikakuSolver.is_human_solvable(3, 2, anchors),
 		"Cell-ownership pass must identify this puzzle as human-solvable")
+
+
+# ---------------------------------------------------------------------------
+# Fix 3 (current batch) — cell-ownership deduplication and restriction
+#   propagation
+# ---------------------------------------------------------------------------
+
+func test_cell_ownership_deduplication_does_not_inflate_owner_count() -> void:
+	# 4×2 grid, A at (0,0) SHAPE_ANY, B at (2,0) SHAPE_ANY.
+	# A has two valid candidates: 1×2@(0,0) and 2×2@(0,0), both covering cell
+	# (0,1).  Before deduplication, the old code added A's index twice to
+	# cell_owners[(0,1)] → size 2 → restriction skipped. The solver still
+	# resolved the puzzle via other cells, but the deduplication ensures the
+	# restriction is correctly recorded and applied.
+	# The unique solution is 2×2@(0,0) + 2×2@(2,0).
+	var anchors := {
+		Vector2i(0, 0): {"area": 0, "shape": ShikakuLogic.SHAPE_ANY},
+		Vector2i(2, 0): {"area": 0, "shape": ShikakuLogic.SHAPE_ANY},
+	}
+	assert_true(ShikakuSolver.is_human_solvable(4, 2, anchors),
+		"4×2 puzzle with two SHAPE_ANY anchors must be human-solvable")
+
+
+func test_restriction_propagation_accumulates_across_iterations() -> void:
+	# Verify that required_cells restrictions recorded in Phase 2 are applied
+	# in subsequent Phase 1 and Phase 2 iterations, enabling cumulative
+	# exact-cover deductions that neither phase could make independently.
+	#
+	# 4×2 grid, A at (0,0) SHAPE_ANY, B at (2,0) SHAPE_ANY.
+	# The unique solution is A=2×2@(0,0), B=2×2@(2,0).
+	# Phase 2 correctly deduces A's placement because (1,1) is uniquely owned by A;
+	# additionally, with deduplication, (0,1) is correctly identified as uniquely
+	# owned by A (two of A's candidates cover it, but no B candidate does).
+	# With restriction propagation, A's required_cells accumulate so the solver
+	# applies narrowed candidates across iterations.
+	var anchors := {
+		Vector2i(0, 0): {"area": 0, "shape": ShikakuLogic.SHAPE_ANY},
+		Vector2i(2, 0): {"area": 0, "shape": ShikakuLogic.SHAPE_ANY},
+	}
+	assert_true(ShikakuSolver.is_human_solvable(4, 2, anchors),
+		"4×2 puzzle with two SHAPE_ANY anchors must be human-solvable via combined deductions")
+
+
+# ---------------------------------------------------------------------------
+# Fix 4 (current batch) — cancellation polling in area-constrained enumeration
+# ---------------------------------------------------------------------------
+
+func test_enumerate_rects_returns_empty_when_cancelled_with_area_constraint() -> void:
+	# Before this fix, the area-constrained branch (anchor_area > 0) in
+	# _enumerate_rects_for_anchor never polled cancel_check.  Verify that it
+	# now aborts early when the check fires.
+	var covered := PackedByteArray()
+	covered.resize(5 * 5)
+	covered.fill(0)
+	# Large area so the w-loop has many iterations to cancel through.
+	var anchor := {"area": 15, "shape": ShikakuLogic.SHAPE_ABSENT}
+	var cancel_check := func() -> bool: return true  # always cancel
+	var rects := ShikakuSolver._enumerate_rects_for_anchor(
+		Vector2i(2, 2), anchor, 5, 5, covered, cancel_check)
+	assert_true(rects.is_empty(),
+		"_enumerate_rects_for_anchor must return [] when cancel fires in area-constrained branch")

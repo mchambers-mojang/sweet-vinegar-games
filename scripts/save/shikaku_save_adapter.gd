@@ -35,9 +35,16 @@ func _migrate(data: Dictionary, _from_version: int) -> Dictionary:
 					var parts: PackedStringArray = str(key).split(",")
 					if parts.size() != 2:
 						continue
-					pos = Vector2i(int(parts[0]), int(parts[1]))
+					var col_str := parts[0].strip_edges()
+					var row_str := parts[1].strip_edges()
+					if not col_str.is_valid_int() or not row_str.is_valid_int():
+						continue
+					pos = Vector2i(int(col_str), int(row_str))
+				var val = numbers[key]
+				if not (val is int):
+					continue
 				anchors["%d,%d" % [pos.x, pos.y]] = {
-					"area": int(numbers[key]),
+					"area": val as int,
 					"shape": ShikakuLogic.SHAPE_ABSENT,
 				}
 			data["anchors"] = anchors
@@ -97,10 +104,10 @@ func _can_resume_from(data: Dictionary) -> bool:
 				push_warning("ShikakuSaveAdapter: corrupted save — legacy number position out of bounds %s" % str(pos))
 				return false
 			var val = raw_numbers[key]
-			if not (val is int) and not (val is float):
-				push_warning("ShikakuSaveAdapter: corrupted save — legacy number value not a number")
+			if not (val is int):
+				push_warning("ShikakuSaveAdapter: corrupted save — legacy number value not an integer")
 				return false
-			if int(val) <= 0:
+			if (val as int) <= 0:
 				push_warning("ShikakuSaveAdapter: corrupted save — legacy number value must be positive")
 				return false
 	# Deep-validate each anchor when present in new format.
@@ -112,8 +119,18 @@ func _can_resume_from(data: Dictionary) -> bool:
 				push_warning("ShikakuSaveAdapter: corrupted save — anchor entry not a Dictionary")
 				return false
 			var anchor: Dictionary = entry as Dictionary
-			var area: int = int(anchor.get("area", 0))
-			var shape: int = int(anchor.get("shape", ShikakuLogic.SHAPE_ABSENT))
+			# Area must be a non-negative integer — reject floats and strings.
+			var area_raw = anchor.get("area", 0)
+			if not (area_raw is int):
+				push_warning("ShikakuSaveAdapter: corrupted save — anchor area must be an integer")
+				return false
+			var area: int = area_raw as int
+			# Shape must be an integer matching a known constant.
+			var shape_raw = anchor.get("shape", ShikakuLogic.SHAPE_ABSENT)
+			if not (shape_raw is int):
+				push_warning("ShikakuSaveAdapter: corrupted save — anchor shape must be an integer")
+				return false
+			var shape: int = shape_raw as int
 			# Area must be non-negative.
 			if area < 0:
 				push_warning("ShikakuSaveAdapter: corrupted save — negative anchor area")
@@ -188,19 +205,19 @@ func _validate_rect_entry(entry: Variant, grid_w: int, grid_h: int, context: Str
 		push_warning("ShikakuSaveAdapter: corrupted save — %s entry not a Dictionary" % context)
 		return false
 	var d: Dictionary = entry as Dictionary
-	# Require numeric types to avoid coercive int("garbage") == 0 silent failures.
+	# Require strict integer types — reject floats and strings to avoid silent
+	# coercive parsing (e.g. int(3.7) == 3, int("garbage") == 0).
 	var x_raw = d.get("x")
 	var y_raw = d.get("y")
 	var rw_raw = d.get("w")
 	var rh_raw = d.get("h")
-	if not (x_raw is int or x_raw is float) or not (y_raw is int or y_raw is float) \
-			or not (rw_raw is int or rw_raw is float) or not (rh_raw is int or rh_raw is float):
-		push_warning("ShikakuSaveAdapter: corrupted save — %s rect has non-numeric field" % context)
+	if not (x_raw is int) or not (y_raw is int) or not (rw_raw is int) or not (rh_raw is int):
+		push_warning("ShikakuSaveAdapter: corrupted save — %s rect has non-integer field" % context)
 		return false
-	var x: int = int(x_raw)
-	var y: int = int(y_raw)
-	var rw: int = int(rw_raw)
-	var rh: int = int(rh_raw)
+	var x: int = x_raw as int
+	var y: int = y_raw as int
+	var rw: int = rw_raw as int
+	var rh: int = rh_raw as int
 	if rw <= 0 or rh <= 0:
 		push_warning("ShikakuSaveAdapter: corrupted save — %s rect has non-positive dimensions" % context)
 		return false
