@@ -497,28 +497,19 @@ func test_rank4_step_has_rank4_label() -> void:
 
 
 func test_rank3_cascade_returns_rank3_step() -> void:
-	## Build a line where a cascade within the line forces a second cell.
-	## The FIRST forced cell is blocked by a direct constraint (propagated_count=0)
-	## and must NOT be returned; the SECOND forced cell (needing the first as
-	## prerequisite) IS the Rank-3 step that should be returned.
+	## With cross-line checks, _line_propagate_rank3 uses column quota to
+	## eliminate row completions and reach consensus.  This board has
+	## alternating-complete rows 1-5 so each empty column (2,3,4,5) is
+	## already at half-1 of one value: placing the opposite exceeds quota.
 	##
-	## 4×4 row 0: [+, +, _, _]  half=2; pair→pos2=MINUS (Rank-1, not returned by R3)
-	## After pos2=MINUS: row has +,+,-,?; quota needs 0 more +, 0 more −?
-	## Wait, half=2 for size=4: plus=2, minus=0, need 0 more plus, 2 more minus.
-	## After pos2=MINUS (internal propagation): plus=2=half → pos3 forced to MINUS.
-	## pos3 required cascade from pos2 → RANK_3.
+	## 6×6 row 0: [-,+,_,_,_,_]  half=3; need 2+ and 2-
+	## Col 2 (rows 1-5): +,-,+,-,+  = 3+, 2-  → placing + would give col 4+ > half=3 → must be MINUS
+	## Col 3 (rows 1-5): -,+,-,+,-  = 2+, 3-  → placing - would give col 4- > half=3 → must be PLUS
+	## Col 4 (rows 1-5): +,-,+,-,+  = 3+, 2-  → must be MINUS
+	## Col 5 (rows 1-5): -,+,-,+,-  = 2+, 3-  → must be PLUS
 	##
-	## But _adjacent_pair_prevention fires for the [+,+] pair first at Rank-1,
-	## forcing pos2=MINUS globally.  So by the time _line_propagate_rank3 runs,
-	## pos2 is already filled, leaving pos3 as the only empty cell.
-	## _quota_completion then fires for pos3 (Rank-1).
-	##
-	## A case _line_propagate_rank3 can contribute a RANK_3 step:
-	## 6×6 row: [-,+,_,_,_,_], plus=1, minus=1, empties at 2,3,4,5 (4 cells).
-	## No-three rules: col 0=MINUS, col 1=PLUS means no immediate pair or sandwich.
-	## Quota not exhausted. Direct Rank-1 exhausted globally.
-	## However, _line_propagate_rank3 won't cascade without a triggering constraint.
-	## → The function returns null when no cascade exists — that's the correct outcome.
+	## Cross-line quota eliminates all completions except [-,+,-,+,-,+].
+	## All 4 empties are uniquely forced; pos 2 = MINUS is returned first.
 	var cells: Array[int] = [
 		MINUS, PLUS,  EMPTY, EMPTY, EMPTY, EMPTY,
 		PLUS,  MINUS, PLUS,  MINUS, PLUS,  MINUS,
@@ -529,9 +520,16 @@ func test_rank3_cascade_returns_rank3_step() -> void:
 	]
 	var step: EclipseGridSolver.SolverStep = \
 		EclipseGridSolver._line_propagate_rank3(6, cells, {}, {}, 0, true)
-	# No cascade possible; must return null rather than a spurious step.
-	assert_null(step,
-		"_line_propagate_rank3 must return null when no cascade deduction exists")
+	# Cross-line quota forces all 4 empties; the function must return a RANK_3 step.
+	assert_not_null(step,
+		"_line_propagate_rank3 must find a cross-line-forced step for this board")
+	if step != null:
+		assert_eq(step.rank, EclipseGridSolver.RANK_3,
+			"Cross-line deduction must be labeled RANK_3")
+		assert_eq(step.result_value, MINUS,
+			"Col 2 must be forced to MINUS by cross-line quota")
+		assert_eq(step.affected_cells[0], 2,
+			"Forced cell is flat index 2 (row 0, col 2)")
 
 
 func test_rank3_does_not_mislabel_rank1_in_analyze() -> void:

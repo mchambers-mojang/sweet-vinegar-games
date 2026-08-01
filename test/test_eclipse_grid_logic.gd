@@ -810,7 +810,7 @@ func test_hint_undo_uses_pre_rejection_value_not_rejected_glyph() -> void:
 
 	# use_hint() must look at cell 1 (still EMPTY) and fill it correctly.
 	var hint := l3.use_hint()
-	assert_true(hint.applied, "Hint must succeed on the empty cell")
+	assert_true(hint.had_step, "Hint must succeed on the empty cell")
 
 	# The undo entry for the hint must use EMPTY as old_value (not the rejected
 	# MINUS that is currently sitting in cells[0]).
@@ -851,7 +851,7 @@ func test_hint_undo_old_value_is_empty_even_when_rejected_glyph_present() -> voi
 
 	# use_hint() should fix cell 0 back to PLUS.
 	var hint := l2.use_hint()
-	if not hint.applied:
+	if not hint.had_step:
 		pending("Hint did not apply — solver may prefer another cell; skip")
 		return
 
