@@ -44,12 +44,11 @@ func _can_resume_from(data: Dictionary) -> bool:
 		push_warning("CrownGridSaveAdapter: corrupted save — tier/size mismatch")
 		return false
 
-	# Validate assistance_mode
+	# Validate assistance_mode — required field
 	var mode = data.get("assistance_mode", null)
-	if mode != null:
-		if typeof(mode) != TYPE_INT or not VALID_ASSISTANCE_MODES.has(mode as int):
-			push_warning("CrownGridSaveAdapter: corrupted save — invalid assistance_mode")
-			return false
+	if mode == null or typeof(mode) != TYPE_INT or not VALID_ASSISTANCE_MODES.has(mode as int):
+		push_warning("CrownGridSaveAdapter: corrupted save — missing or invalid assistance_mode")
+		return false
 
 	# Validate regions
 	var regions = data.get("regions", null)
@@ -222,8 +221,9 @@ static func _validate_cell_values(cells: Variant) -> bool:
 	return true
 
 
-## Validate an undo/redo entry for required fields, value ranges, and coordinate
-## bounds.  sz must be the board size (6–9) so coordinate ranges can be checked.
+## Validate an undo/redo entry for required fields, value ranges, coordinate
+## bounds, and consistency between related fields.
+## sz must be the board size (6–9) so coordinate ranges can be checked.
 static func _validate_undo_entry(entry: Variant, sz: int = -1) -> bool:
 	if not (entry is Dictionary):
 		return false
@@ -247,6 +247,12 @@ static func _validate_undo_entry(entry: Variant, sz: int = -1) -> bool:
 				return false
 			if not _validate_old_states(d["old_states"], sz):
 				return false
+			# Cross-validate: cell and every auto_marked cell must appear in old_states
+			if not _validate_cell_in_old_states(d["cell"], d["old_states"]):
+				return false
+			for am in (d["auto_marked"] as Array):
+				if not _validate_cell_in_old_states(am, d["old_states"]):
+					return false
 		"paint":
 			if not d.has("changed") or not (d["changed"] is Array):
 				return false
@@ -257,6 +263,10 @@ static func _validate_undo_entry(entry: Variant, sz: int = -1) -> bool:
 				return false
 			if not _validate_old_states(d["old_states"], sz):
 				return false
+			# Cross-validate: every changed cell must appear in old_states
+			for item in (d["changed"] as Array):
+				if not _validate_cell_in_old_states(item, d["old_states"]):
+					return false
 		"hint_crown":
 			if not d.has("cell"):
 				return false
@@ -270,6 +280,12 @@ static func _validate_undo_entry(entry: Variant, sz: int = -1) -> bool:
 				return false
 			if not _validate_old_states(d["old_states"], sz):
 				return false
+			# Cross-validate: cell and every auto_marked cell must appear in old_states
+			if not _validate_cell_in_old_states(d["cell"], d["old_states"]):
+				return false
+			for am in (d["auto_marked"] as Array):
+				if not _validate_cell_in_old_states(am, d["old_states"]):
+					return false
 		"hint_exclude":
 			if not d.has("changed") or not (d["changed"] is Array):
 				return false
@@ -280,9 +296,24 @@ static func _validate_undo_entry(entry: Variant, sz: int = -1) -> bool:
 				return false
 			if not _validate_old_states(d["old_states"], sz):
 				return false
+			# Cross-validate: every changed cell must appear in old_states
+			for item in (d["changed"] as Array):
+				if not _validate_cell_in_old_states(item, d["old_states"]):
+					return false
 		_:
 			return false
 	return true
+
+
+## Return true when a single cell coord [x, y] has a corresponding key in old_states.
+## old_states keys are stored as "x,y" strings.
+static func _validate_cell_in_old_states(cell: Variant, old_states: Variant) -> bool:
+	if not (cell is Array) or (cell as Array).size() < 2:
+		return false
+	if not (old_states is Dictionary):
+		return false
+	var k := "%d,%d" % [int((cell as Array)[0]), int((cell as Array)[1])]
+	return (old_states as Dictionary).has(k)
 
 
 ## Return true when v is a 2-element Array whose components are integers in

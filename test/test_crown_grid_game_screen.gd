@@ -285,3 +285,77 @@ func test_hint_crown_result_carries_auto_marked_cells() -> void:
 	assert_false(hint.auto_marked.is_empty(),
 			"Crown hint with auto_mark=true must populate auto_marked — "
 			+ "this is the data the game screen uses to record exclusions_painted")
+
+
+## _on_hint() must record a hint_applied event followed by an exclusions_painted
+## event when auto_mark fires; replaying those frames against a CrownGridBoard
+## must produce the same cell state that the logic has.
+func test_on_hint_records_and_replays_correctly() -> void:
+	var recorder := MockRecorder.new()
+	var stats := MockStats.new()
+	var screen := _make_screen(recorder, stats)
+
+	# Start session via _on_generation_done() with the 6x6 minimal result.
+	var gen := _minimal_gen_result()
+	screen._tier = CrownGridGenerator.TIER_EASY
+	screen._tier_size = 6
+	screen._pending_gen_seed = 42
+	screen._gen_pending_result = gen
+	screen._gen_thread = null
+	screen._on_generation_done()
+
+	# Re-init logic with auto_mark=true so Crown hints auto-mark the column.
+	var sz: int = gen["size"]
+	var regions: PackedInt32Array = gen["regions"]
+	var solution: Array[int] = gen["solution"]  # [0, 2, 4, 1, 3, 5]
+	screen.logic.init_new_game(sz, regions, solution, true)
+
+	# Force a naked-single Crown hint in row 0: exclude all cols except 0.
+	var to_exclude: Array[Vector2i] = []
+	for c in range(1, sz):
+		to_exclude.append(Vector2i(c, 0))
+	screen.logic.paint_excluded(to_exclude)
+
+	# Snapshot recorder state before the hint so we can find the new events.
+	var inputs_before := recorder.inputs.size()
+
+	screen._on_hint()
+
+	# --- Verify recorded events ---
+	var new_inputs: Array = recorder.inputs.slice(inputs_before)
+	var hint_events: Array = new_inputs.filter(func(e): return e["type"] == "hint_applied")
+	var excl_events: Array = new_inputs.filter(func(e): return e["type"] == "exclusions_painted")
+
+	assert_false(hint_events.is_empty(),
+			"_on_hint() must record a hint_applied event")
+	var hint_payload: Dictionary = hint_events[0]["payload"]
+	assert_eq(hint_payload.get("col", -1), 0,
+			"hint_applied col must be 0 (crown position in row 0)")
+	assert_eq(hint_payload.get("row", -1), 0,
+			"hint_applied row must be 0")
+	assert_eq(hint_payload.get("new_state", -1), CrownGridLogic.CELL_CROWN,
+			"hint_applied new_state must be CELL_CROWN")
+
+	assert_false(excl_events.is_empty(),
+			"Crown hint with auto_mark=true must also record an exclusions_painted event")
+
+	# --- Verify replay faithfully reproduces the hint ---
+	var board := CrownGridBoard.new()
+	board.setup(sz, regions)
+
+	var adapter := CrownGridReplayAdapter.new()
+	for evt in new_inputs:
+		var frame := {"input_event": {"type": evt["type"], "payload": evt["payload"]}}
+		adapter.apply_frame(frame, board)
+
+	# The crown at (col=0, row=0) must be reflected in board.cell_states.
+	assert_eq(int(board.cell_states[0 * sz + 0]), CrownGridLogic.CELL_CROWN,
+			"Replayed board must show CELL_CROWN at (0,0) after hint_applied frame")
+
+	# All cells in col 0 except row 0 must be CELL_EXCLUDED after exclusions_painted.
+	for r in range(1, sz):
+		assert_eq(int(board.cell_states[r * sz + 0]), CrownGridLogic.CELL_EXCLUDED,
+				"Column-0 cell in row %d must be CELL_EXCLUDED after auto-mark replay" % r)
+
+	board.free()
+	screen.free()

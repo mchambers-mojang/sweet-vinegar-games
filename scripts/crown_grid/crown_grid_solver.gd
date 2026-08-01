@@ -383,30 +383,30 @@ static func _find_locked_subset(
 
 
 # ---------------------------------------------------------------------------
-# Rank 4 — Skyscraper (non-speculative pigeonhole deduction)
+# Rank 4 — Bilocal X-chain (genuinely non-speculative, 3+ dependent links)
 # ---------------------------------------------------------------------------
 
-## For each pair of regions (Ri, Rj) whose remaining candidates span exactly
-## 2 rows (row-Skyscraper) or exactly 2 columns (column-Skyscraper) with
-## exactly one shared row/column:
+## An X-chain is a path of cells  C0 — C1 — C2 — … — Cn  where each
+## consecutive pair (C_{k−1}, C_k) is a *strong link*: the only two remaining
+## candidates in some shared unit (row, column, or region).
 ##
-##   Let X = Ri's candidates in its *non-shared* row/col
-##   Let Y = Rj's candidates in its *non-shared* row/col
+## For a chain of odd length L ≥ 3:
+##   C0 NOT crown  ⟹  C1 IS  crown  (link 1, strong)
+##                 ⟹  C2 NOT crown  (link 2, strong)
+##                 ⟹  …
+##                 ⟹  Cn  IS  crown  (link L, strong)
+##   ∴ "C0 IS crown  OR  Cn IS crown"
 ##
-## Because each row (or column) can hold only one Crown, Ri and Rj cannot both
-## use the shared unit.  Therefore at least one of X or Y must contain the
-## true Crown.  Any candidate cell Z outside Ri and Rj that "sees" every cell
-## of X and every cell of Y is eliminated regardless of which choice is made,
-## so Z can be safely excluded.
+## Any candidate Z that sees both C0 and Cn is eliminated regardless of which
+## endpoint holds the Crown — a genuinely forced, non-speculative deduction
+## using L dependent reasoning steps.
 ##
-## "Sees" means: same row, same column, same region, or diagonally adjacent
-## (|Δrow| = |Δcol| = 1).
+## Three or more links are required (L ≥ 3) so the deduction is a proper chain
+## and not a single direct elimination.
 ##
-## This deduction is purely non-speculative — no hypothetical placements or
-## branch propagation are used.  The argument follows directly from the
-## one-Crown-per-unit pigeonhole constraint.
-##
-## cancel_check is polled between each candidate region pair.
+## Implementation: depth-first search over the strong-link graph, capped at
+## MAX_CHAIN_LINKS to keep the search tractable.
+## cancel_check is polled at the start of every top-level DFS expansion.
 static func _try_rank4_chain(
 		size: int,
 		regions: PackedInt32Array,
@@ -415,135 +415,97 @@ static func _try_rank4_chain(
 		_excluded: Dictionary,
 		cancel_check: Callable = Callable()) -> SolveStep:
 
-	# ---- Collect bi-row and bi-col region descriptors ----
-	# birow[i] = {reg, rows:[r_a,r_b], ca:[cells in r_a], cb:[cells in r_b]}
-	# bicol[i] = {reg, cols:[c_a,c_b], ca:[cells in c_a], cb:[cells in c_b]}
-	var birow: Array = []
-	var bicol: Array = []
+	# Build bilocal adjacency: cell → Dictionary[neighbor_cell → true].
+	# A bilocal pair (A, B) exists when A and B are the *only* 2 candidates
+	# in some shared row, column, or region.
+	var adj: Dictionary = {}
+	for cell in cands.keys():
+		adj[cell as Vector2i] = {}
 
+	for r in range(size):
+		var rc := _cands_in_row(cands, r)
+		if rc.size() == 2:
+			var adj_a: Dictionary = adj[rc[0]]
+			var adj_b: Dictionary = adj[rc[1]]
+			adj_a[rc[1]] = true
+			adj_b[rc[0]] = true
+	for c in range(size):
+		var cc := _cands_in_col(cands, c, size)
+		if cc.size() == 2:
+			var adj_a: Dictionary = adj[cc[0]]
+			var adj_b: Dictionary = adj[cc[1]]
+			adj_a[cc[1]] = true
+			adj_b[cc[0]] = true
 	for reg in range(size):
 		var rc := _cands_in_region(cands, reg, size, regions)
-		if rc.is_empty():
+		if rc.size() == 2:
+			var adj_a: Dictionary = adj[rc[0]]
+			var adj_b: Dictionary = adj[rc[1]]
+			adj_a[rc[1]] = true
+			adj_b[rc[0]] = true
+
+	# DFS for odd-length chains with 3+ links that produce eliminations.
+	for start_cell in cands.keys():
+		if cancel_check.is_valid() and cancel_check.call():
+			return null
+		var start := start_cell as Vector2i
+		var visited: Dictionary = {start: true}
+		var result := _dfs_xchain(
+				start, start, 0, visited, adj, size, regions, cands, cancel_check)
+		if result:
+			return result
+
+	return null
+
+
+## DFS helper: extend the X-chain from `current` and check for eliminations.
+## `depth` = number of strong links traversed so far.
+## At odd depth ≥ 3 the chain proves "start IS crown OR current IS crown", so
+## any candidate seeing both endpoints can be excluded.
+static func _dfs_xchain(
+		start: Vector2i,
+		current: Vector2i,
+		depth: int,
+		visited: Dictionary,
+		adj: Dictionary,
+		size: int,
+		regions: PackedInt32Array,
+		cands: Dictionary,
+		cancel_check: Callable) -> SolveStep:
+
+	const MAX_CHAIN_LINKS := 7
+
+	if depth >= 3 and depth % 2 == 1:
+		var to_exclude: Array[Vector2i] = []
+		for cand_cell in cands.keys():
+			var v := cand_cell as Vector2i
+			if v == start or v == current:
+				continue
+			if _cell_sees(v, start, size, regions) and _cell_sees(v, current, size, regions):
+				to_exclude.append(v)
+		if not to_exclude.is_empty():
+			return SolveStep.new(
+				"X-chain (%d links): Crown in %s or %s" % [depth, str(start), str(current)],
+				to_exclude, CELL_EXCLUDED, RANK_CHAIN)
+
+	if depth >= MAX_CHAIN_LINKS:
+		return null
+
+	if not adj.has(current):
+		return null
+	var neighbors: Dictionary = adj[current]
+	for next_cell in neighbors.keys():
+		var next := next_cell as Vector2i
+		if visited.has(next):
 			continue
-
-		var rows := _unique_rows(rc)
-		if rows.size() == 2:
-			var ca: Array[Vector2i] = []
-			var cb: Array[Vector2i] = []
-			for cell in rc:
-				if (cell as Vector2i).y == rows[0]:
-					ca.append(cell as Vector2i)
-				else:
-					cb.append(cell as Vector2i)
-			birow.append({"reg": reg, "rows": rows, "ca": ca, "cb": cb})
-
-		var cols := _unique_cols(rc)
-		if cols.size() == 2:
-			var ca: Array[Vector2i] = []
-			var cb: Array[Vector2i] = []
-			for cell in rc:
-				if (cell as Vector2i).x == cols[0]:
-					ca.append(cell as Vector2i)
-				else:
-					cb.append(cell as Vector2i)
-			bicol.append({"reg": reg, "cols": cols, "ca": ca, "cb": cb})
-
-	# ---- Row-based Skyscraper ----
-	# Pairs where both regions span exactly 2 rows, sharing exactly 1.
-	for i in range(birow.size()):
-		for j in range(i + 1, birow.size()):
-			if cancel_check.is_valid() and cancel_check.call():
-				return null
-
-			var ri: Dictionary = birow[i]
-			var rj: Dictionary = birow[j]
-			var ri_rows: Array = ri["rows"]
-			var rj_rows: Array = rj["rows"]
-
-			# Identify the single shared row and the two non-shared rows.
-			var shared := -1
-			var ri_uniq := -1
-			var rj_uniq := -1
-			for r in ri_rows:
-				if r == rj_rows[0] or r == rj_rows[1]:
-					if shared >= 0:
-						shared = -2  # more than one shared row — skip
-						break
-					shared = r
-				else:
-					ri_uniq = r
-			if shared < 0:
-				continue
-			for r in rj_rows:
-				if r != shared:
-					rj_uniq = r
-
-			# X = Ri's candidates in the non-shared row (must be the crown if
-			#     the shared row is taken by Rj).
-			# Y = Rj's candidates in the non-shared row.
-			var X: Array[Vector2i] = ri["ca"] if ri_rows[0] == ri_uniq else ri["cb"]
-			var Y: Array[Vector2i] = rj["ca"] if rj_rows[0] == rj_uniq else rj["cb"]
-
-			var to_exclude: Array[Vector2i] = []
-			for cell in cands:
-				var v := cell as Vector2i
-				var rv := regions[v.y * size + v.x]
-				if rv == ri["reg"] or rv == rj["reg"]:
-					continue
-				if _cell_sees_all(v, X, size, regions) and _cell_sees_all(v, Y, size, regions):
-					to_exclude.append(v)
-
-			if not to_exclude.is_empty():
-				return SolveStep.new(
-					"Skyscraper (rows): regions %d and %d share row %d" % [
-						ri["reg"], rj["reg"], shared],
-					to_exclude, CELL_EXCLUDED, RANK_CHAIN)
-
-	# ---- Column-based Skyscraper ----
-	for i in range(bicol.size()):
-		for j in range(i + 1, bicol.size()):
-			if cancel_check.is_valid() and cancel_check.call():
-				return null
-
-			var ci: Dictionary = bicol[i]
-			var cj: Dictionary = bicol[j]
-			var ci_cols: Array = ci["cols"]
-			var cj_cols: Array = cj["cols"]
-
-			var shared := -1
-			var ci_uniq := -1
-			var cj_uniq := -1
-			for c in ci_cols:
-				if c == cj_cols[0] or c == cj_cols[1]:
-					if shared >= 0:
-						shared = -2
-						break
-					shared = c
-				else:
-					ci_uniq = c
-			if shared < 0:
-				continue
-			for c in cj_cols:
-				if c != shared:
-					cj_uniq = c
-
-			var X: Array[Vector2i] = ci["ca"] if ci_cols[0] == ci_uniq else ci["cb"]
-			var Y: Array[Vector2i] = cj["ca"] if cj_cols[0] == cj_uniq else cj["cb"]
-
-			var to_exclude: Array[Vector2i] = []
-			for cell in cands:
-				var v := cell as Vector2i
-				var rv := regions[v.y * size + v.x]
-				if rv == ci["reg"] or rv == cj["reg"]:
-					continue
-				if _cell_sees_all(v, X, size, regions) and _cell_sees_all(v, Y, size, regions):
-					to_exclude.append(v)
-
-			if not to_exclude.is_empty():
-				return SolveStep.new(
-					"Skyscraper (cols): regions %d and %d share col %d" % [
-						ci["reg"], cj["reg"], shared],
-					to_exclude, CELL_EXCLUDED, RANK_CHAIN)
+		if cancel_check.is_valid() and cancel_check.call():
+			return null
+		visited[next] = true
+		var result := _dfs_xchain(
+				start, next, depth + 1, visited, adj, size, regions, cands, cancel_check)
+		visited.erase(next)
+		if result:
+			return result
 
 	return null
 
@@ -558,16 +520,6 @@ static func _cell_sees(a: Vector2i, b: Vector2i, size: int, regions: PackedInt32
 	if regions[a.y * size + a.x] == regions[b.y * size + b.x]:
 		return true
 	return absi(a.y - b.y) == 1 and absi(a.x - b.x) == 1
-
-
-## Return true if cell `a` sees every cell in `group`.
-static func _cell_sees_all(
-		a: Vector2i, group: Array[Vector2i],
-		size: int, regions: PackedInt32Array) -> bool:
-	for b in group:
-		if not _cell_sees(a, b, size, regions):
-			return false
-	return true
 
 
 # ---------------------------------------------------------------------------
@@ -617,8 +569,8 @@ static func _compute_candidates(
 			used_regions[regions[r * size + c]] = true
 			for dr in [-1, 1]:
 				for dc in [-1, 1]:
-					var nr := r + dr
-					var nc := c + dc
+					var nr: int = r + dr
+					var nc: int = c + dc
 					if nr >= 0 and nr < size and nc >= 0 and nc < size:
 						diag_adjacent[Vector2i(nc, nr)] = true
 
@@ -672,8 +624,8 @@ static func _exclude_from_crown(
 	# Exclude diagonal neighbors
 	for dr in [-1, 1]:
 		for dc in [-1, 1]:
-			var nr := rc + dr
-			var nc := cc + dc
+			var nr: int = rc + dr
+			var nc: int = cc + dc
 			if nr >= 0 and nr < size and nc >= 0 and nc < size:
 				excluded[Vector2i(nc, nr)] = true
 

@@ -370,9 +370,10 @@ func _on_hint() -> void:
 	if not result.applied:
 		return
 
-	board.set_cells(logic.cells)
-	if logic.assistance_mode == CrownGridLogic.ASSISTANCE_FREE:
-		board.set_violations(logic.get_violations())
+	if board:
+		board.set_cells(logic.cells)
+		if logic.assistance_mode == CrownGridLogic.ASSISTANCE_FREE:
+			board.set_violations(logic.get_violations())
 
 	_crash.register_user_action("crown_grid_hint_used")
 

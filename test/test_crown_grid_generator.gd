@@ -21,7 +21,7 @@ func _verify_connectivity(size: int, regions: PackedInt32Array) -> bool:
 		while not queue.is_empty():
 			var cur: Vector2i = queue.pop_front()
 			for delta in [Vector2i(0, -1), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(1, 0)]:
-				var n := cur + delta
+				var n: Vector2i = cur + delta
 				if n.x >= 0 and n.x < size and n.y >= 0 and n.y < size:
 					if regions[n.y * size + n.x] == reg and not visited.has(n):
 						visited[n] = true

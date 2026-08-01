@@ -225,6 +225,13 @@ func test_invalid_assistance_mode_rejected() -> void:
 	assert_false(adapter._can_resume_from(d))
 
 
+func test_missing_assistance_mode_rejected() -> void:
+	var d := _valid_save()
+	d.erase("assistance_mode")
+	assert_false(adapter._can_resume_from(d),
+			"Save without assistance_mode must be rejected")
+
+
 func test_valid_assistance_modes_accepted() -> void:
 	for m in [0, 1]:
 		var d := _valid_save()
@@ -251,7 +258,7 @@ func test_invalid_undo_entry_unknown_action_rejected() -> void:
 func test_valid_undo_entries_accepted() -> void:
 	var d := _valid_save()
 	d["undo_stack"] = [
-		{"action": "tap", "cell": [1, 0], "from": 0, "to": 1, "auto_marked": [], "old_states": {}},
+		{"action": "tap", "cell": [1, 0], "from": 0, "to": 1, "auto_marked": [], "old_states": {"1,0": 0}},
 	]
 	assert_true(adapter._can_resume_from(d))
 
@@ -286,7 +293,7 @@ func test_paint_entry_missing_changed_rejected() -> void:
 
 func test_paint_entry_valid_accepted() -> void:
 	var d := _valid_save()
-	d["undo_stack"] = [{"action": "paint", "changed": [[0, 1], [1, 2]], "old_states": {}}]
+	d["undo_stack"] = [{"action": "paint", "changed": [[0, 1], [1, 2]], "old_states": {"0,1": 0, "1,2": 0}}]
 	assert_true(adapter._can_resume_from(d))
 
 
@@ -298,13 +305,13 @@ func test_hint_crown_entry_missing_cell_rejected() -> void:
 
 func test_hint_crown_entry_valid_accepted() -> void:
 	var d := _valid_save()
-	d["undo_stack"] = [{"action": "hint_crown", "cell": [2, 3], "auto_marked": [], "old_states": {}}]
+	d["undo_stack"] = [{"action": "hint_crown", "cell": [2, 3], "auto_marked": [], "old_states": {"2,3": 0}}]
 	assert_true(adapter._can_resume_from(d))
 
 
 func test_hint_exclude_entry_valid_accepted() -> void:
 	var d := _valid_save()
-	d["undo_stack"] = [{"action": "hint_exclude", "changed": [[0, 1]], "old_states": {}}]
+	d["undo_stack"] = [{"action": "hint_exclude", "changed": [[0, 1]], "old_states": {"0,1": 0}}]
 	assert_true(adapter._can_resume_from(d))
 
 
@@ -327,7 +334,7 @@ func test_redo_stack_invalid_entry_rejected() -> void:
 func test_redo_stack_valid_entries_accepted() -> void:
 	var d := _valid_save()
 	d["redo_stack"] = [
-		{"action": "tap", "cell": [1, 0], "from": 0, "to": 1, "auto_marked": [], "old_states": {}},
+		{"action": "tap", "cell": [1, 0], "from": 0, "to": 1, "auto_marked": [], "old_states": {"1,0": 0}},
 	]
 	assert_true(adapter._can_resume_from(d))
 
@@ -386,6 +393,7 @@ func test_disconnected_region_rejected() -> void:
 		"solution": sol,
 		"cells": cells,
 		"is_completed": false,
+		"assistance_mode": 0,
 	}
 	# Topology passes (all regions 0-5 present) but connectivity fails.
 	assert_false(adapter._can_resume_from(d),
@@ -507,7 +515,7 @@ func test_hint_exclude_entry_changed_oob_rejected() -> void:
 func test_valid_tap_entry_in_bounds_accepted() -> void:
 	var d := _valid_save()
 	d["undo_stack"] = [{"action": "tap", "cell": [0, 0], "from": 0, "to": 1,
-			"auto_marked": [], "old_states": {}}]
+			"auto_marked": [], "old_states": {"0,0": 0}}]
 	assert_true(adapter._can_resume_from(d),
 			"Valid tap entry with in-bounds coordinates must be accepted")
 
@@ -535,7 +543,8 @@ func test_tap_entry_auto_marked_non_array_element_rejected() -> void:
 func test_tap_entry_auto_marked_valid_accepted() -> void:
 	var d := _valid_save()
 	d["undo_stack"] = [{"action": "tap", "cell": [0, 0], "from": 0, "to": 2,
-			"auto_marked": [[1, 0], [2, 0]]}]
+			"auto_marked": [[1, 0], [2, 0]],
+			"old_states": {"0,0": 0, "1,0": 0, "2,0": 0}}]
 	assert_true(adapter._can_resume_from(d),
 			"tap entry with valid auto_marked coordinates must be accepted")
 
@@ -551,7 +560,8 @@ func test_hint_crown_auto_marked_oob_coord_rejected() -> void:
 func test_hint_crown_auto_marked_valid_accepted() -> void:
 	var d := _valid_save()
 	d["undo_stack"] = [{"action": "hint_crown", "cell": [2, 3],
-			"auto_marked": [[0, 3], [1, 3]], "old_states": {}}]
+			"auto_marked": [[0, 3], [1, 3]],
+			"old_states": {"2,3": 0, "0,3": 0, "1,3": 0}}]
 	assert_true(adapter._can_resume_from(d),
 			"hint_crown entry with valid auto_marked coordinates must be accepted")
 
@@ -563,7 +573,7 @@ func test_hint_crown_auto_marked_valid_accepted() -> void:
 func test_tap_old_states_non_dict_rejected() -> void:
 	var d := _valid_save()
 	d["undo_stack"] = [{"action": "tap", "cell": [0, 0], "from": 0, "to": 1,
-			"old_states": "bad"}]
+			"auto_marked": [], "old_states": "bad"}]
 	assert_false(adapter._can_resume_from(d),
 			"tap entry with non-dict old_states must be rejected")
 
@@ -571,7 +581,7 @@ func test_tap_old_states_non_dict_rejected() -> void:
 func test_tap_old_states_oob_key_rejected() -> void:
 	var d := _valid_save()
 	d["undo_stack"] = [{"action": "tap", "cell": [0, 0], "from": 0, "to": 1,
-			"old_states": {"99,0": 0}}]
+			"auto_marked": [], "old_states": {"99,0": 0}}]
 	assert_false(adapter._can_resume_from(d),
 			"tap entry with out-of-bounds old_states key must be rejected")
 
@@ -579,7 +589,7 @@ func test_tap_old_states_oob_key_rejected() -> void:
 func test_tap_old_states_invalid_value_rejected() -> void:
 	var d := _valid_save()
 	d["undo_stack"] = [{"action": "tap", "cell": [0, 0], "from": 0, "to": 1,
-			"old_states": {"0,0": 5}}]
+			"auto_marked": [], "old_states": {"0,0": 5}}]
 	assert_false(adapter._can_resume_from(d),
 			"tap entry with invalid old_states value must be rejected")
 
@@ -678,4 +688,53 @@ func test_hint_exclude_entry_missing_old_states_rejected() -> void:
 	d["undo_stack"] = [{"action": "hint_exclude", "changed": [[0, 0]]}]
 	assert_false(adapter._can_resume_from(d),
 			"hint_exclude entry without old_states must be rejected")
+
+
+# ---------------------------------------------------------------------------
+# Cross-validation: changed/auto_marked cells must appear in old_states (fix 3)
+# ---------------------------------------------------------------------------
+
+func test_tap_cell_not_in_old_states_rejected() -> void:
+	var d := _valid_save()
+	# cell=[1,0] but old_states has no key "1,0"
+	d["undo_stack"] = [{"action": "tap", "cell": [1, 0], "from": 0, "to": 1,
+			"auto_marked": [], "old_states": {"0,0": 0}}]
+	assert_false(adapter._can_resume_from(d),
+			"tap entry where cell is absent from old_states must be rejected")
+
+
+func test_tap_auto_marked_cell_not_in_old_states_rejected() -> void:
+	var d := _valid_save()
+	# cell=[0,0] present in old_states, but auto_marked [1,0] is absent
+	d["undo_stack"] = [{"action": "tap", "cell": [0, 0], "from": 0, "to": 2,
+			"auto_marked": [[1, 0]], "old_states": {"0,0": 0}}]
+	assert_false(adapter._can_resume_from(d),
+			"tap entry where auto_marked cell is absent from old_states must be rejected")
+
+
+func test_paint_changed_cell_not_in_old_states_rejected() -> void:
+	var d := _valid_save()
+	# changed has [0,1] and [1,2] but old_states only covers [0,1]
+	d["undo_stack"] = [{"action": "paint", "changed": [[0, 1], [1, 2]],
+			"old_states": {"0,1": 0}}]
+	assert_false(adapter._can_resume_from(d),
+			"paint entry where a changed cell is absent from old_states must be rejected")
+
+
+func test_hint_crown_cell_not_in_old_states_rejected() -> void:
+	var d := _valid_save()
+	# cell=[2,3] absent from old_states
+	d["undo_stack"] = [{"action": "hint_crown", "cell": [2, 3],
+			"auto_marked": [], "old_states": {"0,0": 0}}]
+	assert_false(adapter._can_resume_from(d),
+			"hint_crown entry where cell is absent from old_states must be rejected")
+
+
+func test_hint_exclude_changed_cell_not_in_old_states_rejected() -> void:
+	var d := _valid_save()
+	# changed=[0,1] but old_states has no key "0,1"
+	d["undo_stack"] = [{"action": "hint_exclude", "changed": [[0, 1]],
+			"old_states": {"0,0": 0}}]
+	assert_false(adapter._can_resume_from(d),
+			"hint_exclude entry where changed cell is absent from old_states must be rejected")
 

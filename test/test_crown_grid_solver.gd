@@ -427,7 +427,8 @@ func test_rank4_cancel_check_respected() -> void:
 
 func test_rank4_intersection_finds_forced_exclusions() -> void:
 	## Positive regression: a 6x6 board where no Rank 1–3 deduction produces
-	## any exclusion, but the Skyscraper pattern (Rank 4) can.
+	## any exclusion, but a Rank 4 X-chain (bilocal strong-link chain, ≥3 links)
+	## can.
 	##
 	## Region layout (row-major):
 	##   Rows 0-2: [0, 0, 2, 1, 3, 4]
@@ -443,10 +444,9 @@ func test_rank4_intersection_finds_forced_exclusions() -> void:
 	##   Row 4: (3,4)[R1], (0,4)[R5]
 	##   Row 5: (4,5)[R3], (1,5)[R5], (5,5)[R4]
 	##
-	## Skyscraper:
-	##   R0 spans rows {0, 2}; R1 spans rows {0, 4}; shared row = 0.
-	##   X = R0's row-2 candidates = {(1,2)}
-	##   Y = R1's row-4 candidates = {(3,4)}
+	## X-chain (3 strong links, depth 3):
+	##   (1,2) —[R0]— (0,0) —[row0]— (3,0) —[R1/col3]— (3,4)
+	##   "Crown is at (1,2) OR at (3,4)"
 	##   Cell (2,3)[R2] sees (1,2) diagonally and (3,4) diagonally → EXCLUDE.
 
 	var sz := 6
@@ -499,7 +499,7 @@ func test_rank4_intersection_finds_forced_exclusions() -> void:
 	assert_null(lower_step, "No Rank 3 step should be available on this board")
 
 	var step := CrownGridSolver._try_rank4_chain(sz, regions, cands, crowns_by_row, excluded)
-	assert_not_null(step, "Rank 4 Skyscraper must find forced exclusions on this board")
+	assert_not_null(step, "Rank 4 X-chain must find forced exclusions on this board")
 	if step == null:
 		return
 	assert_eq(step.result, CrownGridSolver.CELL_EXCLUDED,
@@ -509,23 +509,19 @@ func test_rank4_intersection_finds_forced_exclusions() -> void:
 	assert_true(step.affected_cells.size() > 0,
 			"At least one cell must be excluded")
 
-	# The Skyscraper must exclude (2,3) — it sees both (1,2) and (3,4) diagonally.
+	# The X-chain (1,2)—(0,0)—(3,0)—(3,4) must exclude (2,3):
+	# it sees (1,2) diagonally and (3,4) diagonally.
 	var excluded_cells: Array[Vector2i] = []
 	for cell in step.affected_cells:
 		excluded_cells.append(cell as Vector2i)
 	assert_true(Vector2i(2, 3) in excluded_cells,
-			"Skyscraper must exclude (2,3) which sees both non-shared candidates")
+			"X-chain must exclude (2,3) which sees both chain endpoints")
 
-	# Structural soundness: (2,3) is excluded because it sees both non-shared candidates.
-	# R0 spans rows {0,2}; R1 spans rows {0,4}; shared row = 0.
-	# X = R0's non-shared candidate in row 2 = (1,2).
-	# Y = R1's non-shared candidate in row 4 = (3,4).
-	# By pigeonhole at least one of X or Y is crowned, so (2,3) — which sees both
-	# diagonally — can be safely excluded without any hypothetical placement.
+	# Soundness cross-check: (2,3) sees both chain endpoints.
 	assert_true(CrownGridSolver._cell_sees(Vector2i(2, 3), Vector2i(1, 2), sz, regions),
-			"(2,3) must see R0's non-shared candidate (1,2) via diagonal adjacency")
+			"(2,3) must see chain endpoint (1,2) via diagonal adjacency")
 	assert_true(CrownGridSolver._cell_sees(Vector2i(2, 3), Vector2i(3, 4), sz, regions),
-			"(2,3) must see R1's non-shared candidate (3,4) via diagonal adjacency")
+			"(2,3) must see chain endpoint (3,4) via diagonal adjacency")
 
 
 # ---------------------------------------------------------------------------

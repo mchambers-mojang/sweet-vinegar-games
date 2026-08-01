@@ -204,7 +204,7 @@ static func _try_gen_regions(size: int, crown_cols: Array[int], rng: RandomNumbe
 
 static func _add_unassigned_neighbors(cell: Vector2i, size: int, region_map: PackedInt32Array, frontier: Array[Vector2i]) -> void:
 	for delta in [Vector2i(0, -1), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(1, 0)]:
-		var n := cell + delta
+		var n: Vector2i = cell + delta
 		if n.x >= 0 and n.x < size and n.y >= 0 and n.y < size:
 			if region_map[n.y * size + n.x] < 0:
 				frontier.append(n)
@@ -213,7 +213,7 @@ static func _add_unassigned_neighbors(cell: Vector2i, size: int, region_map: Pac
 static func _adjacent_regions(cell: Vector2i, size: int, region_map: PackedInt32Array) -> Array[int]:
 	var seen: Dictionary = {}
 	for delta in [Vector2i(0, -1), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(1, 0)]:
-		var n := cell + delta
+		var n: Vector2i = cell + delta
 		if n.x >= 0 and n.x < size and n.y >= 0 and n.y < size:
 			var reg: int = region_map[n.y * size + n.x]
 			if reg >= 0:
@@ -241,7 +241,7 @@ static func _verify_connectivity(size: int, region_map: PackedInt32Array) -> boo
 		while not queue.is_empty():
 			var cur: Vector2i = queue.pop_front()
 			for delta in [Vector2i(0, -1), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(1, 0)]:
-				var n := cur + delta
+				var n: Vector2i = cur + delta
 				if n.x >= 0 and n.x < size and n.y >= 0 and n.y < size:
 					if region_map[n.y * size + n.x] == reg and not visited.has(n):
 						visited[n] = true

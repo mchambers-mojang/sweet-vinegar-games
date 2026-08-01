@@ -227,7 +227,10 @@ func use_hint() -> HintResult:
 	if is_completed:
 		return result
 
-	# Build current board state for solver
+	# Build current board state for solver.
+	# Only pass player Excluded marks that are confirmed correct by the solution
+	# (i.e. the cell is NOT the solution's crown for that row).  Incorrect notes
+	# must not be forwarded or they can manufacture false-single Crown hints.
 	var crowns_by_row: Array = []
 	crowns_by_row.resize(size)
 	crowns_by_row.fill(-1)
@@ -238,7 +241,10 @@ func use_hint() -> HintResult:
 			if st == CELL_CROWN:
 				crowns_by_row[r] = c
 			elif st == CELL_EXCLUDED:
-				excluded[Vector2i(c, r)] = true
+				# Include only if solution confirms this is not the crown position.
+				# When solution is unavailable (wrong size), include all marks.
+				if solution.size() != size or int(solution[r]) != c:
+					excluded[Vector2i(c, r)] = true
 
 	var step := CrownGridSolver.find_next_step(size, regions, crowns_by_row, excluded)
 	if step == null:
@@ -408,8 +414,8 @@ func _apply_auto_marks(crown_col: int, crown_row: int) -> Array[Vector2i]:
 	# Diagonal neighbors
 	for dr in [-1, 1]:
 		for dc in [-1, 1]:
-			var nr := crown_row + dr
-			var nc := crown_col + dc
+			var nr: int = crown_row + dr
+			var nc: int = crown_col + dc
 			if nr >= 0 and nr < size and nc >= 0 and nc < size:
 				target_cells.append(Vector2i(nc, nr))
 
