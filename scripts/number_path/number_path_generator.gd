@@ -182,18 +182,30 @@ static func _ham_dfs(
 	var head: Vector2i = path[path.size() - 1]
 	var neighbors := _get_free_neighbors(size, head, visited)
 
-	# Warnsdorff: pre-shuffle with seeded rng for random tiebreaking, then sort
-	# deterministically by degree. Using rng inside sort_custom violates the
-	# strict-ordering contract (the same pair can compare differently between
-	# calls), causing Godot's sort to emit errors and loop indefinitely.
-	for _i in range(neighbors.size() - 1, 0, -1):
-		var _j := rng.randi_range(0, _i)
-		var _tmp := neighbors[_i]
-		neighbors[_i] = neighbors[_j]
-		neighbors[_j] = _tmp
-	neighbors.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
-		return _get_free_neighbor_count(size, a, visited) < _get_free_neighbor_count(size, b, visited)
-	)
+	# Warnsdorff: assign each neighbour a composite key (degree, random) so the
+	# comparator is fully deterministic while tiebreaking is seeded.
+	# Using rng inside sort_custom would violate strict ordering; a pre-shuffle
+	# still consumed n-1 rng calls which shifted the sequence relative to the
+	# original intent. This selection sort consumes exactly n calls — one per
+	# neighbour — and keeps degree as the primary sort key.
+	var nb_count := neighbors.size()
+	if nb_count > 1:
+		var sort_deg: Array[int] = []
+		var sort_rnd: Array[int] = []
+		for i in range(nb_count):
+			sort_deg.append(_get_free_neighbor_count(size, neighbors[i], visited))
+			sort_rnd.append(rng.randi())
+		# Selection sort: n ≤ 4, so O(n²) is negligible.
+		for i in range(nb_count - 1):
+			var best := i
+			for j in range(i + 1, nb_count):
+				if sort_deg[j] < sort_deg[best] or \
+				   (sort_deg[j] == sort_deg[best] and sort_rnd[j] < sort_rnd[best]):
+					best = j
+			if best != i:
+				var tmp_d: int = sort_deg[i]; sort_deg[i] = sort_deg[best]; sort_deg[best] = tmp_d
+				var tmp_r: int = sort_rnd[i]; sort_rnd[i] = sort_rnd[best]; sort_rnd[best] = tmp_r
+				var tmp_n: Vector2i = neighbors[i]; neighbors[i] = neighbors[best]; neighbors[best] = tmp_n
 
 	for nb in neighbors:
 		var idx := nb.y * size + nb.x

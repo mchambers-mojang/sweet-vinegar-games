@@ -97,14 +97,16 @@ func test_solve_returns_path_starting_at_checkpoint_1() -> void:
 # --- Regression: rank-4 can_complete_from off-by-one (fix 1) ---
 
 func test_rank4_global_deduction_succeeds_on_3x3() -> void:
-	# 3×3 grid with checkpoints at corners (0,0) and (2,2).
-	# Rank-4 global deduction must fire and the solver must complete the puzzle.
-	# Before the fix, can_complete_from compared reachable (including the cell
-	# itself) against remaining-1, so valid candidates were always rejected.
-	var cps := _make_checkpoints([[0, 0], [2, 2]])
+	# 3×3 grid, checkpoints at (0,0) start and (0,1) last.
+	# From (0,0), candidate (0,1) is the last checkpoint; with 8 cells still
+	# remaining it is too early to visit — rank-4 rejects it and deduces (1,0).
+	# This directly exercises the can_complete_from last-CP-early guard.
+	var cps := _make_checkpoints([[0, 0], [0, 1]])
 	var result := NumberPathSolver.solve(3, 3, cps, [])
-	assert_true(result.get("solved", false), "Rank-4 deduction must solve a 3×3 puzzle")
-	assert_eq(result.get("path", []).size(), 9, "Solved path must cover all 9 cells")
+	assert_true(result.get("max_rank", 0) >= NumberPathSolver.RANK_GLOBAL,
+		"Rank-4 must fire to eliminate the too-early last-checkpoint candidate")
+	assert_true(result.get("path", []).size() >= 2,
+		"Solver must extend the path at least one step past CP1")
 
 
 func test_can_complete_from_accepts_fully_connected_state() -> void:

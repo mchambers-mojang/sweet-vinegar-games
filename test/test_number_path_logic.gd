@@ -4,9 +4,9 @@ extends GutTest
 
 var logic: NumberPathLogic
 
-# Minimal 2×2 puzzle: checkpoints at (0,0)=1 and (1,1)=2
-# Solution path: (0,0) → (1,0) → (1,1) → (0,1)  [or (0,0)→(0,1)→(1,1)→(1,0)]
-# We'll use a specific path for determinism.
+# Minimal 2×2 puzzle: checkpoints at (0,0)=1 and (0,1)=2
+# Solution path: (0,0) → (1,0) → (1,1) → (0,1)
+# CP2 is the last cell so completing the full path triggers game_won.
 func _make_simple_logic() -> NumberPathLogic:
 	var l := NumberPathLogic.new()
 	l.init_from_save({
@@ -16,7 +16,7 @@ func _make_simple_logic() -> NumberPathLogic:
 		"random_seed": 1,
 		"checkpoints": [
 			{"x": 0, "y": 0, "n": 1},
-			{"x": 1, "y": 1, "n": 2},
+			{"x": 0, "y": 1, "n": 2},
 		],
 		"barriers": [],
 		"solution_path": [
@@ -249,8 +249,8 @@ func test_is_cell_in_path() -> void:
 
 func test_get_checkpoint_number_at() -> void:
 	assert_eq(logic.get_checkpoint_number_at(Vector2i(0, 0)), 1)
-	assert_eq(logic.get_checkpoint_number_at(Vector2i(1, 1)), 2)
-	assert_eq(logic.get_checkpoint_number_at(Vector2i(0, 1)), -1)
+	assert_eq(logic.get_checkpoint_number_at(Vector2i(0, 1)), 2)
+	assert_eq(logic.get_checkpoint_number_at(Vector2i(1, 1)), -1)
 
 
 func test_save_corrupt_path_clipped() -> void:
@@ -332,12 +332,10 @@ func test_undo_after_redo_returns_to_pre_state() -> void:
 
 
 func test_undo_redo_multiple_steps() -> void:
-	# Three extensions, then undo all, then redo all.
+	# Two extensions (not completing the game), then undo all, then redo all.
 	logic.try_extend(Vector2i(1, 0))
 	logic.try_extend(Vector2i(1, 1))
-	logic.try_extend(Vector2i(0, 1))
-	assert_eq(logic.current_path.size(), 4)
-	logic.undo()
+	assert_eq(logic.current_path.size(), 3)
 	logic.undo()
 	logic.undo()
 	assert_eq(logic.current_path.size(), 1)
@@ -345,8 +343,6 @@ func test_undo_redo_multiple_steps() -> void:
 	assert_eq(logic.current_path.size(), 2)
 	logic.redo()
 	assert_eq(logic.current_path.size(), 3)
-	logic.redo()
-	assert_eq(logic.current_path.size(), 4)
 
 
 # --- Regression: _validate_path checkpoint ordering (fix 3) ---

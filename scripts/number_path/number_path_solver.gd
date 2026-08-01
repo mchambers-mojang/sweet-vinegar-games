@@ -77,8 +77,9 @@ static func count_solutions(
 	var path: Array[Vector2i] = [start]
 	visited[start.y * width + start.x] = 1
 
+	var call_count := [0]
 	_count_dfs(width, height, checkpoints, barriers, path, visited,
-			counter, cancelled, max_count, cancel_check)
+			counter, cancelled, max_count, cancel_check, call_count)
 
 	if cancelled[0]:
 		return -1
@@ -264,10 +265,15 @@ static func _count_dfs(
 		counter: Array,
 		cancelled: Array,
 		max_count: int,
-		cancel_check: Callable) -> void:
+		cancel_check: Callable,
+		call_count: Array) -> void:
 	if cancelled[0]:
 		return
-	if cancel_check.is_valid() and cancel_check.call():
+	call_count[0] += 1
+	if call_count[0] >= 500000:
+		cancelled[0] = true
+		return
+	if call_count[0] % 500 == 0 and cancel_check.is_valid() and cancel_check.call():
 		cancelled[0] = true
 		return
 
@@ -299,7 +305,18 @@ static func _count_dfs(
 
 		path.append(nb)
 		visited[idx] = 1
-		_count_dfs(width, height, checkpoints, barriers, path, visited, counter, cancelled, max_count, cancel_check)
+
+		# Connectivity pruning: if extending to nb leaves any remaining cell
+		# unreachable from nb, this branch can never complete — skip it.
+		var remaining_after: int = total - path.size()
+		var prune := false
+		if remaining_after > 0:
+			if _count_reachable_from_static(width, height, visited, barriers, nb) != remaining_after:
+				prune = true
+
+		if not prune:
+			_count_dfs(width, height, checkpoints, barriers, path, visited,
+					counter, cancelled, max_count, cancel_check, call_count)
 		if cancelled[0] or counter[0] >= max_count:
 			path.pop_back()
 			visited[idx] = 0
@@ -370,6 +387,46 @@ static func _has_barrier(barriers: Array[Dictionary], a: Vector2i, b: Vector2i) 
 			if int(barrier.get("r", -1)) == left.y and int(barrier.get("c", -1)) == left.x and int(barrier.get("dir", -1)) == NumberPathLogic.DIR_RIGHT:
 				return true
 	return false
+
+
+## BFS from `start` (which is already marked visited) through unvisited cells.
+## Returns the count of unvisited cells reachable from start, not counting start itself.
+## Used by _count_dfs for connectivity pruning.
+static func _count_reachable_from_static(
+		width: int, height: int,
+		visited: PackedByteArray,
+		barriers: Array[Dictionary],
+		start: Vector2i) -> int:
+	var count := 0
+	var seen := PackedByteArray()
+	seen.resize(width * height)
+	seen.fill(0)
+	seen[start.y * width + start.x] = 1
+	var queue: Array[Vector2i] = []
+	var dirs: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+	# Seed from start's unvisited neighbours (start itself is already visited)
+	for d in dirs:
+		var nb: Vector2i = start + d
+		if nb.x < 0 or nb.y < 0 or nb.x >= width or nb.y >= height:
+			continue
+		var idx: int = nb.y * width + nb.x
+		if visited[idx] != 0 or seen[idx] != 0 or _has_barrier(barriers, start, nb):
+			continue
+		seen[idx] = 1
+		queue.append(nb)
+	while not queue.is_empty():
+		var cur: Vector2i = queue.pop_front()
+		count += 1
+		for d in dirs:
+			var nb: Vector2i = cur + d
+			if nb.x < 0 or nb.y < 0 or nb.x >= width or nb.y >= height:
+				continue
+			var idx: int = nb.y * width + nb.x
+			if visited[idx] != 0 or seen[idx] != 0 or _has_barrier(barriers, cur, nb):
+				continue
+			seen[idx] = 1
+			queue.append(nb)
+	return count
 
 
 # --- Solver state helper class ---
@@ -555,7 +612,17 @@ class _SolverState:
 		var reachable := _count_reachable_from(cell)
 		var remaining := width * height - path.size()
 		visited[cell.y * width + cell.x] = 0
-		return reachable == remaining
+		if reachable != remaining:
+			return false
+		# The last checkpoint must be the terminal cell of the completed path.
+		# Visiting it while unvisited cells still remain is never valid, since
+		# we would have to leave and return — impossible without revisiting.
+		if not checkpoints.is_empty():
+			var lc: Dictionary = checkpoints[checkpoints.size() - 1]
+			var lc_cell := Vector2i(int(lc.get("x", -1)), int(lc.get("y", -1)))
+			if cell == lc_cell and remaining > 1:
+				return false
+		return true
 
 	func _count_reachable_from(start: Vector2i) -> int:
 		var count := 0
