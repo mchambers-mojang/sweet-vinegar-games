@@ -102,13 +102,15 @@ static func _try_generate(size: int, tier: int, attempt_seed: int, cancel_check:
 	if cancel_check.is_valid() and cancel_check.call():
 		return {}
 
-	# Step 5: Verify human-solvability at the required rank
+	# Step 5: Verify human-solvability at exactly the required rank.
+	# max_rank must equal required_rank: the puzzle must need the tier's deduction
+	# techniques (lower → too easy, higher → out of scope for that tier).
 	var solver_result := NumberPathSolver.solve(size, size, checkpoints, barriers)
 	if not solver_result.get("solved", false):
 		return {}
 	var max_rank: int = solver_result.get("max_rank", 0)
 	var required_rank: int = TIER_REQUIRED_RANK.get(tier, 1)
-	if max_rank < required_rank:
+	if max_rank != required_rank:
 		return {}
 
 	return {

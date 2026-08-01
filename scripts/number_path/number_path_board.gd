@@ -158,18 +158,25 @@ func _end_drag() -> void:
 	path_drag_released.emit()
 
 
-## Walk from 'from' to 'to' one step at a time along the dominant axis.
-## This handles sparse pointer events (touch interpolation).
+## Walk from 'from' to 'to' one step at a time along a single axis.
+## Handles sparse pointer events (touch interpolation) for orthogonal moves only.
+## Returns an empty array if the transition is diagonal (both axes differ),
+## because a diagonal swipe cannot be decomposed into a valid orthogonal sequence.
 func _interpolate_cells(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
 	var result: Array[Vector2i] = []
+	var dx := to.x - from.x
+	var dy := to.y - from.y
+	# Reject diagonal transitions outright — the caller should ignore this frame.
+	if dx != 0 and dy != 0:
+		return result
 	var cur := from
 	while cur != to:
-		var dx := to.x - cur.x
-		var dy := to.y - cur.y
-		if abs(dx) >= abs(dy):
-			cur.x += signi(dx)
+		var cdx := to.x - cur.x
+		var cdy := to.y - cur.y
+		if abs(cdx) >= abs(cdy):
+			cur.x += signi(cdx)
 		else:
-			cur.y += signi(dy)
+			cur.y += signi(cdy)
 		result.append(cur)
 	return result
 

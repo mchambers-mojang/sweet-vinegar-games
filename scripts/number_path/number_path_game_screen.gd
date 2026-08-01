@@ -278,7 +278,13 @@ func _on_undo() -> void:
 	if not result.performed:
 		return
 	board.set_path(logic.current_path)
-	_recorder.record_input(elapsed_time, "undo_applied", {"length": logic.current_path.size()})
+	var path_arr: Array[Dictionary] = []
+	for cell in logic.current_path:
+		path_arr.append({"x": cell.x, "y": cell.y})
+	_recorder.record_input(elapsed_time, "undo_applied", {
+		"length": logic.current_path.size(),
+		"path": path_arr,
+	})
 	_update_button_states()
 	_save_current_state()
 

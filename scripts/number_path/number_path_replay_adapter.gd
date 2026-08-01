@@ -63,11 +63,21 @@ func apply_frame(frame: Dictionary, visual: Control, _suppress_effects: bool = f
 		var length := int(payload.get("length", 0))
 		board.truncate_path(length)
 	elif event_type == "hint_applied":
-		var cell := Vector2i(int(payload.get("x", 0)), int(payload.get("y", 0)))
-		board.extend_path(cell)
+		# Contradiction hints only flash cells — geometry is unchanged.
+		if not payload.get("contradiction", false):
+			var cell := Vector2i(int(payload.get("x", 0)), int(payload.get("y", 0)))
+			board.extend_path(cell)
 	elif event_type == "undo_applied":
-		var length := int(payload.get("length", 0))
-		board.truncate_path(length)
+		var path_arr: Array = payload.get("path", [])
+		if not path_arr.is_empty():
+			var restored: Array[Vector2i] = []
+			for p in path_arr:
+				if p is Dictionary:
+					restored.append(Vector2i(int(p.get("x", 0)), int(p.get("y", 0))))
+			board.set_path(restored)
+		else:
+			# Legacy: older replays only recorded length (truncation only)
+			board.truncate_path(int(payload.get("length", 0)))
 	elif event_type == "redo_applied":
 		var path_arr: Array = payload.get("path", [])
 		if not path_arr.is_empty():
