@@ -228,25 +228,18 @@ func use_hint() -> HintResult:
 		return result
 
 	# Build current board state for solver.
-	# Only pass player Excluded marks that are confirmed correct by the solution
-	# (i.e. the cell is NOT the solution's crown for that row).  Incorrect notes
-	# must not be forwarded or they can manufacture false-single Crown hints.
+	# Only confirmed Crown placements are forwarded.  Player Excluded marks are
+	# deliberately not passed — hints must be derivable from puzzle logic alone,
+	# independent of unproven player notes.
 	var crowns_by_row: Array = []
 	crowns_by_row.resize(size)
 	crowns_by_row.fill(-1)
-	var excluded: Dictionary = {}
 	for r in range(size):
 		for c in range(size):
-			var st := int(cells[r * size + c])
-			if st == CELL_CROWN:
+			if int(cells[r * size + c]) == CELL_CROWN:
 				crowns_by_row[r] = c
-			elif st == CELL_EXCLUDED:
-				# Include only if solution confirms this is not the crown position.
-				# When solution is unavailable (wrong size), include all marks.
-				if solution.size() != size or int(solution[r]) != c:
-					excluded[Vector2i(c, r)] = true
 
-	var step := CrownGridSolver.find_next_step(size, regions, crowns_by_row, excluded)
+	var step := CrownGridSolver.find_next_step(size, regions, crowns_by_row, {})
 	if step == null:
 		return result
 
@@ -436,12 +429,25 @@ func _apply_auto_marks(crown_col: int, crown_row: int) -> Array[Vector2i]:
 func _apply_undo_entry(entry: Dictionary) -> void:
 	var action := str(entry.get("action", ""))
 	match action:
-		"tap", "hint_crown":
+		"tap":
 			var cell: Vector2i = entry.get("cell", Vector2i(-1, -1))
 			var old_from: int = int(entry.get("from", CELL_EMPTY))
 			if cell.x >= 0:
 				cells[cell.y * size + cell.x] = old_from
-			# Restore auto-marked cells
+			# Restore auto-marked cells to empty
+			var auto_marked: Array = entry.get("auto_marked", [])
+			for am in auto_marked:
+				var amc := am as Vector2i
+				cells[amc.y * size + amc.x] = CELL_EMPTY
+		"hint_crown":
+			# For hint_crown there is no "from" field; restore from old_states
+			# so that a replaced player note (CELL_EXCLUDED) is recovered correctly.
+			var cell: Vector2i = entry.get("cell", Vector2i(-1, -1))
+			var old_states_map: Dictionary = entry.get("old_states", {})
+			if cell.x >= 0:
+				var prev := int(old_states_map.get(cell, CELL_EMPTY))
+				cells[cell.y * size + cell.x] = prev
+			# Restore auto-marked cells to empty
 			var auto_marked: Array = entry.get("auto_marked", [])
 			for am in auto_marked:
 				var amc := am as Vector2i

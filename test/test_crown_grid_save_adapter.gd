@@ -597,9 +597,9 @@ func test_tap_old_states_invalid_value_rejected() -> void:
 func test_tap_old_states_valid_accepted() -> void:
 	var d := _valid_save()
 	d["undo_stack"] = [{"action": "tap", "cell": [0, 0], "from": 0, "to": 1,
-			"auto_marked": [], "old_states": {"0,0": 0, "1,0": 0}}]
+			"auto_marked": [], "old_states": {"0,0": 0}}]
 	assert_true(adapter._can_resume_from(d),
-			"tap entry with valid old_states must be accepted")
+			"tap entry with exactly the right old_states keys must be accepted")
 
 
 func test_paint_old_states_non_string_key_rejected() -> void:
@@ -737,4 +737,45 @@ func test_hint_exclude_changed_cell_not_in_old_states_rejected() -> void:
 			"old_states": {"0,0": 0}}]
 	assert_false(adapter._can_resume_from(d),
 			"hint_exclude entry where changed cell is absent from old_states must be rejected")
+
+
+# ---------------------------------------------------------------------------
+# Extra old_states entries mutate unrelated cells — exact-set equality (fix 3)
+# ---------------------------------------------------------------------------
+
+func test_tap_extra_old_states_key_rejected() -> void:
+	var d := _valid_save()
+	# cell=[0,0], auto_marked=[], so old_states must have exactly 1 key "0,0";
+	# extra key "1,0" makes the entry corrupt.
+	d["undo_stack"] = [{"action": "tap", "cell": [0, 0], "from": 0, "to": 1,
+			"auto_marked": [], "old_states": {"0,0": 0, "1,0": 0}}]
+	assert_false(adapter._can_resume_from(d),
+			"tap entry with extra old_states key must be rejected")
+
+
+func test_paint_extra_old_states_key_rejected() -> void:
+	var d := _valid_save()
+	# changed has 1 cell [0,1], so old_states must have exactly 1 key; "1,2" is extra.
+	d["undo_stack"] = [{"action": "paint", "changed": [[0, 1]],
+			"old_states": {"0,1": 0, "1,2": 0}}]
+	assert_false(adapter._can_resume_from(d),
+			"paint entry with extra old_states key must be rejected")
+
+
+func test_hint_crown_extra_old_states_key_rejected() -> void:
+	var d := _valid_save()
+	# cell=[2,3], auto_marked=[], so old_states must have exactly 1 key; "0,0" is extra.
+	d["undo_stack"] = [{"action": "hint_crown", "cell": [2, 3],
+			"auto_marked": [], "old_states": {"2,3": 0, "0,0": 0}}]
+	assert_false(adapter._can_resume_from(d),
+			"hint_crown entry with extra old_states key must be rejected")
+
+
+func test_hint_exclude_extra_old_states_key_rejected() -> void:
+	var d := _valid_save()
+	# changed has 1 cell [0,1], so old_states must have exactly 1 key; "1,1" is extra.
+	d["undo_stack"] = [{"action": "hint_exclude", "changed": [[0, 1]],
+			"old_states": {"0,1": 0, "1,1": 0}}]
+	assert_false(adapter._can_resume_from(d),
+			"hint_exclude entry with extra old_states key must be rejected")
 

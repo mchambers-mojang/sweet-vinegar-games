@@ -283,13 +283,12 @@ func test_get_region() -> void:
 
 
 func test_hint_applies_crown_step() -> void:
-	# With full solution available, hint should find a crown step
-	# First exclude all cells in row 0 except (1,0)
-	var excluded_cells: Array[Vector2i] = [
-		Vector2i(0, 0), Vector2i(2, 0), Vector2i(3, 0),
-	]
-	logic.paint_excluded(excluded_cells)
-	# Also exclude col 1 cells to focus other constraints
+	# Place crowns at (0,2) and (2,3) — col 0 and col 2 used + diagonal adj (1,2)(3,2) —
+	# leaving (3,1) as the only candidate in row 1: a pure rank-1 deduction with no player notes.
+	logic.tap_cell(0, 2)  # excluded
+	logic.tap_cell(0, 2)  # crown at (col=0, row=2)
+	logic.tap_cell(2, 3)  # excluded
+	logic.tap_cell(2, 3)  # crown at (col=2, row=3)
 	var hint := logic.use_hint()
 	assert_true(hint.applied)
 	assert_eq(logic.hints_used, 1)
@@ -300,10 +299,13 @@ func test_hint_applies_crown_step() -> void:
 ## screen consumes to record the "exclusions_painted" replay event.
 func test_hint_crown_populates_auto_marked_when_auto_mark_enabled() -> void:
 	logic = CrownGridLogic.new()
-	logic.init_new_game(4, _regions_4x4(), _solution_4x4(), true)  # auto_mark=true
-	# Force a crown hint: exclude all row-0 cells except the solution col (1).
-	var to_exclude: Array[Vector2i] = [Vector2i(0, 0), Vector2i(2, 0), Vector2i(3, 0)]
-	logic.paint_excluded(to_exclude)
+	logic.init_new_game(4, _regions_4x4(), _solution_4x4(), false)  # auto_mark=false during setup
+	# Place crown at (2,3) — col 2 used + diag (1,2)(3,2) → row 2 has only (0,2) left.
+	# Setup without auto_mark so col/row cells remain EMPTY for the hint to auto-mark them.
+	logic.tap_cell(2, 3)  # excluded
+	logic.tap_cell(2, 3)  # crown at (col=2, row=3)
+	# Enable auto_mark so the Crown hint will populate auto_marked.
+	logic.auto_mark = true
 	var hint := logic.use_hint()
 	assert_true(hint.applied, "Hint must be applied")
 	assert_eq(hint.new_state, CrownGridLogic.CELL_CROWN,
@@ -317,9 +319,11 @@ func test_hint_crown_populates_auto_marked_when_auto_mark_enabled() -> void:
 ## triggered by a legitimately-saved game.
 func test_hint_crown_undo_entry_includes_required_fields() -> void:
 	logic = CrownGridLogic.new()
-	logic.init_new_game(4, _regions_4x4(), _solution_4x4(), true)  # auto_mark=true
-	var to_exclude: Array[Vector2i] = [Vector2i(0, 0), Vector2i(2, 0), Vector2i(3, 0)]
-	logic.paint_excluded(to_exclude)
+	logic.init_new_game(4, _regions_4x4(), _solution_4x4(), false)  # auto_mark=false during setup
+	# Place crown at (2,3) — forces naked single at (0,2) in row 2.
+	logic.tap_cell(2, 3)  # excluded
+	logic.tap_cell(2, 3)  # crown
+	logic.auto_mark = true
 	logic.use_hint()  # places a crown via hint
 	var serialized := logic.serialize()
 	var undo_stack: Array = serialized.get("undo_stack", [])
@@ -335,6 +339,33 @@ func test_hint_crown_undo_entry_includes_required_fields() -> void:
 			"hint_crown entry must always include auto_marked")
 	assert_true(crown_entry.has("old_states"),
 			"hint_crown entry must always include old_states")
+
+
+## Regression for Fix 2: undoing a Crown hint that replaced an Excluded note
+## must restore the Excluded state, not Empty.
+func test_hint_crown_undo_restores_excluded_note() -> void:
+	# Place crowns in rows 0, 1, and 3 (free mode; (2,1) is diag-adjacent to
+	# (1,0) but free mode allows it).  Row 2 then has only (0,2) as the sole
+	# remaining candidate: (1,2) is diag-adj to (2,1), (2,2) and (3,2) are
+	# in used columns.  The player first marks (0,2) Excluded; the hint must
+	# replace that with Crown, and undo must recover the Excluded note.
+	logic.tap_cell(1, 0)  # excluded
+	logic.tap_cell(1, 0)  # crown at (col=1, row=0)
+	logic.tap_cell(2, 1)  # excluded
+	logic.tap_cell(2, 1)  # crown at (col=2, row=1) — free mode allows diag adj
+	logic.tap_cell(3, 3)  # excluded
+	logic.tap_cell(3, 3)  # crown at (col=3, row=3)
+	logic.tap_cell(0, 2)  # player marks (0,2) as Excluded
+	assert_eq(logic.get_cell(0, 2), CrownGridLogic.CELL_EXCLUDED,
+			"Cell (0,2) must be Excluded after one tap")
+	var hint := logic.use_hint()
+	assert_true(hint.applied, "Hint must be applied")
+	assert_eq(logic.get_cell(0, 2), CrownGridLogic.CELL_CROWN,
+			"Hint must replace Excluded with Crown")
+	var undo_result := logic.undo()
+	assert_true(undo_result.changed, "Undo must report a change")
+	assert_eq(logic.get_cell(0, 2), CrownGridLogic.CELL_EXCLUDED,
+			"Undo of Crown hint must restore the player's Excluded note, not Empty")
 
 
 # ---------------------------------------------------------------------------

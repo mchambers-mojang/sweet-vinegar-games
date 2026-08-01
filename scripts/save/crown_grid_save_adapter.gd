@@ -253,6 +253,9 @@ static func _validate_undo_entry(entry: Variant, sz: int = -1) -> bool:
 			for am in (d["auto_marked"] as Array):
 				if not _validate_cell_in_old_states(am, d["old_states"]):
 					return false
+			# Exact-set check: old_states must not contain extra coordinates
+			if (d["old_states"] as Dictionary).size() != 1 + (d["auto_marked"] as Array).size():
+				return false
 		"paint":
 			if not d.has("changed") or not (d["changed"] is Array):
 				return false
@@ -267,6 +270,9 @@ static func _validate_undo_entry(entry: Variant, sz: int = -1) -> bool:
 			for item in (d["changed"] as Array):
 				if not _validate_cell_in_old_states(item, d["old_states"]):
 					return false
+			# Exact-set check: old_states must not contain extra coordinates
+			if (d["old_states"] as Dictionary).size() != (d["changed"] as Array).size():
+				return false
 		"hint_crown":
 			if not d.has("cell"):
 				return false
@@ -286,6 +292,9 @@ static func _validate_undo_entry(entry: Variant, sz: int = -1) -> bool:
 			for am in (d["auto_marked"] as Array):
 				if not _validate_cell_in_old_states(am, d["old_states"]):
 					return false
+			# Exact-set check: old_states must not contain extra coordinates
+			if (d["old_states"] as Dictionary).size() != 1 + (d["auto_marked"] as Array).size():
+				return false
 		"hint_exclude":
 			if not d.has("changed") or not (d["changed"] is Array):
 				return false
@@ -300,6 +309,9 @@ static func _validate_undo_entry(entry: Variant, sz: int = -1) -> bool:
 			for item in (d["changed"] as Array):
 				if not _validate_cell_in_old_states(item, d["old_states"]):
 					return false
+			# Exact-set check: old_states must not contain extra coordinates
+			if (d["old_states"] as Dictionary).size() != (d["changed"] as Array).size():
+				return false
 		_:
 			return false
 	return true
