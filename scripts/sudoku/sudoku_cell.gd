@@ -10,6 +10,12 @@ var row: int = 0
 var col: int = 0
 var box: int = 0
 
+## Number of symbols in the grid (9 for standard, 6 for mini).
+## Used to determine the pencil-mark grid layout.
+var sym_count: int = 9
+## Grid size (number of columns/rows) — used for row/col/box computation.
+var grid_size: int = 9
+
 var value: int = 0          # Current displayed number (0 = empty)
 var is_given: bool = false   # Whether this was part of the original puzzle
 var is_error: bool = false   # Whether this cell has a conflict
@@ -47,10 +53,12 @@ func _ready() -> void:
 	gui_input.connect(_on_gui_input)
 
 
-func setup(cell_index: int) -> void:
+func setup(cell_index: int, p_grid_size: int = 9, p_sym_count: int = 9) -> void:
 	index = cell_index
-	row = index / 9
-	col = index % 9
+	grid_size = p_grid_size
+	sym_count = p_sym_count
+	row = index / grid_size
+	col = index % grid_size
 	box = (row / 3) * 3 + col / 3
 
 
@@ -300,13 +308,16 @@ func _draw() -> void:
 			pencil_color = Color(0.2, 0.2, 0.2) if bg_color.get_luminance() > 0.5 else Color(0.85, 0.85, 0.85)
 		else:
 			pencil_color = tm.get_color("text_pencil")
-		var cell_w := cell_size.x / 3.0
-		var cell_h := cell_size.y / 3.0
+		# Pencil-mark grid: 3 columns, ceil(sym_count/3) rows.
+		var pm_cols := 3
+		var pm_rows := int(ceil(float(sym_count) / float(pm_cols)))
+		var cell_w := cell_size.x / float(pm_cols)
+		var cell_h := cell_size.y / float(pm_rows)
 		# When a cage sum label occupies the top-left corner, nudge mark 1 to avoid overlap.
 		var sum_label_w := int(cell_size.y * 0.22) * (2 if cage_anchor_sum >= 10 else 1)
 		for mark in pencil_marks:
-			var pm_col := (mark - 1) % 3
-			var pm_row := (mark - 1) / 3
+			var pm_col := (mark - 1) % pm_cols
+			var pm_row := (mark - 1) / pm_cols
 			var pencil_text := str(mark)
 			var pencil_text_size := pencil_font.get_string_size(pencil_text, HORIZONTAL_ALIGNMENT_CENTER, -1, pencil_size)
 			var px := pm_col * cell_w + (cell_w - pencil_text_size.x) / 2.0

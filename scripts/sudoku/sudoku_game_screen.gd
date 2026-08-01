@@ -12,7 +12,7 @@ var constraints: Array[SudokuConstraint] = []
 
 # UI-only state
 var difficulty: int = 0
-var rule_set: int = 0   # 0 = Standard, 1 = Anti-Knight, 2 = Anti-King, 3 = Killer
+var rule_set: int = 0   # 0 = Standard, 1 = Anti-Knight, 2 = Anti-King, 3 = Killer, 4 = Mini
 var _can_continue_after_failure: bool = false
 var is_paused: bool = false
 var notes_mode: bool = false
@@ -22,6 +22,7 @@ const RULE_SET_STANDARD := 0
 const RULE_SET_ANTI_KNIGHT := 1
 const RULE_SET_ANTI_KING := 2
 const RULE_SET_KILLER := 3
+const RULE_SET_MINI := 4
 
 # Killer Sudoku state
 ## True when the current game is a Killer Sudoku.
@@ -141,6 +142,7 @@ func _serialize_state() -> Dictionary:
 	state["random_seed"] = random_seed
 	state["replay_id"] = replay_id
 	state["rule_set"] = rule_set
+	# grid_spec_id is already written by logic.serialize(); also write rule_set
 	return state
 
 
@@ -204,7 +206,6 @@ func launch(params: LaunchParams) -> void:
 	else:
 		start_new_game(params.option_value)
 
-
 func resume_game(data: Dictionary) -> void:
 	difficulty = data.get("difficulty", 0)
 	rule_set = data.get("rule_set", 0)
@@ -213,7 +214,6 @@ func resume_game(data: Dictionary) -> void:
 	is_paused = false
 	notes_mode = false
 	begin_session(data)
-
 
 func _exit_tree() -> void:
 	# Set the cancellation flag under the mutex, then release the mutex before
@@ -351,6 +351,7 @@ func _get_initial_state() -> Dictionary:
 		"difficulty": logic.difficulty,
 		"puzzle": logic.puzzle.duplicate(),
 		"rule_set": rule_set,
+		"grid_spec_id": logic.spec.id,
 	}
 
 
@@ -376,6 +377,7 @@ func _setup_game(saved_data: Dictionary) -> void:
 		logic.constraints.append(_killer_constraint)
 		difficulty = logic.difficulty
 		difficulty_label.text = _difficulty_label_text(logic.difficulty)
+		board.configure_for_spec(logic.spec)
 		board.load_puzzle(logic.puzzle)
 		board.set_cages(logic.killer_cages)
 	elif is_killer and not saved_data.is_empty():
@@ -387,6 +389,7 @@ func _setup_game(saved_data: Dictionary) -> void:
 		if random_seed == 0:
 			random_seed = _derive_seed_from_puzzle(logic.puzzle)
 		difficulty_label.text = _difficulty_label_text(logic.difficulty)
+		board.configure_for_spec(logic.spec)
 		_load_board_from_logic()
 		board.set_cages(logic.killer_cages)
 		if logic.is_failed and _is_board_locked():
@@ -397,6 +400,9 @@ func _setup_game(saved_data: Dictionary) -> void:
 			logic.constraints.append(c)
 		else:
 			logic.constraints.assign(constraints)
+		# Apply grid spec for Mini mode
+		if rule_set == RULE_SET_MINI:
+			logic.spec = SudokuGridSpec.MINI_6X6
 		if saved_data.is_empty():
 			if not logic.init_new_game(difficulty, random_seed):
 				# Generation failed (e.g. unsatisfiable constraints).
@@ -419,6 +425,7 @@ func _setup_game(saved_data: Dictionary) -> void:
 				return
 			difficulty = logic.difficulty
 			difficulty_label.text = _difficulty_label_text(logic.difficulty)
+			board.configure_for_spec(logic.spec)
 			board.load_puzzle(logic.puzzle)
 		else:
 			logic.init_from_save(saved_data)
@@ -427,10 +434,12 @@ func _setup_game(saved_data: Dictionary) -> void:
 			if random_seed == 0:
 				random_seed = _derive_seed_from_puzzle(logic.puzzle)
 			difficulty_label.text = _difficulty_label_text(logic.difficulty)
+			board.configure_for_spec(logic.spec)
 			_load_board_from_logic()
 			if logic.is_failed and _is_board_locked():
 				# Re-show the fail dialog for failed saves so players can choose Continue/Menu.
 				call_deferred("_show_fail_dialog")
+	_update_number_buttons()
 	_update_strikes_display()
 	_update_button_states()
 	_update_number_completion()
@@ -787,13 +796,14 @@ func _play_win_celebration() -> void:
 	_haptic.vibrate_success()
 	# Neon win shockwave from board center
 	if AppTheme.is_neon:
-		var center_rect := board.get_cell_rect(40)  # Center cell (row 4, col 4)
+		var center_idx := board.cells.size() / 2
+		var center_rect := board.get_cell_rect(center_idx)
 		var center := center_rect.position + center_rect.size / 2.0
 		EffectFactory.neon_ring(board, center, Color(0.0, 2.0, 1.5), center_rect.size.x * 8.0, 0.5, 1.2)
 		AppTheme.screen_shake(6.0, 0.2)
 	# Cascade reveal: flash each cell in sequence from top-left to bottom-right
 	var tween := create_tween()
-	for i in 81:
+	for i in board.cells.size():
 		var cell := board.cells[i]
 		tween.tween_callback(func() -> void:
 			cell.flash(Color(1.0, 0.85, 0.4), 0.25)
@@ -821,7 +831,7 @@ func _sync_cell_display(cell_index: int) -> void:
 
 
 func _load_board_from_logic() -> void:
-	for i in 81:
+	for i in logic.grid_cells:
 		var cell := board.cells[i]
 		cell.is_given = logic.puzzle[i] != 0
 		cell.value = logic.current_grid[i]
@@ -919,24 +929,28 @@ func _apply_unit_completion_effects(units: Array) -> void:
 	var center := Vector2(avg_x / flash_indices.size(), avg_y / flash_indices.size())
 	EffectFactory.neon_ring(board, center, Color(0.0, 2.0, 1.5), board.get_cell_rect(0).size.x * 4.0, 0.35, 0.6)
 
+	var gs := logic.spec
 	for unit: Dictionary in units:
 		var unit_type: String = unit["type"]
 		var unit_index: int = unit["unit_index"]
 		if unit_type == "row":
-			var row_first := board.get_cell_rect(unit_index * 9)
-			var row_last := board.get_cell_rect(unit_index * 9 + 8)
+			var row_first := board.get_cell_rect(unit_index * gs.size)
+			var row_last := board.get_cell_rect(unit_index * gs.size + gs.size - 1)
 			var row_sweep_rect := Rect2(row_first.position, Vector2(row_last.position.x + row_last.size.x - row_first.position.x, row_first.size.y))
 			EffectFactory.neon_sweep(board, row_sweep_rect, true, Color(0.0, 2.0, 1.5))
 		elif unit_type == "col":
 			var col_first := board.get_cell_rect(unit_index)
-			var col_last := board.get_cell_rect(72 + unit_index)
+			var col_last := board.get_cell_rect((gs.size - 1) * gs.size + unit_index)
 			var col_sweep_rect := Rect2(col_first.position, Vector2(col_first.size.x, col_last.position.y + col_last.size.y - col_first.position.y))
 			EffectFactory.neon_sweep(board, col_sweep_rect, false, Color(2.0, 0.3, 1.8))
 		elif unit_type == "box":
-			var box_row := (unit_index / 3) * 3
-			var box_col := (unit_index % 3) * 3
-			var box_first := board.get_cell_rect(box_row * 9 + box_col)
-			var box_last := board.get_cell_rect((box_row + 2) * 9 + box_col + 2)
+			var num_col_regions := gs.size / gs.region_w
+			var box_row_idx := unit_index / num_col_regions
+			var box_col_idx := unit_index % num_col_regions
+			var box_row := box_row_idx * gs.region_h
+			var box_col := box_col_idx * gs.region_w
+			var box_first := board.get_cell_rect(box_row * gs.size + box_col)
+			var box_last := board.get_cell_rect((box_row + gs.region_h - 1) * gs.size + box_col + gs.region_w - 1)
 			var box_sweep_rect := Rect2(box_first.position, Vector2(box_last.position.x + box_last.size.x - box_first.position.x, box_last.position.y + box_last.size.y - box_first.position.y))
 			EffectFactory.neon_sweep(board, box_sweep_rect, true, Color(1.5, 0.2, 1.0))
 
@@ -959,11 +973,12 @@ func _flash_constraint_conflicts(conflict_indices: Array[int]) -> void:
 func _update_number_completion() -> void:
 	if logic == null:
 		return
-	for i in range(9):
+	var sym_max := logic.spec.sym_max
+	for i in range(sym_max):
 		if i < _number_buttons.size():
 			var btn := _number_buttons[i]
 			var num := i + 1
-			var complete := logic.count_number_placements(num) >= 9
+			var complete := logic.count_number_placements(num) >= sym_max
 			btn.disabled = complete
 			btn.modulate = Color(1, 1, 1, 0.3) if complete else Color.WHITE
 
@@ -1058,7 +1073,12 @@ func _show_win_dialog() -> void:
 	var dialog := AcceptDialog.new()
 	dialog.title = "Congratulations!"
 	var time_text := TimeFormat.format_time(elapsed_time, true)
-	dialog.dialog_text = "You solved the %s puzzle in %s!" % [DIFFICULTY_NAMES[difficulty], time_text]
+	var puzzle_label: String
+	if rule_set == RULE_SET_MINI:
+		puzzle_label = "Mini 6×6"
+	else:
+		puzzle_label = DIFFICULTY_NAMES[difficulty]
+	dialog.dialog_text = "You solved the %s puzzle in %s!" % [puzzle_label, time_text]
 	if logic.hints_used > 0:
 		dialog.dialog_text += "\nHints used: %d" % logic.hints_used
 	dialog.ok_button_text = "Play Again"
@@ -1087,7 +1107,7 @@ func _show_win_dialog() -> void:
 func _restart_same_game() -> void:
 	var diff := difficulty
 	var rs := rule_set
-	if rs == RULE_SET_KILLER:
+	if rs == RULE_SET_KILLER or rs == RULE_SET_MINI:
 		SceneTransition.navigate(Scenes.SUDOKU_GAME, func(game_scene: Node) -> void:
 			var mock_params := LaunchParams.new()
 			mock_params.rule_set = rs
@@ -1107,6 +1127,30 @@ func _setup_number_buttons() -> void:
 	_number_buttons.clear()
 
 	for i in range(1, 10):
+		var btn := Button.new()
+		btn.text = str(i)
+		btn.custom_minimum_size = Vector2(36, 50)
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var num := i
+		btn.pressed.connect(func() -> void: _on_number_pressed(num))
+		number_container.add_child(btn)
+		_number_buttons.append(btn)
+
+
+## Rebuild number buttons to match the active grid spec (e.g. 1–6 for Mini).
+## Called from _setup_game() after logic is initialised so the spec is known.
+func _update_number_buttons() -> void:
+	if logic == null:
+		return
+	var sym_max := logic.spec.sym_max
+	if sym_max == 9 and _number_buttons.size() == 9:
+		return  # Already correct for 9×9 — no rebuild needed.
+
+	for child in number_container.get_children():
+		child.queue_free()
+	_number_buttons.clear()
+
+	for i in range(1, sym_max + 1):
 		var btn := Button.new()
 		btn.text = str(i)
 		btn.custom_minimum_size = Vector2(36, 50)
@@ -1286,20 +1330,28 @@ func _is_board_locked() -> bool:
 
 func _log_game_over_analytics(won: bool) -> void:
 	GameEvents.game_ended.emit("sudoku", "win" if won else "game_over", elapsed_time)
-	var leaderboard_supported := difficulty <= SudokuSolver.Difficulty.EXPERT or (
-			rule_set == RULE_SET_STANDARD and difficulty == SudokuSolver.Difficulty.EVIL)
-	if won and leaderboard_supported:
-		var diff_mode: String = DIFFICULTY_NAMES[difficulty].to_lower()
+	# Leaderboard: submit for easy/medium/hard/expert (all rule sets), Evil (standard only),
+	# and Mini 6×6. Modes that don't match any supported leaderboard category are skipped.
+	if won:
 		var mode: String
-		if rule_set == RULE_SET_ANTI_KNIGHT:
-			mode = "antiknight_" + diff_mode
-		elif rule_set == RULE_SET_ANTI_KING:
-			mode = "antiking_" + diff_mode
-		elif rule_set == RULE_SET_KILLER:
-			mode = "killer_" + diff_mode
+		if rule_set == RULE_SET_MINI:
+			mode = "mini"
+		elif difficulty <= SudokuSolver.Difficulty.EXPERT:
+			var diff_mode: String = DIFFICULTY_NAMES[difficulty].to_lower()
+			if rule_set == RULE_SET_ANTI_KNIGHT:
+				mode = "antiknight_" + diff_mode
+			elif rule_set == RULE_SET_ANTI_KING:
+				mode = "antiking_" + diff_mode
+			elif rule_set == RULE_SET_KILLER:
+				mode = "killer_" + diff_mode
+			else:
+				mode = diff_mode
+		elif rule_set == RULE_SET_STANDARD and difficulty == SudokuSolver.Difficulty.EVIL:
+			mode = DIFFICULTY_NAMES[difficulty].to_lower()
 		else:
-			mode = diff_mode
-		GameEvents.leaderboard_score_ready.emit("sudoku", mode, elapsed_time)
+			mode = ""
+		if mode != "":
+			GameEvents.leaderboard_score_ready.emit("sudoku", mode, elapsed_time)
 	_analytics.log_event("game_over", {
 		"game": "sudoku",
 		"won": won,
@@ -1313,6 +1365,8 @@ func _log_game_over_analytics(won: bool) -> void:
 
 ## Returns the display label for the current difficulty (prepends rule set name when active).
 func _difficulty_label_text(diff: int) -> String:
+	if rule_set == RULE_SET_MINI:
+		return "Mini"
 	var base: String = DIFFICULTY_NAMES[diff]
 	if rule_set == RULE_SET_ANTI_KNIGHT:
 		return "Anti-Knight – " + base
@@ -1324,7 +1378,7 @@ func _difficulty_label_text(diff: int) -> String:
 
 
 ## Build the active SudokuConstraint from the current rule_set.
-## Returns null for standard (no extra constraint).
+## Returns null for standard and Mini (no extra constraints).
 func _make_constraint() -> SudokuConstraint:
 	if rule_set == RULE_SET_ANTI_KNIGHT:
 		return AntiKnightConstraint.new()
@@ -1348,7 +1402,7 @@ func _refresh_constraint_errors() -> void:
 	var error_set: Dictionary = {}
 	for idx in logic.get_constraint_errors():
 		error_set[idx] = true
-	for i in 81:
+	for i in logic.grid_cells:
 		var cell := board.cells[i]
 		if cell.is_given:
 			continue
@@ -1384,7 +1438,7 @@ func _refresh_killer_errors() -> void:
 		if has_duplicate or wrong_sum:
 			for idx in cells:
 				error_cells[idx] = true
-	for i in 81:
+	for i in logic.grid_cells:
 		board.cells[i].set_error(error_cells.has(i))
 
 
@@ -1419,11 +1473,17 @@ func _record_sudoku_completion(diff: int, time: float, was_strict: bool, won: bo
 		"was_strict": was_strict,
 		"won": won,
 	})
-	_stats.increment_counter("sudoku", "completed_d%d" % diff)
+	# Mini uses its own completion counter; difficulty counters are 9×9-only.
+	if rule_set == RULE_SET_MINI:
+		_stats.increment_counter("sudoku", "completed_mini")
+	else:
+		_stats.increment_counter("sudoku", "completed_d%d" % diff)
 	# Track best time — use a separate key per rule_set so variant bests don't
 	# compete with standard bests.
 	var best_key: String
-	if rule_set == RULE_SET_ANTI_KNIGHT:
+	if rule_set == RULE_SET_MINI:
+		best_key = "best_mini"
+	elif rule_set == RULE_SET_ANTI_KNIGHT:
 		best_key = "best_ak_d%d" % diff
 	elif rule_set == RULE_SET_ANTI_KING:
 		best_key = "best_aking_d%d" % diff
@@ -1442,15 +1502,19 @@ func _record_sudoku_completion(diff: int, time: float, was_strict: bool, won: bo
 			var best_streak: int = _stats.get_counter("sudoku", "best_streak")
 			if streak > best_streak:
 				_stats.set_counter("sudoku", "best_streak", streak)
-			_stats.increment_counter("sudoku", "won_d%d" % diff)
+			if rule_set != RULE_SET_MINI:
+				_stats.increment_counter("sudoku", "won_d%d" % diff)
 		else:
 			_stats.set_counter("sudoku", "current_streak", 0)
-			_stats.increment_counter("sudoku", "lost_d%d" % diff)
+			if rule_set != RULE_SET_MINI:
+				_stats.increment_counter("sudoku", "lost_d%d" % diff)
 
 
 func _get_best_time(diff: int) -> float:
 	var key: String
-	if rule_set == RULE_SET_ANTI_KNIGHT:
+	if rule_set == RULE_SET_MINI:
+		key = "best_mini"
+	elif rule_set == RULE_SET_ANTI_KNIGHT:
 		key = "best_ak_d%d" % diff
 	elif rule_set == RULE_SET_ANTI_KING:
 		key = "best_aking_d%d" % diff
