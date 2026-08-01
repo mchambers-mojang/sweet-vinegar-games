@@ -254,7 +254,14 @@ func use_hint() -> HintResult:
 	result.index = idx
 	result.value = val
 
-	_undo_stack.push({"index": idx, "old_value": cells[idx], "new_value": val})
+	# If this cell had a pending rejected value in strict mode, the undo entry's
+	# old_value must be the pre-rejection state so that undo doesn't restore the
+	# wrong glyph back to the board.
+	var undo_old_val: int = cells[idx]
+	if _pre_rejection.has(idx):
+		undo_old_val = int(_pre_rejection[idx])
+		_pre_rejection.erase(idx)
+	_undo_stack.push({"index": idx, "old_value": undo_old_val, "new_value": val})
 	cells[idx] = val
 	hints_used += 1
 	_recompute_completion()

@@ -708,35 +708,39 @@ static func _line_propagate_rank3(
 												h_relations, v_relations)
 
 			if plus_blocked and not minus_blocked:
-				var af: Array[int] = [idx]
-				var ltype := "row" if is_row else "col"
-				# Only Rank 3 if this deduction cascades from an earlier forced cell;
-				# pure direct blockers on the original state are Rank 1.
-				var rank := RANK_3 if propagated_count > 0 else RANK_1
-				if first_step == null:
+				# Only record this as the return step if cascade has already
+				# happened (propagated_count > 0).  Deductions visible on the
+				# original board state (propagated_count == 0) are equivalent to
+				# Rank-1 and are handled by the global Rank-1 functions; returning
+				# them here would both mislabel them and cause max_rank to stay low,
+				# making Hard/Expert puzzles impossible to generate.
+				if first_step == null and propagated_count > 0:
+					var af: Array[int] = [idx]
+					var ltype := "row" if is_row else "col"
 					first_step = SolverStep.new(
-						"Rank-%d %s %d: constraints force position %d to MINUS" % [rank, ltype, line, e],
-						af, MINUS, rank)
+						"Rank-3 %s %d: cascade forces position %d to MINUS" % [ltype, line, e],
+						af, MINUS, RANK_3)
 				working[idx] = MINUS
 				w_minus += 1
 				propagated_count += 1
 				changed = true
 			elif minus_blocked and not plus_blocked:
-				var af: Array[int] = [idx]
-				var ltype := "row" if is_row else "col"
-				var rank := RANK_3 if propagated_count > 0 else RANK_1
-				if first_step == null:
+				if first_step == null and propagated_count > 0:
+					var af: Array[int] = [idx]
+					var ltype := "row" if is_row else "col"
 					first_step = SolverStep.new(
-						"Rank-%d %s %d: constraints force position %d to PLUS" % [rank, ltype, line, e],
-						af, PLUS, rank)
+						"Rank-3 %s %d: cascade forces position %d to PLUS" % [ltype, line, e],
+						af, PLUS, RANK_3)
 				working[idx] = PLUS
 				w_plus += 1
 				propagated_count += 1
 				changed = true
 
-	# Also handle the unique-completion case: after propagation, if the remaining
-	# quota exactly matches the remaining empties, all are forced to one value.
-	if first_step == null:
+	# Also handle the unique-completion case: after cascade propagation, if the
+	# remaining quota exactly matches the remaining empties, they are all forced.
+	# Only report this as Rank-3 when propagation actually happened (otherwise
+	# _quota_completion would have already caught this at Rank-1).
+	if first_step == null and propagated_count > 0:
 		var remaining_empties := 0
 		for e in empties:
 			var idx := line * size + e if is_row else e * size + line
@@ -745,8 +749,6 @@ static func _line_propagate_rank3(
 		if remaining_empties > 0:
 			var plus_needed  := half - w_plus
 			var minus_needed := half - w_minus
-			# Rank 3 only if we cascaded into this conclusion; otherwise Rank 1.
-			var rank := RANK_3 if propagated_count > 0 else RANK_1
 			if plus_needed == remaining_empties:
 				for e in empties:
 					var idx := line * size + e if is_row else e * size + line
@@ -754,8 +756,8 @@ static func _line_propagate_rank3(
 						var af: Array[int] = [idx]
 						var ltype := "row" if is_row else "col"
 						first_step = SolverStep.new(
-							"Rank-%d %s %d: quota forces position %d to PLUS" % [rank, ltype, line, e],
-							af, PLUS, rank)
+							"Rank-3 %s %d: cascade quota forces position %d to PLUS" % [ltype, line, e],
+							af, PLUS, RANK_3)
 						break
 			elif minus_needed == remaining_empties:
 				for e in empties:
@@ -764,8 +766,8 @@ static func _line_propagate_rank3(
 						var af: Array[int] = [idx]
 						var ltype := "row" if is_row else "col"
 						first_step = SolverStep.new(
-							"Rank-%d %s %d: quota forces position %d to MINUS" % [rank, ltype, line, e],
-							af, MINUS, rank)
+							"Rank-3 %s %d: cascade quota forces position %d to MINUS" % [ltype, line, e],
+							af, MINUS, RANK_3)
 						break
 
 	return first_step
@@ -865,7 +867,11 @@ static func _global_quota_chain(
 			for val in [PLUS, MINUS]:
 				var trial: Array[int] = cells.duplicate()
 				trial[idx] = val
-				# Propagate all Rank-1 forced moves until stable.
+				# Propagate all Rank-1 through Rank-3 forced moves until stable.
+				# Using only Rank-1 here is insufficient: by the time Rank-4 runs,
+				# Rank-1 is already globally exhausted so trial propagation would
+				# advance zero steps.  Rank-2 and Rank-3 propagation is needed to
+				# expose the contradictions that Expert-level puzzles require.
 				var progress := true
 				while progress:
 					progress = false
@@ -876,6 +882,12 @@ static func _global_quota_chain(
 						s = _sandwich_rule(size, trial)
 					if s == null:
 						s = _direct_relation(size, trial, h_relations, v_relations)
+					if s == null:
+						s = _combined_local(size, trial, h_relations, v_relations)
+					if s == null:
+						s = _relation_propagation_rank2(size, trial, h_relations, v_relations)
+					if s == null:
+						s = _relation_chain_rank3(size, trial, h_relations, v_relations)
 					if s != null:
 						trial[s.affected_cells[0]] = s.result_value
 						progress = true

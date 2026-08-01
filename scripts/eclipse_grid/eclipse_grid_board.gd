@@ -261,7 +261,7 @@ func _draw_cell(
 
 	# Given highlight
 	if is_given and value != EMPTY:
-		var given_bg := tm.get_color("cell_given_bg") if tm.has_color("cell_given_bg") else Color(0.85, 0.85, 0.85, 0.3)
+		var given_bg := tm.get_color("cell_given")
 		if neon:
 			given_bg = Color(0.1, 0.1, 0.3, 0.4)
 		draw_rect(cell_rect, given_bg)
@@ -280,7 +280,7 @@ func _draw_cell(
 
 func _draw_plus(rect: Rect2, is_given: bool, neon: bool) -> void:
 	var tm := AppTheme
-	var color := tm.get_color("primary") if tm.has_color("primary") else tm.get_color("text_given")
+	var color := tm.get_color("text_given")
 	if neon:
 		color = Color(0.0, 1.5, 1.5)
 	if is_given:
@@ -304,7 +304,7 @@ func _draw_plus(rect: Rect2, is_given: bool, neon: bool) -> void:
 
 func _draw_minus(rect: Rect2, is_given: bool, neon: bool) -> void:
 	var tm := AppTheme
-	var color := tm.get_color("secondary") if tm.has_color("secondary") else tm.get_color("text_player")
+	var color := tm.get_color("text_placed")
 	if neon:
 		color = Color(1.5, 0.3, 1.5)
 	if is_given:
