@@ -420,7 +420,7 @@ func _on_pause() -> void:
 
 func _on_back() -> void:
 	_cancel_generation()
-	var completed := _recorder.finish_session("abandoned", 0, elapsed_time, {
+	var completed: Dictionary = _recorder.finish_session("abandoned", 0, elapsed_time, {
 		"tier": _tier,
 		"size": _tier_size,
 	})
@@ -442,7 +442,7 @@ func _handle_win() -> void:
 
 	_recorder.record_input(elapsed_time, "game_completed", {"tier": _tier})
 
-	var completed := _recorder.finish_session("win", logic.hints_used, elapsed_time, {
+	var completed: Dictionary = _recorder.finish_session("win", logic.hints_used, elapsed_time, {
 		"tier": _tier,
 		"size": _tier_size,
 		"hints_used": logic.hints_used,
@@ -498,7 +498,7 @@ func _show_new_best_indicator() -> void:
 
 
 func _show_win_dialog() -> void:
-	var tier_name := TIER_NAMES.get(_tier, "")
+	var tier_name: String = TIER_NAMES.get(_tier, "")
 	var dialog := AcceptDialog.new()
 	dialog.title = "Crown Grid Complete!"
 	dialog.dialog_text = "You solved the %s puzzle\nin %s!" % [tier_name, TimeFormat.format_time(elapsed_time, true)]
@@ -521,7 +521,7 @@ func _show_win_dialog() -> void:
 			dialog.queue_free()
 			SceneTransition.navigate(CROWN_GRID_MENU_SCENE)
 		elif action == "bookmark":
-			var ok := _storage.bookmark_latest_replay()
+			var ok: bool = _storage.bookmark_latest_replay()
 			dialog.dialog_text += "\n\n" + ("✓ Replay bookmarked!" if ok else "✗ No replay to bookmark")
 	)
 

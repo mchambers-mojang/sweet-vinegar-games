@@ -135,8 +135,7 @@ func test_generate_easy_correct_size() -> void:
 
 func test_generate_medium_correct_size() -> void:
 	var result := CrownGridGenerator.generate(CrownGridGenerator.TIER_MEDIUM, 2)
-	if result.is_empty():
-		return
+	assert_false(result.is_empty(), "Generation must succeed for TIER_MEDIUM seed 2")
 	assert_eq(result["size"], 7)
 
 

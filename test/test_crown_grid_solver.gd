@@ -38,21 +38,17 @@ func _simple_3x3_regions() -> PackedInt32Array:
 # ---------------------------------------------------------------------------
 
 func test_validate_solution_correct() -> void:
-	var regions := _regions_from_array([
-		[0, 1],
-		[1, 0],
+	# 4x4 column-region board; crown_cols = [1, 3, 0, 2] is verified valid
+	# by test_validate_solution_4x4. Confirm validate_solution returns true.
+	var r4 := _regions_from_array([
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
 	])
-	# Crown at (1,0) and (0,1): row 0 col 1 (region 1), row 1 col 0 (region 1 conflict!)
-	# Let's use proper: crown at (0,0) region 0, crown at (1,1) region 0 -- conflict
-	# Correct: size=2, regions 0=[0,0],[1,1], 1=[0,1],[1,0]
-	# Crown at (1,0) row=0 col=1 region=1, crown at (0,1) row=1 col=0 region=1 -- same region!
-	# Use: regions [0 1; 1 0]
-	# Crown (0,0) region 0, Crown (1,1) region 0 -- same region conflict
-	# Let's use size=2: [[0,1],[0,1]]: col 0 = region 0, col 1 = region 1
-	# Crown at row0→col0 (region 0), row1→col1 (region 1); no diagonal adjacency (|0-1|=1,|0-1|=1 = adjacent!)
-	# So use crown at row0→col0, row1→col0 -- same column conflict
-	# For N=2 it's hard to avoid adjacency, let's use N=4:
-	pass
+	var crown_cols: Array = [1, 3, 0, 2]
+	assert_true(CrownGridSolver.validate_solution(4, r4, crown_cols),
+			"validate_solution must return true for a correct placement")
 
 
 func test_validate_solution_4x4() -> void:
@@ -365,8 +361,9 @@ func test_find_next_step_hint_respects_diagonal_constraint() -> void:
 # ---------------------------------------------------------------------------
 
 func test_rank4_on_empty_board_safe() -> void:
-	## _try_rank4_chain on an empty symmetric board must not crash and must only
-	## produce valid in-range cell coordinates when it does fire.
+	## _try_rank4_chain on an empty symmetric board must not crash.
+	## On this board every unit has 4 candidates, so no bilocal strong links
+	## exist and rank-4 cannot fire (must return null).
 	var r4 := _regions_from_array([
 		[0, 1, 2, 3],
 		[0, 1, 2, 3],
@@ -377,6 +374,9 @@ func test_rank4_on_empty_board_safe() -> void:
 	var excluded: Dictionary = {}
 	var cands := CrownGridSolver._compute_candidates(4, r4, crowns_by_row, excluded)
 	var step := CrownGridSolver._try_rank4_chain(4, r4, cands, crowns_by_row, excluded)
+	# No bilocal pairs exist → rank-4 cannot produce a chain.
+	assert_null(step,
+			"Rank 4 must not fire on a fully-empty symmetric board (no bilocal pairs)")
 	if step != null:
 		assert_eq(step.result, CrownGridSolver.CELL_EXCLUDED,
 				"Rank 4 steps must only exclude cells, never place crowns")
@@ -388,7 +388,9 @@ func test_rank4_on_empty_board_safe() -> void:
 
 func test_rank4_any_excluded_cell_not_in_valid_solution() -> void:
 	## Any cell emitted by _try_rank4_chain must not appear in any valid solution.
-	## Verified externally via count_solutions to confirm soundness.
+	## On this fully-empty symmetric board no bilocal pairs exist, so rank-4
+	## must return null. If it unexpectedly fires, each excluded cell is
+	## cross-verified by count_solutions.
 	var r4 := _regions_from_array([
 		[0, 1, 2, 3],
 		[0, 1, 2, 3],
@@ -399,14 +401,14 @@ func test_rank4_any_excluded_cell_not_in_valid_solution() -> void:
 	var excluded: Dictionary = {}
 	var cands := CrownGridSolver._compute_candidates(4, r4, crowns_by_row, excluded)
 	var step := CrownGridSolver._try_rank4_chain(4, r4, cands, crowns_by_row, excluded)
-	if step == null:
-		pass  # No rank-4 step found — nothing to validate
-	else:
-		for cell in step.affected_cells:
-			var v := cell as Vector2i
-			var n := CrownGridSolver.count_solutions(4, r4, {v.y: v.x})
-			assert_eq(n, 0,
-					"Cell excluded by rank-4 must not appear in any solution")
+	# No bilocal pairs exist on this board → rank-4 must not fire.
+	assert_null(step,
+			"No X-chain possible on fully-empty symmetric board (no bilocal pairs)")
+	for cell in (step.affected_cells if step != null else []):
+		var v := cell as Vector2i
+		var n := CrownGridSolver.count_solutions(4, r4, {v.y: v.x})
+		assert_eq(n, 0,
+				"Cell excluded by rank-4 must not appear in any solution")
 
 
 func test_rank4_cancel_check_respected() -> void:
