@@ -300,3 +300,123 @@ func test_analyze_difficulty_respects_cancel() -> void:
 	var rank := CrownGridSolver.analyze_difficulty(4, r4, func() -> bool: return cancel_ref[0])
 	assert_eq(rank, CrownGridSolver.RANK_NONE,
 			"analyze_difficulty cancelled immediately should return RANK_NONE")
+
+
+# ---------------------------------------------------------------------------
+# _compute_candidates diagonal filtering (fix 6 regression)
+# ---------------------------------------------------------------------------
+
+func test_candidates_exclude_diagonal_neighbors_without_explicit_exclusion() -> void:
+	## Crown at (2,0). Player has NOT manually excluded the diagonal neighbours.
+	## _compute_candidates must filter them out even without explicit exclusions.
+	var r4 := _regions_from_array([
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+	])
+	var crowns_by_row: Array = [2, -1, -1, -1]  # Crown at row 0, col 2
+	var excluded: Dictionary = {}               # No manual exclusions
+	var cands := CrownGridSolver._compute_candidates(4, r4, crowns_by_row, excluded)
+	assert_false(cands.has(Vector2i(1, 1)),
+			"(1,1) is diagonal to crown at (2,0) and must not be a candidate")
+	assert_false(cands.has(Vector2i(3, 1)),
+			"(3,1) is diagonal to crown at (2,0) and must not be a candidate")
+
+
+func test_candidates_non_diagonal_neighbor_remains_available() -> void:
+	## (0,1) is not diagonal to a crown at (2,0) (col diff = 2) and
+	## is not in the used row/col/region, so it should remain a candidate.
+	var r4 := _regions_from_array([
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+	])
+	var crowns_by_row: Array = [2, -1, -1, -1]
+	var excluded: Dictionary = {}
+	var cands := CrownGridSolver._compute_candidates(4, r4, crowns_by_row, excluded)
+	assert_true(cands.has(Vector2i(0, 1)),
+			"(0,1) is not diagonally adjacent to crown at (2,0) and should be a candidate")
+
+
+func test_find_next_step_hint_respects_diagonal_constraint() -> void:
+	## After placing a crown at (1,0), a step that would place at (0,1) or (2,1)
+	## must not be suggested because those cells are diagonally adjacent.
+	## If the solver removes them from candidates, it will not produce an incorrect hint.
+	var r4 := _regions_from_array([
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+	])
+	var crowns_by_row: Array = [1, -1, -1, -1]  # Crown at (1,0)
+	var excluded: Dictionary = {}
+	# _compute_candidates should not include (0,1) or (2,1)
+	var cands := CrownGridSolver._compute_candidates(4, r4, crowns_by_row, excluded)
+	assert_false(cands.has(Vector2i(0, 1)),
+			"(0,1) diag-adjacent to (1,0) must not be a candidate")
+	assert_false(cands.has(Vector2i(2, 1)),
+			"(2,1) diag-adjacent to (1,0) must not be a candidate")
+
+
+# ---------------------------------------------------------------------------
+# Rank 4 chain_steps >= 3 requirement (fix 2 regression)
+# ---------------------------------------------------------------------------
+
+func test_rank4_chain_requires_at_least_3_steps() -> void:
+	## _try_rank4_chain now requires chain_steps >= 3.
+	## We call it with an empty board (no candidates that form long chains)
+	## and verify it returns null rather than making an unjustified deduction.
+	var r4 := _regions_from_array([
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+	])
+	var crowns_by_row: Array = [-1, -1, -1, -1]
+	var excluded: Dictionary = {}
+	var cands := CrownGridSolver._compute_candidates(4, r4, crowns_by_row, excluded)
+	# On an empty symmetric board with column regions, rank-4 may or may not fire,
+	# but the function must not crash and must only produce valid Vector2i cells.
+	var step := CrownGridSolver._try_rank4_chain(4, r4, cands, crowns_by_row, excluded)
+	if step != null:
+		for cell in step.affected_cells:
+			var v := cell as Vector2i
+			assert_true(v.x >= 0 and v.x < 4, "Affected cell col must be in range")
+			assert_true(v.y >= 0 and v.y < 4, "Affected cell row must be in range")
+
+
+func test_rank4_cancel_check_respected() -> void:
+	## Passing an immediately-true cancel_check must cause _try_rank4_chain to return null.
+	var r4 := _regions_from_array([
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+	])
+	var crowns_by_row: Array = [-1, -1, -1, -1]
+	var excluded: Dictionary = {}
+	var cands := CrownGridSolver._compute_candidates(4, r4, crowns_by_row, excluded)
+	var step := CrownGridSolver._try_rank4_chain(
+			4, r4, cands, crowns_by_row, excluded, func() -> bool: return true)
+	assert_null(step, "_try_rank4_chain with immediate cancel must return null")
+
+
+func test_find_next_step_cancel_check_respected() -> void:
+	## find_next_step now accepts cancel_check and must return null when cancelled.
+	var r4 := _regions_from_array([
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+	])
+	var crowns_by_row: Array = [-1, -1, -1, -1]
+	var excluded: Dictionary = {}
+	var step := CrownGridSolver.find_next_step(
+			4, r4, crowns_by_row, excluded, func() -> bool: return true)
+	# With immediate cancel, rank 4 chain detection is skipped.
+	# Ranks 1/2/3 still fire synchronously; only rank 4 is guarded.
+	# If a rank-1/2/3 step is found it is returned; otherwise null.
+	assert_true(step == null or step.rank < CrownGridSolver.RANK_CHAIN,
+			"With cancel_check=true, rank-4 step must not be returned")

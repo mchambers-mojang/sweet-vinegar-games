@@ -26,6 +26,9 @@ var _gen_thread: Thread = null
 var _gen_pending_result: Dictionary = {}
 var _gen_mutex: Mutex = Mutex.new()
 var _gen_cancelled: bool = false
+## Seed created just before launching the generation thread; forwarded to
+## begin_session() via _setup_game() so replay headers record the correct seed.
+var _pending_gen_seed: int = 0
 
 # Node refs
 @onready var board: CrownGridBoard = %CrownGridBoard
@@ -68,6 +71,7 @@ func _serialize_state() -> Dictionary:
 	data["elapsed_time"] = elapsed_time
 	data["tier"] = _tier
 	data["replay_id"] = replay_id
+	data["random_seed"] = random_seed
 	return data
 
 
@@ -103,9 +107,10 @@ func _on_game_screen_ready() -> void:
 
 
 func start_new_game(tier: int) -> void:
+	_suppress_auto_resume = true  # prevent deferred auto-resume while generating
 	_tier = tier
 	_tier_size = CrownGridGenerator.TIER_SIZES.get(tier, 6)
-	begin_session()
+	_start_generation()  # begin_session() is deferred to _on_generation_done()
 
 
 func launch(params: LaunchParams) -> void:
@@ -150,7 +155,11 @@ func _get_settings_snapshot() -> Dictionary:
 
 func _setup_game(saved_data: Dictionary) -> void:
 	if saved_data.is_empty():
-		_start_generation()
+		# Logic was already initialised by _on_generation_done() before begin_session() was
+		# called. Overwrite the throwaway seed that begin_session() created with the real
+		# generation seed so replay headers record the correct value.
+		random_seed = _pending_gen_seed
+		_apply_board_from_logic()
 	else:
 		_load_from_save(saved_data)
 
@@ -177,8 +186,9 @@ func _start_generation() -> void:
 	_set_gen_cancelled(false)
 	_gen_pending_result = {}
 
+	_pending_gen_seed = _create_session_seed()
 	_gen_thread = Thread.new()
-	_gen_thread.start(_run_generation.bind(_tier, random_seed))
+	_gen_thread.start(_run_generation.bind(_tier, _pending_gen_seed))
 
 
 func _run_generation(tier: int, seed: int) -> void:
@@ -204,7 +214,7 @@ func _on_generation_done() -> void:
 
 	if result.is_empty():
 		_suppress_auto_resume = true
-		push_warning("CrownGridGameScreen: generation failed for tier %d seed %d" % [_tier, random_seed])
+		push_warning("CrownGridGameScreen: generation failed for tier %d seed %d" % [_tier, _pending_gen_seed])
 		_show_generation_failed_dialog()
 		return
 
@@ -219,7 +229,8 @@ func _on_generation_done() -> void:
 	logic.init_new_game(p_size, p_regions, p_solution, p_auto_mark, p_assistance)
 	_tier_size = p_size
 
-	_finish_setup()
+	# Now run the full session ceremony: replay setup, stats, achievements, initial save.
+	begin_session()
 
 
 func _load_from_save(data: Dictionary) -> void:
@@ -228,16 +239,16 @@ func _load_from_save(data: Dictionary) -> void:
 	logic.init_from_save(data)
 	_tier = int(data.get("tier", _tier))
 	_tier_size = logic.size
-	_finish_setup()
+	_apply_board_from_logic()
 
 
-func _finish_setup() -> void:
+func _apply_board_from_logic() -> void:
 	board.setup(logic.size, logic.regions)
 	board.set_cells(logic.cells)
 	board.visible = true
 	tier_label.text = TIER_NAMES.get(_tier, "")
 	_update_button_states()
-	_save_current_state()
+	# _save_current_state() is not called here — begin_session() / callers handle it.
 
 
 func _show_generation_failed_dialog() -> void:
@@ -371,6 +382,13 @@ func _on_hint() -> void:
 			"row": result.cell.y,
 			"new_state": result.new_state,
 		})
+		if not result.auto_marked.is_empty():
+			var auto_cols: Array = []
+			var auto_rows: Array = []
+			for ac in result.auto_marked:
+				auto_cols.append(ac.x)
+				auto_rows.append(ac.y)
+			_recorder.record_input(elapsed_time, "exclusions_painted", {"cols": auto_cols, "rows": auto_rows})
 		_sound.play_place()
 		_haptic.vibrate_medium()
 	else:

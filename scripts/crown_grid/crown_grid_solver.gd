@@ -92,11 +92,13 @@ static func count_solutions(size: int, regions: PackedInt32Array, fixed_crowns: 
 ## Returns null if no logical step found (puzzle requires guessing or is solved).
 ## crowns_by_row: Array[int] length size, -1 = no crown in that row
 ## excluded: Dictionary[Vector2i -> bool] of excluded cells
+## cancel_check: Callable() -> bool, return true to abort (returns null on cancel)
 static func find_next_step(
 		size: int,
 		regions: PackedInt32Array,
 		crowns_by_row: Array,
-		excluded: Dictionary) -> SolveStep:
+		excluded: Dictionary,
+		cancel_check: Callable = Callable()) -> SolveStep:
 
 	# Build candidate set: cells that could still have a crown
 	var cands := _compute_candidates(size, regions, crowns_by_row, excluded)
@@ -118,7 +120,7 @@ static func find_next_step(
 	if step:
 		return step
 
-	step = _try_rank4_chain(size, regions, cands)
+	step = _try_rank4_chain(size, regions, cands, crowns_by_row, excluded, cancel_check)
 	if step:
 		return step
 
@@ -138,7 +140,7 @@ static func analyze_difficulty(size: int, regions: PackedInt32Array, cancel_chec
 	for _iter in range(size * size * 4):
 		if cancel_check.is_valid() and cancel_check.call():
 			return RANK_NONE
-		var step := find_next_step(size, regions, crowns_by_row, excluded)
+		var step := find_next_step(size, regions, crowns_by_row, excluded, cancel_check)
 		if step == null:
 			break
 		max_rank = maxi(max_rank, step.rank)
@@ -367,27 +369,42 @@ static func _find_locked_subset(
 # Rank 4 — Non-branching chain of 3+ dependent eliminations
 # ---------------------------------------------------------------------------
 
-static func _try_rank4_chain(size: int, regions: PackedInt32Array, cands: Dictionary) -> SolveStep:
-	# Forcing-chain detection: for each candidate cell, temporarily assume
-	# it is excluded, then simulate rank-1/2/3 propagation. If 3+ steps
-	# fire and they expose an exclusion common to ALL assumed starting cells
-	# (or a definite crown), that exclusion is logically forced.
-	# This is a lightweight implementation; it detects simple forcing chains.
+## Forcing-chain detection: for each candidate cell, assume it is excluded and
+## simulate rank-1/2/3 propagation. If 3+ chained steps fire and expose an
+## exclusion common to ALL starting assumptions, that exclusion is forced.
+## Crown placements found during simulation are propagated via _exclude_from_crown
+## so subsequent steps reflect the full state.
+## cancel_check is polled at the start of each candidate and each inner step.
+static func _try_rank4_chain(
+		size: int,
+		regions: PackedInt32Array,
+		cands: Dictionary,
+		crowns_by_row: Array,
+		excluded: Dictionary,
+		cancel_check: Callable = Callable()) -> SolveStep:
+
 	var candidate_list: Array = cands.keys()
 	if candidate_list.size() > size * size:
 		return null  # Too large to evaluate quickly
 
-	# Map: excluded_cell → list of cells that become forced-excluded
+	# For each candidate, simulate its exclusion and collect what chain follows.
 	var forced_map: Dictionary = {}
 
 	for assumed_cell in candidate_list:
-		var sim_cands := _clone_cands(cands)
-		sim_cands.erase(assumed_cell)
+		if cancel_check.is_valid() and cancel_check.call():
+			return null
+
+		var sim_crowns: Array = crowns_by_row.duplicate()
+		var sim_excluded: Dictionary = excluded.duplicate()
+		sim_excluded[assumed_cell] = true
+		var sim_cands := _compute_candidates(size, regions, sim_crowns, sim_excluded)
 
 		var chain_steps := 0
 		var newly_excluded: Array[Vector2i] = []
 
-		for _iter in range(size * 3):
+		for _iter in range(size * size):
+			if cancel_check.is_valid() and cancel_check.call():
+				return null
 			var step := _try_rank1_singles(size, regions, sim_cands)
 			if step == null:
 				step = _try_rank2_combined(size, regions, sim_cands)
@@ -398,16 +415,22 @@ static func _try_rank4_chain(size: int, regions: PackedInt32Array, cands: Dictio
 			chain_steps += 1
 			for cell in step.affected_cells:
 				var v := cell as Vector2i
-				sim_cands.erase(v)
-				if step.result == CrownGridSolver.CELL_EXCLUDED and cands.has(v) and v != assumed_cell:
-					if not newly_excluded.has(v):
-						newly_excluded.append(v)
+				if step.result == CELL_CROWN:
+					sim_crowns[v.y] = v.x
+					_exclude_from_crown(size, regions, sim_crowns, sim_excluded, v)
+				else:
+					sim_excluded[v] = true
+					# Track cells newly excluded by the chain (not the starting assumption).
+					if cands.has(v) and v != assumed_cell:
+						if not newly_excluded.has(v):
+							newly_excluded.append(v)
+			# Recompute candidates from the full propagated state.
+			sim_cands = _compute_candidates(size, regions, sim_crowns, sim_excluded)
 
-		if chain_steps >= 2 and not newly_excluded.is_empty():
+		if chain_steps >= 3 and not newly_excluded.is_empty():
 			forced_map[assumed_cell] = newly_excluded
 
-	# Find cells that are excluded regardless of which starting assumption is made
-	# i.e., cells excluded in ALL forced_map entries → these are rank-4 forced
+	# Find cells that are excluded regardless of which starting assumption is made.
 	if forced_map.size() < 2:
 		return null
 
@@ -462,22 +485,31 @@ static func _build_candidates(size: int, regions: PackedInt32Array, fixed_crowns
 
 
 ## Compute candidate cells given current board state.
+## Filters out cells in used rows/cols/regions, explicitly excluded cells,
+## and cells diagonally adjacent to already-placed crowns.
 static func _compute_candidates(
 		size: int,
 		regions: PackedInt32Array,
 		crowns_by_row: Array,
 		excluded: Dictionary) -> Dictionary:
 
-	# Build sets of used rows, cols, regions
+	# Build sets of used rows, cols, regions, and diagonal-adjacent cells
 	var used_rows: Dictionary = {}
 	var used_cols: Dictionary = {}
 	var used_regions: Dictionary = {}
+	var diag_adjacent: Dictionary = {}
 	for r in range(size):
 		var c: int = int(crowns_by_row[r])
 		if c >= 0:
 			used_rows[r] = true
 			used_cols[c] = true
 			used_regions[regions[r * size + c]] = true
+			for dr in [-1, 1]:
+				for dc in [-1, 1]:
+					var nr := r + dr
+					var nc := c + dc
+					if nr >= 0 and nr < size and nc >= 0 and nc < size:
+						diag_adjacent[Vector2i(nc, nr)] = true
 
 	var cands: Dictionary = {}
 	for r in range(size):
@@ -491,6 +523,8 @@ static func _compute_candidates(
 				continue
 			var cell := Vector2i(c, r)
 			if excluded.has(cell):
+				continue
+			if diag_adjacent.has(cell):
 				continue
 			cands[cell] = true
 	return cands

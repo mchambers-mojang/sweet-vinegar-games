@@ -1,7 +1,8 @@
 class_name CrownGridSaveAdapter extends GameSaveAdapter
 
 ## Save adapter for Crown Grid.
-## Validates tier, size, regions, cells, solution, assistance_mode, and undo entries.
+## Validates tier, size, regions (topology + connectivity), cells, solution
+## (range + puzzle compatibility), assistance_mode, and undo/redo entries.
 
 const VALID_TIERS := [0, 1, 2, 3]
 const VALID_ASSISTANCE_MODES := [0, 1]
@@ -58,6 +59,9 @@ func _can_resume_from(data: Dictionary) -> bool:
 	if not _validate_region_topology(sz, regions):
 		push_warning("CrownGridSaveAdapter: corrupted save — invalid region topology")
 		return false
+	if not _validate_region_connectivity(sz, regions):
+		push_warning("CrownGridSaveAdapter: corrupted save — disconnected region")
+		return false
 
 	# Validate solution
 	var solution = data.get("solution", null)
@@ -74,6 +78,18 @@ func _can_resume_from(data: Dictionary) -> bool:
 			push_warning("CrownGridSaveAdapter: corrupted save — solution column out of range")
 			return false
 
+	# Build a PackedInt32Array for the solver call
+	var p_regions := PackedInt32Array()
+	if regions is Array:
+		for v in (regions as Array):
+			p_regions.append(int(v))
+	else:
+		p_regions = regions as PackedInt32Array
+
+	if not CrownGridSolver.validate_solution(sz, p_regions, sol_arr):
+		push_warning("CrownGridSaveAdapter: corrupted save — solution incompatible with regions")
+		return false
+
 	# Validate cells
 	var cells = data.get("cells", null)
 	if cells != null:
@@ -89,7 +105,7 @@ func _can_resume_from(data: Dictionary) -> bool:
 			push_warning("CrownGridSaveAdapter: corrupted save — cells contain invalid values")
 			return false
 
-	# Validate undo/redo entries (spot-check structure)
+	# Validate undo_stack entries
 	var undo_stack = data.get("undo_stack", null)
 	if undo_stack != null:
 		if not (undo_stack is Array):
@@ -98,6 +114,17 @@ func _can_resume_from(data: Dictionary) -> bool:
 		for entry in (undo_stack as Array):
 			if not _validate_undo_entry(entry):
 				push_warning("CrownGridSaveAdapter: corrupted save — invalid undo entry")
+				return false
+
+	# Validate redo_stack entries
+	var redo_stack = data.get("redo_stack", null)
+	if redo_stack != null:
+		if not (redo_stack is Array):
+			push_warning("CrownGridSaveAdapter: corrupted save — redo_stack is not an array")
+			return false
+		for entry in (redo_stack as Array):
+			if not _validate_undo_entry(entry):
+				push_warning("CrownGridSaveAdapter: corrupted save — invalid redo entry")
 				return false
 
 	return true
@@ -122,6 +149,55 @@ static func _validate_region_topology(sz: int, regions: Variant) -> bool:
 	return seen.size() == sz
 
 
+## Validate that every region forms a single 4-connected component.
+static func _validate_region_connectivity(sz: int, regions: Variant) -> bool:
+	# Group flat cell indices by region ID
+	var region_cells: Dictionary = {}
+	var total := sz * sz
+	for i in range(total):
+		var reg: int
+		if regions is Array:
+			reg = int((regions as Array)[i])
+		elif regions is PackedInt32Array:
+			reg = int((regions as PackedInt32Array)[i])
+		else:
+			return false
+		if not region_cells.has(reg):
+			region_cells[reg] = []
+		(region_cells[reg] as Array).append(i)
+
+	for reg in region_cells:
+		var cell_list: Array = region_cells[reg]
+		if cell_list.is_empty():
+			continue
+		# Build a set for O(1) membership tests
+		var cell_set: Dictionary = {}
+		for idx in cell_list:
+			cell_set[idx] = true
+		# BFS from the first cell in this region
+		var visited: Dictionary = {}
+		var queue: Array = [cell_list[0]]
+		visited[cell_list[0]] = true
+		while not queue.is_empty():
+			var idx: int = queue.pop_front()
+			var r := idx / sz
+			var c := idx % sz
+			for delta in [[0, 1], [0, -1], [1, 0], [-1, 0]]:
+				var nr := r + int(delta[0])
+				var nc := c + int(delta[1])
+				if nr < 0 or nr >= sz or nc < 0 or nc >= sz:
+					continue
+				var nidx := nr * sz + nc
+				if visited.has(nidx) or not cell_set.has(nidx):
+					continue
+				visited[nidx] = true
+				queue.append(nidx)
+		if visited.size() != cell_list.size():
+			return false
+
+	return true
+
+
 ## Validate that all cell values are 0 (empty), 1 (excluded), or 2 (crown).
 static func _validate_cell_values(cells: Variant) -> bool:
 	if cells is Array:
@@ -136,7 +212,7 @@ static func _validate_cell_values(cells: Variant) -> bool:
 	return true
 
 
-## Spot-check an undo entry for the minimal required fields.
+## Validate an undo/redo entry for required fields based on its action type.
 static func _validate_undo_entry(entry: Variant) -> bool:
 	if not (entry is Dictionary):
 		return false
@@ -144,4 +220,20 @@ static func _validate_undo_entry(entry: Variant) -> bool:
 	if not d.has("action"):
 		return false
 	var action := str(d.get("action", ""))
-	return action in ["tap", "paint", "hint_crown", "hint_exclude"]
+	match action:
+		"tap":
+			if not d.has("cell") or not d.has("from") or not d.has("to"):
+				return false
+			var cell_val = d["cell"]
+			return (cell_val is Array) and (cell_val as Array).size() >= 2
+		"paint":
+			return d.has("changed") and (d["changed"] is Array)
+		"hint_crown":
+			if not d.has("cell"):
+				return false
+			var cell_val = d["cell"]
+			return (cell_val is Array) and (cell_val as Array).size() >= 2
+		"hint_exclude":
+			return d.has("changed") and (d["changed"] is Array)
+		_:
+			return false
