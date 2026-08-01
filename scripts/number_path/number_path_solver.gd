@@ -77,6 +77,12 @@ static func count_solutions(
 	var path: Array[Vector2i] = [start]
 	visited[start.y * width + start.x] = 1
 
+	# Check cancellation before starting any work so that an immediately-set
+	# cancel flag is always honoured even on tiny grids that finish in < 500 DFS
+	# calls (the periodic check inside _count_dfs would never fire for them).
+	if cancel_check.is_valid() and cancel_check.call():
+		return -1
+
 	var call_count := [0]
 	_count_dfs(width, height, checkpoints, barriers, path, visited,
 			counter, cancelled, max_count, cancel_check, call_count)

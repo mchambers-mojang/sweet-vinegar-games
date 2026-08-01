@@ -94,19 +94,43 @@ func test_solve_returns_path_starting_at_checkpoint_1() -> void:
 		assert_eq(path[0], Vector2i(2, 2))
 
 
+func test_count_solutions_immediate_cancel_small_grid() -> void:
+	# Even a tiny grid must return -1 when cancellation is set before the first
+	# DFS call; previously the periodic check fired only every 500 calls so a
+	# small search could complete and return a real count instead of -1.
+	var cps := _make_checkpoints([[0, 0], [3, 0]])
+	var count := NumberPathSolver.count_solutions(4, 1, cps, [], 2,
+			func() -> bool: return true)  # immediately cancel
+	assert_eq(count, -1, "Immediate cancellation must return -1 on small grids")
+
+
 # --- Regression: rank-4 can_complete_from off-by-one (fix 1) ---
 
 func test_rank4_global_deduction_succeeds_on_3x3() -> void:
-	# 3×3 grid, checkpoints at (0,0) start and (0,1) last.
-	# From (0,0), candidate (0,1) is the last checkpoint; with 8 cells still
-	# remaining it is too early to visit — rank-4 rejects it and deduces (1,0).
-	# This directly exercises the can_complete_from last-CP-early guard.
-	var cps := _make_checkpoints([[0, 0], [0, 1]])
-	var result := NumberPathSolver.solve(3, 3, cps, [])
+	# 3×3 with checkpoints at (0,0) start and (1,1) last, and a DIR_DOWN
+	# barrier at {r:0,c:0} that blocks (0,0)↔(0,1).
+	# Rank-1 forces the first step to (1,0); then rank-4 fires three times
+	# by rejecting (1,1) as a too-early last-checkpoint visit:
+	#   • from (1,0): deduces (2,0)
+	#   • from (2,1): deduces (2,2)
+	#   • from (1,2): deduces (0,2)
+	# The unique complete solution is:
+	#   (0,0)→(1,0)→(2,0)→(2,1)→(2,2)→(1,2)→(0,2)→(0,1)→(1,1)
+	var cps := _make_checkpoints([[0, 0], [1, 1]])
+	var barriers: Array[Dictionary] = [{"r": 0, "c": 0, "dir": NumberPathLogic.DIR_DOWN}]
+	var result := NumberPathSolver.solve(3, 3, cps, barriers)
+	assert_true(result.get("solved", false), "Solver must complete the 3×3 puzzle")
 	assert_true(result.get("max_rank", 0) >= NumberPathSolver.RANK_GLOBAL,
-		"Rank-4 must fire to eliminate the too-early last-checkpoint candidate")
-	assert_true(result.get("path", []).size() >= 2,
-		"Solver must extend the path at least one step past CP1")
+		"Rank-4 must fire to reject the too-early last-checkpoint candidate")
+	var path: Array = result.get("path", [])
+	var expected: Array[Vector2i] = [
+		Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(2, 1),
+		Vector2i(2, 2), Vector2i(1, 2), Vector2i(0, 2), Vector2i(0, 1),
+		Vector2i(1, 1),
+	]
+	assert_eq(path.size(), 9, "Solution must cover all 9 cells")
+	for i in range(expected.size()):
+		assert_eq(path[i], expected[i], "Path cell %d must match expected" % i)
 
 
 func test_can_complete_from_accepts_fully_connected_state() -> void:
