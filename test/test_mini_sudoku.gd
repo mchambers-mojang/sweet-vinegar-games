@@ -651,60 +651,217 @@ func test_save_adapter_rejects_out_of_range_symbols() -> void:
 
 
 # ---------------------------------------------------------------------------
-# 11. Regression: completion effect cell indices use spec dimensions
+# 11. Regression: completion effect cell indices call production code
+# ---------------------------------------------------------------------------
+# These tests call SudokuLogic.place_number() (which invokes _get_completed_units)
+# and verify that the units_completed entries carry the correct cell indices for a
+# 6×6 grid — not the hardcoded 9×9 values that existed before generalization.
+
+func _make_near_complete_logic_except(skip_cell: int) -> LogicScript:
+	## Return a 6×6 SudokuLogic where every cell except skip_cell has the
+	## correct solution value already placed.  The caller may then place
+	## skip_cell via place_number() to trigger unit-completion reporting.
+	var logic := LogicScript.new(false, true)
+	logic.spec = SudokuGridSpec.MINI_6X6
+	logic._setup_from_arrays(0, TEST_PUZZLE_6X6, TEST_SOLUTION_6X6)
+	for i in 36:
+		if i != skip_cell:
+			logic.current_grid[i] = logic.solution[i]
+	logic.current_grid[skip_cell] = 0
+	return logic
+
+
+func test_completion_effect_row_cells_via_place_number_6x6() -> void:
+	## Regression: completion effects used hardcoded 9×9 row span (0–8).
+	## Placing the last cell in row 0 of a 6×6 grid must report cells 0–5 only.
+	# Cell 1 is editable (puzzle[1]=0) and belongs to row 0.
+	var logic := _make_near_complete_logic_except(1)
+	var result := logic.place_number(1, logic.solution[1])
+	assert_true(result.placed, "Placement must succeed")
+	var row_unit: Dictionary = {}
+	for u: Dictionary in result.units_completed:
+		if u["type"] == "row" and u["unit_index"] == 0:
+			row_unit = u
+			break
+	assert_false(row_unit.is_empty(), "Row 0 must appear in units_completed")
+	var cells: Array = row_unit["cells"]
+	assert_eq(cells.size(), 6, "Row 0 in 6×6 must have 6 cells (not 9)")
+	assert_eq(cells[0], 0, "Row 0 first cell = 0")
+	assert_eq(cells[5], 5, "Row 0 last cell = 5 (not 8 as in 9×9)")
+
+
+func test_completion_effect_col_cells_via_place_number_6x6() -> void:
+	## Regression: completion effects used hardcoded col span ending at cell 72.
+	## Col 1 cells in 6×6 are 1, 7, 13, 19, 25, 31 — the last is 31, not 73.
+	# Cell 1 is editable (puzzle[1]=0) and belongs to col 1.
+	var logic := _make_near_complete_logic_except(1)
+	var result := logic.place_number(1, logic.solution[1])
+	assert_true(result.placed, "Placement must succeed")
+	var col_unit: Dictionary = {}
+	for u: Dictionary in result.units_completed:
+		if u["type"] == "col" and u["unit_index"] == 1:
+			col_unit = u
+			break
+	assert_false(col_unit.is_empty(), "Col 1 must appear in units_completed")
+	var cells: Array = col_unit["cells"]
+	assert_eq(cells.size(), 6, "Col 1 in 6×6 must have 6 cells (not 9)")
+	assert_eq(cells[0], 1, "Col 1 first cell = 1")
+	assert_eq(cells[5], 31, "Col 1 last cell = 31 (not 73 as in 9×9)")
+
+
+func test_completion_effect_box_cells_via_place_number_6x6() -> void:
+	## Regression: completion effects used hardcoded 3×3 box span.
+	## Box 0 in 6×6 (rows 0–1 × cols 0–2) has 6 cells; last is index 8, not 20.
+	# Cell 1 (row 0, col 1) is in box 0 and is editable (puzzle[1]=0).
+	var logic := _make_near_complete_logic_except(1)
+	var result := logic.place_number(1, logic.solution[1])
+	assert_true(result.placed, "Placement must succeed")
+	var box_unit: Dictionary = {}
+	for u: Dictionary in result.units_completed:
+		if u["type"] == "box" and u["unit_index"] == 0:
+			box_unit = u
+			break
+	assert_false(box_unit.is_empty(), "Box 0 must appear in units_completed")
+	var cells: Array = box_unit["cells"]
+	assert_eq(cells.size(), 6, "Box 0 in 6×6 must have 6 cells (not 9)")
+	assert_eq(cells[0], 0, "Box 0 first cell = 0")
+	assert_eq(cells[5], 8, "Box 0 last cell = 8 (rows 0–1 × cols 0–2)")
+
+
+# ---------------------------------------------------------------------------
+# 12. Regression: Mini completion does not corrupt Standard statistics
+# ---------------------------------------------------------------------------
+# These tests inject a lightweight MockStats into a SudokuGameScreen subclass
+# (without a scene tree) and call _record_sudoku_completion() directly to
+# prove that Mini rule_set guards work as intended.
+
+class MockStatsMini:
+	var counters: Dictionary = {}
+	var records: Array = []
+
+	func record(_game_id: String, entry: Dictionary) -> void:
+		records.append(entry)
+
+	func increment_counter(game_id: String, key: String, _amount: int = 1) -> void:
+		var full_key := game_id + "." + key
+		counters[full_key] = counters.get(full_key, 0) + _amount
+
+	func set_counter(game_id: String, key: String, value: int) -> void:
+		counters[game_id + "." + key] = value
+
+	func get_counter(game_id: String, key: String) -> int:
+		return counters.get(game_id + "." + key, 0)
+
+
+class TestSudokuScreen extends "res://scripts/sudoku/sudoku_game_screen.gd":
+	pass  # Inherits GameScreen._init(…) which accepts p_stats injection.
+
+
+func test_mini_completion_does_not_update_standard_easy_counters() -> void:
+	## Regression: Mini completion must not increment completed_d0 / won_d0 / lost_d0.
+	## A strict Mini win must increment completed_mini (not the Standard Easy counters).
+	var stats := MockStatsMini.new()
+	# Pass stats as the 7th positional arg (p_stats); all others default to autoloads.
+	var screen := TestSudokuScreen.new(null, null, null, null, null, null, stats)
+	screen.rule_set = 4  # RULE_SET_MINI
+	screen._record_sudoku_completion(0, 60.0, true, true)  # strict win, difficulty=0
+	assert_eq(stats.counters.get("sudoku.completed_d0", 0), 0,
+		"Mini must not increment Standard Easy completed_d0")
+	assert_eq(stats.counters.get("sudoku.won_d0", 0), 0,
+		"Mini must not increment Standard Easy won_d0")
+	assert_eq(stats.counters.get("sudoku.lost_d0", 0), 0,
+		"Mini must not increment Standard Easy lost_d0")
+	assert_eq(stats.counters.get("sudoku.completed_mini", 0), 1,
+		"Mini must increment completed_mini")
+	screen.free()
+
+
+func test_mini_loss_does_not_update_standard_easy_lost_counter() -> void:
+	## Regression: a strict Mini loss must not increment lost_d0.
+	var stats := MockStatsMini.new()
+	var screen := TestSudokuScreen.new(null, null, null, null, null, null, stats)
+	screen.rule_set = 4  # RULE_SET_MINI
+	screen._record_sudoku_completion(0, 60.0, true, false)  # strict loss
+	assert_eq(stats.counters.get("sudoku.lost_d0", 0), 0,
+		"Mini loss must not increment Standard Easy lost_d0")
+	assert_eq(stats.counters.get("sudoku.won_d0", 0), 0,
+		"Mini loss must not increment Standard Easy won_d0")
+	screen.free()
+
+
+func test_standard_easy_win_does_update_d0_counters() -> void:
+	## Positive control: Standard Easy must still update completed_d0 and won_d0.
+	var stats := MockStatsMini.new()
+	var screen := TestSudokuScreen.new(null, null, null, null, null, null, stats)
+	screen.rule_set = 0  # RULE_SET_STANDARD
+	screen._record_sudoku_completion(0, 120.0, true, true)  # strict win, diff 0
+	assert_eq(stats.counters.get("sudoku.completed_d0", 0), 1,
+		"Standard Easy must increment completed_d0")
+	assert_eq(stats.counters.get("sudoku.won_d0", 0), 1,
+		"Standard Easy must increment won_d0")
+	assert_eq(stats.counters.get("sudoku.completed_mini", 0), 0,
+		"Standard Easy must not touch completed_mini")
+	screen.free()
+
+
+# ---------------------------------------------------------------------------
+# 13. Regression: generator fallback enforces logic-solvability for Mini
 # ---------------------------------------------------------------------------
 
-func test_completion_effect_row_indices_6x6() -> void:
-	## Regression for: completion effects used hardcoded 9×9 dimensions.
-	## Verify that spec-derived row/col/box cell indices are correct for 6×6.
-	## Row 0 in a 6×6 grid spans cells 0–5 (not 0–8 as in 9×9).
+func test_generator_6x6_logic_solvable_across_seeds() -> void:
+	## Regression: both normal path and fallback path must return logic-solvable
+	## puzzles. Verifying multiple seeds covers a broader range of generation paths.
+	var gen := SudokuGenerator.new()
 	var spec := SudokuGridSpec.MINI_6X6
-	var row := 0
-	var first_cell := row * spec.size          # 0
-	var last_cell := row * spec.size + spec.size - 1  # 5
-	assert_eq(first_cell, 0, "Row 0 first cell must be 0")
-	assert_eq(last_cell, 5, "Row 0 last cell must be 5 (not 8)")
-
-	# Row 2 in 6×6 spans cells 12–17
-	row = 2
-	first_cell = row * spec.size
-	last_cell = row * spec.size + spec.size - 1
-	assert_eq(first_cell, 12, "Row 2 first cell must be 12")
-	assert_eq(last_cell, 17, "Row 2 last cell must be 17")
-
-
-func test_completion_effect_col_indices_6x6() -> void:
-	## Column 0 in a 6×6 grid spans cells 0, 6, 12, 18, 24, 30 (not up to 72).
-	var spec := SudokuGridSpec.MINI_6X6
-	var col := 0
-	var first_cell := col                     # 0
-	var last_cell := (spec.size - 1) * spec.size + col  # 30
-	assert_eq(first_cell, 0, "Col 0 first cell must be 0")
-	assert_eq(last_cell, 30, "Col 0 last cell must be 30 (not 72 as in 9×9)")
+	for seed_val in [1, 7, 13, 42, 99, 200]:
+		var result: Dictionary = gen.generate(SudokuSolver.Difficulty.EASY, seed_val, [], spec)
+		assert_true(result.has("puzzle"),
+			"Seed %d: result must contain puzzle" % seed_val)
+		var puzzle: Array = result["puzzle"]
+		var p6: Array[int] = []
+		p6.assign(puzzle)
+		var solver := SudokuSolver.new()
+		solver.analyze(p6, [], spec)
+		assert_true(solver.is_logic_solvable,
+			"Seed %d: Mini puzzle must be solvable by logic alone (not just unique)" % seed_val)
 
 
-func test_completion_effect_box_indices_6x6() -> void:
-	## Box 0 in a 6×6 grid (2×3 regions, top-left box) spans rows 0–1 × cols 0–2.
-	## First cell = row 0 × col 0 = 0; last cell = row 1 × col 2 = 8.
-	var spec := SudokuGridSpec.MINI_6X6
-	var num_col_regions := spec.size / spec.region_w  # 2
-	var box_idx := 0
-	var box_row_idx := box_idx / num_col_regions  # 0
-	var box_col_idx := box_idx % num_col_regions  # 0
-	var box_row := box_row_idx * spec.region_h    # 0
-	var box_col := box_col_idx * spec.region_w    # 0
-	var first_cell := box_row * spec.size + box_col  # 0
-	var last_cell := (box_row + spec.region_h - 1) * spec.size + box_col + spec.region_w - 1  # 8
-	assert_eq(first_cell, 0, "Box 0 first cell must be 0")
-	assert_eq(last_cell, 8, "Box 0 last cell must be 8")
+# ---------------------------------------------------------------------------
+# 14. Regression: save adapter rejects Mini saves with incompatible difficulty
+# ---------------------------------------------------------------------------
 
-	# Box 1 (top-right in 6×6): rows 0–1 × cols 3–5 → first=3, last=11
-	box_idx = 1
-	box_row_idx = box_idx / num_col_regions  # 0
-	box_col_idx = box_idx % num_col_regions  # 1
-	box_row = box_row_idx * spec.region_h    # 0
-	box_col = box_col_idx * spec.region_w    # 3
-	first_cell = box_row * spec.size + box_col   # 3
-	last_cell = (box_row + spec.region_h - 1) * spec.size + box_col + spec.region_w - 1  # 11
-	assert_eq(first_cell, 3, "Box 1 first cell must be 3")
-	assert_eq(last_cell, 11, "Box 1 last cell must be 11")
+func test_save_adapter_rejects_mini_with_nonzero_difficulty() -> void:
+	## Mini is a single quick-play difficulty (Easy = 0). A save with difficulty=1
+	## indicates data corruption or rule-set mismatch and must be rejected.
+	var adapter := SudokuSaveAdapter.new()
+	var data := {
+		"puzzle": _make_array(36, 0),
+		"solution": _make_array(36, 1),
+		"current_grid": _make_array(36, 0),
+		"grid_spec_id": "mini_6x6",
+		"rule_set": 4,
+		"difficulty": 1,  # invalid for Mini
+	}
+	data["puzzle"][0] = 1
+	data["current_grid"][0] = 1
+	GameSaveManager.save_game("sudoku", data)
+	var can_resume: bool = adapter.can_resume()
+	assert_false(can_resume, "Adapter must reject a Mini save with difficulty=1")
+
+
+func test_save_adapter_accepts_mini_with_difficulty_zero() -> void:
+	## Positive control: a valid Mini save with difficulty=0 must be accepted.
+	var adapter := SudokuSaveAdapter.new()
+	var data := {
+		"puzzle": _make_array(36, 0),
+		"solution": _make_array(36, 1),
+		"current_grid": _make_array(36, 0),
+		"grid_spec_id": "mini_6x6",
+		"rule_set": 4,
+		"difficulty": 0,
+	}
+	data["puzzle"][0] = 1
+	data["current_grid"][0] = 1
+	GameSaveManager.save_game("sudoku", data)
+	var can_resume: bool = adapter.can_resume()
+	assert_true(can_resume, "Valid Mini save with difficulty=0 must be accepted")

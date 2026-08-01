@@ -96,6 +96,11 @@ func _can_resume_from(data: Dictionary) -> bool:
 		if data.get("is_killer", false):
 			push_warning("SudokuSaveAdapter: Mini save must not have is_killer=true — not resumable")
 			return false
+		# Mini is a single quick-play difficulty (Easy = 0); any other value is invalid.
+		var saved_difficulty: int = int(data.get("difficulty", -1))
+		if saved_difficulty != 0:
+			push_warning("SudokuSaveAdapter: Mini save must have difficulty=0 (single difficulty), got %d — not resumable" % saved_difficulty)
+			return false
 	elif saved_rule_set == RULE_SET_MINI:
 		push_warning("SudokuSaveAdapter: non-Mini spec '%s' must not have rule_set=4 — not resumable" % spec_id)
 		return false

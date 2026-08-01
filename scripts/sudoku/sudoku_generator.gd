@@ -102,6 +102,9 @@ func generate(difficulty: SudokuSolver.Difficulty, seed: int = -1, constraints: 
 		fallback_puzzle = _simple_remove(fallback_full_grid, simple_target, rng, constraints, s)
 	var fallback_solver := SudokuSolver.new()
 	fallback_solver.analyze(fallback_puzzle, constraints, s)
+	# Mini requires uniqueness + human-logic solvability even in the fallback path.
+	if s.id == "mini_6x6" and not (fallback_solver.is_unique and fallback_solver.is_logic_solvable):
+		return {}
 	return {
 		"puzzle": fallback_puzzle,
 		"solution": fallback_solver.solution if fallback_solver.is_unique else fallback_full_grid,
