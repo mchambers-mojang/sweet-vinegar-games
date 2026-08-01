@@ -36,7 +36,14 @@ func reset_to_state(initial_state: Dictionary, visual: Control) -> void:
 			barriers.append(b.duplicate())
 
 	board.setup(w, h, checkpoints, barriers)
-	board.set_path([])
+
+	# Restore initial path (checkpoint 1 is already placed at game start)
+	var initial_path_raw: Array = initial_state.get("initial_path", [])
+	var initial_path: Array[Vector2i] = []
+	for p in initial_path_raw:
+		if p is Dictionary:
+			initial_path.append(Vector2i(int(p.get("x", 0)), int(p.get("y", 0))))
+	board.set_path(initial_path)
 	board.queue_redraw()
 
 
@@ -58,14 +65,31 @@ func apply_frame(frame: Dictionary, visual: Control, _suppress_effects: bool = f
 	elif event_type == "hint_applied":
 		var cell := Vector2i(int(payload.get("x", 0)), int(payload.get("y", 0)))
 		board.extend_path(cell)
+	elif event_type == "undo_applied":
+		var length := int(payload.get("length", 0))
+		board.truncate_path(length)
+	elif event_type == "redo_applied":
+		var path_arr: Array = payload.get("path", [])
+		if not path_arr.is_empty():
+			var restored: Array[Vector2i] = []
+			for p in path_arr:
+				if p is Dictionary:
+					restored.append(Vector2i(int(p.get("x", 0)), int(p.get("y", 0))))
+			board.set_path(restored)
+		else:
+			# Fallback: truncation/extension by length is not enough for redo;
+			# this branch handles old replays missing the path field.
+			board.truncate_path(int(payload.get("length", 0)))
 	board.queue_redraw()
 
 
 func should_include_frame(frame: Dictionary) -> bool:
 	var input_event: Dictionary = frame.get("input_event", {})
 	var event_type := str(input_event.get("type", ""))
-	return event_type in ["path_extended", "path_truncated", "hint_applied", "game_completed"]
+	return event_type in ["path_extended", "path_truncated", "hint_applied",
+			"undo_applied", "redo_applied", "game_completed"]
 
 
 func get_visual_event_types() -> Array[String]:
-	return ["path_extended", "path_truncated", "hint_applied", "game_completed"]
+	return ["path_extended", "path_truncated", "hint_applied",
+			"undo_applied", "redo_applied", "game_completed"]

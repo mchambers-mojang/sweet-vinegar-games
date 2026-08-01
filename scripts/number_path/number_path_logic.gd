@@ -163,8 +163,13 @@ func try_extend(cell: Vector2i) -> ExtendResult:
 			return result
 
 	# Accepted
-	_undo_stack.push({"action": "extend", "path_snapshot": _serialize_path(current_path)})
+	var _pre_snap := _serialize_path(current_path)
 	current_path.append(cell)
+	_undo_stack.push({
+		"action": "extend",
+		"pre_snapshot": _pre_snap,
+		"post_snapshot": _serialize_path(current_path),
+	})
 	result.accepted = true
 	has_contradiction = false
 	_check_completion()
@@ -201,10 +206,15 @@ func try_truncate(cell: Vector2i) -> TruncateResult:
 	if target_idx == current_path.size() - 1:
 		return result
 
-	_undo_stack.push({"action": "truncate", "path_snapshot": _serialize_path(current_path)})
+	var _pre_snap := _serialize_path(current_path)
 	# Keep 0..target_idx
 	while current_path.size() > target_idx + 1:
 		current_path.pop_back()
+	_undo_stack.push({
+		"action": "truncate",
+		"pre_snapshot": _pre_snap,
+		"post_snapshot": _serialize_path(current_path),
+	})
 	result.truncated = true
 	result.new_length = current_path.size()
 	has_contradiction = false
@@ -217,7 +227,9 @@ func undo() -> UndoRedoResult:
 	if not _undo_stack.can_undo():
 		return result
 	var entry := _undo_stack.undo()
-	current_path = _deserialize_path(entry.get("path_snapshot", []))
+	# pre_snapshot holds the state before the action; fall back to legacy path_snapshot
+	var snap := entry.get("pre_snapshot", entry.get("path_snapshot", []))
+	current_path = _deserialize_path(snap)
 	has_contradiction = false
 	result.performed = true
 	result.action = str(entry.get("action", ""))
@@ -230,7 +242,9 @@ func redo() -> UndoRedoResult:
 	if not _undo_stack.can_redo():
 		return result
 	var entry := _undo_stack.redo()
-	current_path = _deserialize_path(entry.get("path_snapshot", []))
+	# post_snapshot holds the state after the action; fall back to legacy path_snapshot
+	var snap := entry.get("post_snapshot", entry.get("path_snapshot", []))
+	current_path = _deserialize_path(snap)
 	has_contradiction = false
 	result.performed = true
 	result.action = str(entry.get("action", ""))
@@ -411,12 +425,14 @@ func _get_next_solution_cell() -> Vector2i:
 
 
 func _validate_path() -> void:
-	# Verify path integrity: in-bounds, adjacent, no revisits, no barrier crossings
+	# Verify path integrity: in-bounds, adjacent, no revisits, no barrier crossings,
+	# and checkpoints visited in order.
 	if current_path.is_empty():
 		return
 	var seen: Dictionary = {}
 	var prev: Vector2i = Vector2i(-1, -1)
 	var valid_path: Array[Vector2i] = []
+	var next_cp_idx := 0
 	for cell in current_path:
 		if not _in_bounds(cell):
 			break
@@ -427,6 +443,12 @@ func _validate_path() -> void:
 				break
 			if _has_barrier_between(prev, cell):
 				break
+		# Checkpoint ordering: if this cell is a checkpoint it must be the next expected one
+		var cp_idx := _checkpoint_index_at(cell)
+		if cp_idx >= 0:
+			if cp_idx != next_cp_idx:
+				break
+			next_cp_idx += 1
 		seen[cell] = true
 		valid_path.append(cell)
 		prev = cell
@@ -490,7 +512,8 @@ func _serialize_undo_stack(entries: Array[Dictionary]) -> Array[Dictionary]:
 	for entry in entries:
 		result.append({
 			"action": str(entry.get("action", "")),
-			"path_snapshot": entry.get("path_snapshot", []).duplicate(true),
+			"pre_snapshot": entry.get("pre_snapshot", entry.get("path_snapshot", [])).duplicate(true),
+			"post_snapshot": entry.get("post_snapshot", entry.get("path_snapshot", [])).duplicate(true),
 		})
 	return result
 
@@ -502,6 +525,7 @@ func _deserialize_undo_stack(data: Variant) -> Array[Dictionary]:
 			if entry is Dictionary:
 				result.append({
 					"action": str(entry.get("action", "")),
-					"path_snapshot": entry.get("path_snapshot", []).duplicate(true),
+					"pre_snapshot": entry.get("pre_snapshot", entry.get("path_snapshot", [])).duplicate(true),
+					"post_snapshot": entry.get("post_snapshot", entry.get("path_snapshot", [])).duplicate(true),
 				})
 	return result

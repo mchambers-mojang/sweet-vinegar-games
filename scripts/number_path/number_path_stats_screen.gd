@@ -4,6 +4,8 @@ extends Control
 
 const TimeFormat := preload("res://scripts/utils/time_format.gd")
 
+const _SCENE_MENU := "res://scenes/number_path_menu.tscn"
+
 const TIER_NAMES := {
 	NumberPathLogic.TIER_EASY: "Easy (5×5)",
 	NumberPathLogic.TIER_MEDIUM: "Medium (6×6)",
@@ -31,7 +33,7 @@ const TIERS := [
 
 func _ready() -> void:
 	back_button.pressed.connect(func() -> void:
-		SceneTransition.navigate(Scenes.NUMBER_PATH_MENU)
+		SceneTransition.navigate(_SCENE_MENU)
 	)
 	_build_stats_ui()
 	_apply_theme()

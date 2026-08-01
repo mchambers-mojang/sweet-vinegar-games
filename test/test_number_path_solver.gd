@@ -92,3 +92,24 @@ func test_solve_returns_path_starting_at_checkpoint_1() -> void:
 		var path: Array = result.get("path", [])
 		assert_false(path.is_empty())
 		assert_eq(path[0], Vector2i(2, 2))
+
+
+# --- Regression: rank-4 can_complete_from off-by-one (fix 1) ---
+
+func test_rank4_global_deduction_succeeds_on_3x3() -> void:
+	# 3×3 grid with checkpoints at corners (0,0) and (2,2).
+	# Rank-4 global deduction must fire and the solver must complete the puzzle.
+	# Before the fix, can_complete_from compared reachable (including the cell
+	# itself) against remaining-1, so valid candidates were always rejected.
+	var cps := _make_checkpoints([[0, 0], [2, 2]])
+	var result := NumberPathSolver.solve(3, 3, cps, [])
+	assert_true(result.get("solved", false), "Rank-4 deduction must solve a 3×3 puzzle")
+	assert_eq(result.get("path", []).size(), 9, "Solved path must cover all 9 cells")
+
+
+func test_can_complete_from_accepts_fully_connected_state() -> void:
+	# Verify that count_solutions works correctly for a puzzle where rank-4
+	# deduction is required (previously the off-by-one caused false zero counts).
+	var cps := _make_checkpoints([[0, 0], [2, 2]])
+	var count := NumberPathSolver.count_solutions(3, 3, cps, [], 2)
+	assert_true(count >= 1, "3×3 with diagonal checkpoints must have at least one solution")

@@ -549,9 +549,11 @@ class _SolverState:
 	func can_complete_from(cell: Vector2i) -> bool:
 		# Quick connectivity heuristic: after extending to cell,
 		# can we reach all remaining cells and checkpoints?
+		# _count_reachable_from counts 'cell' itself, so compare against
+		# (total - already-visited), which also includes 'cell'.
 		visited[cell.y * width + cell.x] = 1
 		var reachable := _count_reachable_from(cell)
-		var remaining := width * height - path.size() - 1
+		var remaining := width * height - path.size()
 		visited[cell.y * width + cell.x] = 0
 		return reachable == remaining
 

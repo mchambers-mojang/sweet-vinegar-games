@@ -16,6 +16,9 @@ const TIER_KEYS := {
 	NumberPathLogic.TIER_EXPERT: "expert",
 }
 
+const _SCENE_MENU := "res://scenes/number_path_menu.tscn"
+const _SCENE_GAME := "res://scenes/number_path_game.tscn"
+
 # Game state
 var _tier: int = NumberPathLogic.TIER_EASY
 var is_paused: bool = false
@@ -45,7 +48,7 @@ func _get_game_id() -> String:
 
 
 func _get_scene_path() -> String:
-	return Scenes.NUMBER_PATH_GAME
+	return _SCENE_GAME
 
 
 func _get_save_adapter() -> GameSaveAdapter:
@@ -203,6 +206,7 @@ func _get_initial_state() -> Dictionary:
 		"tier": logic.tier,
 		"checkpoints": s.get("checkpoints", []),
 		"barriers": s.get("barriers", []),
+		"initial_path": s.get("current_path", []),
 	}
 
 
@@ -274,6 +278,7 @@ func _on_undo() -> void:
 	if not result.performed:
 		return
 	board.set_path(logic.current_path)
+	_recorder.record_input(elapsed_time, "undo_applied", {"length": logic.current_path.size()})
 	_update_button_states()
 	_save_current_state()
 
@@ -285,6 +290,13 @@ func _on_redo() -> void:
 	if not result.performed:
 		return
 	board.set_path(logic.current_path)
+	var path_arr: Array[Dictionary] = []
+	for cell in logic.current_path:
+		path_arr.append({"x": cell.x, "y": cell.y})
+	_recorder.record_input(elapsed_time, "redo_applied", {
+		"length": logic.current_path.size(),
+		"path": path_arr,
+	})
 	_update_button_states()
 	_save_current_state()
 
@@ -332,7 +344,7 @@ func _on_back() -> void:
 		_stats.set_counter("general", "current_win_streak", 0)
 		_achievements.check_stats()
 	_save_current_state()
-	SceneTransition.navigate(Scenes.NUMBER_PATH_MENU)
+	SceneTransition.navigate(_SCENE_MENU)
 
 
 # --- Win ---
@@ -341,12 +353,12 @@ func _handle_win() -> void:
 	GameEvents.game_ended.emit("number_path", "win", elapsed_time)
 	var tier_key: String = TIER_KEYS.get(_tier, "easy")
 	GameEvents.leaderboard_score_ready.emit("number_path", tier_key, elapsed_time)
+	_recorder.record_input(elapsed_time, "game_completed", {})
 	var completed := _recorder.finish_session("win", logic.current_path.size(), elapsed_time, {
 		"tier": _tier,
 		"hints_used": logic.hints_used,
 	})
 	_storage.save_replay(completed)
-	_recorder.record_input(elapsed_time, "game_completed", {})
 	var is_new_best := _is_new_best_time()
 	_record_completion(_tier, elapsed_time)
 	_stats.increment_counter("general", "games_won")
@@ -419,7 +431,7 @@ func _show_win_dialog() -> void:
 	dialog.custom_action.connect(func(action: StringName) -> void:
 		if action == "menu":
 			dialog.queue_free()
-			SceneTransition.navigate(Scenes.NUMBER_PATH_MENU)
+			SceneTransition.navigate(_SCENE_MENU)
 		elif action == "bookmark":
 			var success := _storage.bookmark_latest_replay()
 			dialog.dialog_text += "\n\n%s" % ("✓ Replay bookmarked!" if success else "✗ No replay to bookmark")
@@ -428,7 +440,7 @@ func _show_win_dialog() -> void:
 
 func _restart_same_game() -> void:
 	var t := _tier
-	SceneTransition.navigate(Scenes.NUMBER_PATH_GAME, func(scene: Node) -> void:
+	SceneTransition.navigate(_SCENE_GAME, func(scene: Node) -> void:
 		scene.start_new_game(t)
 	)
 
