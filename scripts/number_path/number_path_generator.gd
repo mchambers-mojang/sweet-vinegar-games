@@ -205,7 +205,7 @@ static func _ham_dfs(
 
 static func _get_free_neighbors(size: int, cell: Vector2i, visited: PackedByteArray) -> Array[Vector2i]:
 	var result: Array[Vector2i] = []
-	var dirs := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+	var dirs: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 	for d in dirs:
 		var nb := cell + d
 		if nb.x >= 0 and nb.y >= 0 and nb.x < size and nb.y < size:

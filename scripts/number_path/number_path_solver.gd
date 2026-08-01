@@ -279,13 +279,13 @@ static func _count_dfs(
 		return
 
 	var head: Vector2i = path[path.size() - 1]
-	var dirs := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+	var dirs: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 
 	for d in dirs:
-		var nb := head + d
+		var nb: Vector2i = head + d
 		if nb.x < 0 or nb.y < 0 or nb.x >= width or nb.y >= height:
 			continue
-		var idx := nb.y * width + nb.x
+		var idx: int = nb.y * width + nb.x
 		if visited[idx] != 0:
 			continue
 		if _has_barrier(barriers, head, nb):
@@ -418,7 +418,7 @@ class _SolverState:
 
 	func free_neighbors(cell: Vector2i) -> Array[Vector2i]:
 		var result: Array[Vector2i] = []
-		var dirs := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+		var dirs: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 		for d in dirs:
 			var nb := cell + d
 			if nb.x < 0 or nb.y < 0 or nb.x >= width or nb.y >= height:
@@ -513,7 +513,7 @@ class _SolverState:
 		seen[start.y * width + start.x] = 1
 		while not queue.is_empty():
 			var cur: Vector2i = queue.pop_front()
-			var dirs := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+			var dirs: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 			for d in dirs:
 				var nb := cur + d
 				if nb.x < 0 or nb.y < 0 or nb.x >= width or nb.y >= height:
@@ -567,7 +567,7 @@ class _SolverState:
 		while not queue.is_empty():
 			var cur: Vector2i = queue.pop_front()
 			count += 1
-			var dirs := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+			var dirs: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 			for d in dirs:
 				var nb := cur + d
 				if nb.x < 0 or nb.y < 0 or nb.x >= width or nb.y >= height:

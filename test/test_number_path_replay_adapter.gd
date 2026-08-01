@@ -5,10 +5,8 @@ extends GutTest
 ##   Fix 3: undo_applied restores the complete path (not just truncates)
 ##   Fix 4: hint_applied with contradiction:true leaves geometry unchanged
 
-const BoardScript := preload("res://scripts/number_path/number_path_board.gd")
-
 var adapter: NumberPathReplayAdapter
-var board: Control
+var board: NumberPathBoard
 
 
 func _make_frame(event_type: String, payload: Dictionary) -> Dictionary:
@@ -17,8 +15,7 @@ func _make_frame(event_type: String, payload: Dictionary) -> Dictionary:
 
 func before_each() -> void:
 	adapter = NumberPathReplayAdapter.new()
-	board = Control.new()
-	board.set_script(BoardScript)
+	board = NumberPathBoard.new()
 	board.size = Vector2(300, 300)
 	add_child_autofree(board)
 	board.setup(5, 5,

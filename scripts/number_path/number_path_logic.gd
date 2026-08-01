@@ -228,7 +228,7 @@ func undo() -> UndoRedoResult:
 		return result
 	var entry := _undo_stack.undo()
 	# pre_snapshot holds the state before the action; fall back to legacy path_snapshot
-	var snap := entry.get("pre_snapshot", entry.get("path_snapshot", []))
+	var snap: Variant = entry.get("pre_snapshot", entry.get("path_snapshot", []))
 	current_path = _deserialize_path(snap)
 	has_contradiction = false
 	result.performed = true
@@ -243,7 +243,7 @@ func redo() -> UndoRedoResult:
 		return result
 	var entry := _undo_stack.redo()
 	# post_snapshot holds the state after the action; fall back to legacy path_snapshot
-	var snap := entry.get("post_snapshot", entry.get("path_snapshot", []))
+	var snap: Variant = entry.get("post_snapshot", entry.get("path_snapshot", []))
 	current_path = _deserialize_path(snap)
 	has_contradiction = false
 	result.performed = true
@@ -338,8 +338,8 @@ func _in_bounds(cell: Vector2i) -> bool:
 
 
 func _are_adjacent(a: Vector2i, b: Vector2i) -> bool:
-	var dx := abs(a.x - b.x)
-	var dy := abs(a.y - b.y)
+	var dx := absi(a.x - b.x)
+	var dy := absi(a.y - b.y)
 	return (dx == 1 and dy == 0) or (dx == 0 and dy == 1)
 
 
