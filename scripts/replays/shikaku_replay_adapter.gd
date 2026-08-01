@@ -17,9 +17,10 @@ func get_initial_state(replay: Dictionary) -> Dictionary:
 			return initial_state
 
 	# Legacy path: try to recover from recorded numbers or re-generate.
-	var numbers: Dictionary = initial_state.get("numbers", {})
-	if not numbers.is_empty():
+	var raw_numbers = initial_state.get("numbers")
+	if raw_numbers is Dictionary and not (raw_numbers as Dictionary).is_empty():
 		# Convert legacy numbers to area-only anchors.
+		var numbers: Dictionary = raw_numbers as Dictionary
 		var anchors: Dictionary = {}
 		for key in numbers.keys():
 			anchors[key] = {"area": int(numbers[key]), "shape": ShikakuLogic.SHAPE_ABSENT}
@@ -93,14 +94,16 @@ func reset_to_state(initial_state: Dictionary, visual: Control) -> void:
 				anchors[pos] = {"area": int(entry), "shape": ShikakuLogic.SHAPE_ABSENT}
 	else:
 		# Legacy: numbers dict.
-		var numbers_data: Dictionary = initial_state.get("numbers", {})
-		for key in numbers_data.keys():
-			var parts := str(key).split(",")
-			if parts.size() == 2:
-				anchors[Vector2i(int(parts[0]), int(parts[1]))] = {
-					"area": int(numbers_data[key]),
-					"shape": ShikakuLogic.SHAPE_ABSENT,
-				}
+		var raw_numbers_data = initial_state.get("numbers")
+		if raw_numbers_data is Dictionary:
+			var numbers_data: Dictionary = raw_numbers_data as Dictionary
+			for key in numbers_data.keys():
+				var parts := str(key).split(",")
+				if parts.size() == 2:
+					anchors[Vector2i(int(parts[0]), int(parts[1]))] = {
+						"area": int(numbers_data[key]),
+						"shape": ShikakuLogic.SHAPE_ABSENT,
+					}
 
 	board.setup(w, h, anchors)
 
