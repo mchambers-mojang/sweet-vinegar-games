@@ -534,13 +534,11 @@ func test_rank3_cascade_returns_rank3_step() -> void:
 		"_line_propagate_rank3 must return null when no cascade deduction exists")
 
 
-func test_rank3_no_step_on_rank1_board() -> void:
-	## If only Rank-1 deductions exist, _line_propagate_rank3 must return null
-	## (not return them mislabeled as RANK_3).
-	## Row 0: [+,+,_,_,_,_] — pair at (0,1) forces pos 2 = MINUS (Rank-1).
-	## After _adjacent_pair_prevention fires and is applied by the outer loop,
-	## the board changes.  _line_propagate_rank3 on the ORIGINAL row (before
-	## applying Rank-1) must NOT return that Rank-1 step.
+func test_rank3_does_not_mislabel_rank1_in_analyze() -> void:
+	## _find_next_step runs Rank-1 before Rank-3, so a pair-prevention deduction
+	## must be labeled RANK_1 in analyze() output even though _line_propagate_rank3
+	## (which now uses enumeration) would also find that deduction.
+	## Row 0: [+,+,_,_,_,_] — pair forces pos 2 = MINUS (Rank-1).
 	var cells: Array[int] = [
 		PLUS,  PLUS,  EMPTY, EMPTY, EMPTY, EMPTY,
 		MINUS, MINUS, PLUS,  PLUS,  MINUS, MINUS,
@@ -549,8 +547,40 @@ func test_rank3_no_step_on_rank1_board() -> void:
 		PLUS,  MINUS, MINUS, PLUS,  PLUS,  MINUS,
 		MINUS, PLUS,  PLUS,  MINUS, MINUS, PLUS,
 	]
+	var analysis := EclipseGridSolver.analyze(6, cells, {}, {})
+	assert_false(analysis.steps.is_empty(), "analyze() must find at least one step")
+	if not analysis.steps.is_empty():
+		var first: EclipseGridSolver.SolverStep = analysis.steps[0]
+		assert_eq(first.rank, EclipseGridSolver.RANK_1,
+			"Pair-prevention must be labeled RANK_1, not RANK_3")
+		assert_eq(first.result_value, MINUS,
+			"Pair-prevention forces pos 2 to MINUS")
+		assert_eq(first.affected_cells[0], 2,
+			"Forced cell is flat index 2 (row 0, col 2)")
+
+
+func test_rank3_enumerate_finds_eq_forced_cell() -> void:
+	## Row 0 = [+, _, _, _, _, -] with EQ between positions 1 and 2.
+	## With plus_needed=2, minus_needed=2 in 4 empties, and EQ(pos1==pos2),
+	## only one valid line completion exists: pos1=MINUS,pos2=MINUS,pos3=PLUS,pos4=PLUS.
+	## No Rank-1 or Rank-2 technique can detect this; it requires enumeration.
+	var cells: Array[int] = [
+		PLUS, EMPTY, EMPTY, EMPTY, EMPTY, MINUS,
+		MINUS, PLUS, MINUS, PLUS, MINUS, PLUS,
+		PLUS, MINUS, PLUS, MINUS, PLUS, MINUS,
+		MINUS, PLUS, MINUS, PLUS, MINUS, PLUS,
+		PLUS, MINUS, PLUS, MINUS, PLUS, MINUS,
+		MINUS, PLUS, MINUS, PLUS, MINUS, PLUS,
+	]
+	var h_rels := { Vector2i(1, 0): EQ }
 	var step: EclipseGridSolver.SolverStep = \
-		EclipseGridSolver._line_propagate_rank3(6, cells, {}, {}, 0, true)
-	# Rank-1 (_adjacent_pair_prevention) handles this; Rank-3 must return null.
-	assert_null(step,
-		"_line_propagate_rank3 must not return Rank-1 deductions as RANK_3")
+		EclipseGridSolver._line_propagate_rank3(6, cells, h_rels, {}, 0, true)
+	assert_not_null(step,
+		"_line_propagate_rank3 must find forced cell when EQ relation creates unique completion")
+	if step != null:
+		assert_eq(step.rank, EclipseGridSolver.RANK_3,
+			"Must be labeled RANK_3")
+		assert_eq(step.affected_cells[0], 1,
+			"pos 1 (flat index 1) is the first forced cell")
+		assert_eq(step.result_value, MINUS,
+			"pos 1 is forced to MINUS by unique completion")

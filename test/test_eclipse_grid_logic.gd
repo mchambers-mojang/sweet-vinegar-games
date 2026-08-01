@@ -866,3 +866,102 @@ func test_hint_undo_old_value_is_empty_even_when_rejected_glyph_present() -> voi
 	# either EMPTY (if hint targeted cell 0) or remain unchanged.
 	assert_true(u.new_value == EMPTY or u.new_value == PLUS or u.new_value == MINUS,
 		"Undo new_value must be a valid glyph")
+
+
+func test_pre_rejection_survives_save_resume() -> void:
+	## In strict mode, when a rejected (wrong) glyph is in cells[], saving and
+	## resuming must preserve _pre_rejection so that the next accepted tap
+	## records undo old_value as the pre-rejection state (not the wrong glyph).
+	## Without serialization, resume clears _pre_rejection and undo would
+	## restore the wrong glyph instead of the correct prior state.
+	var sol: Array[int] = [PLUS, MINUS, PLUS, MINUS,
+						   MINUS, PLUS, MINUS, PLUS,
+						   PLUS, MINUS, PLUS, MINUS,
+						   MINUS, PLUS, MINUS, PLUS]
+	var gv: Array[int] = sol.duplicate()
+	gv[0] = EMPTY  # cell 0 is non-given
+
+	var l1 := EclipseGridLogic.new()
+	l1.init_from_save(_make_save_data(4, sol, gv))
+	l1.assistance_mode = EclipseGridLogic.ASSIST_STRICT
+
+	# EMPTY → PLUS (wrong if solution[0]=PLUS... wait, solution[0]=PLUS, so PLUS is accepted)
+	# Need solution[0]=MINUS for PLUS to be wrong. Use _sol4() where cell0=PLUS,
+	# so let's pick a cell where PLUS is the wrong guess.
+	# Cell 1: solution[1]=MINUS, so tapping PLUS first is wrong.
+	gv[1] = EMPTY
+	var l2 := EclipseGridLogic.new()
+	l2.init_from_save(_make_save_data(4, sol, gv))
+	l2.assistance_mode = EclipseGridLogic.ASSIST_STRICT
+
+	# Step 1: EMPTY → PLUS (wrong, sol[1]=MINUS). Rejected and stored.
+	var r1 := l2.cycle_cell(1)
+	assert_true(r1.rejected, "PLUS at cell 1 should be rejected (sol=MINUS)")
+	assert_eq(l2.cells[1], PLUS, "Rejected value stored in cells[]")
+
+	# Step 2: Save and resume
+	var saved := l2.serialize()
+	var l3 := EclipseGridLogic.new()
+	l3.init_from_save(saved)
+
+	# The resumed logic should have the same cells[] and a valid _pre_rejection
+	assert_eq(l3.cells[1], PLUS, "Resume must keep the rejected glyph in cells[]")
+
+	# Step 3: Tap again after resume → MINUS (correct, accepted)
+	var r2 := l3.cycle_cell(1)
+	assert_false(r2.rejected, "MINUS should be accepted after resume")
+	assert_eq(l3.cells[1], MINUS, "Cell 1 must be MINUS after accepted tap")
+
+	# Step 4: Undo — must revert to EMPTY (the pre-rejection state), not to PLUS
+	assert_true(l3.can_undo(), "Undo must be available")
+	var u := l3.undo()
+	assert_eq(l3.cells[1], EMPTY,
+		"Undo after resume must restore EMPTY (pre-rejection state), not wrong PLUS glyph")
+	assert_eq(u.new_value, EMPTY,
+		"UndoRedoResult.new_value must be EMPTY after reverting to pre-rejection state")
+
+
+func test_save_adapter_accepts_pre_rejection() -> void:
+	## A save with a valid pre_rejection dict (int string keys, glyph int values)
+	## must be accepted by the save adapter.
+	var adapter := EclipseGridSaveAdapter.new()
+	var sol: Array[int] = [PLUS, MINUS, PLUS, MINUS,
+						   MINUS, PLUS, MINUS, PLUS,
+						   PLUS, MINUS, PLUS, MINUS,
+						   MINUS, PLUS, MINUS, PLUS]
+	var gv: Array[int] = sol.duplicate()
+	gv[0] = EMPTY
+	var data := _make_save_data(4, sol, gv)
+	data["pre_rejection"] = {"0": EMPTY}  # String key → valid glyph
+	assert_true(adapter._can_resume_from(data),
+		"Save adapter must accept a valid pre_rejection dict")
+
+
+func test_save_adapter_rejects_pre_rejection_invalid_key() -> void:
+	## A pre_rejection dict with a non-string key must be rejected.
+	var adapter := EclipseGridSaveAdapter.new()
+	var sol: Array[int] = [PLUS, MINUS, PLUS, MINUS,
+						   MINUS, PLUS, MINUS, PLUS,
+						   PLUS, MINUS, PLUS, MINUS,
+						   MINUS, PLUS, MINUS, PLUS]
+	var gv: Array[int] = sol.duplicate()
+	gv[0] = EMPTY
+	var data := _make_save_data(4, sol, gv)
+	data["pre_rejection"] = {0: EMPTY}  # Int key instead of string — invalid
+	assert_false(adapter._can_resume_from(data),
+		"Save adapter must reject pre_rejection with non-string key")
+
+
+func test_save_adapter_rejects_pre_rejection_invalid_value() -> void:
+	## A pre_rejection dict with an out-of-range value must be rejected.
+	var adapter := EclipseGridSaveAdapter.new()
+	var sol: Array[int] = [PLUS, MINUS, PLUS, MINUS,
+						   MINUS, PLUS, MINUS, PLUS,
+						   PLUS, MINUS, PLUS, MINUS,
+						   MINUS, PLUS, MINUS, PLUS]
+	var gv: Array[int] = sol.duplicate()
+	gv[0] = EMPTY
+	var data := _make_save_data(4, sol, gv)
+	data["pre_rejection"] = {"0": 5}  # Value 5 is not a valid glyph (EMPTY=0,PLUS=1,MINUS=2)
+	assert_false(adapter._can_resume_from(data),
+		"Save adapter must reject pre_rejection with invalid glyph value")

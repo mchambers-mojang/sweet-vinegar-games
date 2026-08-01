@@ -329,7 +329,7 @@ func _draw_relations(origin: Vector2, cs: float, neon: bool) -> void:
 	var font_sz := int(rel_size * 1.4)
 	var tm := AppTheme
 	var rel_color := tm.get_color("text_given")
-	var err_color := tm.get_color("cell_error")
+	var err_color := tm.get_color("text_error")
 	if neon:
 		rel_color = Color(1.0, 1.0, 0.5)
 		err_color = Color(1.5, 0.3, 0.3)

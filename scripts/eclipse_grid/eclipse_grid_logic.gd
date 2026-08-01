@@ -128,7 +128,7 @@ func init_from_save(data: Dictionary) -> void:
 	var undo_entries := _deserialize_undo_stack(data.get("undo_stack", []))
 	var redo_entries := _deserialize_undo_stack(data.get("redo_stack", []))
 	_undo_stack.load_entries(undo_entries, redo_entries)
-	_pre_rejection.clear()
+	_pre_rejection = _deserialize_pre_rejection(data.get("pre_rejection", {}))
 
 	_recompute_completion()
 
@@ -148,6 +148,7 @@ func serialize() -> Dictionary:
 		"assistance_mode": assistance_mode,
 		"undo_stack": _serialize_undo_stack(_undo_stack.get_undo_entries()),
 		"redo_stack": _serialize_undo_stack(_undo_stack.get_redo_entries()),
+		"pre_rejection": _serialize_pre_rejection(_pre_rejection),
 	}
 
 
@@ -519,4 +520,29 @@ func _deserialize_undo_stack(data: Variant) -> Array[Dictionary]:
 					"old_value": int(entry.get("old_value", EMPTY)),
 					"new_value": int(entry.get("new_value", EMPTY)),
 				})
+	return result
+
+
+## Serialize _pre_rejection as {"idx": glyph_int, ...} using string keys.
+func _serialize_pre_rejection(pr: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for key in pr.keys():
+		out[str(int(key))] = int(pr[key])
+	return out
+
+
+## Restore _pre_rejection from serialized form.  Unknown or invalid entries
+## are silently dropped (saves from older schema versions have no pre_rejection).
+func _deserialize_pre_rejection(data: Variant) -> Dictionary:
+	var result: Dictionary = {}
+	if not (data is Dictionary):
+		return result
+	var max_idx: int = cells.size()
+	for key in data.keys():
+		var idx: int = int(str(key))
+		if idx < 0 or idx >= max_idx:
+			continue
+		var val: int = int(data[key])
+		if val == EMPTY or val == PLUS or val == MINUS:
+			result[idx] = val
 	return result

@@ -640,10 +640,8 @@ static func _relation_chain_rank3(
 		cells: Array[int],
 		h_relations: Dictionary,
 		v_relations: Dictionary) -> SolverStep:
-	# Iterate over each row/column and propagate direct constraints without
-	# placing any trial values.  A cell is forced when one value is immediately
-	# ruled out by quota, no-three, or relation constraints given the current
-	# line state; repeated passes propagate cascading forced values.
+	# For each row and column, enumerate all valid line completions and return
+	# the first cell that is forced in every valid completion (Rank-3 enumeration).
 	for r in size:
 		var step := _line_propagate_rank3(size, cells, h_relations, v_relations, r, true)
 		if step:
@@ -655,11 +653,11 @@ static func _relation_chain_rank3(
 	return null
 
 
-## Iterative non-speculative Rank-3 propagation for a single line.
-## Checks whether each empty cell's value is directly forced by quota, no-three,
-## or relation constraints using only the current known state — no trial placement.
-## Propagates: each newly forced value is committed to a working copy so that
-## subsequent positions can benefit from the deduction.
+## Non-speculative Rank-3 technique: enumerate all valid line completions and
+## return the first cell that is forced in EVERY valid completion.
+## "Forced" means all valid completions agree on the same value for that cell.
+## Uses bitmask enumeration over k empty cells (k ≤ size ≤ 10 → 2^10 = 1024 max).
+## Does NOT modify cells[].
 static func _line_propagate_rank3(
 		size: int,
 		cells: Array[int],
@@ -667,240 +665,287 @@ static func _line_propagate_rank3(
 		v_relations: Dictionary,
 		line: int,
 		is_row: bool) -> SolverStep:
-	# Collect empties and current counts for the line.
 	var plus_count := 0
 	var minus_count := 0
 	var empties: Array[int] = []
+	var line_vals: Array[int] = []
+
 	for i in size:
 		var idx := line * size + i if is_row else i * size + line
-		match cells[idx]:
+		var v: int = cells[idx]
+		line_vals.append(v)
+		match v:
 			PLUS:  plus_count += 1
 			MINUS: minus_count += 1
 			_:     empties.append(i)
 
-	if empties.size() < 3:
-		return null  # Rank 1/2 handles 0-2 empty cells in a line
+	var k := empties.size()
+	if k < 3:
+		return null  # Rank 1/2 handles short completions
 
 	var half := size / 2
-	var working: Array[int] = cells.duplicate()
-	var w_plus  := plus_count
-	var w_minus := minus_count
-	var first_step: SolverStep = null
-	var propagated_count := 0  # How many cells were forced before the reported step
-	var changed := true
+	var plus_needed  := half - plus_count
+	var minus_needed := half - minus_count
 
-	while changed:
-		changed = false
-		for e in empties:
-			var idx := line * size + e if is_row else e * size + line
-			if working[idx] != EMPTY:
-				continue
+	if plus_needed < 0 or minus_needed < 0 or plus_needed + minus_needed != k:
+		return null  # Quota already violated or impossible
 
-			# Check whether each value is immediately ruled out by the current
-			# working state — purely by examining existing neighbours; no placement.
-			var plus_blocked  := (w_plus  >= half) \
-				or _is_no_three_blocked_in_line(working, size, line, is_row, e, PLUS) \
-				or _is_relation_blocked_in_line(working, size, line, is_row, e, PLUS,
-												h_relations, v_relations)
-			var minus_blocked := (w_minus >= half) \
-				or _is_no_three_blocked_in_line(working, size, line, is_row, e, MINUS) \
-				or _is_relation_blocked_in_line(working, size, line, is_row, e, MINUS,
-												h_relations, v_relations)
+	# forced_val[j] tracks the consensus value for empties[j] across valid completions:
+	#   -1    = no valid completion seen yet
+	#   PLUS/MINUS = all completions seen so far agree on this value
+	#   EMPTY = completions disagree → not universally forced
+	var forced_val: Array[int] = []
+	forced_val.resize(k)
+	forced_val.fill(-1)
 
-			if plus_blocked and not minus_blocked:
-				# Only record this as the return step if cascade has already
-				# happened (propagated_count > 0).  Deductions visible on the
-				# original board state (propagated_count == 0) are equivalent to
-				# Rank-1 and are handled by the global Rank-1 functions; returning
-				# them here would both mislabel them and cause max_rank to stay low,
-				# making Hard/Expert puzzles impossible to generate.
-				if first_step == null and propagated_count > 0:
-					var af: Array[int] = [idx]
-					var ltype := "row" if is_row else "col"
-					first_step = SolverStep.new(
-						"Rank-3 %s %d: cascade forces position %d to MINUS" % [ltype, line, e],
-						af, MINUS, RANK_3)
-				working[idx] = MINUS
-				w_minus += 1
-				propagated_count += 1
-				changed = true
-			elif minus_blocked and not plus_blocked:
-				if first_step == null and propagated_count > 0:
-					var af: Array[int] = [idx]
-					var ltype := "row" if is_row else "col"
-					first_step = SolverStep.new(
-						"Rank-3 %s %d: cascade forces position %d to PLUS" % [ltype, line, e],
-						af, PLUS, RANK_3)
-				working[idx] = PLUS
-				w_plus += 1
-				propagated_count += 1
-				changed = true
+	for mask in range(1 << k):
+		if _popcount(mask) != plus_needed:
+			continue
 
-	# Also handle the unique-completion case: after cascade propagation, if the
-	# remaining quota exactly matches the remaining empties, they are all forced.
-	# Only report this as Rank-3 when propagation actually happened (otherwise
-	# _quota_completion would have already caught this at Rank-1).
-	if first_step == null and propagated_count > 0:
-		var remaining_empties := 0
-		for e in empties:
-			var idx := line * size + e if is_row else e * size + line
-			if working[idx] == EMPTY:
-				remaining_empties += 1
-		if remaining_empties > 0:
-			var plus_needed  := half - w_plus
-			var minus_needed := half - w_minus
-			if plus_needed == remaining_empties:
-				for e in empties:
-					var idx := line * size + e if is_row else e * size + line
-					if working[idx] == EMPTY:
-						var af: Array[int] = [idx]
-						var ltype := "row" if is_row else "col"
-						first_step = SolverStep.new(
-							"Rank-3 %s %d: cascade quota forces position %d to PLUS" % [ltype, line, e],
-							af, PLUS, RANK_3)
-						break
-			elif minus_needed == remaining_empties:
-				for e in empties:
-					var idx := line * size + e if is_row else e * size + line
-					if working[idx] == EMPTY:
-						var af: Array[int] = [idx]
-						var ltype := "row" if is_row else "col"
-						first_step = SolverStep.new(
-							"Rank-3 %s %d: cascade quota forces position %d to MINUS" % [ltype, line, e],
-							af, MINUS, RANK_3)
-						break
+		# Build trial line
+		var trial := line_vals.duplicate()
+		for j in k:
+			trial[empties[j]] = PLUS if (mask >> j) & 1 else MINUS
 
-	return first_step
+		# Validate no-three consecutive
+		var valid := true
+		for i in range(2, size):
+			if trial[i] != EMPTY and trial[i] == trial[i - 1] and trial[i - 1] == trial[i - 2]:
+				valid = false
+				break
+		if not valid:
+			continue
+
+		# Validate in-line relations
+		if not _line_check_relations(trial, line, is_row, size, h_relations, v_relations):
+			continue
+
+		# Update forced_val consensus
+		for j in k:
+			var val: int = trial[empties[j]]
+			if forced_val[j] == -1:
+				forced_val[j] = val
+			elif forced_val[j] != val:
+				forced_val[j] = EMPTY  # Disagreement — not universally forced
+
+	# Return the first universally-forced empty cell
+	for j in k:
+		if forced_val[j] == PLUS or forced_val[j] == MINUS:
+			var pos_in_line := empties[j]
+			var idx := line * size + pos_in_line if is_row else pos_in_line * size + line
+			var ltype := "row" if is_row else "col"
+			var af: Array[int] = [idx]
+			return SolverStep.new(
+				"Rank-3 %s %d: enumeration forces position %d to %s" % [
+					ltype, line, pos_in_line, "+" if forced_val[j] == PLUS else "-"],
+				af, forced_val[j], RANK_3)
+
+	return null
 
 
-## Return true if placing val at position pos in the line would immediately create
-## three consecutive identical values given the current (working) line state.
-## Does NOT place any value — inspects neighbours directly.
-static func _is_no_three_blocked_in_line(
-		cells: Array[int], size: int, line: int, is_row: bool, pos: int, val: int) -> bool:
-	var p1: int
-	var p2: int
-	var n1: int
-	var n2: int
-	if is_row:
-		p1 = cells[line * size + (pos - 1)] if pos - 1 >= 0     else EMPTY
-		p2 = cells[line * size + (pos - 2)] if pos - 2 >= 0     else EMPTY
-		n1 = cells[line * size + (pos + 1)] if pos + 1 < size   else EMPTY
-		n2 = cells[line * size + (pos + 2)] if pos + 2 < size   else EMPTY
-	else:
-		p1 = cells[(pos - 1) * size + line] if pos - 1 >= 0     else EMPTY
-		p2 = cells[(pos - 2) * size + line] if pos - 2 >= 0     else EMPTY
-		n1 = cells[(pos + 1) * size + line] if pos + 1 < size   else EMPTY
-		n2 = cells[(pos + 2) * size + line] if pos + 2 < size   else EMPTY
-	return (p1 == val and p2 == val) or (p1 == val and n1 == val) or (n1 == val and n2 == val)
+## Check all in-line relation constraints for a 1D trial array.
+## trial[i] is the value at position i in the line (0..size-1).
+## is_row=true means line is a row and uses h_relations; false uses v_relations.
+## EMPTY endpoints are skipped. Returns false if any constraint is violated.
+static func _line_check_relations(
+		trial: Array[int],
+		line: int,
+		is_row: bool,
+		size: int,
+		h_relations: Dictionary,
+		v_relations: Dictionary) -> bool:
+	for i in range(size - 1):
+		var a: int = trial[i]
+		var b: int = trial[i + 1]
+		if a == EMPTY or b == EMPTY:
+			continue
+		if is_row:
+			var pos := Vector2i(i, line)
+			if h_relations.has(pos):
+				var rel: int = h_relations[pos]
+				if (rel == EQ and a != b) or (rel == NEQ and a == b):
+					return false
+		else:
+			var pos := Vector2i(line, i)
+			if v_relations.has(pos):
+				var rel: int = v_relations[pos]
+				if (rel == EQ and a != b) or (rel == NEQ and a == b):
+					return false
+	return true
 
 
-## Return true if placing val at position pos in the line would violate a relation
-## constraint with an immediately adjacent placed cell.
-## Does NOT place any value — inspects neighbours directly.
-static func _is_relation_blocked_in_line(
-		cells: Array[int], size: int, line: int, is_row: bool, pos: int, val: int,
-		h_relations: Dictionary, v_relations: Dictionary) -> bool:
-	if is_row:
-		var r := line
-		var c := pos
-		if c + 1 < size:
-			var rel_pos := Vector2i(c, r)
-			if h_relations.has(rel_pos):
-				var rv: int = cells[r * size + (c + 1)]
-				if rv != EMPTY:
-					var rel: int = h_relations[rel_pos]
-					if (rel == EQ and val != rv) or (rel == NEQ and val == rv):
-						return true
-		if c > 0:
-			var rel_pos := Vector2i(c - 1, r)
-			if h_relations.has(rel_pos):
-				var lv: int = cells[r * size + (c - 1)]
-				if lv != EMPTY:
-					var rel: int = h_relations[rel_pos]
-					if (rel == EQ and val != lv) or (rel == NEQ and val == lv):
-						return true
-	else:
-		var col := line
-		var r := pos
-		if r + 1 < size:
-			var rel_pos := Vector2i(col, r)
-			if v_relations.has(rel_pos):
-				var bv: int = cells[(r + 1) * size + col]
-				if bv != EMPTY:
-					var rel: int = v_relations[rel_pos]
-					if (rel == EQ and val != bv) or (rel == NEQ and val == bv):
-						return true
-		if r > 0:
-			var rel_pos := Vector2i(col, r - 1)
-			if v_relations.has(rel_pos):
-				var tv: int = cells[(r - 1) * size + col]
-				if tv != EMPTY:
-					var rel: int = v_relations[rel_pos]
-					if (rel == EQ and val != tv) or (rel == NEQ and val == tv):
-						return true
-	return false
+## Count set bits (popcount) for small non-negative integers.
+static func _popcount(n: int) -> int:
+	var count := 0
+	var m := n
+	while m:
+		count += m & 1
+		m >>= 1
+	return count
 
 
 # ---------------------------------------------------------------------------
 # Rank 4 techniques
 # ---------------------------------------------------------------------------
 
-## Single-step contradiction chain: for each empty cell, try each candidate
-## value in a scratch copy, propagate all forced Rank-1 consequences until
-## stable, then test the resulting board for consistency.  If one candidate
-## leads to an immediate contradiction the other value is forced.
+## Non-speculative Rank-4 technique: cross-line feasibility check.
+## For each empty cell (r,c) and each candidate value val, enumerate all valid
+## row completions that place val at (r,c), then test whether each completion is
+## immediately compatible with the column constraints of the cells it assigns.
+## If no valid row completion is column-compatible, val is infeasible and the
+## opposite value is forced.
 ##
-## This is non-recursive and bounded (one hypothesis per cell, one pass of
-## Rank-1 propagation per hypothesis).  It finds deductions that are invisible
-## to individual-line analysis because the contradiction spans multiple lines.
+## "Column compatible" means assigning trial_val at (r,cc) does not immediately
+## exceed that column's quota, create three consecutive in that column, or
+## violate a vertical relation clue adjacent to row r in that column — all
+## checked against the unchanged original cells[].
+##
+## No values are ever written to cells[].
 static func _global_quota_chain(
 		size: int,
 		cells: Array[int],
 		h_relations: Dictionary,
 		v_relations: Dictionary) -> SolverStep:
+	var half := size / 2
+
 	for r in size:
+		var row_plus := 0
+		var row_minus := 0
+		var row_empties: Array[int] = []
+		var row_vals: Array[int] = []
 		for c in size:
+			var v: int = cells[r * size + c]
+			row_vals.append(v)
+			match v:
+				PLUS:  row_plus += 1
+				MINUS: row_minus += 1
+				_:     row_empties.append(c)
+
+		var k := row_empties.size()
+		if k == 0:
+			continue
+
+		var row_plus_need  := half - row_plus
+		var row_minus_need := half - row_minus
+		if row_plus_need < 0 or row_minus_need < 0:
+			continue  # Row already violates quota
+
+		for j in k:
+			var c := row_empties[j]
 			var idx := r * size + c
-			if cells[idx] != EMPTY:
-				continue
+
 			for val in [PLUS, MINUS]:
-				var trial: Array[int] = cells.duplicate()
-				trial[idx] = val
-				# Propagate all Rank-1 through Rank-3 forced moves until stable.
-				# Using only Rank-1 here is insufficient: by the time Rank-4 runs,
-				# Rank-1 is already globally exhausted so trial propagation would
-				# advance zero steps.  Rank-2 and Rank-3 propagation is needed to
-				# expose the contradictions that Expert-level puzzles require.
-				var progress := true
-				while progress:
-					progress = false
-					var s: SolverStep = _quota_completion(size, trial)
-					if s == null:
-						s = _adjacent_pair_prevention(size, trial)
-					if s == null:
-						s = _sandwich_rule(size, trial)
-					if s == null:
-						s = _direct_relation(size, trial, h_relations, v_relations)
-					if s == null:
-						s = _combined_local(size, trial, h_relations, v_relations)
-					if s == null:
-						s = _relation_propagation_rank2(size, trial, h_relations, v_relations)
-					if s == null:
-						s = _relation_chain_rank3(size, trial, h_relations, v_relations)
-					if s != null:
-						trial[s.affected_cells[0]] = s.result_value
-						progress = true
-				# If the fully-propagated trial violates any constraint, the
-				# opposite value is forced.
-				if not is_consistent(size, trial, h_relations, v_relations):
+				var need := row_plus_need if val == PLUS else row_minus_need
+
+				var has_cross_compatible := false
+
+				if need > 0:
+					for mask in range(1 << k):
+						if _popcount(mask) != row_plus_need:
+							continue
+						# Verify val is placed at position j
+						var bit_j: int = (mask >> j) & 1
+						if (val == PLUS and bit_j == 0) or (val == MINUS and bit_j == 1):
+							continue
+
+						# Build trial row
+						var trial_row := row_vals.duplicate()
+						for jj in k:
+							trial_row[row_empties[jj]] = PLUS if (mask >> jj) & 1 else MINUS
+
+						# Check no-three in trial row
+						var row_ok := true
+						for i in range(2, size):
+							if trial_row[i] == trial_row[i - 1] \
+									and trial_row[i - 1] == trial_row[i - 2]:
+								row_ok = false
+								break
+						if not row_ok:
+							continue
+
+						# Check in-row relations
+						if not _line_check_relations(trial_row, r, true, size,
+								h_relations, v_relations):
+							continue
+
+						# Check column compatibility for each previously-empty cell
+						var col_ok := true
+						for jj in k:
+							var cc := row_empties[jj]
+							var trial_val: int = trial_row[cc]
+
+							# a) Column quota
+							var col_plus := 0
+							var col_minus := 0
+							for rr in size:
+								match cells[rr * size + cc]:
+									PLUS:  col_plus += 1
+									MINUS: col_minus += 1
+							if trial_val == PLUS:
+								col_plus += 1
+							else:
+								col_minus += 1
+							if col_plus > half or col_minus > half:
+								col_ok = false
+								break
+
+							# b) No-three in column at row r
+							if r >= 2:
+								var v1: int = cells[(r - 1) * size + cc]
+								var v2: int = cells[(r - 2) * size + cc]
+								if v1 == trial_val and v2 == trial_val:
+									col_ok = false
+									break
+							if r >= 1 and r + 1 < size:
+								var v1: int = cells[(r - 1) * size + cc]
+								var v2: int = cells[(r + 1) * size + cc]
+								if v1 == trial_val and v2 == trial_val:
+									col_ok = false
+									break
+							if r + 2 < size:
+								var v1: int = cells[(r + 1) * size + cc]
+								var v2: int = cells[(r + 2) * size + cc]
+								if v1 == trial_val and v2 == trial_val:
+									col_ok = false
+									break
+
+							# c) Vertical relations adjacent to row r in this column
+							if r + 1 < size:
+								var vpos := Vector2i(cc, r)
+								if v_relations.has(vpos):
+									var below: int = cells[(r + 1) * size + cc]
+									if below != EMPTY:
+										var rel: int = v_relations[vpos]
+										if (rel == EQ and trial_val != below) \
+												or (rel == NEQ and trial_val == below):
+											col_ok = false
+											break
+							if r > 0:
+								var vpos := Vector2i(cc, r - 1)
+								if v_relations.has(vpos):
+									var above: int = cells[(r - 1) * size + cc]
+									if above != EMPTY:
+										var rel: int = v_relations[vpos]
+										if (rel == EQ and trial_val != above) \
+												or (rel == NEQ and trial_val == above):
+											col_ok = false
+											break
+
+						if col_ok:
+							has_cross_compatible = true
+							break  # Found a column-compatible row completion
+				# else: need == 0 means placing val here exceeds row quota →
+				# no valid row completion with val at this cell.
+
+				if not has_cross_compatible:
 					var forced := MINUS if val == PLUS else PLUS
 					var af: Array[int] = [idx]
 					var forced_str := "+" if forced == PLUS else "-"
 					var tried_str  := "+" if val   == PLUS else "-"
 					return SolverStep.new(
-						"Rank-4 chain (%d,%d): placing %s leads to contradiction, forced %s" % [c, r, tried_str, forced_str],
+						"Rank-4 cross-line (%d,%d): placing %s has no col-compatible row completion, forced %s" % [c, r, tried_str, forced_str],
 						af, forced, RANK_4)
+
 	return null
 
 
