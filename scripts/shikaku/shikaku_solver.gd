@@ -103,7 +103,9 @@ static func count_solutions(width: int, height: int, anchors: Dictionary, max_co
 ## to a unique valid rectangle given successive placements.
 ## A rectangle is valid only if it covers no other unplaced anchor, matching the
 ## constraint used in the backtracking solver.
-static func is_human_solvable(width: int, height: int, anchors: Dictionary) -> bool:
+## Returns false when cancelled (conservative: treated as not human-solvable).
+static func is_human_solvable(width: int, height: int, anchors: Dictionary, cancel_check: Callable = Callable()) -> bool:
+	var do_cancel := cancel_check.is_valid()
 	var covered := PackedByteArray()
 	covered.resize(width * height)
 	covered.fill(0)
@@ -114,12 +116,16 @@ static func is_human_solvable(width: int, height: int, anchors: Dictionary) -> b
 
 	var changed := true
 	while changed:
+		if do_cancel and cancel_check.call():
+			return false
 		changed = false
 		for i in range(entries.size()):
 			if placed[i] != 0:
 				continue
 			var pos: Vector2i = entries[i]["pos"]
-			var all_rects := _enumerate_rects_for_anchor(pos, entries[i]["anchor"], width, height, covered)
+			var all_rects := _enumerate_rects_for_anchor(pos, entries[i]["anchor"], width, height, covered, cancel_check)
+			if all_rects.is_empty() and do_cancel and cancel_check.call():
+				return false
 			# Filter out rects that would capture another unplaced anchor.
 			var valid_rects: Array[Rect2i] = []
 			for rect in all_rects:
@@ -191,7 +197,7 @@ static func _backtrack(
 	if covered[pos.y * width + pos.x] != 0:
 		return _backtrack(width, height, entries, idx + 1, covered, result, cancel_check, do_cancel)
 
-	var rects := _enumerate_rects_for_anchor(pos, anchor, width, height, covered)
+	var rects := _enumerate_rects_for_anchor(pos, anchor, width, height, covered, cancel_check)
 
 	for rect in rects:
 		_mark_covered(rect, width, covered, 1)
@@ -241,7 +247,7 @@ static func _count_backtrack(
 		_count_backtrack(width, height, entries, idx + 1, covered, count, max_count, cancel_check, do_cancel, cancelled)
 		return
 
-	var rects := _enumerate_rects_for_anchor(pos, anchor, width, height, covered)
+	var rects := _enumerate_rects_for_anchor(pos, anchor, width, height, covered, cancel_check)
 
 	for rect in rects:
 		if count[0] >= max_count or cancelled[0]:
@@ -264,9 +270,12 @@ static func _count_backtrack(
 
 
 ## Enumerate all candidate rectangles for a given anchor position and clue.
+## Returns an empty array early if cancelled.
 static func _enumerate_rects_for_anchor(
 		pos: Vector2i, anchor: Dictionary,
-		width: int, height: int, covered: PackedByteArray) -> Array[Rect2i]:
+		width: int, height: int, covered: PackedByteArray,
+		cancel_check: Callable = Callable()) -> Array[Rect2i]:
+	var do_cancel := cancel_check.is_valid()
 	var anchor_area: int = int(anchor.get("area", 0))
 	var anchor_shape: int = int(anchor.get("shape", ShikakuLogic.SHAPE_ABSENT))
 	var rects: Array[Rect2i] = []
@@ -284,6 +293,8 @@ static func _enumerate_rects_for_anchor(
 		# No area constraint: enumerate all (w,h) pairs that fit in the grid.
 		# This must be exhaustive (no area cap) to ensure sound uniqueness checks.
 		for w in range(1, width + 1):
+			if do_cancel and cancel_check.call():
+				return []
 			for h in range(1, height + 1):
 				if not _shape_matches(w, h, anchor_shape):
 					continue

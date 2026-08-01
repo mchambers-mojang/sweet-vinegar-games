@@ -448,3 +448,96 @@ func test_solver_finds_unique_solution_with_large_unconstrained_shape() -> void:
 	])
 	var n := ShikakuSolver.count_solutions(3, 3, anchors, 2)
 	assert_eq(n, 1, "3x3 grid with single SQUARE anchor must have exactly 1 solution")
+
+
+# ---------------------------------------------------------------------------
+# Fix 1 — human-solvability guaranteed: generate never returns a non-human-
+# solvable puzzle
+# ---------------------------------------------------------------------------
+
+func test_shapes_mode_generate_always_human_solvable_small_seeds() -> void:
+	# Every generated 5x5 Shapes puzzle must be human-solvable.
+	for seed in range(1, 8):
+		var gen := ShikakuGenerator.generate(5, 5, seed, ShikakuLogic.RULE_SET_SHAPES)
+		var anchors: Dictionary = gen.get("anchors", {})
+		if anchors.is_empty():
+			# Generation may fail on some seeds — skip those.
+			continue
+		assert_true(
+			ShikakuSolver.is_human_solvable(5, 5, anchors),
+			"5x5 Shapes seed=%d must be human-solvable" % seed
+		)
+
+
+func test_shapes_mode_generate_never_returns_non_human_solvable() -> void:
+	# A puzzle returned by generate() for Shapes mode must either be empty
+	# (generation failed) or human-solvable. It must never be a non-empty,
+	# non-human-solvable result (the old fallback behaviour).
+	for seed in [10, 11, 42]:
+		var gen := ShikakuGenerator.generate(7, 7, seed, ShikakuLogic.RULE_SET_SHAPES)
+		var anchors: Dictionary = gen.get("anchors", {})
+		if anchors.is_empty():
+			continue
+		assert_true(
+			ShikakuSolver.is_human_solvable(7, 7, anchors),
+			"7x7 Shapes seed=%d returned by generate() must be human-solvable" % seed
+		)
+
+
+# ---------------------------------------------------------------------------
+# Fix 2 — cancellation wired end-to-end
+# ---------------------------------------------------------------------------
+
+func test_is_human_solvable_returns_false_when_cancelled() -> void:
+	var gen := ShikakuGenerator.generate(5, 5, 42, ShikakuLogic.RULE_SET_SHAPES)
+	var anchors: Dictionary = gen.get("anchors", {})
+	var cancel_check := func() -> bool: return true  # always cancel
+	# Conservative: returns false when cancelled.
+	var result := ShikakuSolver.is_human_solvable(5, 5, anchors, cancel_check)
+	assert_false(result, "is_human_solvable must return false when cancelled")
+
+
+func test_generate_shapes_returns_empty_when_cancelled() -> void:
+	var cancel_check := func() -> bool: return true  # always cancel
+	var gen := ShikakuGenerator.generate(5, 5, 42, ShikakuLogic.RULE_SET_SHAPES, cancel_check)
+	assert_true(gen.is_empty(), "Shapes generate must return {} when cancelled immediately")
+
+
+func test_generate_standard_returns_empty_when_cancelled() -> void:
+	var cancel_check := func() -> bool: return true  # always cancel
+	var gen := ShikakuGenerator.generate(5, 5, 42, ShikakuLogic.RULE_SET_STANDARD, cancel_check)
+	assert_true(gen.is_empty(), "Standard generate must return {} when cancelled immediately")
+
+
+func test_enumerate_rects_returns_empty_when_cancelled() -> void:
+	# Unconstrained anchor: the outer w-loop in _enumerate_rects_for_anchor
+	# should abort early when cancel fires.
+	var covered := PackedByteArray()
+	covered.resize(5 * 5)
+	covered.fill(0)
+	var anchor := {"area": 0, "shape": ShikakuLogic.SHAPE_ANY}
+	var cancel_check := func() -> bool: return true  # always cancel
+	var rects := ShikakuSolver._enumerate_rects_for_anchor(Vector2i(2, 2), anchor, 5, 5, covered, cancel_check)
+	assert_true(rects.is_empty(), "_enumerate_rects_for_anchor must return [] when cancelled")
+
+
+# ---------------------------------------------------------------------------
+# Fix 7 — Standard generation uniqueness guaranteed
+# ---------------------------------------------------------------------------
+
+func test_standard_generation_produces_unique_solution_multiple_seeds() -> void:
+	for seed in [1, 7, 13, 99]:
+		var gen := ShikakuGenerator.generate(5, 5, seed, ShikakuLogic.RULE_SET_STANDARD)
+		var anchors: Dictionary = gen.get("anchors", {})
+		if anchors.is_empty():
+			# Extremely unlikely for Standard mode but skip if generation failed.
+			continue
+		var n := ShikakuSolver.count_solutions(5, 5, anchors, 2)
+		assert_eq(n, 1, "Standard 5x5 seed=%d must have exactly 1 solution after uniqueness fix" % seed)
+
+
+func test_standard_generation_not_empty_for_common_seeds() -> void:
+	# Standard mode should reliably produce puzzles within MAX_STANDARD_ATTEMPTS.
+	for seed in [1, 2, 3, 42, 100]:
+		var gen := ShikakuGenerator.generate(5, 5, seed, ShikakuLogic.RULE_SET_STANDARD)
+		assert_false(gen.is_empty(), "Standard generate must succeed for seed=%d" % seed)

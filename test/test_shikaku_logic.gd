@@ -198,6 +198,72 @@ func test_can_hint_false_after_used() -> void:
 	assert_false(logic.can_hint())
 
 
+# ---------------------------------------------------------------------------
+# Fix 5 — hints succeed even when candidates are blocked by wrong placements
+# ---------------------------------------------------------------------------
+
+func test_hint_succeeds_when_first_candidate_blocked() -> void:
+	# 4x1 grid, two shape-ANY anchors, solution = two 2x1 rects.
+	# A wrong 1x1 rect at (0,0) blocks the first solution rect (0,0,2,1).
+	# The new hint code tries all candidates in order, so it must find
+	# and place the second solution rect (2,0,2,1) instead of silently failing.
+	var l := ShikakuLogic.new()
+	l.init_from_save({
+		"width": 4,
+		"height": 1,
+		"anchors": {
+			"0,0": {"area": 0, "shape": ShikakuLogic.SHAPE_ANY},
+			"2,0": {"area": 0, "shape": ShikakuLogic.SHAPE_ANY},
+		},
+		"solution": [
+			{"x": 0, "y": 0, "w": 2, "h": 1},
+			{"x": 2, "y": 0, "w": 2, "h": 1},
+		],
+		"placed_rects": [],
+		"random_seed": 1234,
+	})
+	# Place a wrong 1x1 rect at (0,0): locally valid (area-unconstrained, SHAPE_ANY),
+	# but not in the solution. This covers cell (0,0), blocking solution rect (0,0,2,1).
+	var wrong_result: ShikakuLogic.PlaceRectResult = l.place_rectangle(0, 0, 1, 1)
+	assert_true(wrong_result.valid, "Wrong 1x1 placement must be locally valid for ANY anchor")
+	# Now hint: candidates = [(0,0,2,1), (2,0,2,1)].
+	# (0,0,2,1) is blocked by the wrong placement; (2,0,2,1) is free.
+	# The hint must find and place (2,0,2,1).
+	var hint_result: ShikakuLogic.HintResult = l.use_hint()
+	assert_false(hint_result.rect.is_empty(), "Hint must succeed and not silently fail when first candidate is blocked")
+	assert_eq(l.hints_used, 1, "hints_used must be incremented on successful hint")
+
+
+# ---------------------------------------------------------------------------
+# Fix 6 — contradiction detection: get_wrong_placed_rects
+# ---------------------------------------------------------------------------
+
+func test_get_wrong_placed_rects_empty_when_no_placements() -> void:
+	var wrong := logic.get_wrong_placed_rects()
+	assert_true(wrong.is_empty(), "No wrong rects when board is empty")
+
+
+func test_get_wrong_placed_rects_empty_when_correct() -> void:
+	logic.place_rectangle(0, 0, 2, 1)
+	var wrong := logic.get_wrong_placed_rects()
+	assert_true(wrong.is_empty(), "Correct placement must not appear in wrong rects")
+
+
+func test_get_wrong_placed_rects_empty_when_solution_is_empty() -> void:
+	# Logic without a stored solution — cannot determine wrong rects.
+	var l := ShikakuLogic.new()
+	l.init_from_save({
+		"width": 2, "height": 2,
+		"anchors": {"0,0": {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT}},
+		"solution": [],
+		"placed_rects": [],
+		"random_seed": 1234,
+	})
+	l.placed_rects.append(Rect2i(0, 0, 2, 2))
+	var wrong := l.get_wrong_placed_rects()
+	assert_true(wrong.is_empty(), "No wrong rects when solution is empty")
+
+
 func test_can_undo_redo_false_when_completed() -> void:
 	logic.place_rectangle(0, 0, 2, 1)
 	logic.place_rectangle(0, 1, 2, 1)

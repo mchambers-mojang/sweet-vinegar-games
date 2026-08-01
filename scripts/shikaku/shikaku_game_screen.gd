@@ -149,6 +149,7 @@ func _setup_game(saved_data: Dictionary) -> void:
 	board.setup(grid_width, grid_height, logic.anchors)
 	for rect in logic.placed_rects:
 		board.add_rect(rect)
+	_refresh_error_display()
 	size_label.text = SIZE_NAMES.get(grid_width, "%dx%d" % [grid_width, grid_height])
 	_update_button_states()
 
@@ -201,6 +202,7 @@ func _on_rectangle_placed(rect: Rect2i) -> void:
 		"h": rect.size.y,
 	})
 	board.add_rect(rect)
+	_refresh_error_display()
 	_sound.play_place()
 	_haptic.vibrate_light()
 	# Neon shockwave on rect placement
@@ -229,6 +231,7 @@ func _on_rectangle_tapped(index: int) -> void:
 		return
 	_recorder.record_input(elapsed_time, "rectangle_removed", {"index": index})
 	board.remove_rect(index)
+	_refresh_error_display()
 	_haptic.vibrate_light()
 	_update_button_states()
 	_save_current_state()
@@ -259,6 +262,7 @@ func _on_undo() -> void:
 			"h": removed_rect.size.y,
 		})
 		board.add_rect(removed_rect)
+	_refresh_error_display()
 	_update_button_states()
 	_save_current_state()
 
@@ -285,6 +289,7 @@ func _on_redo() -> void:
 				_recorder.record_input(elapsed_time, "rectangle_removed", {"index": i})
 				board.remove_rect(i)
 				break
+	_refresh_error_display()
 	_update_button_states()
 	_save_current_state()
 
@@ -304,12 +309,18 @@ func _on_hint() -> void:
 		"h": hint_rect.size.y,
 	})
 	board.add_rect(hint_rect)
+	_refresh_error_display()
 	_sound.play_place()
 	_haptic.vibrate_medium()
 	_update_button_states()
 	if result.game_won:
 		_handle_win()
 	_save_current_state()
+
+
+## Refresh the board's error highlighting to show wrong (non-solution) placements.
+func _refresh_error_display() -> void:
+	board.refresh_error_state(logic.get_wrong_placed_rects())
 
 
 func _on_pause() -> void:

@@ -97,13 +97,13 @@ class UndoRedoResult:
 	var rect: Dictionary = {}
 
 
-func init_new_game(width: int, height: int, seed_value: int, p_mode: int = RULE_SET_STANDARD) -> void:
+func init_new_game(width: int, height: int, seed_value: int, p_mode: int = RULE_SET_STANDARD, cancel_check: Callable = Callable()) -> void:
 	grid_width = width
 	grid_height = height
 	mode = p_mode
 	random_seed = seed_value
 	_rng.seed = seed_value
-	var generated: Dictionary = ShikakuGenerator.generate(width, height, seed_value, mode)
+	var generated: Dictionary = ShikakuGenerator.generate(width, height, seed_value, mode, cancel_check)
 	anchors = generated.get("anchors", {})
 	solution = generated.get("solution", [] as Array[Rect2i])
 	placed_rects.clear()
@@ -184,13 +184,18 @@ func use_hint() -> HintResult:
 			candidates.append(rect)
 	if candidates.is_empty():
 		return result
-	var picked: Rect2i = candidates[_rng.randi_range(0, candidates.size() - 1)]
-	var place_result: PlaceRectResult = place_rectangle(picked.position.x, picked.position.y, picked.size.x, picked.size.y)
-	if not place_result.valid:
-		return result
-	hints_used += 1
-	result.rect = place_result.rect
-	result.game_won = place_result.game_won
+	# Iterate candidates in random order so the hint picks a random unplaced
+	# solution rect but still succeeds even if some are currently blocked by
+	# wrong player placements.
+	var start_idx := _rng.randi_range(0, candidates.size() - 1)
+	for i in range(candidates.size()):
+		var picked: Rect2i = candidates[(start_idx + i) % candidates.size()]
+		var place_result: PlaceRectResult = place_rectangle(picked.position.x, picked.position.y, picked.size.x, picked.size.y)
+		if place_result.valid:
+			hints_used += 1
+			result.rect = place_result.rect
+			result.game_won = place_result.game_won
+			return result
 	return result
 
 
@@ -252,6 +257,19 @@ func get_unplaced_solution_rects() -> Array[Rect2i]:
 		if not _has_rect(rect):
 			result.append(rect)
 	return result
+
+
+## Returns placed rectangles that are not part of the known solution.
+## When the solution is empty (e.g. loaded from a legacy save without solution),
+## returns an empty array (no false positives).
+func get_wrong_placed_rects() -> Array[Rect2i]:
+	if solution.is_empty():
+		return []
+	var wrong: Array[Rect2i] = []
+	for rect in placed_rects:
+		if not solution.has(rect):
+			wrong.append(rect)
+	return wrong
 
 
 func is_fully_covered() -> bool:

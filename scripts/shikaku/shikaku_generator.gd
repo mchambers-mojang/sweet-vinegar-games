@@ -9,6 +9,8 @@ const MIN_AREA := 2
 const MAX_AREA := 8
 ## Maximum outer attempts to find a human-solvable Shapes puzzle.
 const MAX_OUTER_ATTEMPTS := 8
+## Maximum attempts to find a uniquely-solvable Standard puzzle.
+const MAX_STANDARD_ATTEMPTS := 50
 
 
 ## Generate a puzzle for the given grid size and rule set.
@@ -28,26 +30,41 @@ static func generate(width: int, height: int, seed: int = -1, rule_set: int = Sh
 	if rule_set == ShikakuLogic.RULE_SET_SHAPES:
 		return _generate_shapes(width, height, rng, cancel_check)
 
-	# Standard mode: single attempt.
-	var solution := _generate_partition(width, height, rng)
-	var anchors := _derive_standard_anchors(solution, rng)
-	return {
-		"width": width,
-		"height": height,
-		"anchors": anchors,
-		"solution": solution,
-	}
+	# Standard mode: verify uniqueness, retrying until a uniquely-solvable
+	# puzzle is found or MAX_STANDARD_ATTEMPTS is exhausted.
+	for _attempt in range(MAX_STANDARD_ATTEMPTS):
+		if cancel_check.is_valid() and cancel_check.call():
+			return {}
+		var solution := _generate_partition(width, height, rng, cancel_check)
+		if solution.is_empty():
+			if cancel_check.is_valid() and cancel_check.call():
+				return {}
+			continue
+		var anchors := _derive_standard_anchors(solution, rng)
+		var n := ShikakuSolver.count_solutions(width, height, anchors, 2, cancel_check)
+		if n == -1:
+			return {}
+		if n == 1:
+			return {
+				"width": width,
+				"height": height,
+				"anchors": anchors,
+				"solution": solution,
+			}
+	return {}
 
 
 ## Generate a Shapes mode puzzle, retrying until the result is uniquely and
 ## human-solvable (or until MAX_OUTER_ATTEMPTS exhausted).
+## Returns {} if all attempts fail or if cancelled.
 static func _generate_shapes(width: int, height: int, rng: RandomNumberGenerator, cancel_check: Callable) -> Dictionary:
-	var last_valid: Dictionary = {}
 	for _outer in range(MAX_OUTER_ATTEMPTS):
 		if cancel_check.is_valid() and cancel_check.call():
 			return {}
-		var solution := _generate_partition(width, height, rng)
+		var solution := _generate_partition(width, height, rng, cancel_check)
 		if solution.is_empty():
+			if cancel_check.is_valid() and cancel_check.call():
+				return {}
 			continue
 		# _derive_shapes_anchors returns {} when the initial full-clue puzzle is
 		# not uniquely solvable (unsound base) or when cancelled.
@@ -62,12 +79,11 @@ static func _generate_shapes(width: int, height: int, rng: RandomNumberGenerator
 			"anchors": anchors,
 			"solution": solution,
 		}
-		if ShikakuSolver.is_human_solvable(width, height, anchors):
+		if ShikakuSolver.is_human_solvable(width, height, anchors, cancel_check):
 			return result
-		# Keep as fallback in case human-solvability is never achieved.
-		last_valid = result
-	# Return the last uniquely-solvable puzzle even if it requires guessing.
-	return last_valid
+		# Human-solvability not achieved for this partition; try a fresh partition.
+	# All attempts exhausted without a human-solvable uniquely-solvable puzzle.
+	return {}
 
 
 ## Derive area-only anchors (Standard mode).
@@ -162,21 +178,26 @@ static func _shuffle_array(arr: Array, rng: RandomNumberGenerator) -> void:
 		arr[j] = tmp
 
 
-static func _generate_partition(width: int, height: int, rng: RandomNumberGenerator) -> Array[Rect2i]:
+static func _generate_partition(width: int, height: int, rng: RandomNumberGenerator, cancel_check: Callable = Callable()) -> Array[Rect2i]:
 	for _attempt in range(200):
-		var result := _try_partition(width, height, rng)
+		if cancel_check.is_valid() and cancel_check.call():
+			return []
+		var result := _try_partition(width, height, rng, cancel_check)
 		if result.size() > 0:
 			return result
-	return _try_partition(width, height, rng)
+	return _try_partition(width, height, rng, cancel_check)
 
 
-static func _try_partition(width: int, height: int, rng: RandomNumberGenerator) -> Array[Rect2i]:
+static func _try_partition(width: int, height: int, rng: RandomNumberGenerator, cancel_check: Callable = Callable()) -> Array[Rect2i]:
+	var do_cancel := cancel_check.is_valid()
 	var covered := PackedByteArray()
 	covered.resize(width * height)
 	covered.fill(0)
 	var rectangles: Array[Rect2i] = []
 
 	while true:
+		if do_cancel and cancel_check.call():
+			return []
 		var start := -1
 		for i in covered.size():
 			if covered[i] == 0:

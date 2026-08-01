@@ -14,6 +14,8 @@ var grid_height: int = 10
 var anchors: Dictionary = {}
 var placed_rects: Array[Rect2i] = []
 var rect_colors: Array[Color] = []
+## Parallel flag array: true when the rect at the same index is a wrong placement.
+var rect_is_wrong: Array[bool] = []
 
 ## Backward-compat computed property: { Vector2i -> int } for area-carrying anchors.
 var numbers: Dictionary:
@@ -36,6 +38,8 @@ var _drag_preview: Rect2i = Rect2i()
 const LINE_WIDTH := 1.0
 const BORDER_WIDTH := 2.0
 const RECT_BORDER := 2.0
+## Highlight color for wrong (contradiction) placements.
+const ERROR_COLOR := Color(1.0, 0.35, 0.35, 0.45)
 
 # Color palette for auto-coloring rectangles
 const PALETTE: Array[Color] = [
@@ -50,6 +54,8 @@ const PALETTE: Array[Color] = [
 ]
 
 var _color_index: int = 0
+## Static tooltip text describing all anchors, set at setup time for screen readers.
+var _full_anchor_description: String = ""
 
 
 func _ready() -> void:
@@ -65,8 +71,12 @@ func setup(w: int, h: int, a: Dictionary) -> void:
 	anchors = _normalize_anchors(a)
 	placed_rects.clear()
 	rect_colors.clear()
+	rect_is_wrong.clear()
 	_color_index = 0
-	tooltip_text = ""
+	# Build a static description of all anchor clues and set it as tooltip_text
+	# so screen readers can access the full clue set without requiring mouse hover.
+	_full_anchor_description = _build_anchor_description()
+	tooltip_text = _full_anchor_description
 	queue_redraw()
 
 
@@ -80,6 +90,36 @@ func _normalize_anchors(a: Dictionary) -> Dictionary:
 		elif val is int or val is float:
 			result[pos] = {"area": int(val), "shape": ShikakuLogic.SHAPE_ABSENT}
 	return result
+
+
+## Build a human-readable description of all anchor clues for screen-reader accessibility.
+func _build_anchor_description() -> String:
+	var parts: PackedStringArray = []
+	for pos in anchors.keys():
+		var anchor: Dictionary = anchors[pos]
+		var area: int = int(anchor.get("area", 0))
+		var shape: int = int(anchor.get("shape", ShikakuLogic.SHAPE_ABSENT))
+		var shape_name: String = str(ShikakuLogic.SHAPE_NAMES.get(shape, ""))
+		var desc: String
+		if area > 0 and shape != ShikakuLogic.SHAPE_ABSENT:
+			desc = "%s, %d cells at (%d,%d)" % [shape_name, area, pos.x, pos.y]
+		elif area > 0:
+			desc = "%d cells at (%d,%d)" % [area, pos.x, pos.y]
+		elif shape != ShikakuLogic.SHAPE_ABSENT:
+			desc = "%s at (%d,%d)" % [shape_name, pos.x, pos.y]
+		else:
+			continue
+		parts.append(desc)
+	return "; ".join(parts)
+
+
+## Mark which placed rects are wrong (not in the solution).
+## Call this after any board state change to refresh the contradiction display.
+func refresh_error_state(wrong_rects: Array[Rect2i]) -> void:
+	rect_is_wrong.resize(placed_rects.size())
+	for i in placed_rects.size():
+		rect_is_wrong[i] = wrong_rects.has(placed_rects[i])
+	queue_redraw()
 
 
 func _get_cell_size() -> float:
@@ -205,12 +245,13 @@ func _find_rect_at(cell: Vector2i) -> int:
 
 
 ## Update tooltip_text to describe the anchor clue (if any) under [param screen_pos].
-## This provides accessible names for shape glyphs to assistive technologies.
+## Falls back to the full board description when not hovering over a clue cell,
+## so screen readers always have an accessible representation of all anchors.
 func _update_anchor_tooltip(screen_pos: Vector2) -> void:
 	var cell := _pos_to_cell(screen_pos)
 	var anchor = anchors.get(cell, null)
 	if anchor == null:
-		tooltip_text = ""
+		tooltip_text = _full_anchor_description
 		return
 	var area: int = int((anchor as Dictionary).get("area", 0))
 	var shape: int = int((anchor as Dictionary).get("shape", ShikakuLogic.SHAPE_ABSENT))
@@ -222,7 +263,7 @@ func _update_anchor_tooltip(screen_pos: Vector2) -> void:
 	elif shape != ShikakuLogic.SHAPE_ABSENT:
 		tooltip_text = shape_name
 	else:
-		tooltip_text = ""
+		tooltip_text = _full_anchor_description
 
 
 func _update_drag_preview() -> void:
@@ -236,6 +277,7 @@ func _update_drag_preview() -> void:
 func add_rect(rect: Rect2i) -> void:
 	placed_rects.append(rect)
 	rect_colors.append(PALETTE[_color_index % PALETTE.size()])
+	rect_is_wrong.append(false)
 	_color_index += 1
 	queue_redraw()
 
@@ -244,6 +286,8 @@ func remove_rect(index: int) -> void:
 	if index >= 0 and index < placed_rects.size():
 		placed_rects.remove_at(index)
 		rect_colors.remove_at(index)
+		if index < rect_is_wrong.size():
+			rect_is_wrong.remove_at(index)
 		queue_redraw()
 
 
@@ -275,7 +319,11 @@ func _draw() -> void:
 	# Placed rectangles (fill)
 	for i in range(placed_rects.size()):
 		var rect := placed_rects[i]
-		var color := rect_colors[i]
+		var color: Color
+		if i < rect_is_wrong.size() and rect_is_wrong[i]:
+			color = ERROR_COLOR
+		else:
+			color = rect_colors[i]
 		var draw_rect_pos := origin + Vector2(rect.position.x * cell_size, rect.position.y * cell_size)
 		var draw_rect_size := Vector2(rect.size.x * cell_size, rect.size.y * cell_size)
 		draw_rect(Rect2(draw_rect_pos, draw_rect_size), color)

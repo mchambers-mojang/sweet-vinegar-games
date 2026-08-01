@@ -46,9 +46,10 @@ func _migrate(data: Dictionary, _from_version: int) -> Dictionary:
 	return data
 
 
-## A valid Shikaku save must have positive dimensions, at least one well-formed
-## anchor, and every anchor must satisfy the clue-component invariant.
-## Corrupted or structurally invalid data is treated as no-save.
+## A valid Shikaku save must have positive dimensions, a known mode, at least
+## one well-formed anchor, and every anchor must satisfy the clue-component
+## invariant. Solution, placed rectangles, and undo/redo history are validated
+## when present. Corrupted or structurally invalid data is treated as no-save.
 func _can_resume_from(data: Dictionary) -> bool:
 	if data.is_empty():
 		return false
@@ -57,6 +58,15 @@ func _can_resume_from(data: Dictionary) -> bool:
 	if not (w is int) or (w as int) <= 0 or not (h is int) or (h as int) <= 0:
 		push_warning("ShikakuSaveAdapter: corrupted save — invalid dimensions")
 		return false
+	var grid_w: int = w as int
+	var grid_h: int = h as int
+
+	# Validate mode — must be a known rule-set constant.
+	var mode_val = data.get("mode", ShikakuLogic.RULE_SET_STANDARD)
+	if not (mode_val is int) or (mode_val as int) < ShikakuLogic.RULE_SET_STANDARD or (mode_val as int) > ShikakuLogic.RULE_SET_SHAPES:
+		push_warning("ShikakuSaveAdapter: corrupted save — unknown mode %s" % str(mode_val))
+		return false
+
 	if data.get("is_completed", false):
 		return false
 	# Must have at least one anchor (new format) or numbers (legacy).
@@ -67,8 +77,6 @@ func _can_resume_from(data: Dictionary) -> bool:
 		return false
 	# Deep-validate each anchor when present in new format.
 	if has_anchors:
-		var grid_w: int = w as int
-		var grid_h: int = h as int
 		var raw_anchors: Dictionary = data["anchors"] as Dictionary
 		for key in raw_anchors.keys():
 			var entry = raw_anchors[key]
@@ -90,7 +98,8 @@ func _can_resume_from(data: Dictionary) -> bool:
 			if area == 0 and shape == ShikakuLogic.SHAPE_ABSENT:
 				push_warning("ShikakuSaveAdapter: corrupted save — anchor has no clue component")
 				return false
-			# Anchor position must be within grid bounds.
+			# Parse and validate anchor position — use is_valid_int() to reject
+			# coercive int("garbage") == 0 silent failures.
 			var pos: Vector2i
 			if key is Vector2i:
 				pos = key as Vector2i
@@ -99,8 +108,73 @@ func _can_resume_from(data: Dictionary) -> bool:
 				if parts.size() != 2:
 					push_warning("ShikakuSaveAdapter: corrupted save — malformed anchor key '%s'" % str(key))
 					return false
-				pos = Vector2i(int(parts[0]), int(parts[1]))
+				var col_str := parts[0].strip_edges()
+				var row_str := parts[1].strip_edges()
+				if not col_str.is_valid_int() or not row_str.is_valid_int():
+					push_warning("ShikakuSaveAdapter: corrupted save — non-integer anchor key '%s'" % str(key))
+					return false
+				pos = Vector2i(int(col_str), int(row_str))
 			if pos.x < 0 or pos.x >= grid_w or pos.y < 0 or pos.y >= grid_h:
 				push_warning("ShikakuSaveAdapter: corrupted save — anchor position %s out of bounds" % str(pos))
 				return false
+
+	# Validate solution rects if present.
+	var raw_solution = data.get("solution", null)
+	if raw_solution is Array and not (raw_solution as Array).is_empty():
+		for entry in raw_solution as Array:
+			if not _validate_rect_entry(entry, grid_w, grid_h, "solution"):
+				return false
+
+	# Validate placed_rects if present.
+	var raw_placed = data.get("placed_rects", null)
+	if raw_placed is Array and not (raw_placed as Array).is_empty():
+		for entry in raw_placed as Array:
+			if not _validate_rect_entry(entry, grid_w, grid_h, "placed_rects"):
+				return false
+
+	# Validate undo/redo history entries if present.
+	for stack_key in ["undo_stack", "redo_stack"]:
+		var raw_stack = data.get(stack_key, null)
+		if raw_stack is Array:
+			for entry in raw_stack as Array:
+				if not _validate_history_entry(entry, grid_w, grid_h, stack_key):
+					return false
+
 	return true
+
+
+## Return false and emit a warning when [param entry] is not a valid rect dict
+## with positive dimensions inside the grid.
+func _validate_rect_entry(entry: Variant, grid_w: int, grid_h: int, context: String) -> bool:
+	if not (entry is Dictionary):
+		push_warning("ShikakuSaveAdapter: corrupted save — %s entry not a Dictionary" % context)
+		return false
+	var d: Dictionary = entry as Dictionary
+	var x := int(d.get("x", -1))
+	var y := int(d.get("y", -1))
+	var rw := int(d.get("w", 0))
+	var rh := int(d.get("h", 0))
+	if rw <= 0 or rh <= 0:
+		push_warning("ShikakuSaveAdapter: corrupted save — %s rect has non-positive dimensions" % context)
+		return false
+	if x < 0 or y < 0 or x + rw > grid_w or y + rh > grid_h:
+		push_warning("ShikakuSaveAdapter: corrupted save — %s rect out of bounds" % context)
+		return false
+	return true
+
+
+## Return false and emit a warning when [param entry] is not a valid undo/redo entry.
+func _validate_history_entry(entry: Variant, grid_w: int, grid_h: int, context: String) -> bool:
+	if not (entry is Dictionary):
+		push_warning("ShikakuSaveAdapter: corrupted save — %s entry not a Dictionary" % context)
+		return false
+	var d: Dictionary = entry as Dictionary
+	var action := str(d.get("action", ""))
+	if action != "place" and action != "remove":
+		push_warning("ShikakuSaveAdapter: corrupted save — %s unknown action '%s'" % [context, action])
+		return false
+	var rect_data = d.get("rect", null)
+	if not (rect_data is Dictionary):
+		push_warning("ShikakuSaveAdapter: corrupted save — %s entry missing rect" % context)
+		return false
+	return _validate_rect_entry(rect_data, grid_w, grid_h, context + ".rect")

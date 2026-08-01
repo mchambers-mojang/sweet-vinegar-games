@@ -286,6 +286,70 @@ func test_shikaku_adapter_get_grid_width_default_when_no_save() -> void:
 	assert_eq(adapter.get_grid_width(), 10)
 
 
+# Fix 3 — extended save-adapter validation
+
+func test_shikaku_adapter_can_resume_false_for_invalid_mode() -> void:
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"3,3": {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT}}
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors, "mode": 99})
+	assert_false(adapter.can_resume(), "Unknown mode must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_true_for_shapes_mode() -> void:
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"3,3": {"area": 0, "shape": ShikakuLogic.SHAPE_SQUARE}}
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors, "mode": ShikakuLogic.RULE_SET_SHAPES})
+	assert_true(adapter.can_resume(), "Shapes mode with valid anchor must be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_invalid_solution_rect_out_of_bounds() -> void:
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"3,3": {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT}}
+	var bad_solution := [{"x": 8, "y": 8, "w": 5, "h": 5}]  # far outside 10×10
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors, "solution": bad_solution})
+	assert_false(adapter.can_resume(), "Solution rect outside grid must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_invalid_solution_rect_zero_size() -> void:
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"3,3": {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT}}
+	var bad_solution := [{"x": 0, "y": 0, "w": 0, "h": 3}]  # zero width
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors, "solution": bad_solution})
+	assert_false(adapter.can_resume(), "Solution rect with zero dimension must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_invalid_placed_rect() -> void:
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"3,3": {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT}}
+	var bad_placed := [{"x": -1, "y": 0, "w": 2, "h": 2}]  # negative x
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors, "placed_rects": bad_placed})
+	assert_false(adapter.can_resume(), "Placed rect with negative x must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_invalid_undo_stack_action() -> void:
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"3,3": {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT}}
+	var bad_undo := [{"action": "bogus", "rect": {"x": 0, "y": 0, "w": 2, "h": 2}}]
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors, "undo_stack": bad_undo})
+	assert_false(adapter.can_resume(), "Unknown action in undo_stack must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_undo_stack_rect_out_of_bounds() -> void:
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"3,3": {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT}}
+	var bad_undo := [{"action": "place", "rect": {"x": 9, "y": 9, "w": 5, "h": 5}}]
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors, "undo_stack": bad_undo})
+	assert_false(adapter.can_resume(), "undo_stack rect outside grid must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_non_integer_anchor_key() -> void:
+	# Coercive-parsing fix: "abc,def" must NOT silently parse to (0,0).
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"abc,def": {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT}}
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors})
+	assert_false(adapter.can_resume(), "Non-integer anchor key must not be resumable")
+
+
 # ---------------------------------------------------------------------------
 # GameSaveAdapter — restore_if_resumable (avoids double load)
 # ---------------------------------------------------------------------------

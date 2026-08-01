@@ -148,3 +148,83 @@ func test_get_cell_center_matches_rect_center() -> void:
 	var rect: Rect2 = board.get_cell_screen_rect(2, 3)
 	var center: Vector2 = board.get_cell_center(2, 3)
 	assert_true(center.distance_to(rect.get_center()) < 0.001)
+
+
+# ---------------------------------------------------------------------------
+# Fix 4 — accessible tooltip set at setup time
+# ---------------------------------------------------------------------------
+
+func test_setup_sets_tooltip_text_non_empty() -> void:
+	# Board was set up with area-only anchors in before_each — tooltip must not be empty.
+	assert_false(board.tooltip_text.is_empty(),
+		"tooltip_text must be set at setup() time for screen-reader accessibility")
+
+
+func test_setup_tooltip_contains_area_description() -> void:
+	# The tooltip for area-only anchors should mention cell counts.
+	assert_true(board.tooltip_text.contains("cells"),
+		"tooltip_text must describe area anchors ('cells')")
+
+
+func test_setup_shape_only_anchor_tooltip_contains_shape_name() -> void:
+	board.setup(5, 5, {Vector2i(2, 2): {"area": 0, "shape": ShikakuLogic.SHAPE_TALL}})
+	assert_true(board.tooltip_text.contains("Tall"),
+		"tooltip_text must include shape name for shape-only anchors")
+
+
+func test_setup_combined_anchor_tooltip_contains_both() -> void:
+	board.setup(5, 5, {Vector2i(1, 1): {"area": 4, "shape": ShikakuLogic.SHAPE_SQUARE}})
+	assert_true(board.tooltip_text.contains("Square"),
+		"tooltip_text must include shape name for combined anchors")
+	assert_true(board.tooltip_text.contains("4"),
+		"tooltip_text must include area for combined anchors")
+
+
+func test_setup_clears_tooltip_when_no_anchors() -> void:
+	board.setup(5, 5, {})
+	assert_true(board.tooltip_text.is_empty(),
+		"tooltip_text must be empty when there are no anchors")
+
+
+# ---------------------------------------------------------------------------
+# Fix 6 — contradiction highlighting via refresh_error_state
+# ---------------------------------------------------------------------------
+
+func test_add_rect_sets_rect_is_wrong_false_by_default() -> void:
+	board.add_rect(Rect2i(0, 0, 2, 2))
+	assert_eq(board.rect_is_wrong.size(), 1)
+	assert_false(board.rect_is_wrong[0], "Newly added rect must default to not-wrong")
+
+
+func test_refresh_error_state_marks_wrong_rects() -> void:
+	board.add_rect(Rect2i(0, 0, 2, 2))
+	board.add_rect(Rect2i(2, 0, 3, 1))
+	var wrong: Array[Rect2i] = [Rect2i(0, 0, 2, 2)]
+	board.refresh_error_state(wrong)
+	assert_true(board.rect_is_wrong[0], "Rect matching wrong list must be flagged")
+	assert_false(board.rect_is_wrong[1], "Rect not in wrong list must not be flagged")
+
+
+func test_refresh_error_state_clears_previous_errors() -> void:
+	board.add_rect(Rect2i(0, 0, 2, 2))
+	board.refresh_error_state([Rect2i(0, 0, 2, 2)])
+	assert_true(board.rect_is_wrong[0])
+	board.refresh_error_state([])
+	assert_false(board.rect_is_wrong[0], "After clearing wrong list, rect must no longer be flagged")
+
+
+func test_remove_rect_removes_from_error_tracking() -> void:
+	board.add_rect(Rect2i(0, 0, 2, 2))
+	board.add_rect(Rect2i(2, 0, 3, 1))
+	board.refresh_error_state([Rect2i(0, 0, 2, 2)])
+	board.remove_rect(0)
+	assert_eq(board.rect_is_wrong.size(), 1,
+		"rect_is_wrong must be kept in sync with placed_rects after remove")
+
+
+func test_setup_clears_error_state() -> void:
+	board.add_rect(Rect2i(0, 0, 2, 2))
+	board.refresh_error_state([Rect2i(0, 0, 2, 2)])
+	board.setup(5, 5, {Vector2i(1, 1): {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT}})
+	assert_true(board.rect_is_wrong.is_empty(),
+		"rect_is_wrong must be cleared on setup()")
