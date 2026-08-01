@@ -19,7 +19,8 @@ func _migrate(data: Dictionary, _from_version: int) -> Dictionary:
 
 
 ## A valid Number Path save must have valid dimensions, tier, non-empty checkpoints in
-## range, barriers with valid fields, non-empty solution path, and a non-completed game.
+## range, barriers with valid fields (not at board edges), fully-validated solution path,
+## non-empty current path starting at CP1, valid history stacks, and a non-completed game.
 func _can_resume_from(data: Dictionary) -> bool:
 	if data.is_empty():
 		return false
@@ -46,7 +47,6 @@ func _can_resume_from(data: Dictionary) -> bool:
 		push_warning("NumberPathSaveAdapter: corrupted save — no checkpoints")
 		return false
 	var cp_seen_coords: Dictionary = {}
-	var cp_seen_ns: Dictionary = {}
 	for i in range(cps_arr.size()):
 		var cp = cps_arr[i]
 		if not (cp is Dictionary):
@@ -74,13 +74,9 @@ func _can_resume_from(data: Dictionary) -> bool:
 			push_warning("NumberPathSaveAdapter: corrupted save — duplicate checkpoint coordinates")
 			return false
 		cp_seen_coords[coord_key] = true
-		# Duplicate n check
-		if cp_seen_ns.has(cn as int):
-			push_warning("NumberPathSaveAdapter: corrupted save — duplicate checkpoint n")
-			return false
-		cp_seen_ns[cn as int] = true
-	# Validate barriers
+	# Validate barriers and build lookup set for path validators
 	var bs = data.get("barriers", null)
+	var barrier_set: Dictionary = {}
 	if bs != null:
 		if not (bs is Array):
 			push_warning("NumberPathSaveAdapter: corrupted save — invalid barriers field")
@@ -101,7 +97,16 @@ func _can_resume_from(data: Dictionary) -> bool:
 			if not (bd is int) or ((bd as int) != 0 and (bd as int) != 1):
 				push_warning("NumberPathSaveAdapter: corrupted save — invalid barrier dir")
 				return false
-	# Validate solution path length
+			# A DIR_RIGHT barrier at the rightmost column has no cell to the right
+			if (bd as int) == NumberPathLogic.DIR_RIGHT and (bc2 as int) >= (w as int) - 1:
+				push_warning("NumberPathSaveAdapter: corrupted save — DIR_RIGHT barrier at rightmost column")
+				return false
+			# A DIR_DOWN barrier at the bottom row has no cell below
+			if (bd as int) == NumberPathLogic.DIR_DOWN and (br as int) >= (h as int) - 1:
+				push_warning("NumberPathSaveAdapter: corrupted save — DIR_DOWN barrier at bottom row")
+				return false
+			barrier_set["%d,%d,%d" % [(br as int), (bc2 as int), (bd as int)]] = true
+	# Validate solution path: must have exactly w*h cells and pass full path validation
 	var sp = data.get("solution_path", null)
 	if sp == null or not (sp is Array) or (sp as Array).is_empty():
 		push_warning("NumberPathSaveAdapter: corrupted save — missing solution path")
@@ -109,79 +114,18 @@ func _can_resume_from(data: Dictionary) -> bool:
 	if (sp as Array).size() != (w as int) * (h as int):
 		push_warning("NumberPathSaveAdapter: corrupted save — solution path wrong length")
 		return false
-	# Validate current_path invariants
+	if not _validate_path_data(sp as Array, w as int, h as int, barrier_set, cps_arr):
+		push_warning("NumberPathSaveAdapter: corrupted save — solution path failed validation")
+		return false
+	# Validate current_path: must be present and non-empty (game always starts at CP1)
 	var cp_raw = data.get("current_path", null)
-	if cp_raw != null:
-		if not (cp_raw is Array):
-			push_warning("NumberPathSaveAdapter: corrupted save — current_path not an array")
-			return false
-		var cp_arr := cp_raw as Array
-		if not cp_arr.is_empty():
-			# Build barrier lookup for fast access
-			var barrier_set: Dictionary = {}
-			if bs != null and (bs is Array):
-				for b in (bs as Array):
-					if b is Dictionary:
-						barrier_set["%d,%d,%d" % [int((b as Dictionary).get("r", 0)), int((b as Dictionary).get("c", 0)), int((b as Dictionary).get("dir", 0))]] = true
-			# Must start at CP1
-			var cp1 = cps_arr[0] as Dictionary
-			var first = cp_arr[0]
-			if not (first is Dictionary):
-				push_warning("NumberPathSaveAdapter: corrupted save — current_path entry not a dict")
-				return false
-			if int((first as Dictionary).get("x", -1)) != int(cp1.get("x", -2)) \
-					or int((first as Dictionary).get("y", -1)) != int(cp1.get("y", -2)):
-				push_warning("NumberPathSaveAdapter: corrupted save — current_path does not start at CP1")
-				return false
-			var seen_cells: Dictionary = {}
-			var prev_x := -1
-			var prev_y := -1
-			var next_cp_idx := 0
-			for entry in cp_arr:
-				if not (entry is Dictionary):
-					push_warning("NumberPathSaveAdapter: corrupted save — current_path entry not a dict")
-					return false
-				var ex := int((entry as Dictionary).get("x", -1))
-				var ey := int((entry as Dictionary).get("y", -1))
-				if ex < 0 or ex >= (w as int) or ey < 0 or ey >= (h as int):
-					push_warning("NumberPathSaveAdapter: corrupted save — current_path cell out of bounds")
-					return false
-				var cell_key := "%d,%d" % [ex, ey]
-				if seen_cells.has(cell_key):
-					push_warning("NumberPathSaveAdapter: corrupted save — current_path revisits a cell")
-					return false
-				if prev_x >= 0:
-					var adx := absi(ex - prev_x)
-					var ady := absi(ey - prev_y)
-					if not ((adx == 1 and ady == 0) or (adx == 0 and ady == 1)):
-						push_warning("NumberPathSaveAdapter: corrupted save — current_path has non-adjacent step")
-						return false
-					# Barrier crossing check
-					if adx == 1:
-						var left_x := mini(ex, prev_x)
-						var bk := "%d,%d,%d" % [prev_y, left_x, NumberPathLogic.DIR_RIGHT]
-						if barrier_set.has(bk):
-							push_warning("NumberPathSaveAdapter: corrupted save — current_path crosses barrier")
-							return false
-					else:
-						var top_y := mini(ey, prev_y)
-						var bk := "%d,%d,%d" % [top_y, ex, NumberPathLogic.DIR_DOWN]
-						if barrier_set.has(bk):
-							push_warning("NumberPathSaveAdapter: corrupted save — current_path crosses barrier")
-							return false
-				# Checkpoint ordering
-				for cpi in range(cps_arr.size()):
-					var cpe := cps_arr[cpi] as Dictionary
-					if int(cpe.get("x", -1)) == ex and int(cpe.get("y", -1)) == ey:
-						if cpi != next_cp_idx:
-							push_warning("NumberPathSaveAdapter: corrupted save — current_path visits checkpoint out of order")
-							return false
-						next_cp_idx += 1
-						break
-				seen_cells[cell_key] = true
-				prev_x = ex
-				prev_y = ey
-	# Validate undo/redo stack entries contain valid path arrays
+	if cp_raw == null or not (cp_raw is Array) or (cp_raw as Array).is_empty():
+		push_warning("NumberPathSaveAdapter: corrupted save — current_path missing or empty")
+		return false
+	if not _validate_path_data(cp_raw as Array, w as int, h as int, barrier_set, cps_arr):
+		push_warning("NumberPathSaveAdapter: corrupted save — current_path failed validation")
+		return false
+	# Validate undo/redo stacks: action values, required snapshots, valid paths, transitions
 	for stack_key in ["undo_stack", "redo_stack"]:
 		var stack_raw = data.get(stack_key, null)
 		if stack_raw == null:
@@ -193,23 +137,122 @@ func _can_resume_from(data: Dictionary) -> bool:
 			if not (entry is Dictionary):
 				push_warning("NumberPathSaveAdapter: corrupted save — %s entry not a dict" % stack_key)
 				return false
-			for snap_key in ["pre_snapshot", "post_snapshot"]:
-				var snap = (entry as Dictionary).get(snap_key, null)
-				if snap == null:
-					continue
-				if not (snap is Array):
-					push_warning("NumberPathSaveAdapter: corrupted save — %s.%s not an array" % [stack_key, snap_key])
-					return false
-				for cell in (snap as Array):
-					if not (cell is Dictionary):
-						push_warning("NumberPathSaveAdapter: corrupted save — %s snapshot cell not a dict" % stack_key)
-						return false
-					var sx := (cell as Dictionary).get("x", -1)
-					var sy := (cell as Dictionary).get("y", -1)
-					if not (sx is int) or (sx as int) < 0 or (sx as int) >= (w as int):
-						push_warning("NumberPathSaveAdapter: corrupted save — %s snapshot x out of range" % stack_key)
-						return false
-					if not (sy is int) or (sy as int) < 0 or (sy as int) >= (h as int):
-						push_warning("NumberPathSaveAdapter: corrupted save — %s snapshot y out of range" % stack_key)
-						return false
+			# Action must be a known operation name
+			var action = (entry as Dictionary).get("action", null)
+			if not (action is String) or not (action as String in ["extend", "truncate"]):
+				push_warning("NumberPathSaveAdapter: corrupted save — %s has invalid action" % stack_key)
+				return false
+			# Both snapshots are required and must be non-empty valid paths
+			var pre_snap = (entry as Dictionary).get("pre_snapshot", null)
+			var post_snap = (entry as Dictionary).get("post_snapshot", null)
+			if pre_snap == null or not (pre_snap is Array) or (pre_snap as Array).is_empty():
+				push_warning("NumberPathSaveAdapter: corrupted save — %s pre_snapshot missing or empty" % stack_key)
+				return false
+			if post_snap == null or not (post_snap is Array) or (post_snap as Array).is_empty():
+				push_warning("NumberPathSaveAdapter: corrupted save — %s post_snapshot missing or empty" % stack_key)
+				return false
+			if not _validate_path_data(pre_snap as Array, w as int, h as int, barrier_set, cps_arr):
+				push_warning("NumberPathSaveAdapter: corrupted save — %s pre_snapshot failed validation" % stack_key)
+				return false
+			if not _validate_path_data(post_snap as Array, w as int, h as int, barrier_set, cps_arr):
+				push_warning("NumberPathSaveAdapter: corrupted save — %s post_snapshot failed validation" % stack_key)
+				return false
+			# Transition must be consistent with the recorded action
+			if not _validate_snapshot_transition(action as String, pre_snap as Array, post_snap as Array):
+				push_warning("NumberPathSaveAdapter: corrupted save — %s transition invalid for action '%s'" % [stack_key, action])
+				return false
 	return true
+
+
+## Validate that a non-empty path array represents a valid game path:
+## each entry is a typed in-bounds cell, cells are unique, consecutive cells are
+## orthogonally adjacent, no barrier is crossed, checkpoints are visited in order,
+## and the path starts at CP1.
+func _validate_path_data(path_arr: Array, w: int, h: int,
+		barrier_set: Dictionary, cps_arr: Array) -> bool:
+	if path_arr.is_empty():
+		return false
+	# First cell must be CP1
+	var first = path_arr[0]
+	if not (first is Dictionary):
+		return false
+	var cp1 := cps_arr[0] as Dictionary
+	if int((first as Dictionary).get("x", -1)) != int(cp1.get("x", -2)) \
+			or int((first as Dictionary).get("y", -1)) != int(cp1.get("y", -2)):
+		return false
+	var seen_cells: Dictionary = {}
+	var prev_x := -1
+	var prev_y := -1
+	var next_cp_idx := 0
+	for i in range(path_arr.size()):
+		var entry = path_arr[i]
+		if not (entry is Dictionary):
+			return false
+		var ex = (entry as Dictionary).get("x", null)
+		var ey = (entry as Dictionary).get("y", null)
+		if not (ex is int) or not (ey is int):
+			return false
+		var exi := ex as int
+		var eyi := ey as int
+		if exi < 0 or exi >= w or eyi < 0 or eyi >= h:
+			return false
+		var cell_key := "%d,%d" % [exi, eyi]
+		if seen_cells.has(cell_key):
+			return false
+		if prev_x >= 0:
+			var adx := absi(exi - prev_x)
+			var ady := absi(eyi - prev_y)
+			if not ((adx == 1 and ady == 0) or (adx == 0 and ady == 1)):
+				return false
+			# Barrier crossing check
+			if adx == 1:
+				var left_x := mini(exi, prev_x)
+				var bk := "%d,%d,%d" % [prev_y, left_x, NumberPathLogic.DIR_RIGHT]
+				if barrier_set.has(bk):
+					return false
+			else:
+				var top_y := mini(eyi, prev_y)
+				var bk := "%d,%d,%d" % [top_y, exi, NumberPathLogic.DIR_DOWN]
+				if barrier_set.has(bk):
+					return false
+		# Checkpoint ordering: if this cell is a checkpoint it must be the next expected one
+		for cpi in range(cps_arr.size()):
+			var cpe := cps_arr[cpi] as Dictionary
+			if int(cpe.get("x", -1)) == exi and int(cpe.get("y", -1)) == eyi:
+				if cpi != next_cp_idx:
+					return false
+				next_cp_idx += 1
+				break
+		seen_cells[cell_key] = true
+		prev_x = exi
+		prev_y = eyi
+	return true
+
+
+## Validate that the pre→post snapshot transition is consistent with the action.
+## "extend":  post has exactly one more cell than pre, and pre is a prefix of post.
+## "truncate": post has fewer cells than pre, and post is a prefix of pre.
+func _validate_snapshot_transition(action: String, pre: Array, post: Array) -> bool:
+	if action == "extend":
+		if post.size() != pre.size() + 1:
+			return false
+		for i in range(pre.size()):
+			if not (pre[i] is Dictionary) or not (post[i] is Dictionary):
+				return false
+			if int((pre[i] as Dictionary).get("x", -1)) != int((post[i] as Dictionary).get("x", -1)):
+				return false
+			if int((pre[i] as Dictionary).get("y", -1)) != int((post[i] as Dictionary).get("y", -1)):
+				return false
+		return true
+	elif action == "truncate":
+		if post.size() >= pre.size():
+			return false
+		for i in range(post.size()):
+			if not (pre[i] is Dictionary) or not (post[i] is Dictionary):
+				return false
+			if int((pre[i] as Dictionary).get("x", -1)) != int((post[i] as Dictionary).get("x", -1)):
+				return false
+			if int((pre[i] as Dictionary).get("y", -1)) != int((post[i] as Dictionary).get("y", -1)):
+				return false
+		return true
+	return false

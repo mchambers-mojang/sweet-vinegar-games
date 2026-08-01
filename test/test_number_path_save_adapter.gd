@@ -1,6 +1,6 @@
 extends GutTest
 
-## Unit tests for NumberPathSaveAdapter._can_resume_from validation (fix 3).
+## Unit tests for NumberPathSaveAdapter._can_resume_from validation.
 
 var adapter: NumberPathSaveAdapter
 
@@ -16,7 +16,7 @@ func _valid_save() -> Dictionary:
 			{"x": 4, "y": 4, "n": 2},
 		],
 		"barriers": [],
-		"solution_path": _make_path_arr(5, 5),
+		"solution_path": _make_snake_path_arr(5, 5),
 		"current_path": [{"x": 0, "y": 0}],
 		"is_completed": false,
 		"hints_used": 0,
@@ -26,11 +26,18 @@ func _valid_save() -> Dictionary:
 	}
 
 
-func _make_path_arr(w: int, h: int) -> Array:
+## Build a boustrophedon (snake) path that covers all w*h cells.
+## Row 0 goes left→right, row 1 right→left, alternating.
+## For a 5×5 grid: starts at (0,0) and ends at (4,4).
+func _make_snake_path_arr(w: int, h: int) -> Array:
 	var arr := []
 	for r in range(h):
-		for c in range(w):
-			arr.append({"x": c, "y": r})
+		if r % 2 == 0:
+			for c in range(w):
+				arr.append({"x": c, "y": r})
+		else:
+			for c in range(w - 1, -1, -1):
+				arr.append({"x": c, "y": r})
 	return arr
 
 
@@ -128,8 +135,10 @@ func test_wrong_length_solution_path_rejected() -> void:
 
 func test_valid_barriers_accepted() -> void:
 	var d := _valid_save()
+	# DIR_DOWN at (r=0,c=0) blocks (0,0)↔(0,1); snake path doesn't cross it.
+	# DIR_DOWN at (r=1,c=1) blocks (1,1)↔(1,2); snake path doesn't cross it.
 	d["barriers"] = [
-		{"r": 0, "c": 0, "dir": NumberPathLogic.DIR_RIGHT},
+		{"r": 0, "c": 0, "dir": NumberPathLogic.DIR_DOWN},
 		{"r": 1, "c": 1, "dir": NumberPathLogic.DIR_DOWN},
 	]
 	assert_true(_check_resume(d))
@@ -193,25 +202,28 @@ func test_current_path_with_revisit_rejected() -> void:
 
 func test_current_path_with_barrier_crossing_rejected() -> void:
 	var d := _valid_save()
-	# Place a barrier on the right edge of (0,0): blocks move (0,0)→(1,0)
-	d["barriers"] = [{"r": 0, "c": 0, "dir": NumberPathLogic.DIR_RIGHT}]
-	d["current_path"] = [{"x": 0, "y": 0}, {"x": 1, "y": 0}]
+	# Place a DIR_DOWN barrier at (r=0,c=0): blocks move (0,0)↔(0,1).
+	# The snake solution path does not cross this edge (it goes right from (0,0)).
+	d["barriers"] = [{"r": 0, "c": 0, "dir": NumberPathLogic.DIR_DOWN}]
+	d["current_path"] = [{"x": 0, "y": 0}, {"x": 0, "y": 1}]
 	assert_false(_check_resume(d), "current_path crossing a barrier must be rejected")
 
 
 func test_current_path_with_checkpoint_out_of_order_rejected() -> void:
-	# 3-checkpoint save; path visits CP3 before CP2 (only possible via raw inject).
+	# 3-checkpoint 3×2 save; current_path visits CP3 before CP2 (raw inject).
+	# Snake path for 3×2: (0,0)→(1,0)→(2,0)→(2,1)→(1,1)→(0,1)
+	# Checkpoints: CP1=(0,0), CP2=(2,0), CP3=(0,1) all appear in snake order.
 	var d := _valid_save()
 	d["width"] = 3
 	d["height"] = 2
 	d["checkpoints"] = [
 		{"x": 0, "y": 0, "n": 1},
 		{"x": 2, "y": 0, "n": 2},
-		{"x": 1, "y": 1, "n": 3},
+		{"x": 0, "y": 1, "n": 3},
 	]
-	d["solution_path"] = _make_path_arr(3, 2)
-	# (0,0)→(0,1)→(1,1) — visits CP3 (1,1) without having visited CP2 (2,0)
-	d["current_path"] = [{"x": 0, "y": 0}, {"x": 0, "y": 1}, {"x": 1, "y": 1}]
+	d["solution_path"] = _make_snake_path_arr(3, 2)
+	# (0,0)→(0,1) is adjacent, but (0,1)=CP3 must not be visited before CP2=(2,0)
+	d["current_path"] = [{"x": 0, "y": 0}, {"x": 0, "y": 1}]
 	assert_false(_check_resume(d), "current_path visiting checkpoint out of order must be rejected")
 
 
@@ -221,10 +233,10 @@ func test_current_path_valid_accepted() -> void:
 	assert_true(_check_resume(d), "Valid current_path must be accepted")
 
 
-func test_empty_current_path_accepted() -> void:
+func test_empty_current_path_rejected() -> void:
 	var d := _valid_save()
 	d["current_path"] = []
-	assert_true(_check_resume(d), "Empty current_path must be accepted")
+	assert_false(_check_resume(d), "Empty current_path must be rejected — game always starts at CP1")
 
 
 # --- Regression Fix 2: undo/redo stack entries ---
@@ -269,6 +281,197 @@ func test_valid_undo_stack_accepted() -> void:
 		"post_snapshot": [{"x": 0, "y": 0}, {"x": 1, "y": 0}],
 	}]
 	assert_true(_check_resume(d), "Valid undo_stack must be accepted")
+
+
+# --- Barrier edge validation ---
+
+func test_dir_right_barrier_at_last_column_rejected() -> void:
+	var d := _valid_save()
+	# w=5, last column = 4; DIR_RIGHT there has no cell to the right
+	d["barriers"] = [{"r": 0, "c": 4, "dir": NumberPathLogic.DIR_RIGHT}]
+	assert_false(_check_resume(d), "DIR_RIGHT barrier at last column must be rejected")
+
+
+func test_dir_down_barrier_at_last_row_rejected() -> void:
+	var d := _valid_save()
+	# h=5, last row = 4; DIR_DOWN there has no cell below
+	d["barriers"] = [{"r": 4, "c": 0, "dir": NumberPathLogic.DIR_DOWN}]
+	assert_false(_check_resume(d), "DIR_DOWN barrier at last row must be rejected")
+
+
+func test_dir_down_barrier_not_at_last_row_accepted() -> void:
+	var d := _valid_save()
+	# DIR_DOWN at (r=0,c=1) is structurally valid: r=0 < h-1=4.
+	# It blocks (1,0)↔(1,1); the snake path does not cross that edge consecutively.
+	d["barriers"] = [{"r": 0, "c": 1, "dir": NumberPathLogic.DIR_DOWN}]
+	assert_true(_check_resume(d), "DIR_DOWN barrier not at last row must be accepted")
+
+
+# --- missing current_path ---
+
+func test_missing_current_path_rejected() -> void:
+	var d := _valid_save()
+	d.erase("current_path")
+	assert_false(_check_resume(d), "Missing current_path must be rejected")
+
+
+# --- solution_path full validation ---
+
+func test_solution_path_with_non_dict_entry_rejected() -> void:
+	var d := _valid_save()
+	var sp := _make_snake_path_arr(5, 5)
+	sp[3] = "bad"
+	d["solution_path"] = sp
+	assert_false(_check_resume(d), "solution_path with a non-dict entry must be rejected")
+
+
+func test_solution_path_with_out_of_bounds_cell_rejected() -> void:
+	var d := _valid_save()
+	var sp := _make_snake_path_arr(5, 5)
+	sp[1] = {"x": 99, "y": 0}
+	d["solution_path"] = sp
+	assert_false(_check_resume(d), "solution_path with an out-of-bounds cell must be rejected")
+
+
+func test_solution_path_not_starting_at_cp1_rejected() -> void:
+	var d := _valid_save()
+	var sp := _make_snake_path_arr(5, 5)
+	sp[0] = {"x": 1, "y": 0}  # should be (0,0)=CP1
+	d["solution_path"] = sp
+	assert_false(_check_resume(d), "solution_path not starting at CP1 must be rejected")
+
+
+func test_solution_path_with_non_adjacent_step_rejected() -> void:
+	var d := _valid_save()
+	# Swap two middle entries so consecutive cells are no longer adjacent
+	var sp := _make_snake_path_arr(5, 5)
+	var tmp = sp[5]
+	sp[5] = sp[10]
+	sp[10] = tmp
+	d["solution_path"] = sp
+	assert_false(_check_resume(d), "solution_path with a non-adjacent step must be rejected")
+
+
+func test_solution_path_with_revisit_rejected() -> void:
+	var d := _valid_save()
+	# Duplicate cell: replace entry 2 with a copy of entry 1
+	var sp := _make_snake_path_arr(5, 5)
+	sp[2] = sp[1].duplicate()
+	d["solution_path"] = sp
+	assert_false(_check_resume(d), "solution_path with a revisited cell must be rejected")
+
+
+# --- history stack action / transition validation ---
+
+func test_undo_stack_invalid_action_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{
+		"action": "unknown_op",
+		"pre_snapshot": [{"x": 0, "y": 0}],
+		"post_snapshot": [{"x": 0, "y": 0}, {"x": 1, "y": 0}],
+	}]
+	assert_false(_check_resume(d), "undo_stack entry with unknown action must be rejected")
+
+
+func test_undo_stack_missing_action_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{
+		"pre_snapshot": [{"x": 0, "y": 0}],
+		"post_snapshot": [{"x": 0, "y": 0}, {"x": 1, "y": 0}],
+	}]
+	assert_false(_check_resume(d), "undo_stack entry without action must be rejected")
+
+
+func test_undo_stack_missing_pre_snapshot_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{
+		"action": "extend",
+		"post_snapshot": [{"x": 0, "y": 0}, {"x": 1, "y": 0}],
+	}]
+	assert_false(_check_resume(d), "undo_stack entry missing pre_snapshot must be rejected")
+
+
+func test_undo_stack_missing_post_snapshot_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{
+		"action": "extend",
+		"pre_snapshot": [{"x": 0, "y": 0}],
+	}]
+	assert_false(_check_resume(d), "undo_stack entry missing post_snapshot must be rejected")
+
+
+func test_undo_stack_empty_pre_snapshot_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{
+		"action": "extend",
+		"pre_snapshot": [],
+		"post_snapshot": [{"x": 0, "y": 0}, {"x": 1, "y": 0}],
+	}]
+	assert_false(_check_resume(d), "undo_stack entry with empty pre_snapshot must be rejected")
+
+
+func test_undo_stack_empty_post_snapshot_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{
+		"action": "extend",
+		"pre_snapshot": [{"x": 0, "y": 0}],
+		"post_snapshot": [],
+	}]
+	assert_false(_check_resume(d), "undo_stack entry with empty post_snapshot must be rejected")
+
+
+func test_undo_stack_extend_wrong_size_transition_rejected() -> void:
+	var d := _valid_save()
+	# "extend" requires post.size() == pre.size() + 1; here they're the same size
+	d["undo_stack"] = [{
+		"action": "extend",
+		"pre_snapshot": [{"x": 0, "y": 0}],
+		"post_snapshot": [{"x": 0, "y": 0}],
+	}]
+	assert_false(_check_resume(d), "extend transition with same-size snapshots must be rejected")
+
+
+func test_undo_stack_truncate_wrong_size_transition_rejected() -> void:
+	var d := _valid_save()
+	# "truncate" requires post.size() < pre.size(); here post is larger
+	d["undo_stack"] = [{
+		"action": "truncate",
+		"pre_snapshot": [{"x": 0, "y": 0}],
+		"post_snapshot": [{"x": 0, "y": 0}, {"x": 1, "y": 0}],
+	}]
+	assert_false(_check_resume(d), "truncate transition where post > pre must be rejected")
+
+
+func test_undo_stack_extend_prefix_mismatch_rejected() -> void:
+	var d := _valid_save()
+	# "extend" requires pre to be a prefix of post; here post[0] differs from pre[0]
+	d["undo_stack"] = [{
+		"action": "extend",
+		"pre_snapshot": [{"x": 0, "y": 0}],
+		"post_snapshot": [{"x": 1, "y": 0}, {"x": 2, "y": 0}],
+	}]
+	assert_false(_check_resume(d), "extend transition where pre is not a prefix of post must be rejected")
+
+
+func test_valid_extend_transition_accepted() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{
+		"action": "extend",
+		"pre_snapshot": [{"x": 0, "y": 0}],
+		"post_snapshot": [{"x": 0, "y": 0}, {"x": 1, "y": 0}],
+	}]
+	assert_true(_check_resume(d), "Valid extend transition must be accepted")
+
+
+func test_valid_truncate_transition_accepted() -> void:
+	var d := _valid_save()
+	# Truncation: pre has 3 cells, post has 2 (removed the last)
+	d["undo_stack"] = [{
+		"action": "truncate",
+		"pre_snapshot": [{"x": 0, "y": 0}, {"x": 1, "y": 0}, {"x": 2, "y": 0}],
+		"post_snapshot": [{"x": 0, "y": 0}, {"x": 1, "y": 0}],
+	}]
+	assert_true(_check_resume(d), "Valid truncate transition must be accepted")
 
 
 # Helper: write data into the adapter's backing store and call can_resume().
