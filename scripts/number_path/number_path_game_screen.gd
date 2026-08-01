@@ -341,7 +341,7 @@ func _on_pause() -> void:
 
 func _on_back() -> void:
 	_cancel_generation()
-	var completed := _recorder.finish_session("abandoned", logic.current_path.size(), elapsed_time, {
+	var completed: Dictionary = _recorder.finish_session("abandoned", logic.current_path.size(), elapsed_time, {
 		"tier": _tier,
 	})
 	_storage.save_replay(completed)
@@ -360,7 +360,7 @@ func _handle_win() -> void:
 	var tier_key: String = TIER_KEYS.get(_tier, "easy")
 	GameEvents.leaderboard_score_ready.emit("number_path", tier_key, elapsed_time)
 	_recorder.record_input(elapsed_time, "game_completed", {})
-	var completed := _recorder.finish_session("win", logic.current_path.size(), elapsed_time, {
+	var completed: Dictionary = _recorder.finish_session("win", logic.current_path.size(), elapsed_time, {
 		"tier": _tier,
 		"hints_used": logic.hints_used,
 	})
@@ -439,7 +439,7 @@ func _show_win_dialog() -> void:
 			dialog.queue_free()
 			SceneTransition.navigate(_SCENE_MENU)
 		elif action == "bookmark":
-			var success := _storage.bookmark_latest_replay()
+			var success: bool = _storage.bookmark_latest_replay()
 			dialog.dialog_text += "\n\n%s" % ("✓ Replay bookmarked!" if success else "✗ No replay to bookmark")
 	)
 

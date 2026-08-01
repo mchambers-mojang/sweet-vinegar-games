@@ -132,7 +132,7 @@ static func _build_hamiltonian_path(
 		cancel_check: Callable) -> Array[Vector2i]:
 	# Try several random starting cells for diversity
 	var starts: Array[Vector2i] = []
-	for _ in range(5):
+	for _attempt in range(5):
 		starts.append(Vector2i(rng.randi_range(0, size - 1), rng.randi_range(0, size - 1)))
 
 	for start in starts:
