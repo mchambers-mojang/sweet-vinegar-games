@@ -249,7 +249,7 @@ static func _quota_completion(size: int, cells: Array[int]) -> SolverStep:
 	for r in size:
 		var plus := 0
 		var minus := 0
-		var empty_idx := -1
+		var first_empty_idx := -1
 		var empty_count := 0
 		for c in size:
 			var v: int = cells[r * size + c]
@@ -258,20 +258,21 @@ static func _quota_completion(size: int, cells: Array[int]) -> SolverStep:
 			elif v == MINUS:
 				minus += 1
 			else:
-				empty_idx = r * size + c
+				if first_empty_idx < 0:
+					first_empty_idx = r * size + c
 				empty_count += 1
-		if empty_count == 1:
+		if empty_count >= 1:
 			if plus == half:
-				var af: Array[int] = [empty_idx]
+				var af: Array[int] = [first_empty_idx]
 				return SolverStep.new("Row quota: %d/%d + filled" % [plus, half], af, MINUS, RANK_1)
 			elif minus == half:
-				var af: Array[int] = [empty_idx]
+				var af: Array[int] = [first_empty_idx]
 				return SolverStep.new("Row quota: %d/%d - filled" % [minus, half], af, PLUS, RANK_1)
 	# Columns
 	for c in size:
 		var plus := 0
 		var minus := 0
-		var empty_idx := -1
+		var first_empty_idx := -1
 		var empty_count := 0
 		for r in size:
 			var v: int = cells[r * size + c]
@@ -280,14 +281,15 @@ static func _quota_completion(size: int, cells: Array[int]) -> SolverStep:
 			elif v == MINUS:
 				minus += 1
 			else:
-				empty_idx = r * size + c
+				if first_empty_idx < 0:
+					first_empty_idx = r * size + c
 				empty_count += 1
-		if empty_count == 1:
+		if empty_count >= 1:
 			if plus == half:
-				var af: Array[int] = [empty_idx]
+				var af: Array[int] = [first_empty_idx]
 				return SolverStep.new("Column quota: %d/%d + filled" % [plus, half], af, MINUS, RANK_1)
 			elif minus == half:
-				var af: Array[int] = [empty_idx]
+				var af: Array[int] = [first_empty_idx]
 				return SolverStep.new("Column quota: %d/%d - filled" % [minus, half], af, PLUS, RANK_1)
 	return null
 
@@ -684,6 +686,7 @@ static func _line_propagate_rank3(
 	var w_plus  := plus_count
 	var w_minus := minus_count
 	var first_step: SolverStep = null
+	var propagated_count := 0  # How many cells were forced before the reported step
 	var changed := true
 
 	while changed:
@@ -707,22 +710,28 @@ static func _line_propagate_rank3(
 			if plus_blocked and not minus_blocked:
 				var af: Array[int] = [idx]
 				var ltype := "row" if is_row else "col"
+				# Only Rank 3 if this deduction cascades from an earlier forced cell;
+				# pure direct blockers on the original state are Rank 1.
+				var rank := RANK_3 if propagated_count > 0 else RANK_1
 				if first_step == null:
 					first_step = SolverStep.new(
-						"Rank-3 %s %d: direct constraints force position %d to MINUS" % [ltype, line, e],
-						af, MINUS, RANK_3)
+						"Rank-%d %s %d: constraints force position %d to MINUS" % [rank, ltype, line, e],
+						af, MINUS, rank)
 				working[idx] = MINUS
 				w_minus += 1
+				propagated_count += 1
 				changed = true
 			elif minus_blocked and not plus_blocked:
 				var af: Array[int] = [idx]
 				var ltype := "row" if is_row else "col"
+				var rank := RANK_3 if propagated_count > 0 else RANK_1
 				if first_step == null:
 					first_step = SolverStep.new(
-						"Rank-3 %s %d: direct constraints force position %d to PLUS" % [ltype, line, e],
-						af, PLUS, RANK_3)
+						"Rank-%d %s %d: constraints force position %d to PLUS" % [rank, ltype, line, e],
+						af, PLUS, rank)
 				working[idx] = PLUS
 				w_plus += 1
+				propagated_count += 1
 				changed = true
 
 	# Also handle the unique-completion case: after propagation, if the remaining
@@ -736,6 +745,8 @@ static func _line_propagate_rank3(
 		if remaining_empties > 0:
 			var plus_needed  := half - w_plus
 			var minus_needed := half - w_minus
+			# Rank 3 only if we cascaded into this conclusion; otherwise Rank 1.
+			var rank := RANK_3 if propagated_count > 0 else RANK_1
 			if plus_needed == remaining_empties:
 				for e in empties:
 					var idx := line * size + e if is_row else e * size + line
@@ -743,8 +754,8 @@ static func _line_propagate_rank3(
 						var af: Array[int] = [idx]
 						var ltype := "row" if is_row else "col"
 						first_step = SolverStep.new(
-							"Rank-3 %s %d: quota forces position %d to PLUS" % [ltype, line, e],
-							af, PLUS, RANK_3)
+							"Rank-%d %s %d: quota forces position %d to PLUS" % [rank, ltype, line, e],
+							af, PLUS, rank)
 						break
 			elif minus_needed == remaining_empties:
 				for e in empties:
@@ -753,8 +764,8 @@ static func _line_propagate_rank3(
 						var af: Array[int] = [idx]
 						var ltype := "row" if is_row else "col"
 						first_step = SolverStep.new(
-							"Rank-3 %s %d: quota forces position %d to MINUS" % [ltype, line, e],
-							af, MINUS, RANK_3)
+							"Rank-%d %s %d: quota forces position %d to MINUS" % [rank, ltype, line, e],
+							af, MINUS, rank)
 						break
 
 	return first_step
@@ -833,69 +844,51 @@ static func _is_relation_blocked_in_line(
 # Rank 4 techniques
 # ---------------------------------------------------------------------------
 
+## Single-step contradiction chain: for each empty cell, try each candidate
+## value in a scratch copy, propagate all forced Rank-1 consequences until
+## stable, then test the resulting board for consistency.  If one candidate
+## leads to an immediate contradiction the other value is forced.
+##
+## This is non-recursive and bounded (one hypothesis per cell, one pass of
+## Rank-1 propagation per hypothesis).  It finds deductions that are invisible
+## to individual-line analysis because the contradiction spans multiple lines.
 static func _global_quota_chain(
 		size: int,
 		cells: Array[int],
 		h_relations: Dictionary,
 		v_relations: Dictionary) -> SolverStep:
-	# Cross-line direct propagation: for every empty cell, check whether one of
-	# its two candidate values is immediately blocked by its ROW and/or its COLUMN
-	# using quota, no-three, and relation constraints on those two individual lines.
-	# No trial placements are made — all checks inspect the current board state.
-	return _cross_line_propagate(size, cells, h_relations, v_relations)
-
-
-static func _cross_line_propagate(
-		size: int,
-		cells: Array[int],
-		h_relations: Dictionary,
-		v_relations: Dictionary) -> SolverStep:
-	var half := size / 2
 	for r in size:
-		# Pre-compute row counts once per row.
-		var row_plus := 0
-		var row_minus := 0
-		for cc in size:
-			match cells[r * size + cc]:
-				PLUS:  row_plus  += 1
-				MINUS: row_minus += 1
 		for c in size:
 			var idx := r * size + c
 			if cells[idx] != EMPTY:
 				continue
-			# Column counts for this cell.
-			var col_plus := 0
-			var col_minus := 0
-			for rr in size:
-				match cells[rr * size + c]:
-					PLUS:  col_plus  += 1
-					MINUS: col_minus += 1
-
-			# PLUS is blocked if either the row or the column immediately rules it out.
-			var plus_blocked := (row_plus >= half) \
-				or (col_plus >= half) \
-				or _is_no_three_blocked_in_line(cells, size, r, true,  c, PLUS) \
-				or _is_no_three_blocked_in_line(cells, size, c, false, r, PLUS) \
-				or _is_relation_blocked_in_line(cells, size, r, true,  c, PLUS, h_relations, v_relations) \
-				or _is_relation_blocked_in_line(cells, size, c, false, r, PLUS, h_relations, v_relations)
-
-			var minus_blocked := (row_minus >= half) \
-				or (col_minus >= half) \
-				or _is_no_three_blocked_in_line(cells, size, r, true,  c, MINUS) \
-				or _is_no_three_blocked_in_line(cells, size, c, false, r, MINUS) \
-				or _is_relation_blocked_in_line(cells, size, r, true,  c, MINUS, h_relations, v_relations) \
-				or _is_relation_blocked_in_line(cells, size, c, false, r, MINUS, h_relations, v_relations)
-
-			if plus_blocked and not minus_blocked:
-				var af: Array[int] = [idx]
-				return SolverStep.new(
-					"Rank-4 cross (%d,%d): PLUS blocked by row/col constraints" % [c, r],
-					af, MINUS, RANK_4)
-			elif minus_blocked and not plus_blocked:
-				var af: Array[int] = [idx]
-				return SolverStep.new(
-					"Rank-4 cross (%d,%d): MINUS blocked by row/col constraints" % [c, r],
-					af, PLUS, RANK_4)
+			for val in [PLUS, MINUS]:
+				var trial: Array[int] = cells.duplicate()
+				trial[idx] = val
+				# Propagate all Rank-1 forced moves until stable.
+				var progress := true
+				while progress:
+					progress = false
+					var s: SolverStep = _quota_completion(size, trial)
+					if s == null:
+						s = _adjacent_pair_prevention(size, trial)
+					if s == null:
+						s = _sandwich_rule(size, trial)
+					if s == null:
+						s = _direct_relation(size, trial, h_relations, v_relations)
+					if s != null:
+						trial[s.affected_cells[0]] = s.result_value
+						progress = true
+				# If the fully-propagated trial violates any constraint, the
+				# opposite value is forced.
+				if not is_consistent(size, trial, h_relations, v_relations):
+					var forced := MINUS if val == PLUS else PLUS
+					var af: Array[int] = [idx]
+					var forced_str := "+" if forced == PLUS else "-"
+					var tried_str  := "+" if val   == PLUS else "-"
+					return SolverStep.new(
+						"Rank-4 chain (%d,%d): placing %s leads to contradiction, forced %s" % [c, r, tried_str, forced_str],
+						af, forced, RANK_4)
 	return null
 
 

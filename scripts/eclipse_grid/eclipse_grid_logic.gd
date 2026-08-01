@@ -45,6 +45,11 @@ var assistance_mode: int = ASSIST_FREE
 
 var _undo_stack: UndoStack = UndoStack.new()
 
+## Tracks the pre-rejection cell value for cells in strict mode where a wrong
+## glyph was placed but not recorded in the undo stack.  Cleared when the cell
+## receives an accepted placement or is restored via undo.
+var _pre_rejection: Dictionary = {}
+
 var undo_stack: Array[Dictionary]:
 	get:
 		return _undo_stack.get_undo_entries()
@@ -99,6 +104,7 @@ func init_new_game(puzzle_size: int, seed_value: int, generated: Dictionary = {}
 
 	_apply_generated_data(data)
 	_undo_stack.clear()
+	_pre_rejection.clear()
 	is_completed = false
 	hints_used = 0
 
@@ -122,6 +128,7 @@ func init_from_save(data: Dictionary) -> void:
 	var undo_entries := _deserialize_undo_stack(data.get("undo_stack", []))
 	var redo_entries := _deserialize_undo_stack(data.get("redo_stack", []))
 	_undo_stack.load_entries(undo_entries, redo_entries)
+	_pre_rejection.clear()
 
 	_recompute_completion()
 
@@ -169,17 +176,29 @@ func cycle_cell(index: int) -> SetGlyphResult:
 	# Placing the wrong value keeps the cycle advancing so the player can
 	# reach the correct value on the next tap (EMPTY → PLUS wrong → rejected →
 	# tap again → MINUS).  EMPTY (erase) is always accepted silently.
+	# Rejected placements are NOT added to the undo history so that undo always
+	# returns to the last accepted state, never to an intermediate rejected glyph.
 	if assistance_mode == ASSIST_STRICT and new_val != EMPTY:
 		if not solution.is_empty() and new_val != solution[index]:
 			result.new_value = new_val
 			result.rejected = true
-			_undo_stack.push({"index": index, "old_value": old_val, "new_value": new_val})
+			if not _pre_rejection.has(index):
+				_pre_rejection[index] = old_val  # Remember value before rejection chain
 			cells[index] = new_val
 			return result
 
+	# Accepted placement: use the pre-rejection value as old_value if this cell
+	# was in a rejected state, so undo skips back past the rejected glyph.
+	var undo_old_val: int = old_val
+	if _pre_rejection.has(index):
+		undo_old_val = int(_pre_rejection[index])
+		_pre_rejection.erase(index)
+
 	result.new_value = new_val
 
-	_undo_stack.push({"index": index, "old_value": old_val, "new_value": new_val})
+	# Avoid phantom no-op undo entries (e.g. EMPTY → rejections → EMPTY erase).
+	if undo_old_val != new_val:
+		_undo_stack.push({"index": index, "old_value": undo_old_val, "new_value": new_val})
 	cells[index] = new_val
 	_recompute_completion()
 	result.game_won = is_completed
@@ -192,6 +211,7 @@ func set_cell_direct(index: int, value: int) -> void:
 	if index < 0 or index >= cells.size():
 		return
 	cells[index] = value
+	_pre_rejection.erase(index)
 	_recompute_completion()
 
 
@@ -254,6 +274,7 @@ func undo() -> UndoRedoResult:
 	var old_val: int = int(entry.get("old_value", EMPTY))
 	var new_val: int = int(entry.get("new_value", EMPTY))
 	cells[idx] = old_val
+	_pre_rejection.erase(idx)  # Clear any pending rejection for this cell
 	_recompute_completion()
 	result.index = idx
 	result.old_value = new_val

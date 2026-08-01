@@ -441,8 +441,10 @@ func _refresh_board() -> void:
 	board.update_cells(logic.cells)
 	if logic.assistance_mode == EclipseGridLogic.ASSIST_FREE:
 		board.update_errors(logic.get_error_cells())
+		board.update_error_relations(logic.get_broken_relations())
 	else:
 		board.update_errors([])
+		board.update_error_relations([])
 
 
 func _update_button_states() -> void:

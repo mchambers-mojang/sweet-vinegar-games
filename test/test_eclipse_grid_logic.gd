@@ -607,3 +607,148 @@ func test_hint_applies_correct_value_when_player_has_wrong_cells() -> void:
 	if result.had_step:
 		assert_eq(result.value, sol[result.index],
 			"Hint value must match the solution even when board has wrong cells")
+
+
+# ---------------------------------------------------------------------------
+# Fix 3 — strict-mode undo must not expose rejected glyphs
+# ---------------------------------------------------------------------------
+
+func test_strict_undo_skips_rejected_glyph_solution_plus() -> void:
+	## solution[0] = PLUS.
+	## Cycle: EMPTY → PLUS (correct, accepted) → MINUS (rejected, placed for cycle) →
+	##        EMPTY (erase, accepted).
+	## After the accepted EMPTY step, undo should restore to PLUS (not MINUS).
+	var l2 := EclipseGridLogic.new()
+	var sol: Array[int] = [PLUS, MINUS, PLUS, MINUS,
+						   MINUS, PLUS, MINUS, PLUS,
+						   PLUS, MINUS, PLUS, MINUS,
+						   MINUS, PLUS, MINUS, PLUS]
+	var gv: Array[int] = sol.duplicate()
+	gv[0] = EMPTY
+	l2.init_from_save(_make_save_data(4, sol, gv))
+	l2.assistance_mode = EclipseGridLogic.ASSIST_STRICT
+
+	# EMPTY → PLUS (correct).
+	var r1: EclipseGridLogic.SetGlyphResult = l2.cycle_cell(0)
+	assert_false(r1.rejected)
+	assert_eq(l2.cells[0], PLUS)
+
+	# PLUS → MINUS (wrong, rejected — placed for cycle advancement).
+	var r2: EclipseGridLogic.SetGlyphResult = l2.cycle_cell(0)
+	assert_true(r2.rejected, "Wrong MINUS must be rejected")
+	assert_eq(l2.cells[0], MINUS, "Rejected value placed to allow cycle to advance")
+
+	# MINUS → EMPTY (erase, always accepted).
+	var r3: EclipseGridLogic.SetGlyphResult = l2.cycle_cell(0)
+	assert_false(r3.rejected)
+	assert_eq(l2.cells[0], EMPTY)
+
+	# Undo: should restore to PLUS (last correct state), NOT to rejected MINUS.
+	assert_true(l2.can_undo(), "Undo must be available after accepted placements")
+	var u := l2.undo()
+	assert_eq(l2.cells[0], PLUS,
+		"Undo after erase must restore PLUS (correct state), not rejected MINUS")
+	assert_eq(u.new_value, PLUS,
+		"Undo result.new_value must be PLUS (the restored value)")
+
+
+func test_strict_undo_skips_rejected_glyph_solution_minus() -> void:
+	## solution[0] = MINUS.
+	## Cycle: EMPTY → PLUS (rejected) → MINUS (correct).
+	## After entering correct MINUS, undo must restore to EMPTY, not rejected PLUS.
+	var l2 := EclipseGridLogic.new()
+	var sol: Array[int] = [MINUS, PLUS, MINUS, PLUS,
+						   PLUS, MINUS, PLUS, MINUS,
+						   MINUS, PLUS, MINUS, PLUS,
+						   PLUS, MINUS, PLUS, MINUS]
+	var gv: Array[int] = sol.duplicate()
+	gv[0] = EMPTY
+	l2.init_from_save(_make_save_data(4, sol, gv))
+	l2.assistance_mode = EclipseGridLogic.ASSIST_STRICT
+
+	# EMPTY → PLUS (wrong, rejected).
+	var r1: EclipseGridLogic.SetGlyphResult = l2.cycle_cell(0)
+	assert_true(r1.rejected, "Wrong PLUS must be rejected")
+	assert_eq(l2.cells[0], PLUS, "Rejected value placed to allow cycle to advance")
+
+	# PLUS → MINUS (correct, accepted).
+	var r2: EclipseGridLogic.SetGlyphResult = l2.cycle_cell(0)
+	assert_false(r2.rejected, "Correct MINUS must be accepted")
+	assert_eq(l2.cells[0], MINUS)
+
+	# Undo: must restore to EMPTY, not to rejected PLUS.
+	assert_true(l2.can_undo(), "Undo must be available after accepted MINUS")
+	l2.undo()
+	assert_eq(l2.cells[0], EMPTY,
+		"Undo after correct MINUS must restore EMPTY (pre-rejection state), not rejected PLUS")
+
+
+func test_strict_undo_not_pushed_for_rejected() -> void:
+	## Rejected placements must NOT add entries to the undo stack.
+	## After a rejected PLUS (cell 0 solution=MINUS), undo stack must remain empty.
+	var l2 := EclipseGridLogic.new()
+	var sol: Array[int] = [MINUS, PLUS, MINUS, PLUS,
+						   PLUS, MINUS, PLUS, MINUS,
+						   MINUS, PLUS, MINUS, PLUS,
+						   PLUS, MINUS, PLUS, MINUS]
+	var gv: Array[int] = sol.duplicate()
+	gv[0] = EMPTY
+	l2.init_from_save(_make_save_data(4, sol, gv))
+	l2.assistance_mode = EclipseGridLogic.ASSIST_STRICT
+
+	var r1: EclipseGridLogic.SetGlyphResult = l2.cycle_cell(0)
+	assert_true(r1.rejected)
+	assert_false(l2.can_undo(),
+		"Rejected placement must not add an undo entry — undo stack must remain empty")
+
+
+# ---------------------------------------------------------------------------
+# Fix 4 — broken relation clues are highlighted
+# ---------------------------------------------------------------------------
+
+func test_get_broken_relations_eq_violation() -> void:
+	## EQ relation requires both cells to be the same glyph.
+	## Place PLUS on the left and MINUS on the right → violated.
+	var l2 := EclipseGridLogic.new()
+	var sol := _sol4()
+	var gv: Array[int] = sol.duplicate()
+	var data := _make_save_data(4, sol, gv)
+	# h_relations: relation between (0,0) and (1,0) must be EQ.
+	# sol4 checkerboard: (0,0)=PLUS, (1,0)=MINUS → PLUS ≠ MINUS → EQ violated.
+	data["h_relations"] = {"0,0": EQ}
+	l2.init_from_save(data)
+	var broken: Array[Array] = l2.get_broken_relations()
+	assert_eq(broken.size(), 1, "One EQ relation must be reported as broken")
+	assert_eq(broken[0][2], true, "Broken relation must be flagged as horizontal")
+
+
+func test_get_broken_relations_neq_violation() -> void:
+	## NEQ relation requires both cells to be different.
+	## Place PLUS on both sides → violated.
+	var l2 := EclipseGridLogic.new()
+	var sol: Array[int] = [PLUS, PLUS, MINUS, MINUS,
+						   MINUS, MINUS, PLUS, PLUS,
+						   PLUS, PLUS, MINUS, MINUS,
+						   MINUS, MINUS, PLUS, PLUS]
+	var gv: Array[int] = sol.duplicate()
+	var data := _make_save_data(4, sol, gv)
+	# h_relations: (0,0)→(1,0) NEQ; sol has PLUS,PLUS → NEQ violated.
+	data["h_relations"] = {"0,0": NEQ}
+	l2.init_from_save(data)
+	var broken: Array[Array] = l2.get_broken_relations()
+	assert_eq(broken.size(), 1, "One NEQ relation must be reported as broken")
+
+
+func test_get_broken_relations_returns_empty_when_none_violated() -> void:
+	## EQ relation satisfied: (0,0) and (1,0) are both PLUS in this board.
+	var l2 := EclipseGridLogic.new()
+	var sol: Array[int] = [PLUS, PLUS, MINUS, MINUS,
+						   MINUS, MINUS, PLUS, PLUS,
+						   PLUS, PLUS, MINUS, MINUS,
+						   MINUS, MINUS, PLUS, PLUS]
+	var gv: Array[int] = sol.duplicate()
+	var data := _make_save_data(4, sol, gv)
+	data["h_relations"] = {"0,0": EQ}  # PLUS=PLUS → satisfied
+	l2.init_from_save(data)
+	var broken: Array[Array] = l2.get_broken_relations()
+	assert_eq(broken.size(), 0, "No broken relations when all clues are satisfied")

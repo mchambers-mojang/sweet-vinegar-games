@@ -347,3 +347,104 @@ func test_rank3_propagation_quota_cascade() -> void:
 	if first_step.affected_cells[0] == 2:
 		assert_eq(first_step.result_value, MINUS,
 			"No-three propagation must force index 2 to MINUS")
+
+
+# ---------------------------------------------------------------------------
+# Fix 2 — multi-empty quota fires at Rank 1
+# ---------------------------------------------------------------------------
+
+func test_quota_completion_multi_empty_fires_rank1() -> void:
+	## Row 0 of a 6×6 board: [+, -, +, ?, +, ?]
+	## plus_count = 3 = half (3 for 6×6), minus_count = 1, two empties.
+	## _quota_completion (expanded) must fire immediately at RANK_1 and force
+	## the first empty (index 3) to MINUS — NOT reach _line_propagate_rank3.
+	var cells: Array[int] = [
+		PLUS, MINUS, PLUS, EMPTY, PLUS, EMPTY,   # row 0 — plus quota exhausted
+		MINUS, PLUS, MINUS, PLUS, MINUS, PLUS,   # row 1
+		PLUS, MINUS, PLUS, MINUS, PLUS, MINUS,   # row 2
+		MINUS, PLUS, MINUS, PLUS, MINUS, PLUS,   # row 3
+		PLUS, MINUS, PLUS, MINUS, PLUS, MINUS,   # row 4
+		MINUS, PLUS, MINUS, PLUS, MINUS, PLUS,   # row 5
+	]
+	var step: EclipseGridSolver.SolverStep = EclipseGridSolver._quota_completion(6, cells)
+	assert_not_null(step, "_quota_completion must return a step when plus quota is full")
+	assert_eq(step.rank, EclipseGridSolver.RANK_1,
+		"Multi-empty quota completion must be RANK_1, not RANK_3")
+	assert_eq(step.result_value, MINUS,
+		"When plus quota is exhausted the forced value is MINUS")
+	# The step must target one of the empty cells (index 3 or 5 — whichever is first)
+	assert_eq(step.affected_cells[0], 3,
+		"First empty cell in the quota-exhausted row must be targeted")
+
+
+func test_analyze_multi_empty_quota_rank1_not_rank3() -> void:
+	## Same board as above; analyze() must produce steps, and the very first step
+	## that touches row 0 must come out at RANK_1 (quota exhaustion is Rank 1).
+	var cells: Array[int] = [
+		PLUS, MINUS, PLUS, EMPTY, PLUS, EMPTY,
+		MINUS, PLUS, MINUS, PLUS, MINUS, PLUS,
+		PLUS, MINUS, PLUS, MINUS, PLUS, MINUS,
+		MINUS, PLUS, MINUS, PLUS, MINUS, PLUS,
+		PLUS, MINUS, PLUS, MINUS, PLUS, MINUS,
+		MINUS, PLUS, MINUS, PLUS, MINUS, PLUS,
+	]
+	var analysis: EclipseGridSolver.Analysis = EclipseGridSolver.analyze(6, cells, {}, {})
+	assert_true(analysis.steps.size() > 0, "Solver must produce steps for this board")
+	# All steps that force cells in row 0 via quota exhaustion are RANK_1.
+	for step in analysis.steps:
+		var s: EclipseGridSolver.SolverStep = step
+		if s.affected_cells[0] == 3 or s.affected_cells[0] == 5:
+			assert_eq(s.rank, EclipseGridSolver.RANK_1,
+				"Steps forcing quota-exhausted row cells must be RANK_1, not RANK_3")
+			break
+
+
+# ---------------------------------------------------------------------------
+# Fix 1 — Rank-4 contradiction chain
+# ---------------------------------------------------------------------------
+
+func test_rank4_chain_propagates_before_consistency_check() -> void:
+	## The new _global_quota_chain places a trial value, propagates Rank-1
+	## consequences, then checks is_consistent.  Verify it terminates correctly
+	## and all returned steps are valid RANK_4 steps (if any).
+	## Board: mostly filled 6×6, a few empties — run the full analyzer.
+	var cells: Array[int] = [
+		PLUS, MINUS, PLUS, MINUS, PLUS, MINUS,
+		MINUS, PLUS, MINUS, PLUS, MINUS, PLUS,
+		PLUS, MINUS, EMPTY, MINUS, PLUS, MINUS,
+		MINUS, PLUS, MINUS, EMPTY, MINUS, PLUS,
+		PLUS, MINUS, PLUS, MINUS, PLUS, MINUS,
+		MINUS, PLUS, MINUS, PLUS, MINUS, PLUS,
+	]
+	# is_consistent must hold for the initial partial board
+	assert_true(EclipseGridSolver.is_consistent(6, cells, {}, {}))
+	var analysis: EclipseGridSolver.Analysis = EclipseGridSolver.analyze(6, cells, {}, {})
+	# If the analyzer produces steps they must all be valid ranks
+	for step in analysis.steps:
+		var s: EclipseGridSolver.SolverStep = step
+		assert_gte(s.rank, EclipseGridSolver.RANK_1)
+		assert_lte(s.rank, EclipseGridSolver.RANK_4)
+	# Applying all steps must keep the board consistent
+	var working: Array[int] = cells.duplicate()
+	for step in analysis.steps:
+		var s: EclipseGridSolver.SolverStep = step
+		working[s.affected_cells[0]] = s.result_value
+	assert_true(EclipseGridSolver.is_consistent(6, working, {}, {}),
+		"Applying all analysis steps must keep the board consistent")
+
+
+func test_rank4_chain_trial_placement_does_not_mutate_input() -> void:
+	## _global_quota_chain tries values in scratch copies; the original cells
+	## array must be unchanged after the call.
+	var cells: Array[int] = [
+		PLUS, MINUS, PLUS, MINUS, PLUS, MINUS,
+		MINUS, PLUS, MINUS, PLUS, MINUS, PLUS,
+		PLUS, MINUS, EMPTY, MINUS, PLUS, MINUS,
+		MINUS, PLUS, MINUS, EMPTY, MINUS, PLUS,
+		PLUS, MINUS, PLUS, MINUS, PLUS, MINUS,
+		MINUS, PLUS, MINUS, PLUS, MINUS, PLUS,
+	]
+	var snapshot: Array[int] = cells.duplicate()
+	EclipseGridSolver._global_quota_chain(6, cells, {}, {})
+	assert_eq(cells, snapshot,
+		"_global_quota_chain must not mutate the input cells array")

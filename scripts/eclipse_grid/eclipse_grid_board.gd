@@ -17,6 +17,10 @@ var h_relations: Dictionary = {}
 var v_relations: Dictionary = {}
 var error_cells: Array[int] = []
 
+## Sets of broken relation keys (Vector2i positions) for error highlighting.
+var _broken_h_rel_keys: Dictionary = {}  ## {Vector2i: true} for broken horizontal relations
+var _broken_v_rel_keys: Dictionary = {}  ## {Vector2i: true} for broken vertical relations
+
 ## Invisible accessibility buttons — one per cell, rebuilt on setup().
 var _cell_buttons: Array[Button] = []
 
@@ -41,6 +45,8 @@ func setup(sz: int, gv: Array[int], cr: Array[int], hr: Dictionary, vr: Dictiona
 	h_relations = hr
 	v_relations = vr
 	error_cells.clear()
+	_broken_h_rel_keys.clear()
+	_broken_v_rel_keys.clear()
 	_rebuild_cell_buttons()
 	queue_redraw()
 
@@ -53,6 +59,28 @@ func update_cells(cr: Array[int]) -> void:
 
 func update_errors(errs: Array[int]) -> void:
 	error_cells = errs.duplicate()
+	queue_redraw()
+
+
+## Update which relation clues are currently violated.
+## broken is the Array[Array] returned by EclipseGridLogic.get_broken_relations():
+## each element is [left_cell_idx, right_cell_idx, is_horizontal: bool].
+func update_error_relations(broken: Array[Array]) -> void:
+	_broken_h_rel_keys.clear()
+	_broken_v_rel_keys.clear()
+	for entry in broken:
+		if entry.size() < 3:
+			continue
+		var li: int = int(entry[0])
+		var is_h: bool = bool(entry[2])
+		if is_h:
+			var r := li / grid_size
+			var c := li % grid_size
+			_broken_h_rel_keys[Vector2i(c, r)] = true
+		else:
+			var r := li / grid_size
+			var c := li % grid_size
+			_broken_v_rel_keys[Vector2i(c, r)] = true
 	queue_redraw()
 
 
@@ -301,8 +329,10 @@ func _draw_relations(origin: Vector2, cs: float, neon: bool) -> void:
 	var font_sz := int(rel_size * 1.4)
 	var tm := AppTheme
 	var rel_color := tm.get_color("text_given")
+	var err_color := tm.get_color("cell_error")
 	if neon:
 		rel_color = Color(1.0, 1.0, 0.5)
+		err_color = Color(1.5, 0.3, 0.3)
 
 	# Horizontal relations: drawn between cells in the same row
 	for pos in h_relations.keys():
@@ -318,7 +348,8 @@ func _draw_relations(origin: Vector2, cs: float, neon: bool) -> void:
 		var bg_color := tm.get_color("cell_background")
 		bg_color.a = 0.85
 		draw_rect(bg_rect, bg_color)
-		draw_string(font, text_pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_sz, rel_color)
+		var draw_color := err_color if _broken_h_rel_keys.has(pos) else rel_color
+		draw_string(font, text_pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_sz, draw_color)
 
 	# Vertical relations: drawn between cells in the same column
 	for pos in v_relations.keys():
@@ -333,7 +364,8 @@ func _draw_relations(origin: Vector2, cs: float, neon: bool) -> void:
 		var bg_color := tm.get_color("cell_background")
 		bg_color.a = 0.85
 		draw_rect(bg_rect, bg_color)
-		draw_string(font, text_pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_sz, rel_color)
+		var draw_color := err_color if _broken_v_rel_keys.has(pos) else rel_color
+		draw_string(font, text_pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_sz, draw_color)
 
 
 func _draw_grid_lines(origin: Vector2, cs: float, neon: bool) -> void:
