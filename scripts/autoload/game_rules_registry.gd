@@ -28,11 +28,11 @@ func register_rules(game_id: String, defaults: Dictionary) -> void:
 	_rules[game_id] = stored
 
 
-func get_rule(game_id: String, key: String) -> Variant:
+func get_rule(game_id: String, key: String, default: Variant = null) -> Variant:
 	if not _rules.has(game_id):
 		push_warning("GameRulesRegistry: game_id '%s' not registered" % game_id)
-		return null
-	return _rules[game_id].get(key)
+		return default
+	return _rules[game_id].get(key, default)
 
 
 func set_rule(game_id: String, key: String, value: Variant) -> void:

@@ -19,6 +19,9 @@ abandon_stat_save_key = "tier"
 abandon_stat_prefix = "abandoned_t"
 abandon_stat_default = 0
 title_color_key = ""
-game_rules = {}
+game_rules = {
+"auto_mark": false,
+"strict_assistance": false
+}
 leaderboard_modes = PackedStringArray("easy", "medium", "hard", "expert")
 leaderboard_is_time_based = true

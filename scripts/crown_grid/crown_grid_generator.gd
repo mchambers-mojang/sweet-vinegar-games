@@ -35,7 +35,7 @@ const TIER_MIN_RANK := {
 	TIER_EASY: CrownGridSolver.RANK_SINGLE,
 	TIER_MEDIUM: CrownGridSolver.RANK_COMBINED,
 	TIER_HARD: CrownGridSolver.RANK_LOCKED,
-	TIER_EXPERT: CrownGridSolver.RANK_LOCKED,  # 9×9 with locked-candidate logic
+	TIER_EXPERT: CrownGridSolver.RANK_CHAIN,  # must require at least one rank-4 step
 }
 
 # Max rank allowed per tier
@@ -75,14 +75,14 @@ static func generate(tier: int, seed: int, cancel_check: Callable = Callable()) 
 		# 3. Verify unique solution
 		if cancel_check.is_valid() and cancel_check.call():
 			return {}
-		var solution_count := CrownGridSolver.count_solutions(size, regions)
+		var solution_count := CrownGridSolver.count_solutions(size, regions, {}, cancel_check)
 		if solution_count != 1:
 			continue
 
 		# 4. Analyze difficulty rank
 		if cancel_check.is_valid() and cancel_check.call():
 			return {}
-		var rank := CrownGridSolver.analyze_difficulty(size, regions)
+		var rank := CrownGridSolver.analyze_difficulty(size, regions, cancel_check)
 		if rank == CrownGridSolver.RANK_NONE:
 			continue
 

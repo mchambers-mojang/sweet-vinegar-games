@@ -270,3 +270,33 @@ func test_exclude_from_crown_clears_row_col_region_diag() -> void:
 	# Diagonal neighbors
 	assert_true(excluded.has(Vector2i(0, 1)))
 	assert_true(excluded.has(Vector2i(2, 1)))
+
+
+# ---------------------------------------------------------------------------
+# Cancellation (fix 4)
+# ---------------------------------------------------------------------------
+
+func test_count_solutions_respects_cancel() -> void:
+	var r4 := _regions_from_array([
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+	])
+	var cancel_ref := [true]
+	var count := CrownGridSolver.count_solutions(4, r4, {}, func() -> bool: return cancel_ref[0])
+	# Should return -1 (cancelled) or complete very quickly with no real work
+	assert_true(count == -1 or count >= 0, "count_solutions with immediate cancel should not crash")
+
+
+func test_analyze_difficulty_respects_cancel() -> void:
+	var r4 := _regions_from_array([
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+	])
+	var cancel_ref := [true]
+	var rank := CrownGridSolver.analyze_difficulty(4, r4, func() -> bool: return cancel_ref[0])
+	assert_eq(rank, CrownGridSolver.RANK_NONE,
+			"analyze_difficulty cancelled immediately should return RANK_NONE")

@@ -293,3 +293,24 @@ func test_hint_applies_crown_step() -> void:
 	var hint := logic.use_hint()
 	assert_true(hint.applied)
 	assert_eq(logic.hints_used, 1)
+
+
+# ---------------------------------------------------------------------------
+# Auto-mark exposed in TapResult (fix 3a)
+# ---------------------------------------------------------------------------
+
+func test_auto_mark_exposed_in_tap_result() -> void:
+	logic.init_new_game(4, _regions_4x4(), _solution_4x4(), true)  # auto_mark=true
+	logic.tap_cell(1, 0)  # → excluded
+	var result := logic.tap_cell(1, 0)  # → crown at (1,0)
+	assert_eq(result.new_state, CrownGridLogic.CELL_CROWN)
+	assert_false(result.auto_marked.is_empty(),
+			"auto_marked should be non-empty when auto_mark is on")
+
+
+func test_auto_mark_empty_when_disabled() -> void:
+	# auto_mark defaults to false
+	logic.tap_cell(1, 0)  # → excluded
+	var result := logic.tap_cell(1, 0)  # → crown
+	assert_true(result.auto_marked.is_empty(),
+			"auto_marked should be empty when auto_mark is off")

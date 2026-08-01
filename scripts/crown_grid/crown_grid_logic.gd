@@ -48,6 +48,7 @@ class TapResult:
 	var new_state: int = CELL_EMPTY
 	var game_won: bool = false
 	var rejected: bool = false  # strict-mode crown rejection
+	var auto_marked: Array[Vector2i] = []
 
 
 class PaintResult:
@@ -170,6 +171,7 @@ func tap_cell(col: int, row: int) -> TapResult:
 		auto_marked = _apply_auto_marks(col, row)
 		for cell in auto_marked:
 			old_states[cell] = CELL_EMPTY
+	result.auto_marked = auto_marked
 
 	_undo_stack.push({
 		"action": "tap",

@@ -78,10 +78,13 @@ static func validate_solution(size: int, regions: PackedInt32Array, crown_cols: 
 ## Count solutions using backtracking. Returns 0, 1, or 2 (stops at 2 for speed).
 ## regions: PackedInt32Array of length size*size
 ## fixed_crowns: Dictionary[int -> int] row->col for pre-placed crowns (optional)
-static func count_solutions(size: int, regions: PackedInt32Array, fixed_crowns: Dictionary = {}) -> int:
+## cancel_check: Callable() -> bool, return true to abort (returns -1 on cancel)
+static func count_solutions(size: int, regions: PackedInt32Array, fixed_crowns: Dictionary = {}, cancel_check: Callable = Callable()) -> int:
 	var candidates := _build_candidates(size, regions, fixed_crowns)
 	var count_state := [0]
-	_count_backtrack(size, regions, candidates, 0, count_state, fixed_crowns)
+	_count_backtrack(size, regions, candidates, 0, count_state, fixed_crowns, cancel_check)
+	if cancel_check.is_valid() and cancel_check.call():
+		return -1
 	return count_state[0]
 
 
@@ -124,7 +127,8 @@ static func find_next_step(
 
 ## Perform a full human-style solve and return the maximum rank needed.
 ## Returns RANK_NONE if the puzzle cannot be solved without guessing.
-static func analyze_difficulty(size: int, regions: PackedInt32Array) -> int:
+## cancel_check: Callable() -> bool, return true to abort (returns RANK_NONE on cancel)
+static func analyze_difficulty(size: int, regions: PackedInt32Array, cancel_check: Callable = Callable()) -> int:
 	var crowns_by_row: Array = []
 	crowns_by_row.resize(size)
 	crowns_by_row.fill(-1)
@@ -132,6 +136,8 @@ static func analyze_difficulty(size: int, regions: PackedInt32Array) -> int:
 	var max_rank := RANK_NONE
 
 	for _iter in range(size * size * 4):
+		if cancel_check.is_valid() and cancel_check.call():
+			return RANK_NONE
 		var step := find_next_step(size, regions, crowns_by_row, excluded)
 		if step == null:
 			break
@@ -596,9 +602,13 @@ static func _count_backtrack(
 		cands: Dictionary,
 		row: int,
 		count_state: Array,
-		fixed_crowns: Dictionary) -> void:
+		fixed_crowns: Dictionary,
+		cancel_check: Callable = Callable()) -> void:
 
 	if count_state[0] >= 2:
+		return
+
+	if cancel_check.is_valid() and cancel_check.call():
 		return
 
 	if row >= size:
@@ -607,12 +617,14 @@ static func _count_backtrack(
 
 	# Skip row if already has a fixed crown
 	if fixed_crowns.has(row):
-		_count_backtrack(size, regions, cands, row + 1, count_state, fixed_crowns)
+		_count_backtrack(size, regions, cands, row + 1, count_state, fixed_crowns, cancel_check)
 		return
 
 	var row_cands: Array[Vector2i] = _cands_in_row(cands, row)
 	for cell in row_cands:
 		if count_state[0] >= 2:
+			return
+		if cancel_check.is_valid() and cancel_check.call():
 			return
 		# Save and apply
 		var newly_removed: Array[Vector2i] = []
@@ -630,7 +642,7 @@ static func _count_backtrack(
 			cands.erase(v2)
 		cands.erase(cell)
 
-		_count_backtrack(size, regions, cands, row + 1, count_state, fixed_crowns)
+		_count_backtrack(size, regions, cands, row + 1, count_state, fixed_crowns, cancel_check)
 
 		# Restore
 		cands[cell] = true

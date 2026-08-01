@@ -45,6 +45,16 @@ func apply_frame(frame: Dictionary, visual: Control, _suppress_effects: bool = f
 			var new_state := int(payload.get("new_state", CrownGridLogic.CELL_EMPTY))
 			if col >= 0 and row >= 0 and col < size and row < size:
 				board.cell_states[row * size + col] = new_state
+			# Exclusion-hint: has "cols"/"rows" arrays instead of a single cell
+			if payload.has("cols") and payload.has("rows"):
+				var cols: Array = payload.get("cols", [])
+				var rows: Array = payload.get("rows", [])
+				for i in range(mini(cols.size(), rows.size())):
+					var c := int(cols[i])
+					var r := int(rows[i])
+					if c >= 0 and r >= 0 and c < size and r < size:
+						if board.cell_states[r * size + c] == CrownGridLogic.CELL_EMPTY:
+							board.cell_states[r * size + c] = CrownGridLogic.CELL_EXCLUDED
 
 		"exclusions_painted":
 			var cols: Array = payload.get("cols", [])
@@ -56,14 +66,20 @@ func apply_frame(frame: Dictionary, visual: Control, _suppress_effects: bool = f
 					if board.cell_states[r * size + c] == CrownGridLogic.CELL_EMPTY:
 						board.cell_states[r * size + c] = CrownGridLogic.CELL_EXCLUDED
 
+		"board_state_snapshot":
+			var cells_raw: Array = payload.get("cells", [])
+			var total := size * size
+			for i in range(mini(cells_raw.size(), total)):
+				board.cell_states[i] = int(cells_raw[i])
+
 	board.queue_redraw()
 
 
 func should_include_frame(frame: Dictionary) -> bool:
 	var input_event: Dictionary = frame.get("input_event", {})
 	var event_type := str(input_event.get("type", ""))
-	return event_type in ["cell_state_changed", "exclusions_painted", "hint_applied"]
+	return event_type in ["cell_state_changed", "exclusions_painted", "hint_applied", "board_state_snapshot"]
 
 
 func get_visual_event_types() -> Array[String]:
-	return ["cell_state_changed", "exclusions_painted", "hint_applied", "game_completed"]
+	return ["cell_state_changed", "exclusions_painted", "hint_applied", "board_state_snapshot", "game_completed"]

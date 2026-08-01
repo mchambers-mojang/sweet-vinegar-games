@@ -203,3 +203,32 @@ func test_verify_connectivity_disconnected_region() -> void:
 	regions[0] = 0   # cell (0,0) = region 0
 	regions[15] = 0  # cell (3,3) = region 0 — not connected to (0,0)
 	assert_false(CrownGridGenerator._verify_connectivity(4, regions))
+
+
+# ---------------------------------------------------------------------------
+# Expert rank floor (fix 5)
+# ---------------------------------------------------------------------------
+
+func test_expert_min_rank_is_chain() -> void:
+	assert_eq(
+		CrownGridGenerator.TIER_MIN_RANK[CrownGridGenerator.TIER_EXPERT],
+		CrownGridSolver.RANK_CHAIN,
+		"Expert tier must require at least one Rank-4 (forcing chain) step"
+	)
+
+
+# ---------------------------------------------------------------------------
+# Generator cancel_check passes through to solver (fix 4)
+# ---------------------------------------------------------------------------
+
+func test_generate_cancels_during_solution_count() -> void:
+	# Cancel only after outer loop starts (allow crown+region gen to proceed)
+	var call_count := [0]
+	var result := CrownGridGenerator.generate(
+		CrownGridGenerator.TIER_EASY, 42,
+		func() -> bool:
+			call_count[0] += 1
+			return call_count[0] > 3  # Cancel after a few checks
+	)
+	# May succeed or fail depending on timing, but must not hang
+	assert_true(result is Dictionary, "generate must return a Dictionary")

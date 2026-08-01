@@ -279,6 +279,14 @@ func _on_cell_tapped(cell: Vector2i) -> void:
 		"new_state": result.new_state,
 	})
 
+	if result.new_state == CrownGridLogic.CELL_CROWN and not result.auto_marked.is_empty():
+		var auto_cols: Array = []
+		var auto_rows: Array = []
+		for ac in result.auto_marked:
+			auto_cols.append(ac.x)
+			auto_rows.append(ac.y)
+		_recorder.record_input(elapsed_time, "exclusions_painted", {"cols": auto_cols, "rows": auto_rows})
+
 	if result.new_state == CrownGridLogic.CELL_CROWN:
 		_sound.play_place()
 		_haptic.vibrate_light()
@@ -329,6 +337,7 @@ func _on_undo() -> void:
 	board.set_cells(logic.cells)
 	if logic.assistance_mode == CrownGridLogic.ASSISTANCE_FREE:
 		board.set_violations(logic.get_violations())
+	_recorder.record_input(elapsed_time, "board_state_snapshot", {"cells": Array(logic.cells)})
 	_update_button_states()
 	_save_current_state()
 
@@ -340,6 +349,7 @@ func _on_redo() -> void:
 	board.set_cells(logic.cells)
 	if logic.assistance_mode == CrownGridLogic.ASSISTANCE_FREE:
 		board.set_violations(logic.get_violations())
+	_recorder.record_input(elapsed_time, "board_state_snapshot", {"cells": Array(logic.cells)})
 	_update_button_states()
 	_save_current_state()
 
@@ -364,9 +374,15 @@ func _on_hint() -> void:
 		_sound.play_place()
 		_haptic.vibrate_medium()
 	else:
+		var hint_cols: Array = []
+		var hint_rows: Array = []
+		for hc in result.changed_cells:
+			hint_cols.append(hc.x)
+			hint_rows.append(hc.y)
 		_recorder.record_input(elapsed_time, "hint_applied", {
 			"type": "exclusions",
-			"count": result.changed_cells.size(),
+			"cols": hint_cols,
+			"rows": hint_rows,
 		})
 
 	_update_button_states()
@@ -405,14 +421,14 @@ func _on_back() -> void:
 func _handle_win() -> void:
 	GameEvents.game_ended.emit("crown_grid", "win", elapsed_time)
 
+	_recorder.record_input(elapsed_time, "game_completed", {"tier": _tier})
+
 	var completed := _recorder.finish_session("win", logic.hints_used, elapsed_time, {
 		"tier": _tier,
 		"size": _tier_size,
 		"hints_used": logic.hints_used,
 	})
 	_storage.save_replay(completed)
-
-	_recorder.record_input(elapsed_time, "game_completed", {"tier": _tier})
 
 	var is_new_best := _is_new_best_time()
 	_record_crown_grid_completion(_tier, elapsed_time)
@@ -549,6 +565,7 @@ func _cancel_generation() -> void:
 
 func _exit_tree() -> void:
 	_cancel_generation()
+	super._exit_tree()
 
 
 func _set_gen_cancelled(value: bool) -> void:
