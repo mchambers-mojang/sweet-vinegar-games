@@ -165,18 +165,17 @@ func cycle_cell(index: int) -> SetGlyphResult:
 
 	result.old_value = old_val
 
-	# Strict mode: reject incorrect placements (but allow erasing).
-	# When the first candidate is wrong, advance one more step so that MINUS
-	# is reachable without cycling through an infinite EMPTY→PLUS→reject loop.
+	# Strict mode: place the value but mark it as rejected when wrong.
+	# Placing the wrong value keeps the cycle advancing so the player can
+	# reach the correct value on the next tap (EMPTY → PLUS wrong → rejected →
+	# tap again → MINUS).  EMPTY (erase) is always accepted silently.
 	if assistance_mode == ASSIST_STRICT and new_val != EMPTY:
 		if not solution.is_empty() and new_val != solution[index]:
-			new_val = _next_value(new_val)
-			# EMPTY means the previous value was correct and the player wants to
-			# erase it — allow the erasure rather than rejecting it.
-			if new_val != EMPTY and new_val != solution[index]:
-				result.new_value = new_val
-				result.rejected = true
-				return result
+			result.new_value = new_val
+			result.rejected = true
+			_undo_stack.push({"index": index, "old_value": old_val, "new_value": new_val})
+			cells[index] = new_val
+			return result
 
 	result.new_value = new_val
 
@@ -202,9 +201,17 @@ func use_hint() -> HintResult:
 	if is_completed or solution.is_empty():
 		return result
 
-	# Find the next unsolved cell using the human solver
+	# Provide a clean board state to the solver: any cell the player has filled
+	# incorrectly (free mode) is reset to EMPTY so the solver derives deductions
+	# from a consistent, solution-compatible state rather than propagating player
+	# mistakes into incorrect hint values.
+	var clean_cells: Array[int] = cells.duplicate()
+	for i in clean_cells.size():
+		if clean_cells[i] != EMPTY and clean_cells[i] != solution[i]:
+			clean_cells[i] = EMPTY
+
 	var analysis: EclipseGridSolver.Analysis = EclipseGridSolver.analyze(
-			size, cells, h_relations, v_relations)
+			size, clean_cells, h_relations, v_relations)
 	if analysis.steps.is_empty():
 		return result
 
@@ -214,6 +221,14 @@ func use_hint() -> HintResult:
 
 	var idx: int = step.affected_cells[0]
 	var val: int = step.result_value
+
+	# Guard: the derived value must match the known solution.
+	if val != solution[idx]:
+		return result
+
+	# Skip cells already correctly filled.
+	if cells[idx] == val:
+		return result
 
 	result.had_step = true
 	result.index = idx

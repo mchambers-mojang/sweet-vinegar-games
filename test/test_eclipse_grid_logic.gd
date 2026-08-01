@@ -58,10 +58,14 @@ func _make_adapter_data_4x4() -> Dictionary:
 		cells_arr.append(givens_arr[i])
 	return {
 		"size": 4,
+		"seed": 42,
 		"cells": cells_arr,
 		"givens": givens_arr,
 		"solution": sol_arr,
 		"is_completed": false,
+		"assistance_mode": EclipseGridLogic.ASSIST_FREE,
+		"undo_stack": [],
+		"redo_stack": [],
 	}
 
 
@@ -136,49 +140,80 @@ func test_strict_mode_rejects_wrong_value() -> void:
 	var sol := _sol4()
 	var correct_val := sol[2]  # PLUS (r=0,c=2 → (0+2)%2=0 → PLUS)
 
-	# Cycling from EMPTY once: if PLUS is correct, it should be placed.
-	# If PLUS is wrong (i.e. correct_val is MINUS), the implementation advances past
-	# PLUS to MINUS automatically, so we should land on MINUS (not get rejected).
+	# Cycling from EMPTY once:
+	# - If PLUS is correct: placed without rejection.
+	# - If PLUS is wrong (correct_val == MINUS): placed as rejected (cycle advances).
 	var result: EclipseGridLogic.SetGlyphResult = logic.cycle_cell(2)
 
 	if correct_val == PLUS:
 		# First cycle gives the correct PLUS — no rejection
 		assert_false(result.rejected)
 		assert_eq(result.new_value, PLUS)
-		# Second cycle: PLUS (correct) → MINUS (wrong) → advances to EMPTY (erase).
-		# Strict mode must not reject the erasure of a correct glyph.
+		assert_eq(logic.cells[2], PLUS)
+		# Second cycle: PLUS → MINUS (wrong, rejected, placed so cycle continues)
 		var r2: EclipseGridLogic.SetGlyphResult = logic.cycle_cell(2)
-		assert_false(r2.rejected, "Cycling past a wrong value to EMPTY must not be rejected")
-		assert_eq(r2.new_value, EMPTY, "Advancing past wrong MINUS should produce EMPTY (erase)")
+		assert_true(r2.rejected, "Wrong MINUS must be marked as rejected")
+		assert_eq(r2.new_value, MINUS, "Cycle must advance to MINUS")
+		# Third cycle: MINUS → EMPTY (erase, always accepted)
+		var r3: EclipseGridLogic.SetGlyphResult = logic.cycle_cell(2)
+		assert_false(r3.rejected, "Erasing (→EMPTY) must not be rejected")
+		assert_eq(r3.new_value, EMPTY, "Cycle must advance to EMPTY (erase)")
 	else:
-		# correct_val == MINUS: first cycle skips over wrong PLUS, lands on correct MINUS
-		assert_false(result.rejected)
-		assert_eq(result.new_value, MINUS)
+		# correct_val == MINUS: first cycle tries PLUS (wrong) → rejected, placed
+		assert_true(result.rejected, "Wrong PLUS must be marked as rejected")
+		assert_eq(result.new_value, PLUS)
+		assert_eq(logic.cells[2], PLUS, "Wrong PLUS is placed so cycle can advance")
+		# Second cycle: PLUS → MINUS (correct, no rejection)
+		var r2: EclipseGridLogic.SetGlyphResult = logic.cycle_cell(2)
+		assert_false(r2.rejected, "Correct MINUS must not be rejected")
+		assert_eq(r2.new_value, MINUS)
 
 
 func test_strict_mode_minus_reachable_when_plus_is_wrong() -> void:
-	## Regression test for the strict-mode MINUS-trap bug:
-	## when PLUS is the wrong glyph, cycling from EMPTY must still reach MINUS
-	## without the player being stuck retrying PLUS forever.
+	## Regression test: when PLUS is the wrong glyph, cycling from EMPTY must still
+	## reach MINUS.  The fix places the wrong PLUS (rejected) so that the next tap
+	## advances the cycle to MINUS rather than retrying PLUS forever.
 	var l2 := EclipseGridLogic.new()
 	# Build a puzzle where cell index 0 correct value is MINUS.
-	# Solution row 0: -, +, -, + (all MINUS at even indices for a non-checkerboard).
 	var sol: Array[int] = [MINUS, PLUS, MINUS, PLUS,
 						   PLUS, MINUS, PLUS, MINUS,
 						   MINUS, PLUS, MINUS, PLUS,
 						   PLUS, MINUS, PLUS, MINUS]
-	# Only cell 0 is empty (free to cycle)
 	var gv: Array[int] = sol.duplicate()
 	gv[0] = EMPTY
 	l2.init_from_save(_make_save_data(4, sol, gv))
 	l2.assistance_mode = EclipseGridLogic.ASSIST_STRICT
 
-	# Cell 0 solution is MINUS. First cycle (EMPTY→PLUS) is wrong.
-	# The fix must skip PLUS and land on MINUS.
-	var result: EclipseGridLogic.SetGlyphResult = l2.cycle_cell(0)
-	assert_false(result.rejected, "Correct value must not be reported as rejected")
-	assert_eq(result.new_value, MINUS, "Must skip wrong PLUS and land on correct MINUS")
-	assert_eq(l2.cells[0], MINUS, "Cell must be set to MINUS")
+	# Cell 0 solution is MINUS. First tap tries PLUS (wrong) → rejected.
+	var r1: EclipseGridLogic.SetGlyphResult = l2.cycle_cell(0)
+	assert_true(r1.rejected, "Wrong PLUS must be flagged as rejected")
+	assert_eq(r1.new_value, PLUS, "Cycle advances to PLUS")
+	assert_eq(l2.cells[0], PLUS, "Wrong PLUS is placed so next tap can reach MINUS")
+
+	# Second tap cycles PLUS → MINUS (correct, no rejection).
+	var r2: EclipseGridLogic.SetGlyphResult = l2.cycle_cell(0)
+	assert_false(r2.rejected, "Correct MINUS must not be rejected")
+	assert_eq(r2.new_value, MINUS, "Cycle advances to MINUS")
+	assert_eq(l2.cells[0], MINUS, "Cell is set to MINUS")
+
+
+func test_strict_mode_erase_always_allowed() -> void:
+	## EMPTY (erase) must always be accepted in strict mode regardless of the
+	## previous cell value.
+	var l2 := EclipseGridLogic.new()
+	var sol := _sol4()
+	var gv: Array[int] = sol.duplicate()
+	gv[2] = EMPTY
+	l2.init_from_save(_make_save_data(4, sol, gv))
+	l2.assistance_mode = EclipseGridLogic.ASSIST_STRICT
+	# Place correct PLUS at cell 2 (sol[2] = PLUS for checkerboard)
+	l2.cycle_cell(2)  # → PLUS (correct)
+	# Cycle to MINUS (wrong, rejected, placed)
+	l2.cycle_cell(2)  # → MINUS
+	# Cycle to EMPTY (erase) — must be accepted
+	var r: EclipseGridLogic.SetGlyphResult = l2.cycle_cell(2)
+	assert_false(r.rejected, "Erase must not be rejected in strict mode")
+	assert_eq(r.new_value, EMPTY)
 
 
 func test_free_mode_allows_wrong_value() -> void:
@@ -445,12 +480,12 @@ func test_save_adapter_rejects_cells_inconsistent_with_givens() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Strict mode -- erasure of a correct glyph (regression for Fix 4)
+# Strict mode -- erasure (regression for round-5 cycle/reject fix)
 # ---------------------------------------------------------------------------
 
 func test_strict_mode_allows_erasing_correct_plus() -> void:
-	## In strict mode, cycling PLUS (correct) should produce EMPTY (erase),
-	## not a rejection.  Before the fix, the MINUS->EMPTY advance was rejected.
+	## In strict mode, cycling a correct PLUS must eventually reach EMPTY (erase).
+	## New behaviour: PLUS → MINUS (rejected, placed) → EMPTY (accepted).
 	var l := EclipseGridLogic.new()
 	var sol := _sol4()
 	var gv: Array[int] = sol.duplicate()
@@ -460,15 +495,20 @@ func test_strict_mode_allows_erasing_correct_plus() -> void:
 	l.init_from_save(_make_save_data(4, sol, gv))
 	l.assistance_mode = EclipseGridLogic.ASSIST_STRICT
 
-	# Place the correct PLUS at cell 2
-	var place_result := l.cycle_cell(2)
-	assert_eq(place_result.new_value, PLUS, "First tap should place correct PLUS")
-	assert_false(place_result.rejected, "Placing correct PLUS must not be rejected")
+	# Tap 1: EMPTY → PLUS (correct for cell 2 in checkerboard, no rejection)
+	var r1 := l.cycle_cell(2)
+	assert_eq(r1.new_value, PLUS, "First tap must place correct PLUS")
+	assert_false(r1.rejected, "Placing correct PLUS must not be rejected")
 
-	# Now erase it -- should transition to EMPTY without rejection
-	var erase_result := l.cycle_cell(2)
-	assert_eq(erase_result.new_value, EMPTY, "Second tap (erase) should produce EMPTY")
-	assert_false(erase_result.rejected, "Erasing a correct glyph must not be rejected")
+	# Tap 2: PLUS → MINUS (wrong, rejected but placed so cycle advances)
+	var r2 := l.cycle_cell(2)
+	assert_true(r2.rejected, "Wrong MINUS must be marked as rejected")
+	assert_eq(r2.new_value, MINUS)
+
+	# Tap 3: MINUS → EMPTY (erase, always accepted)
+	var r3 := l.cycle_cell(2)
+	assert_false(r3.rejected, "Erase (→EMPTY) must never be rejected")
+	assert_eq(r3.new_value, EMPTY, "Third tap must produce EMPTY (erase)")
 
 
 # ---------------------------------------------------------------------------
@@ -486,3 +526,84 @@ func test_analyze_does_not_mutate_input_cells() -> void:
 	EclipseGridSolver.analyze(4, cells, {}, {})
 	assert_eq(cells, snapshot,
 		"analyze() must leave the input cells array unchanged")
+
+
+# ---------------------------------------------------------------------------
+# Save adapter — Issue 2: assistance_mode, seed, undo/redo stack validation
+# ---------------------------------------------------------------------------
+
+func test_save_adapter_rejects_missing_assistance_mode() -> void:
+	var adapter := EclipseGridSaveAdapter.new()
+	var data := _make_adapter_data_4x4()
+	data.erase("assistance_mode")
+	assert_false(adapter._can_resume_from(data),
+		"Save without assistance_mode must be rejected")
+
+
+func test_save_adapter_rejects_invalid_assistance_mode() -> void:
+	var adapter := EclipseGridSaveAdapter.new()
+	var data := _make_adapter_data_4x4()
+	data["assistance_mode"] = 99  # out of [0,1,2]
+	assert_false(adapter._can_resume_from(data),
+		"Save with assistance_mode=99 must be rejected")
+
+
+func test_save_adapter_rejects_missing_seed() -> void:
+	var adapter := EclipseGridSaveAdapter.new()
+	var data := _make_adapter_data_4x4()
+	data.erase("seed")
+	assert_false(adapter._can_resume_from(data),
+		"Save without seed must be rejected")
+
+
+func test_save_adapter_rejects_invalid_undo_stack_entry() -> void:
+	var adapter := EclipseGridSaveAdapter.new()
+	var data := _make_adapter_data_4x4()
+	# Entry with an out-of-range index
+	data["undo_stack"] = [{"index": 999, "old_value": 0, "new_value": 1}]
+	assert_false(adapter._can_resume_from(data),
+		"Undo stack entry with invalid index must be rejected")
+
+
+func test_save_adapter_rejects_undo_stack_entry_with_invalid_value() -> void:
+	var adapter := EclipseGridSaveAdapter.new()
+	var data := _make_adapter_data_4x4()
+	data["undo_stack"] = [{"index": 0, "old_value": 0, "new_value": 99}]
+	assert_false(adapter._can_resume_from(data),
+		"Undo stack entry with invalid new_value must be rejected")
+
+
+func test_save_adapter_accepts_valid_undo_stack() -> void:
+	var adapter := EclipseGridSaveAdapter.new()
+	var data := _make_adapter_data_4x4()
+	data["undo_stack"] = [{"index": 2, "old_value": 0, "new_value": 1}]
+	assert_true(adapter._can_resume_from(data),
+		"Valid undo stack entry must be accepted")
+
+
+# ---------------------------------------------------------------------------
+# Logic — Issue 3: hints must not apply values derived from wrong player cells
+# ---------------------------------------------------------------------------
+
+func test_hint_applies_correct_value_when_player_has_wrong_cells() -> void:
+	## In free mode, the player may place wrong values.  Hints must still return
+	## the solution-correct value even when the current cells state is inconsistent.
+	var l := EclipseGridLogic.new()
+	var sol := _sol4()
+	# All cells are givens except cell 2 (free to fill)
+	var gv: Array[int] = sol.duplicate()
+	for i in range(4, 16):
+		gv[i] = EMPTY
+	gv[2] = EMPTY
+	l.init_from_save(_make_save_data(4, sol, gv))
+	l.assistance_mode = EclipseGridLogic.ASSIST_FREE
+
+	# Place the WRONG value at cell 3 to corrupt the solver's view.
+	# (cell 3 correct value is MINUS per checkerboard; we force PLUS)
+	l.set_cell_direct(3, PLUS)  # wrong — now row 0 = [+, -, ?, +] violates quota
+
+	# Request a hint — it must still produce the correct value for some cell.
+	var result: EclipseGridLogic.HintResult = l.use_hint()
+	if result.had_step:
+		assert_eq(result.value, sol[result.index],
+			"Hint value must match the solution even when board has wrong cells")

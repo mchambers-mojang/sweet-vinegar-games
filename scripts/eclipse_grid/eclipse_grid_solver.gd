@@ -638,89 +638,195 @@ static func _relation_chain_rank3(
 		cells: Array[int],
 		h_relations: Dictionary,
 		v_relations: Dictionary) -> SolverStep:
-	# Enumerate all valid completions of each line with 3+ empty cells.
-	# A cell is forced when it takes the same value in every valid completion —
-	# no hypothesis testing; we derive the result from exhaustive local enumeration.
+	# Iterate over each row/column and propagate direct constraints without
+	# placing any trial values.  A cell is forced when one value is immediately
+	# ruled out by quota, no-three, or relation constraints given the current
+	# line state; repeated passes propagate cascading forced values.
 	for r in size:
-		var step := _line_forced_rank3(size, cells, h_relations, v_relations, r, true)
+		var step := _line_propagate_rank3(size, cells, h_relations, v_relations, r, true)
 		if step:
 			return step
 	for c in size:
-		var step := _line_forced_rank3(size, cells, h_relations, v_relations, c, false)
+		var step := _line_propagate_rank3(size, cells, h_relations, v_relations, c, false)
 		if step:
 			return step
 	return null
 
 
-static func _line_forced_rank3(
+## Iterative non-speculative Rank-3 propagation for a single line.
+## Checks whether each empty cell's value is directly forced by quota, no-three,
+## or relation constraints using only the current known state — no trial placement.
+## Propagates: each newly forced value is committed to a working copy so that
+## subsequent positions can benefit from the deduction.
+static func _line_propagate_rank3(
 		size: int,
 		cells: Array[int],
 		h_relations: Dictionary,
 		v_relations: Dictionary,
 		line: int,
 		is_row: bool) -> SolverStep:
+	# Collect empties and current counts for the line.
+	var plus_count := 0
+	var minus_count := 0
 	var empties: Array[int] = []
 	for i in size:
 		var idx := line * size + i if is_row else i * size + line
-		if cells[idx] == EMPTY:
-			empties.append(i)
-	if empties.size() < 3 or empties.size() >= size:
-		return null  # Rank 1/2 handles fewer empties; a fully-empty line yields no deduction
+		match cells[idx]:
+			PLUS:  plus_count += 1
+			MINUS: minus_count += 1
+			_:     empties.append(i)
 
-	# Enumerate all valid assignments for this line's empty positions.
-	# Work on a local copy so the shared cells array is never mutated.
-	var cells_copy: Array[int] = cells.duplicate()
-	var valid_assignments: Array[Array] = []
-	_enum_line_completions(size, cells_copy, h_relations, v_relations, line, is_row, empties, 0, valid_assignments)
+	if empties.size() < 3:
+		return null  # Rank 1/2 handles 0-2 empty cells in a line
 
-	if valid_assignments.size() < 2:
-		return null  # 0 = contradiction (shouldn't happen); 1 = already uniquely forced
+	var half := size / 2
+	var working: Array[int] = cells.duplicate()
+	var w_plus  := plus_count
+	var w_minus := minus_count
+	var first_step: SolverStep = null
+	var changed := true
 
-	# A position is forced when it holds the same value in every valid completion
-	for i in empties.size():
-		var first_val: int = int(valid_assignments[0][i])
-		var all_same := true
-		for assignment in valid_assignments:
-			if int(assignment[i]) != first_val:
-				all_same = false
-				break
-		if all_same:
-			var pos: int = empties[i]
-			var target_idx: int = line * size + pos if is_row else pos * size + line
-			var af: Array[int] = [target_idx]
-			var line_type := "row" if is_row else "col"
-			return SolverStep.new(
-				"Rank-3 %s %d: all valid patterns force position %d" % [line_type, line, pos],
-				af, first_val, RANK_3)
-	return null
+	while changed:
+		changed = false
+		for e in empties:
+			var idx := line * size + e if is_row else e * size + line
+			if working[idx] != EMPTY:
+				continue
+
+			# Check whether each value is immediately ruled out by the current
+			# working state — purely by examining existing neighbours; no placement.
+			var plus_blocked  := (w_plus  >= half) \
+				or _is_no_three_blocked_in_line(working, size, line, is_row, e, PLUS) \
+				or _is_relation_blocked_in_line(working, size, line, is_row, e, PLUS,
+												h_relations, v_relations)
+			var minus_blocked := (w_minus >= half) \
+				or _is_no_three_blocked_in_line(working, size, line, is_row, e, MINUS) \
+				or _is_relation_blocked_in_line(working, size, line, is_row, e, MINUS,
+												h_relations, v_relations)
+
+			if plus_blocked and not minus_blocked:
+				var af: Array[int] = [idx]
+				var ltype := "row" if is_row else "col"
+				if first_step == null:
+					first_step = SolverStep.new(
+						"Rank-3 %s %d: direct constraints force position %d to MINUS" % [ltype, line, e],
+						af, MINUS, RANK_3)
+				working[idx] = MINUS
+				w_minus += 1
+				changed = true
+			elif minus_blocked and not plus_blocked:
+				var af: Array[int] = [idx]
+				var ltype := "row" if is_row else "col"
+				if first_step == null:
+					first_step = SolverStep.new(
+						"Rank-3 %s %d: direct constraints force position %d to PLUS" % [ltype, line, e],
+						af, PLUS, RANK_3)
+				working[idx] = PLUS
+				w_plus += 1
+				changed = true
+
+	# Also handle the unique-completion case: after propagation, if the remaining
+	# quota exactly matches the remaining empties, all are forced to one value.
+	if first_step == null:
+		var remaining_empties := 0
+		for e in empties:
+			var idx := line * size + e if is_row else e * size + line
+			if working[idx] == EMPTY:
+				remaining_empties += 1
+		if remaining_empties > 0:
+			var plus_needed  := half - w_plus
+			var minus_needed := half - w_minus
+			if plus_needed == remaining_empties:
+				for e in empties:
+					var idx := line * size + e if is_row else e * size + line
+					if working[idx] == EMPTY:
+						var af: Array[int] = [idx]
+						var ltype := "row" if is_row else "col"
+						first_step = SolverStep.new(
+							"Rank-3 %s %d: quota forces position %d to PLUS" % [ltype, line, e],
+							af, PLUS, RANK_3)
+						break
+			elif minus_needed == remaining_empties:
+				for e in empties:
+					var idx := line * size + e if is_row else e * size + line
+					if working[idx] == EMPTY:
+						var af: Array[int] = [idx]
+						var ltype := "row" if is_row else "col"
+						first_step = SolverStep.new(
+							"Rank-3 %s %d: quota forces position %d to MINUS" % [ltype, line, e],
+							af, MINUS, RANK_3)
+						break
+
+	return first_step
 
 
-## Enumerate all valid assignments for the empty positions in a line.
-## Fills results with arrays [val_0, val_1, ...] corresponding to empties[0], empties[1], ...
-static func _enum_line_completions(
-		size: int,
-		cells: Array[int],
-		h_relations: Dictionary,
-		v_relations: Dictionary,
-		line: int,
-		is_row: bool,
-		empties: Array[int],
-		depth: int,
-		results: Array[Array]) -> void:
-	if depth == empties.size():
-		var assignment: Array = []
-		for pos in empties:
-			var idx := line * size + pos if is_row else pos * size + line
-			assignment.append(cells[idx])
-		results.append(assignment)
-		return
-	var pos: int = empties[depth]
-	var idx: int = line * size + pos if is_row else pos * size + line
-	for val in [PLUS, MINUS]:
-		cells[idx] = val
-		if _check_partial_line(cells, size, line, is_row, h_relations, v_relations):
-			_enum_line_completions(size, cells, h_relations, v_relations, line, is_row, empties, depth + 1, results)
-		cells[idx] = EMPTY
+## Return true if placing val at position pos in the line would immediately create
+## three consecutive identical values given the current (working) line state.
+## Does NOT place any value — inspects neighbours directly.
+static func _is_no_three_blocked_in_line(
+		cells: Array[int], size: int, line: int, is_row: bool, pos: int, val: int) -> bool:
+	var p1: int
+	var p2: int
+	var n1: int
+	var n2: int
+	if is_row:
+		p1 = cells[line * size + (pos - 1)] if pos - 1 >= 0     else EMPTY
+		p2 = cells[line * size + (pos - 2)] if pos - 2 >= 0     else EMPTY
+		n1 = cells[line * size + (pos + 1)] if pos + 1 < size   else EMPTY
+		n2 = cells[line * size + (pos + 2)] if pos + 2 < size   else EMPTY
+	else:
+		p1 = cells[(pos - 1) * size + line] if pos - 1 >= 0     else EMPTY
+		p2 = cells[(pos - 2) * size + line] if pos - 2 >= 0     else EMPTY
+		n1 = cells[(pos + 1) * size + line] if pos + 1 < size   else EMPTY
+		n2 = cells[(pos + 2) * size + line] if pos + 2 < size   else EMPTY
+	return (p1 == val and p2 == val) or (p1 == val and n1 == val) or (n1 == val and n2 == val)
+
+
+## Return true if placing val at position pos in the line would violate a relation
+## constraint with an immediately adjacent placed cell.
+## Does NOT place any value — inspects neighbours directly.
+static func _is_relation_blocked_in_line(
+		cells: Array[int], size: int, line: int, is_row: bool, pos: int, val: int,
+		h_relations: Dictionary, v_relations: Dictionary) -> bool:
+	if is_row:
+		var r := line
+		var c := pos
+		if c + 1 < size:
+			var rel_pos := Vector2i(c, r)
+			if h_relations.has(rel_pos):
+				var rv: int = cells[r * size + (c + 1)]
+				if rv != EMPTY:
+					var rel: int = h_relations[rel_pos]
+					if (rel == EQ and val != rv) or (rel == NEQ and val == rv):
+						return true
+		if c > 0:
+			var rel_pos := Vector2i(c - 1, r)
+			if h_relations.has(rel_pos):
+				var lv: int = cells[r * size + (c - 1)]
+				if lv != EMPTY:
+					var rel: int = h_relations[rel_pos]
+					if (rel == EQ and val != lv) or (rel == NEQ and val == lv):
+						return true
+	else:
+		var col := line
+		var r := pos
+		if r + 1 < size:
+			var rel_pos := Vector2i(col, r)
+			if v_relations.has(rel_pos):
+				var bv: int = cells[(r + 1) * size + col]
+				if bv != EMPTY:
+					var rel: int = v_relations[rel_pos]
+					if (rel == EQ and val != bv) or (rel == NEQ and val == bv):
+						return true
+		if r > 0:
+			var rel_pos := Vector2i(col, r - 1)
+			if v_relations.has(rel_pos):
+				var tv: int = cells[(r - 1) * size + col]
+				if tv != EMPTY:
+					var rel: int = v_relations[rel_pos]
+					if (rel == EQ and val != tv) or (rel == NEQ and val == tv):
+						return true
+	return false
 
 
 # ---------------------------------------------------------------------------
@@ -732,91 +838,64 @@ static func _global_quota_chain(
 		cells: Array[int],
 		h_relations: Dictionary,
 		v_relations: Dictionary) -> SolverStep:
-	# Cross-line quota analysis: enumerate all valid completions of each line,
-	# then filter out completions that would violate the opposing dimension's
-	# (quota or no-three) constraints.  A cell is forced when it holds the same
-	# value in every completion that survives the two-dimensional filter.
-	# This looks at two dimensions simultaneously (hence Rank 4) but performs
-	# no global speculation — it only checks the local row and column constraints
-	# for each candidate placement.
-	for r in size:
-		var step := _cross_quota_line(size, cells, h_relations, v_relations, r, true)
-		if step:
-			return step
-	for c in size:
-		var step := _cross_quota_line(size, cells, h_relations, v_relations, c, false)
-		if step:
-			return step
-	return null
+	# Cross-line direct propagation: for every empty cell, check whether one of
+	# its two candidate values is immediately blocked by its ROW and/or its COLUMN
+	# using quota, no-three, and relation constraints on those two individual lines.
+	# No trial placements are made — all checks inspect the current board state.
+	return _cross_line_propagate(size, cells, h_relations, v_relations)
 
 
-static func _cross_quota_line(
+static func _cross_line_propagate(
 		size: int,
 		cells: Array[int],
 		h_relations: Dictionary,
-		v_relations: Dictionary,
-		line: int,
-		is_row: bool) -> SolverStep:
-	var empties: Array[int] = []
-	for i in size:
-		var idx := line * size + i if is_row else i * size + line
-		if cells[idx] == EMPTY:
-			empties.append(i)
-	if empties.size() < 2:
-		return null
+		v_relations: Dictionary) -> SolverStep:
+	var half := size / 2
+	for r in size:
+		# Pre-compute row counts once per row.
+		var row_plus := 0
+		var row_minus := 0
+		for cc in size:
+			match cells[r * size + cc]:
+				PLUS:  row_plus  += 1
+				MINUS: row_minus += 1
+		for c in size:
+			var idx := r * size + c
+			if cells[idx] != EMPTY:
+				continue
+			# Column counts for this cell.
+			var col_plus := 0
+			var col_minus := 0
+			for rr in size:
+				match cells[rr * size + c]:
+					PLUS:  col_plus  += 1
+					MINUS: col_minus += 1
 
-	# Enumerate all completions valid for this line alone.
-	# Use a local copy so the shared cells array is never mutated.
-	var cells_copy: Array[int] = cells.duplicate()
-	var raw_completions: Array[Array] = []
-	_enum_line_completions(size, cells_copy, h_relations, v_relations, line, is_row, empties, 0, raw_completions)
+			# PLUS is blocked if either the row or the column immediately rules it out.
+			var plus_blocked := (row_plus >= half) \
+				or (col_plus >= half) \
+				or _is_no_three_blocked_in_line(cells, size, r, true,  c, PLUS) \
+				or _is_no_three_blocked_in_line(cells, size, c, false, r, PLUS) \
+				or _is_relation_blocked_in_line(cells, size, r, true,  c, PLUS, h_relations, v_relations) \
+				or _is_relation_blocked_in_line(cells, size, c, false, r, PLUS, h_relations, v_relations)
 
-	if raw_completions.size() < 2:
-		return null
+			var minus_blocked := (row_minus >= half) \
+				or (col_minus >= half) \
+				or _is_no_three_blocked_in_line(cells, size, r, true,  c, MINUS) \
+				or _is_no_three_blocked_in_line(cells, size, c, false, r, MINUS) \
+				or _is_relation_blocked_in_line(cells, size, r, true,  c, MINUS, h_relations, v_relations) \
+				or _is_relation_blocked_in_line(cells, size, c, false, r, MINUS, h_relations, v_relations)
 
-	# Filter: keep only completions that also satisfy each opposing-dimension line.
-	# Build a trial copy per completion to avoid mutating the shared cells array.
-	var valid_completions: Array[Array] = []
-	for completion in raw_completions:
-		var trial: Array[int] = cells.duplicate()
-		for i in empties.size():
-			var pos: int = empties[i]
-			var idx: int = line * size + pos if is_row else pos * size + line
-			trial[idx] = int(completion[i])
-		var ok := true
-		for i in empties.size():
-			var pos: int = empties[i]
-			# For a row, the opposing dimension is the column indexed by pos; vice-versa.
-			var opp_ok: bool
-			if is_row:
-				opp_ok = _check_partial_line(trial, size, pos, false, h_relations, v_relations)
-			else:
-				opp_ok = _check_partial_line(trial, size, pos, true, h_relations, v_relations)
-			if not opp_ok:
-				ok = false
-				break
-		if ok:
-			valid_completions.append(completion)
-
-	if valid_completions.size() < 2:
-		return null
-
-	# Find positions forced in all surviving completions
-	for i in empties.size():
-		var first_val: int = int(valid_completions[0][i])
-		var all_same := true
-		for completion in valid_completions:
-			if int(completion[i]) != first_val:
-				all_same = false
-				break
-		if all_same:
-			var pos: int = empties[i]
-			var target_idx: int = line * size + pos if is_row else pos * size + line
-			var af: Array[int] = [target_idx]
-			var line_type := "row" if is_row else "col"
-			return SolverStep.new(
-				"Rank-4 %s %d: cross-line forces position %d" % [line_type, line, pos],
-				af, first_val, RANK_4)
+			if plus_blocked and not minus_blocked:
+				var af: Array[int] = [idx]
+				return SolverStep.new(
+					"Rank-4 cross (%d,%d): PLUS blocked by row/col constraints" % [c, r],
+					af, MINUS, RANK_4)
+			elif minus_blocked and not plus_blocked:
+				var af: Array[int] = [idx]
+				return SolverStep.new(
+					"Rank-4 cross (%d,%d): MINUS blocked by row/col constraints" % [c, r],
+					af, PLUS, RANK_4)
 	return null
 
 

@@ -68,6 +68,24 @@ func _can_resume_from(data: Dictionary) -> bool:
 	if not _validate_relations(data.get("v_relations", null), n, true, "v_relations"):
 		return false
 
+	# --- assistance_mode (required; 0=NONE, 1=FREE, 2=STRICT) ---
+	var am: Variant = data.get("assistance_mode", null)
+	if typeof(am) != TYPE_INT or not (int(am) in [0, 1, 2]):
+		push_warning("EclipseGridSaveAdapter: assistance_mode missing or invalid: %s" % str(am))
+		return false
+
+	# --- seed (must be an int; 0 is a valid seed) ---
+	var seed_val: Variant = data.get("seed", null)
+	if typeof(seed_val) != TYPE_INT:
+		push_warning("EclipseGridSaveAdapter: seed is not an int")
+		return false
+
+	# --- undo_stack / redo_stack (must be arrays; entries validated structurally) ---
+	if not _validate_undo_stack(data.get("undo_stack", null), expected, "undo_stack"):
+		return false
+	if not _validate_undo_stack(data.get("redo_stack", null), expected, "redo_stack"):
+		return false
+
 	return not bool(data.get("is_completed", false))
 
 
@@ -149,4 +167,31 @@ func _validate_relations(v: Variant, n: int, is_vertical: bool, label: String) -
 		if typeof(rel) != TYPE_INT or not (int(rel) in _VALID_RELS):
 			push_warning("EclipseGridSaveAdapter: %s relation value is invalid" % label)
 			return false
+	return true
+
+
+## Validate that a undo/redo stack is an Array whose entries are Dictionaries with
+## valid index (int in [0, max_idx-1]) and old/new_value (int in _VALID_GLYPHS).
+## A missing (null) stack is treated as an empty array and accepted.
+func _validate_undo_stack(v: Variant, max_idx: int, label: String) -> bool:
+	if v == null:
+		return true  # omitted stack is fine
+	if typeof(v) != TYPE_ARRAY:
+		push_warning("EclipseGridSaveAdapter: %s is not an Array" % label)
+		return false
+	var arr: Array = v as Array
+	for entry in arr:
+		if typeof(entry) != TYPE_DICTIONARY:
+			push_warning("EclipseGridSaveAdapter: %s entry is not a Dictionary" % label)
+			return false
+		var d: Dictionary = entry as Dictionary
+		var idx_v: Variant = d.get("index", null)
+		if typeof(idx_v) != TYPE_INT or int(idx_v) < 0 or int(idx_v) >= max_idx:
+			push_warning("EclipseGridSaveAdapter: %s entry has invalid index" % label)
+			return false
+		for field in ["old_value", "new_value"]:
+			var fv: Variant = d.get(field, null)
+			if typeof(fv) != TYPE_INT or not (int(fv) in _VALID_GLYPHS):
+				push_warning("EclipseGridSaveAdapter: %s entry has invalid %s" % [label, field])
+				return false
 	return true
