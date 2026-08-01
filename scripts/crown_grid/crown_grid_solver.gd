@@ -100,23 +100,34 @@ static func find_next_step(
 		excluded: Dictionary,
 		cancel_check: Callable = Callable()) -> SolveStep:
 
+	# Honour cancellation before doing any work.
+	if cancel_check.is_valid() and cancel_check.call():
+		return null
+
 	# Build candidate set: cells that could still have a crown
 	var cands := _compute_candidates(size, regions, crowns_by_row, excluded)
 	if cands.is_empty():
 		return null
 
-	# Try deductions in rank order
+	# Try deductions in rank order, re-checking cancellation before each
+	# potentially expensive rank.
 	var step: SolveStep
 
 	step = _try_rank1_singles(size, regions, cands)
 	if step:
 		return step
 
+	if cancel_check.is_valid() and cancel_check.call():
+		return null
+
 	step = _try_rank2_combined(size, regions, cands)
 	if step:
 		return step
 
-	step = _try_rank3_locked(size, regions, cands)
+	if cancel_check.is_valid() and cancel_check.call():
+		return null
+
+	step = _try_rank3_locked(size, regions, cands, cancel_check)
 	if step:
 		return step
 
@@ -294,7 +305,7 @@ static func _try_rank2_combined(size: int, regions: PackedInt32Array, cands: Dic
 # Rank 3 — Locked candidate sets / region-line interactions
 # ---------------------------------------------------------------------------
 
-static func _try_rank3_locked(size: int, regions: PackedInt32Array, cands: Dictionary) -> SolveStep:
+static func _try_rank3_locked(size: int, regions: PackedInt32Array, cands: Dictionary, cancel_check: Callable = Callable()) -> SolveStep:
 	# N regions whose combined candidates span exactly N rows →
 	#   those N rows are claimed by those N regions → exclude other regions in those rows
 	var region_row_sets: Array = []
@@ -306,9 +317,12 @@ static func _try_rank3_locked(size: int, regions: PackedInt32Array, cands: Dicti
 		region_row_sets.append({"reg": reg, "rows": rows})
 
 	# Check subsets of size 2..N-1
-	var step := _find_locked_subset(size, regions, cands, region_row_sets, true)
+	var step := _find_locked_subset(size, regions, cands, region_row_sets, true, cancel_check)
 	if step:
 		return step
+
+	if cancel_check.is_valid() and cancel_check.call():
+		return null
 
 	# N regions with N columns
 	var region_col_sets: Array = []
@@ -319,7 +333,7 @@ static func _try_rank3_locked(size: int, regions: PackedInt32Array, cands: Dicti
 		var cols := _unique_cols(reg_cands)
 		region_col_sets.append({"reg": reg, "cols": cols})
 
-	step = _find_locked_subset(size, regions, cands, region_col_sets, false)
+	step = _find_locked_subset(size, regions, cands, region_col_sets, false, cancel_check)
 	if step:
 		return step
 
@@ -331,10 +345,13 @@ static func _find_locked_subset(
 		regions: PackedInt32Array,
 		cands: Dictionary,
 		sets: Array,
-		use_rows: bool) -> SolveStep:
+		use_rows: bool,
+		cancel_check: Callable = Callable()) -> SolveStep:
 
 	var n := sets.size()
 	for subset_size in range(2, n):
+		if cancel_check.is_valid() and cancel_check.call():
+			return null
 		# Iterate combinations of size subset_size
 		var indices := _combinations(n, subset_size)
 		for combo in indices:
@@ -365,16 +382,22 @@ static func _find_locked_subset(
 	return null
 
 
+
 # ---------------------------------------------------------------------------
-# Rank 4 — Non-branching chain of 3+ dependent eliminations
+# Rank 4 — Contradiction-based exclusion with solution validation
 # ---------------------------------------------------------------------------
 
-## Forcing-chain detection: for each candidate cell, assume it is excluded and
-## simulate rank-1/2/3 propagation. If 3+ chained steps fire and expose an
-## exclusion common to ALL starting assumptions, that exclusion is forced.
-## Crown placements found during simulation are propagated via _exclude_from_crown
-## so subsequent steps reflect the full state.
-## cancel_check is polled at the start of each candidate and each inner step.
+## For each candidate cell, hypothetically place it as a crown and propagate
+## rank-1/2/3 deductions. If an unsatisfied row, column, or region loses all
+## its candidates (contradiction) after 3+ propagation steps, the candidate
+## cannot be a crown and must be excluded.
+##
+## Every proposed exclusion is independently validated by verifying that
+## count_solutions with that cell fixed as a crown returns 0 — guaranteeing
+## soundness even if the chain-detection logic has edge-case gaps.
+##
+## cancel_check is polled at the start of each candidate iteration and after
+## each inner propagation step.
 static func _try_rank4_chain(
 		size: int,
 		regions: PackedInt32Array,
@@ -384,34 +407,41 @@ static func _try_rank4_chain(
 		cancel_check: Callable = Callable()) -> SolveStep:
 
 	var candidate_list: Array = cands.keys()
-	if candidate_list.size() > size * size:
-		return null  # Too large to evaluate quickly
+	var proposed: Array[Vector2i] = []
 
-	# For each candidate, simulate its exclusion and collect what chain follows.
-	var forced_map: Dictionary = {}
-
-	for assumed_cell in candidate_list:
+	for assumed_crown in candidate_list:
 		if cancel_check.is_valid() and cancel_check.call():
 			return null
 
+		var assumed: Vector2i = assumed_crown as Vector2i
 		var sim_crowns: Array = crowns_by_row.duplicate()
 		var sim_excluded: Dictionary = excluded.duplicate()
-		sim_excluded[assumed_cell] = true
+
+		# Hypothetically place this candidate as a crown and propagate constraints.
+		sim_crowns[assumed.y] = assumed.x
+		_exclude_from_crown(size, regions, sim_crowns, sim_excluded, assumed)
 		var sim_cands := _compute_candidates(size, regions, sim_crowns, sim_excluded)
 
 		var chain_steps := 0
-		var newly_excluded: Array[Vector2i] = []
+		var found_contradiction := false
 
 		for _iter in range(size * size):
 			if cancel_check.is_valid() and cancel_check.call():
 				return null
+
+			# Contradiction: any unsatisfied unit has no remaining candidates.
+			if _has_contradiction(size, regions, sim_crowns, sim_cands):
+				found_contradiction = true
+				break
+
 			var step := _try_rank1_singles(size, regions, sim_cands)
 			if step == null:
 				step = _try_rank2_combined(size, regions, sim_cands)
 			if step == null:
-				step = _try_rank3_locked(size, regions, sim_cands)
+				step = _try_rank3_locked(size, regions, sim_cands, cancel_check)
 			if step == null:
 				break
+
 			chain_steps += 1
 			for cell in step.affected_cells:
 				var v := cell as Vector2i
@@ -420,43 +450,67 @@ static func _try_rank4_chain(
 					_exclude_from_crown(size, regions, sim_crowns, sim_excluded, v)
 				else:
 					sim_excluded[v] = true
-					# Track cells newly excluded by the chain (not the starting assumption).
-					if cands.has(v) and v != assumed_cell:
-						if not newly_excluded.has(v):
-							newly_excluded.append(v)
-			# Recompute candidates from the full propagated state.
 			sim_cands = _compute_candidates(size, regions, sim_crowns, sim_excluded)
 
-		if chain_steps >= 3 and not newly_excluded.is_empty():
-			forced_map[assumed_cell] = newly_excluded
+		# Requires ≥ 3 rank-1/2/3 propagation steps before the contradiction to
+		# qualify as a Rank-4 deduction rather than a simpler one.
+		if found_contradiction and chain_steps >= 3:
+			if not proposed.has(assumed):
+				proposed.append(assumed)
 
-	# Find cells that are excluded regardless of which starting assumption is made.
-	if forced_map.size() < 2:
+	if proposed.is_empty():
 		return null
 
-	var intersection: Array[Vector2i] = []
-	var first := true
-	for _key in forced_map:
-		var excluded_list: Array = forced_map[_key]
-		if first:
-			for v in excluded_list:
-				intersection.append(v as Vector2i)
-			first = false
-		else:
-			var keep: Array[Vector2i] = []
-			for v in intersection:
-				if excluded_list.has(v):
-					keep.append(v)
-			intersection = keep
-		if intersection.is_empty():
-			break
+	# Validate soundness: each proposed exclusion cell must not appear in any
+	# complete solution.  count_solutions with the cell fixed as a crown must
+	# return 0.  This guards against any chain-detection edge cases.
+	var validated: Array[Vector2i] = []
+	for cell in proposed:
+		if cancel_check.is_valid() and cancel_check.call():
+			return null
+		var n := count_solutions(size, regions, {cell.y: cell.x}, cancel_check)
+		if n < 0:
+			return null  # cancelled during solution counting
+		if n == 0:
+			validated.append(cell)
 
-	if not intersection.is_empty():
-		return SolveStep.new(
-			"Chain of 3+ dependent eliminations (forcing chain)",
-			intersection, CELL_EXCLUDED, RANK_CHAIN)
+	if validated.is_empty():
+		return null
 
-	return null
+	return SolveStep.new(
+		"Placing a crown here leads to contradiction after 3+ forced steps",
+		validated, CELL_EXCLUDED, RANK_CHAIN)
+
+
+## Return true if any unsatisfied row, column, or region has no remaining
+## candidates — meaning the current simulated state has no valid completion.
+## A "satisfied" unit is one that already has a crown placed.
+static func _has_contradiction(
+		size: int,
+		regions: PackedInt32Array,
+		sim_crowns: Array,
+		sim_cands: Dictionary) -> bool:
+
+	var sat_rows: Dictionary = {}
+	var sat_cols: Dictionary = {}
+	var sat_regions: Dictionary = {}
+	for r in range(size):
+		var c: int = int(sim_crowns[r])
+		if c >= 0:
+			sat_rows[r] = true
+			sat_cols[c] = true
+			sat_regions[regions[r * size + c]] = true
+
+	for r in range(size):
+		if not sat_rows.has(r) and _cands_in_row(sim_cands, r).is_empty():
+			return true
+	for c in range(size):
+		if not sat_cols.has(c) and _cands_in_col(sim_cands, c, size).is_empty():
+			return true
+	for reg in range(size):
+		if not sat_regions.has(reg) and _cands_in_region(sim_cands, reg, size, regions).is_empty():
+			return true
+	return false
 
 
 # ---------------------------------------------------------------------------

@@ -299,78 +299,62 @@ func test_redo_stack_missing_accepted() -> void:
 # Region connectivity validation (new)
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Region connectivity validation — 6x6 fixtures (valid board size)
+# ---------------------------------------------------------------------------
+
+## Build a 6x6 region array where region 0 is disconnected:
+## column 0 rows 0-2 form one piece and column 0 rows 4-5 form another;
+## the gap at (row=3, col=0) belongs to region 1, breaking connectivity.
+func _disconnected_6x6_regions() -> Array:
+	# Start from column layout (region i = column i) then move row 3 col 0 to region 1.
+	var regions: Array = []
+	for r in range(6):
+		for c in range(6):
+			if r == 3 and c == 0:
+				regions.append(1)  # Region 0 gap — disconnects col 0 into two parts
+			else:
+				regions.append(c)
+	return regions
+
+
+## Find a valid crown placement for the disconnected layout above.
+## Region 0 cells: (0,0),(0,1),(0,2),(0,4),(0,5). Region 0 crown must be in col 0.
+## Crown at (col,row): row0→col0(reg0), row1→col2(reg2), row2→col4(reg4),
+##                     row3→col1(reg1), row4→col3(reg3), row5→col5(reg5)
+## Diagonal checks: (0,0)→(2,1)=diff2✓, (2,1)→(4,2)=diff2✓, (4,2)→(1,3)=diff3✓,
+##                  (1,3)→(3,4)=diff2✓, (3,4)→(5,5)=diff2✓
+func _disconnected_6x6_solution() -> Array:
+	return [0, 2, 4, 1, 3, 5]
+
+
 func test_disconnected_region_rejected() -> void:
-	# Create a 4x4 save where region 0 has cells [0,0] and [1,3] (not 4-connected)
-	var sz := 4
-	var regions: Array = []
-	for r in range(sz):
-		for c in range(sz):
-			# Region 0: only (0,0) and (3,1) — not connected; all others in 1–3
-			if r == 0 and c == 0:
-				regions.append(0)
-			elif r == 3 and c == 1:
-				regions.append(0)
-			else:
-				# Distribute the rest evenly into regions 1, 2, 3
-				var cell_idx := r * sz + c
-				regions.append(1 + (cell_idx % 3))
-	# Build a solution that matches the region topology for regions 1-3
-	# (This save will fail the topology check before connectivity if region counts are wrong.)
-	# Instead, use a simpler setup with N=4 and cleanly split regions, but make one disconnected.
-	# 4x4, 4 regions. Make region 0 = col 0 rows 0,1 + col 3 rows 2,3 (disconnected).
-	var r2: Array = []
-	for row in range(sz):
-		for col in range(sz):
-			if col == 0 and row < 2:
-				r2.append(0)
-			elif col == 3 and row >= 2:
-				r2.append(0)
-			elif col <= 1:
-				r2.append(1)
-			elif col == 2:
-				r2.append(2)
-			else:
-				r2.append(3)
-	# Verify topology: region 0 present (yes), regions 1,2,3 present (yes)
-	# Region 0 cells: (0,0),(0,1),(3,2),(3,3) — two disconnected parts
-	var sol: Array = [1, 3, 0, 2]  # some valid crown assignment
-	var d := {
-		"size": sz,
-		"tier": 0,
-		"regions": r2,
-		"solution": sol,
-		"cells": [],
-		"is_completed": false,
-	}
+	# 6x6 save where region 0 is split across two non-adjacent pieces.
+	var sz := 6
+	var regions := _disconnected_6x6_regions()
+	var sol := _disconnected_6x6_solution()
+	var cells: Array = []
 	for i in range(sz * sz):
-		(d["cells"] as Array).append(0)
-	assert_false(adapter._can_resume_from(d))
-
-
-func test_connected_regions_accepted() -> void:
-	# 4x4 with 4 regions in columns: region i = column i (each col is contiguous → connected)
-	var sz := 4
-	var regions: Array = []
-	for r in range(sz):
-		for c in range(sz):
-			regions.append(c)
-	# Valid no-diagonal-adjacency solution for column regions
-	var sol: Array = [0, 2, 1, 3]
-	# (0,0)→(2,1):diff=2 ✓, (2,1)→(1,2):diff=1 ✓ wait—adjacent!
-	# Use [0, 2, 0, ...] — no, need all unique cols
-	# Try [1, 3, 0, 2]: (1,0)→(3,1):diff=2 ✓, (3,1)→(0,2):diff=3 ✓, (0,2)→(2,3):diff=2 ✓
-	sol = [1, 3, 0, 2]
+		cells.append(0)
 	var d := {
 		"size": sz,
 		"tier": 0,
 		"regions": regions,
 		"solution": sol,
-		"cells": [],
+		"cells": cells,
 		"is_completed": false,
 	}
-	for i in range(sz * sz):
-		(d["cells"] as Array).append(0)
-	assert_true(adapter._can_resume_from(d))
+	# Topology passes (all regions 0-5 present) but connectivity fails.
+	assert_false(adapter._can_resume_from(d),
+			"Disconnected region 0 in 6x6 save must be rejected")
+
+
+func test_connected_regions_accepted() -> void:
+	# 6x6 with column regions — every region is a single connected column.
+	# Uses the standard _valid_save(6) fixture; verifies connectivity check
+	# does not incorrectly reject a well-formed board.
+	assert_true(adapter._can_resume_from(_valid_save(6)),
+			"6x6 save with fully connected column regions must be accepted")
 
 
 # ---------------------------------------------------------------------------
@@ -397,3 +381,89 @@ func test_solution_duplicate_column_rejected() -> void:
 		bad_sol.append(0)  # all crowns in col 0 → duplicate column
 	d["solution"] = bad_sol
 	assert_false(adapter._can_resume_from(d))
+
+
+# ---------------------------------------------------------------------------
+# cells field is now required (fix 2 regression)
+# ---------------------------------------------------------------------------
+
+func test_cells_missing_rejected() -> void:
+	var d := _valid_save()
+	d.erase("cells")
+	assert_false(adapter._can_resume_from(d),
+			"Missing cells field must be rejected")
+
+
+# ---------------------------------------------------------------------------
+# Undo entry coordinate out-of-bounds validation (fix 2 regression)
+# ---------------------------------------------------------------------------
+
+func test_tap_entry_cell_col_oob_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "tap", "cell": [99, 0], "from": 0, "to": 1}]
+	assert_false(adapter._can_resume_from(d),
+			"tap entry with out-of-bounds column must be rejected")
+
+
+func test_tap_entry_cell_row_oob_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "tap", "cell": [0, 99], "from": 0, "to": 1}]
+	assert_false(adapter._can_resume_from(d),
+			"tap entry with out-of-bounds row must be rejected")
+
+
+func test_tap_entry_invalid_from_state_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "tap", "cell": [0, 0], "from": 5, "to": 1}]
+	assert_false(adapter._can_resume_from(d),
+			"tap entry with invalid from state must be rejected")
+
+
+func test_tap_entry_invalid_to_state_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "tap", "cell": [0, 0], "from": 0, "to": 9}]
+	assert_false(adapter._can_resume_from(d),
+			"tap entry with invalid to state must be rejected")
+
+
+func test_tap_entry_auto_marked_non_array_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "tap", "cell": [0, 0], "from": 0, "to": 1, "auto_marked": "bad"}]
+	assert_false(adapter._can_resume_from(d),
+			"tap entry with auto_marked that is not an Array must be rejected")
+
+
+func test_paint_entry_changed_oob_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "paint", "changed": [[99, 0]]}]
+	assert_false(adapter._can_resume_from(d),
+			"paint entry with out-of-bounds changed cell must be rejected")
+
+
+func test_hint_crown_entry_cell_oob_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "hint_crown", "cell": [0, 99]}]
+	assert_false(adapter._can_resume_from(d),
+			"hint_crown entry with out-of-bounds cell must be rejected")
+
+
+func test_hint_crown_entry_auto_marked_non_array_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "hint_crown", "cell": [0, 0], "auto_marked": 42}]
+	assert_false(adapter._can_resume_from(d),
+			"hint_crown entry with auto_marked that is not an Array must be rejected")
+
+
+func test_hint_exclude_entry_changed_oob_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "hint_exclude", "changed": [[0, 99]]}]
+	assert_false(adapter._can_resume_from(d),
+			"hint_exclude entry with out-of-bounds changed cell must be rejected")
+
+
+func test_valid_tap_entry_in_bounds_accepted() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "tap", "cell": [0, 0], "from": 0, "to": 1, "auto_marked": []}]
+	assert_true(adapter._can_resume_from(d),
+			"Valid tap entry with in-bounds coordinates must be accepted")
+

@@ -90,20 +90,22 @@ func _can_resume_from(data: Dictionary) -> bool:
 		push_warning("CrownGridSaveAdapter: corrupted save — solution incompatible with regions")
 		return false
 
-	# Validate cells
+	# Validate cells — required field
 	var cells = data.get("cells", null)
-	if cells != null:
-		var cells_size: int = 0
-		if cells is Array:
-			cells_size = (cells as Array).size()
-		elif cells is PackedByteArray:
-			cells_size = (cells as PackedByteArray).size()
-		if cells_size != sz * sz:
-			push_warning("CrownGridSaveAdapter: corrupted save — cells length mismatch")
-			return false
-		if not _validate_cell_values(cells):
-			push_warning("CrownGridSaveAdapter: corrupted save — cells contain invalid values")
-			return false
+	if cells == null:
+		push_warning("CrownGridSaveAdapter: corrupted save — missing cells")
+		return false
+	var cells_size: int = 0
+	if cells is Array:
+		cells_size = (cells as Array).size()
+	elif cells is PackedByteArray:
+		cells_size = (cells as PackedByteArray).size()
+	if cells_size != sz * sz:
+		push_warning("CrownGridSaveAdapter: corrupted save — cells length mismatch")
+		return false
+	if not _validate_cell_values(cells):
+		push_warning("CrownGridSaveAdapter: corrupted save — cells contain invalid values")
+		return false
 
 	# Validate undo_stack entries
 	var undo_stack = data.get("undo_stack", null)
@@ -112,7 +114,7 @@ func _can_resume_from(data: Dictionary) -> bool:
 			push_warning("CrownGridSaveAdapter: corrupted save — undo_stack is not an array")
 			return false
 		for entry in (undo_stack as Array):
-			if not _validate_undo_entry(entry):
+			if not _validate_undo_entry(entry, sz):
 				push_warning("CrownGridSaveAdapter: corrupted save — invalid undo entry")
 				return false
 
@@ -123,7 +125,7 @@ func _can_resume_from(data: Dictionary) -> bool:
 			push_warning("CrownGridSaveAdapter: corrupted save — redo_stack is not an array")
 			return false
 		for entry in (redo_stack as Array):
-			if not _validate_undo_entry(entry):
+			if not _validate_undo_entry(entry, sz):
 				push_warning("CrownGridSaveAdapter: corrupted save — invalid redo entry")
 				return false
 
@@ -212,8 +214,9 @@ static func _validate_cell_values(cells: Variant) -> bool:
 	return true
 
 
-## Validate an undo/redo entry for required fields based on its action type.
-static func _validate_undo_entry(entry: Variant) -> bool:
+## Validate an undo/redo entry for required fields, value ranges, and coordinate
+## bounds.  sz must be the board size (6–9) so coordinate ranges can be checked.
+static func _validate_undo_entry(entry: Variant, sz: int = -1) -> bool:
 	if not (entry is Dictionary):
 		return false
 	var d := entry as Dictionary
@@ -224,16 +227,57 @@ static func _validate_undo_entry(entry: Variant) -> bool:
 		"tap":
 			if not d.has("cell") or not d.has("from") or not d.has("to"):
 				return false
-			var cell_val = d["cell"]
-			return (cell_val is Array) and (cell_val as Array).size() >= 2
+			if not _validate_cell_coord(d["cell"], sz):
+				return false
+			if not _validate_cell_state(d["from"]) or not _validate_cell_state(d["to"]):
+				return false
+			if d.has("auto_marked") and not (d["auto_marked"] is Array):
+				return false
 		"paint":
-			return d.has("changed") and (d["changed"] is Array)
+			if not d.has("changed") or not (d["changed"] is Array):
+				return false
+			for item in (d["changed"] as Array):
+				if not _validate_cell_coord(item, sz):
+					return false
 		"hint_crown":
 			if not d.has("cell"):
 				return false
-			var cell_val = d["cell"]
-			return (cell_val is Array) and (cell_val as Array).size() >= 2
+			if not _validate_cell_coord(d["cell"], sz):
+				return false
+			if d.has("auto_marked") and not (d["auto_marked"] is Array):
+				return false
 		"hint_exclude":
-			return d.has("changed") and (d["changed"] is Array)
+			if not d.has("changed") or not (d["changed"] is Array):
+				return false
+			for item in (d["changed"] as Array):
+				if not _validate_cell_coord(item, sz):
+					return false
 		_:
 			return false
+	return true
+
+
+## Return true when v is a 2-element Array whose components are integers in
+## [0, sz).  If sz <= 0 the range check is skipped (only shape is checked).
+static func _validate_cell_coord(v: Variant, sz: int = -1) -> bool:
+	if not (v is Array):
+		return false
+	var arr := v as Array
+	if arr.size() < 2:
+		return false
+	if typeof(arr[0]) != TYPE_INT or typeof(arr[1]) != TYPE_INT:
+		return false
+	if sz > 0:
+		var cx: int = int(arr[0])
+		var cy: int = int(arr[1])
+		if cx < 0 or cx >= sz or cy < 0 or cy >= sz:
+			return false
+	return true
+
+
+## Return true when v is an integer equal to one of the three valid cell states.
+static func _validate_cell_state(v: Variant) -> bool:
+	if typeof(v) != TYPE_INT:
+		return false
+	var st := int(v)
+	return st >= 0 and st <= 2

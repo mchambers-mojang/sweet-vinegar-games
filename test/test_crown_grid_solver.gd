@@ -361,13 +361,12 @@ func test_find_next_step_hint_respects_diagonal_constraint() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Rank 4 chain_steps >= 3 requirement (fix 2 regression)
+# Rank 4 contradiction-based detection (fix 1 regression)
 # ---------------------------------------------------------------------------
 
-func test_rank4_chain_requires_at_least_3_steps() -> void:
-	## _try_rank4_chain now requires chain_steps >= 3.
-	## We call it with an empty board (no candidates that form long chains)
-	## and verify it returns null rather than making an unjustified deduction.
+func test_rank4_on_empty_board_safe() -> void:
+	## _try_rank4_chain on an empty symmetric board with column regions must not
+	## crash and must only produce valid in-range cell coordinates when it does fire.
 	var r4 := _regions_from_array([
 		[0, 1, 2, 3],
 		[0, 1, 2, 3],
@@ -377,14 +376,37 @@ func test_rank4_chain_requires_at_least_3_steps() -> void:
 	var crowns_by_row: Array = [-1, -1, -1, -1]
 	var excluded: Dictionary = {}
 	var cands := CrownGridSolver._compute_candidates(4, r4, crowns_by_row, excluded)
-	# On an empty symmetric board with column regions, rank-4 may or may not fire,
-	# but the function must not crash and must only produce valid Vector2i cells.
 	var step := CrownGridSolver._try_rank4_chain(4, r4, cands, crowns_by_row, excluded)
 	if step != null:
+		assert_eq(step.result, CrownGridSolver.CELL_EXCLUDED,
+				"Rank 4 steps must only exclude cells, never place crowns")
 		for cell in step.affected_cells:
 			var v := cell as Vector2i
 			assert_true(v.x >= 0 and v.x < 4, "Affected cell col must be in range")
 			assert_true(v.y >= 0 and v.y < 4, "Affected cell row must be in range")
+
+
+func test_rank4_proposed_exclusions_validated_by_solution_count() -> void:
+	## Any cell emitted by _try_rank4_chain must not appear in any valid solution.
+	## We verify this by confirming count_solutions({row: col}) == 0 for each cell.
+	var r4 := _regions_from_array([
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+	])
+	var crowns_by_row: Array = [-1, -1, -1, -1]
+	var excluded: Dictionary = {}
+	var cands := CrownGridSolver._compute_candidates(4, r4, crowns_by_row, excluded)
+	var step := CrownGridSolver._try_rank4_chain(4, r4, cands, crowns_by_row, excluded)
+	if step == null:
+		pass  # No rank-4 step found — nothing to validate
+	else:
+		for cell in step.affected_cells:
+			var v := cell as Vector2i
+			var n := CrownGridSolver.count_solutions(4, r4, {v.y: v.x})
+			assert_eq(n, 0,
+					"Cell excluded by rank-4 must not appear in any solution")
 
 
 func test_rank4_cancel_check_respected() -> void:
@@ -403,8 +425,69 @@ func test_rank4_cancel_check_respected() -> void:
 	assert_null(step, "_try_rank4_chain with immediate cancel must return null")
 
 
+func test_has_contradiction_detects_empty_row() -> void:
+	## _has_contradiction must return true when an unsatisfied row has no candidates.
+	var r4 := _regions_from_array([
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+	])
+	var sim_crowns: Array = [-1, -1, -1, -1]
+	# Empty candidate set — every unit has no candidates
+	var empty_cands: Dictionary = {}
+	assert_true(CrownGridSolver._has_contradiction(4, r4, sim_crowns, empty_cands),
+			"Empty candidates with unsatisfied rows must be a contradiction")
+
+
+func test_has_contradiction_false_when_all_satisfied() -> void:
+	## _has_contradiction must return false when all units are already satisfied.
+	var r4 := _regions_from_array([
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+	])
+	# All rows satisfied — no unsatisfied unit can be empty
+	var sim_crowns: Array = [1, 3, 0, 2]
+	var empty_cands: Dictionary = {}
+	assert_false(CrownGridSolver._has_contradiction(4, r4, sim_crowns, empty_cands),
+			"Fully solved board must not be a contradiction")
+
+
+# ---------------------------------------------------------------------------
+# Early cancellation in find_next_step (fix 3 regression)
+# ---------------------------------------------------------------------------
+
+func test_find_next_step_returns_null_when_already_cancelled() -> void:
+	## find_next_step must return null immediately when cancel_check is already true,
+	## even on a board where a Rank 1 step would normally be found.
+	var r4 := _regions_from_array([
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+		[0, 1, 2, 3],
+	])
+	# Board where row 0 has exactly one candidate: only (2,0) not excluded.
+	var crowns_by_row: Array = [-1, -1, -1, -1]
+	var excluded: Dictionary = {
+		Vector2i(0, 0): true,
+		Vector2i(1, 0): true,
+		Vector2i(3, 0): true,
+	}
+	# Without cancel, this would return a RANK_SINGLE step.
+	var uncancelled_step := CrownGridSolver.find_next_step(4, r4, crowns_by_row, excluded)
+	assert_not_null(uncancelled_step, "Without cancel, a Rank 1 step must be found")
+
+	# With immediate cancel, must return null instead.
+	var cancelled_step := CrownGridSolver.find_next_step(
+			4, r4, crowns_by_row, excluded, func() -> bool: return true)
+	assert_null(cancelled_step,
+			"find_next_step must return null when cancel_check is already true")
+
+
 func test_find_next_step_cancel_check_respected() -> void:
-	## find_next_step now accepts cancel_check and must return null when cancelled.
+	## find_next_step with immediate cancel must return null.
 	var r4 := _regions_from_array([
 		[0, 1, 2, 3],
 		[0, 1, 2, 3],
@@ -415,8 +498,5 @@ func test_find_next_step_cancel_check_respected() -> void:
 	var excluded: Dictionary = {}
 	var step := CrownGridSolver.find_next_step(
 			4, r4, crowns_by_row, excluded, func() -> bool: return true)
-	# With immediate cancel, rank 4 chain detection is skipped.
-	# Ranks 1/2/3 still fire synchronously; only rank 4 is guarded.
-	# If a rank-1/2/3 step is found it is returned; otherwise null.
-	assert_true(step == null or step.rank < CrownGridSolver.RANK_CHAIN,
-			"With cancel_check=true, rank-4 step must not be returned")
+	assert_null(step, "find_next_step with immediate cancel must return null")
+
