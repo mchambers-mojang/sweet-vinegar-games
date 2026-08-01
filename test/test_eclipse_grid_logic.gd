@@ -39,6 +39,32 @@ func _sol4() -> Array[int]:
 	return s
 
 
+## Build a minimal complete adapter-test save dict for 4×4 with known-good values.
+## All fields required by the updated save adapter are present.
+func _make_adapter_data_4x4() -> Dictionary:
+	var sol := _sol4()
+	var sol_arr: Array = []
+	for v in sol:
+		sol_arr.append(v)
+	# givens: index 0 = PLUS, index 1 = MINUS (matches sol4 checkerboard)
+	var givens_arr: Array = []
+	for _i in 16:
+		givens_arr.append(EMPTY)
+	givens_arr[0] = PLUS   # sol4[0] = PLUS
+	givens_arr[1] = MINUS  # sol4[1] = MINUS
+	# cells must match givens at every given position
+	var cells_arr: Array = []
+	for i in 16:
+		cells_arr.append(givens_arr[i])
+	return {
+		"size": 4,
+		"cells": cells_arr,
+		"givens": givens_arr,
+		"solution": sol_arr,
+		"is_completed": false,
+	}
+
+
 func before_each() -> void:
 	logic = EclipseGridLogic.new()
 	var sol := _sol4()
@@ -287,19 +313,14 @@ func test_invalid_save_size_zero_rejected() -> void:
 
 func test_valid_save_schema_accepted() -> void:
 	var adapter := EclipseGridSaveAdapter.new()
-	var cells_arr: Array = []
-	for _i in 16:
-		cells_arr.append(0)
-	var ok_data := {"size": 4, "cells": cells_arr, "is_completed": false}
+	var ok_data := _make_adapter_data_4x4()
 	assert_true(adapter._can_resume_from(ok_data))
 
 
 func test_completed_save_not_resumable() -> void:
 	var adapter := EclipseGridSaveAdapter.new()
-	var cells_arr: Array = []
-	for _i in 16:
-		cells_arr.append(1)
-	var done_data := {"size": 4, "cells": cells_arr, "is_completed": true}
+	var done_data := _make_adapter_data_4x4()
+	done_data["is_completed"] = true
 	assert_false(adapter._can_resume_from(done_data))
 
 
@@ -364,13 +385,102 @@ func test_save_adapter_rejects_out_of_bounds_relation_key() -> void:
 
 func test_save_adapter_accepts_valid_relations() -> void:
 	var adapter := EclipseGridSaveAdapter.new()
-	var cells_arr: Array = []
-	for _i in 16:
-		cells_arr.append(0)
-	var ok_data := {
-		"size": 4,
-		"cells": cells_arr,
-		"h_relations": {"0,0": 1, "1,1": 2},
-		"v_relations": {"0,0": 2},
-	}
+	var ok_data := _make_adapter_data_4x4()
+	ok_data["h_relations"] = {"0,0": 1, "1,1": 2}
+	ok_data["v_relations"] = {"0,0": 2}
 	assert_true(adapter._can_resume_from(ok_data))
+
+
+# ---------------------------------------------------------------------------
+# Save adapter — new validation rules (regression for #2 round of findings)
+# ---------------------------------------------------------------------------
+
+func test_save_adapter_rejects_missing_givens() -> void:
+	var adapter := EclipseGridSaveAdapter.new()
+	var data := _make_adapter_data_4x4()
+	data.erase("givens")
+	assert_false(adapter._can_resume_from(data),
+		"Save without givens must be rejected")
+
+
+func test_save_adapter_rejects_missing_solution() -> void:
+	var adapter := EclipseGridSaveAdapter.new()
+	var data := _make_adapter_data_4x4()
+	data.erase("solution")
+	assert_false(adapter._can_resume_from(data),
+		"Save without solution must be rejected")
+
+
+func test_save_adapter_rejects_empty_value_in_solution() -> void:
+	var adapter := EclipseGridSaveAdapter.new()
+	var data := _make_adapter_data_4x4()
+	var sol_arr: Array = data["solution"].duplicate()
+	sol_arr[3] = EMPTY  # Solution must be fully filled - no EMPTY allowed
+	data["solution"] = sol_arr
+	assert_false(adapter._can_resume_from(data),
+		"Solution array containing EMPTY must be rejected")
+
+
+func test_save_adapter_rejects_malformed_coordinate_string() -> void:
+	## "notanumber,0" used to parse as (0,0) via int("notanumber")->0, silently
+	## accepting an out-of-range key as valid.
+	var adapter := EclipseGridSaveAdapter.new()
+	var data := _make_adapter_data_4x4()
+	data["h_relations"] = {"notanumber,0": 1}
+	assert_false(adapter._can_resume_from(data),
+		"Non-numeric coordinate string must be rejected")
+
+
+func test_save_adapter_rejects_cells_inconsistent_with_givens() -> void:
+	var adapter := EclipseGridSaveAdapter.new()
+	var data := _make_adapter_data_4x4()
+	# givens[0] = PLUS, but cells[0] is set to MINUS -- inconsistency
+	var cells_arr: Array = data["cells"].duplicate()
+	cells_arr[0] = MINUS
+	data["cells"] = cells_arr
+	assert_false(adapter._can_resume_from(data),
+		"cells conflicting with givens must be rejected")
+
+
+# ---------------------------------------------------------------------------
+# Strict mode -- erasure of a correct glyph (regression for Fix 4)
+# ---------------------------------------------------------------------------
+
+func test_strict_mode_allows_erasing_correct_plus() -> void:
+	## In strict mode, cycling PLUS (correct) should produce EMPTY (erase),
+	## not a rejection.  Before the fix, the MINUS->EMPTY advance was rejected.
+	var l := EclipseGridLogic.new()
+	var sol := _sol4()
+	var gv: Array[int] = sol.duplicate()
+	gv[2] = EMPTY
+	for i in range(4, 16):
+		gv[i] = EMPTY
+	l.init_from_save(_make_save_data(4, sol, gv))
+	l.assistance_mode = EclipseGridLogic.ASSIST_STRICT
+
+	# Place the correct PLUS at cell 2
+	var place_result := l.cycle_cell(2)
+	assert_eq(place_result.new_value, PLUS, "First tap should place correct PLUS")
+	assert_false(place_result.rejected, "Placing correct PLUS must not be rejected")
+
+	# Now erase it -- should transition to EMPTY without rejection
+	var erase_result := l.cycle_cell(2)
+	assert_eq(erase_result.new_value, EMPTY, "Second tap (erase) should produce EMPTY")
+	assert_false(erase_result.rejected, "Erasing a correct glyph must not be rejected")
+
+
+# ---------------------------------------------------------------------------
+# Solver -- analyze() must not mutate its input (regression for Fix 2)
+# ---------------------------------------------------------------------------
+
+func test_analyze_does_not_mutate_input_cells() -> void:
+	## analyze() should never write to the array it receives; all enumeration
+	## for Rank 3/4 must operate on internal copies.
+	var cells: Array[int] = [PLUS, MINUS, EMPTY, MINUS,
+							 EMPTY, EMPTY, EMPTY, EMPTY,
+							 EMPTY, EMPTY, EMPTY, EMPTY,
+							 EMPTY, EMPTY, EMPTY, EMPTY]
+	var snapshot: Array[int] = cells.duplicate()
+	EclipseGridSolver.analyze(4, cells, {}, {})
+	assert_eq(cells, snapshot,
+		"analyze() must leave the input cells array unchanged")

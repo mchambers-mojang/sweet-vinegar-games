@@ -181,24 +181,71 @@ func _assert_valid_result(result: Dictionary, expected_size: int) -> void:
 # ---------------------------------------------------------------------------
 
 func test_size_4_puzzle_max_rank_1() -> void:
-	## 4×4 is labelled "Easy" — the generated puzzle must be solvable with
-	## at most Rank-1 techniques.
+	## 4×4 is labelled "Easy" — the generated puzzle must require exactly Rank-1 techniques.
 	for seed in [1, 7, 42, 100]:
 		var result: Dictionary = EclipseGridGenerator.generate(4, seed)
 		if result.is_empty():
 			continue
 		var max_rank: int = result.get("max_rank", 0)
-		assert_lte(max_rank, EclipseGridSolver.RANK_1,
-			"4×4 puzzle (seed %d) must not exceed Rank 1; got %d" % [seed, max_rank])
+		assert_eq(max_rank, EclipseGridSolver.RANK_1,
+			"4×4 puzzle (seed %d) must be exactly Rank 1; got %d" % [seed, max_rank])
 
 
 func test_size_6_puzzle_max_rank_2() -> void:
-	## 6×6 is labelled "Medium" — the generated puzzle must be solvable with
-	## at most Rank-2 techniques.
+	## 6×6 is labelled "Medium" — the generated puzzle must require exactly Rank-2 techniques.
 	for seed in [1, 7, 42, 100]:
 		var result: Dictionary = EclipseGridGenerator.generate(6, seed)
 		if result.is_empty():
 			continue
 		var max_rank: int = result.get("max_rank", 0)
-		assert_lte(max_rank, EclipseGridSolver.RANK_2,
-			"6×6 puzzle (seed %d) must not exceed Rank 2; got %d" % [seed, max_rank])
+		assert_eq(max_rank, EclipseGridSolver.RANK_2,
+			"6×6 puzzle (seed %d) must be exactly Rank 2; got %d" % [seed, max_rank])
+
+
+# ---------------------------------------------------------------------------
+# Cancellation in board construction (regression for unpolled _place_rows)
+# ---------------------------------------------------------------------------
+
+func test_board_construction_respects_cancellation() -> void:
+	## cancel_check fires on the very first poll inside generate() — the outer attempt
+	## loop guard — so {} is returned before any work starts.  A separate state that
+	## cancels on the second poll reaches _build_complete_board and exercises the
+	## cancel_check path inside _place_rows.
+	var state2 := [0]
+	var cancel2 := func() -> bool:
+		state2[0] += 1
+		return state2[0] >= 2
+	var result2: Dictionary = EclipseGridGenerator.generate(6, 99, cancel2)
+	assert_true(result2.is_empty(),
+		"generate() must return {} when cancelled during board construction")
+
+
+# ---------------------------------------------------------------------------
+# Relation minimization (regression for un-minimized relation clues)
+# ---------------------------------------------------------------------------
+
+func test_relation_clues_are_minimized() -> void:
+	## After minimization, each remaining relation clue must be necessary:
+	## removing any one of them must make the puzzle unsolvable by the human solver.
+	var result: Dictionary = EclipseGridGenerator.generate(4, 42)
+	if result.is_empty():
+		return
+	var size: int = result["size"]
+	var givens: Array[int] = []
+	givens.assign(result["givens"])
+	var hr: Dictionary = result["h_relations"].duplicate()
+	var vr: Dictionary = result["v_relations"].duplicate()
+	for key in hr.keys():
+		var saved: int = hr[key]
+		hr.erase(key)
+		var a: EclipseGridSolver.Analysis = EclipseGridSolver.analyze(size, givens, hr, vr)
+		assert_false(a.is_unique,
+			"h_relation %s must be necessary after minimization" % str(key))
+		hr[key] = saved
+	for key in vr.keys():
+		var saved: int = vr[key]
+		vr.erase(key)
+		var a: EclipseGridSolver.Analysis = EclipseGridSolver.analyze(size, givens, hr, vr)
+		assert_false(a.is_unique,
+			"v_relation %s must be necessary after minimization" % str(key))
+		vr[key] = saved

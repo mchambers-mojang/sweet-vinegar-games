@@ -44,7 +44,7 @@ static func generate(size: int, seed: int, cancel_check: Callable = Callable()) 
 			return {}
 
 		# Step 1: Build a complete valid board row-by-row (fast).
-		var solution: Array[int] = _build_complete_board(size, valid_rows, rng)
+		var solution: Array[int] = _build_complete_board(size, valid_rows, rng, cancel_check)
 		if solution.is_empty():
 			continue
 
@@ -65,6 +65,11 @@ static func generate(size: int, seed: int, cancel_check: Callable = Callable()) 
 		if cancel_check.is_valid() and cancel_check.call():
 			return {}
 
+		# Step 3b: Minimize relation clues with the same oracle.
+		_minimize_relations(size, givens, h_relations, v_relations, cancel_check)
+		if cancel_check.is_valid() and cancel_check.call():
+			return {}
+
 		# Step 4: Verify unique solution (backtracking, but board is well-constrained).
 		var unique := EclipseGridSolver.count_solutions(
 				size, givens, h_relations, v_relations, 2, cancel_check) == 1
@@ -73,14 +78,14 @@ static func generate(size: int, seed: int, cancel_check: Callable = Callable()) 
 		if not unique:
 			continue
 
-		# Step 5: Analyse difficulty rank; only accept puzzles within the target rank.
+		# Step 5: Analyse difficulty rank; only accept puzzles at exactly the target rank.
 		var analysis: EclipseGridSolver.Analysis = EclipseGridSolver.analyze(
 				size, givens, h_relations, v_relations, cancel_check)
 		if cancel_check.is_valid() and cancel_check.call():
 			return {}
-		# Enforce difficulty ceiling: reject puzzles that require techniques
-		# harder than the rank corresponding to this board size.
-		if analysis.max_rank > required_rank(size):
+		# Enforce exact difficulty tier: reject puzzles that are too easy (rank below
+		# required) or too hard (rank above required) for this board size.
+		if analysis.max_rank != required_rank(size):
 			continue
 
 		return {
@@ -146,11 +151,12 @@ static func _enumerate_rows(
 static func _build_complete_board(
 		size: int,
 		valid_rows: Array[Array],
-		rng: RandomNumberGenerator) -> Array[int]:
+		rng: RandomNumberGenerator,
+		cancel_check: Callable = Callable()) -> Array[int]:
 	var cells: Array[int] = []
 	cells.resize(size * size)
 	cells.fill(EMPTY)
-	if _place_rows(size, cells, 0, valid_rows, rng):
+	if _place_rows(size, cells, 0, valid_rows, rng, cancel_check):
 		return cells
 	return []
 
@@ -160,7 +166,10 @@ static func _place_rows(
 		cells: Array[int],
 		row: int,
 		valid_rows: Array[Array],
-		rng: RandomNumberGenerator) -> bool:
+		rng: RandomNumberGenerator,
+		cancel_check: Callable = Callable()) -> bool:
+	if cancel_check.is_valid() and cancel_check.call():
+		return false
 	if row == size:
 		return true  # Board complete
 
@@ -169,12 +178,14 @@ static func _place_rows(
 	_shuffle_array(shuffled, rng)
 
 	for row_pattern in shuffled:
+		if cancel_check.is_valid() and cancel_check.call():
+			return false
 		# Place the row
 		for c in size:
 			cells[row * size + c] = row_pattern[c]
 		# Check column consistency up to this row
 		if _columns_consistent_through_row(size, cells, row):
-			if _place_rows(size, cells, row + 1, valid_rows, rng):
+			if _place_rows(size, cells, row + 1, valid_rows, rng, cancel_check):
 				return true
 		# Undo
 		for c in size:
@@ -298,6 +309,30 @@ static func _minimize_givens(
 				givens[idx] = saved  # Cell is needed; restore it
 
 	return givens
+
+
+## Minimize relation clues using the human solver as oracle.
+## A relation is removed only if the human solver can still uniquely determine
+## the full solution without it.
+static func _minimize_relations(
+		size: int,
+		givens: Array[int],
+		h_relations: Dictionary,
+		v_relations: Dictionary,
+		cancel_check: Callable) -> void:
+	for dict in [h_relations, v_relations]:
+		var keys: Array = dict.keys().duplicate()
+		for key in keys:
+			if cancel_check.is_valid() and cancel_check.call():
+				return
+			var saved: int = dict[key]
+			dict.erase(key)
+			var analysis: EclipseGridSolver.Analysis = EclipseGridSolver.analyze(
+					size, givens, h_relations, v_relations, cancel_check)
+			if cancel_check.is_valid() and cancel_check.call():
+				return
+			if not analysis.is_unique:
+				dict[key] = saved  # Relation is needed; restore it
 
 
 # ---------------------------------------------------------------------------

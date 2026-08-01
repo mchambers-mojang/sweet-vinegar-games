@@ -6,6 +6,7 @@ class_name EclipseGridSaveAdapter extends GameSaveAdapter
 const _VALID_SIZES: Array[int] = [4, 6, 8, 10]
 const _VALID_GLYPHS: Array[int] = [0, 1, 2]   # EMPTY, PLUS, MINUS
 const _VALID_RELS: Array[int]   = [1, 2]       # EQ, NEQ
+const EMPTY := EclipseGridSolver.EMPTY
 
 
 func _get_game_id() -> String:
@@ -43,15 +44,23 @@ func _can_resume_from(data: Dictionary) -> bool:
 	if not _validate_glyph_array(data.get("cells", null), expected, "cells"):
 		return false
 
-	# --- givens (optional but validated when present) ---
-	var gv: Variant = data.get("givens", null)
-	if gv != null and not _validate_glyph_array(gv, expected, "givens"):
+	# --- givens (required) ---
+	if not _validate_glyph_array(data.get("givens", null), expected, "givens"):
 		return false
 
-	# --- solution (optional but validated when present) ---
-	var sol: Variant = data.get("solution", null)
-	if sol != null and not _validate_glyph_array(sol, expected, "solution"):
+	# --- solution (required, no EMPTY values — must be fully solved) ---
+	if not _validate_solution_array(data.get("solution", null), expected, "solution"):
 		return false
+
+	# --- cells must agree with givens at every given position ---
+	var cells_arr: Array = data["cells"] as Array
+	var givens_arr: Array = data["givens"] as Array
+	for i in expected:
+		var gv_val: int = int(givens_arr[i])
+		if gv_val != EMPTY and int(cells_arr[i]) != gv_val:
+			push_warning("EclipseGridSaveAdapter: cells[%d]=%d conflicts with givens[%d]=%d" % [
+					i, int(cells_arr[i]), i, gv_val])
+			return false
 
 	# --- relations ---
 	if not _validate_relations(data.get("h_relations", null), n, false, "h_relations"):
@@ -81,6 +90,27 @@ func _validate_glyph_array(v: Variant, expected_len: int, label: String) -> bool
 	return true
 
 
+## Like _validate_glyph_array but also rejects EMPTY (0) values.
+## Used for solution arrays, which must be fully filled.
+func _validate_solution_array(v: Variant, expected_len: int, label: String) -> bool:
+	if typeof(v) != TYPE_ARRAY:
+		push_warning("EclipseGridSaveAdapter: %s is not an Array" % label)
+		return false
+	var arr: Array = v as Array
+	if arr.size() != expected_len:
+		push_warning("EclipseGridSaveAdapter: %s has wrong length %d (expected %d)" % [label, arr.size(), expected_len])
+		return false
+	for element in arr:
+		if typeof(element) != TYPE_INT:
+			push_warning("EclipseGridSaveAdapter: %s contains non-int value" % label)
+			return false
+		var val: int = int(element)
+		if val != EclipseGridSolver.PLUS and val != EclipseGridSolver.MINUS:
+			push_warning("EclipseGridSaveAdapter: %s contains EMPTY or invalid value %d" % [label, val])
+			return false
+	return true
+
+
 func _validate_relations(v: Variant, n: int, is_vertical: bool, label: String) -> bool:
 	if v == null:
 		return true   # omitted relations dictionary is fine
@@ -99,6 +129,9 @@ func _validate_relations(v: Variant, n: int, is_vertical: bool, label: String) -
 			var parts: PackedStringArray = (key as String).split(",")
 			if parts.size() != 2:
 				push_warning("EclipseGridSaveAdapter: %s key has wrong format" % label)
+				return false
+			if not parts[0].is_valid_int() or not parts[1].is_valid_int():
+				push_warning("EclipseGridSaveAdapter: %s key is not a valid coordinate pair" % label)
 				return false
 			x = int(parts[0])
 			y = int(parts[1])

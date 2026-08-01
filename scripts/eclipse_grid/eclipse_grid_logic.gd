@@ -171,11 +171,12 @@ func cycle_cell(index: int) -> SetGlyphResult:
 	if assistance_mode == ASSIST_STRICT and new_val != EMPTY:
 		if not solution.is_empty() and new_val != solution[index]:
 			new_val = _next_value(new_val)
-			if new_val == EMPTY or new_val != solution[index]:
+			# EMPTY means the previous value was correct and the player wants to
+			# erase it — allow the erasure rather than rejecting it.
+			if new_val != EMPTY and new_val != solution[index]:
 				result.new_value = new_val
 				result.rejected = true
 				return result
-			# new_val is now the correct value — fall through to place it
 
 	result.new_value = new_val
 

@@ -274,6 +274,11 @@ func _on_undo() -> void:
 	var result: EclipseGridLogic.UndoRedoResult = logic.undo()
 	if result.index < 0:
 		return
+	_recorder.record_input(elapsed_time, "glyph_changed", {
+		"index": result.index,
+		"old_value": result.old_value,
+		"new_value": result.new_value,
+	})
 	_refresh_board()
 	_update_button_states()
 	_save_current_state()
@@ -285,6 +290,11 @@ func _on_redo() -> void:
 	var result: EclipseGridLogic.UndoRedoResult = logic.redo()
 	if result.index < 0:
 		return
+	_recorder.record_input(elapsed_time, "glyph_changed", {
+		"index": result.index,
+		"old_value": result.old_value,
+		"new_value": result.new_value,
+	})
 	_refresh_board()
 	_update_button_states()
 	_save_current_state()

@@ -667,9 +667,11 @@ static func _line_forced_rank3(
 	if empties.size() < 3 or empties.size() >= size:
 		return null  # Rank 1/2 handles fewer empties; a fully-empty line yields no deduction
 
-	# Enumerate all valid assignments for this line's empty positions
+	# Enumerate all valid assignments for this line's empty positions.
+	# Work on a local copy so the shared cells array is never mutated.
+	var cells_copy: Array[int] = cells.duplicate()
 	var valid_assignments: Array[Array] = []
-	_enum_line_completions(size, cells, h_relations, v_relations, line, is_row, empties, 0, valid_assignments)
+	_enum_line_completions(size, cells_copy, h_relations, v_relations, line, is_row, empties, 0, valid_assignments)
 
 	if valid_assignments.size() < 2:
 		return null  # 0 = contradiction (shouldn't happen); 1 = already uniquely forced
@@ -763,29 +765,33 @@ static func _cross_quota_line(
 	if empties.size() < 2:
 		return null
 
-	# Enumerate all completions valid for this line alone
+	# Enumerate all completions valid for this line alone.
+	# Use a local copy so the shared cells array is never mutated.
+	var cells_copy: Array[int] = cells.duplicate()
 	var raw_completions: Array[Array] = []
-	_enum_line_completions(size, cells, h_relations, v_relations, line, is_row, empties, 0, raw_completions)
+	_enum_line_completions(size, cells_copy, h_relations, v_relations, line, is_row, empties, 0, raw_completions)
 
 	if raw_completions.size() < 2:
 		return null
 
-	# Filter: keep only completions that also satisfy each opposing-dimension line
+	# Filter: keep only completions that also satisfy each opposing-dimension line.
+	# Build a trial copy per completion to avoid mutating the shared cells array.
 	var valid_completions: Array[Array] = []
 	for completion in raw_completions:
+		var trial: Array[int] = cells.duplicate()
+		for i in empties.size():
+			var pos: int = empties[i]
+			var idx: int = line * size + pos if is_row else pos * size + line
+			trial[idx] = int(completion[i])
 		var ok := true
 		for i in empties.size():
 			var pos: int = empties[i]
-			var val: int = int(completion[i])
-			var idx: int = line * size + pos if is_row else pos * size + line
-			cells[idx] = val
 			# For a row, the opposing dimension is the column indexed by pos; vice-versa.
 			var opp_ok: bool
 			if is_row:
-				opp_ok = _check_partial_line(cells, size, pos, false, h_relations, v_relations)
+				opp_ok = _check_partial_line(trial, size, pos, false, h_relations, v_relations)
 			else:
-				opp_ok = _check_partial_line(cells, size, pos, true, h_relations, v_relations)
-			cells[idx] = EMPTY
+				opp_ok = _check_partial_line(trial, size, pos, true, h_relations, v_relations)
 			if not opp_ok:
 				ok = false
 				break

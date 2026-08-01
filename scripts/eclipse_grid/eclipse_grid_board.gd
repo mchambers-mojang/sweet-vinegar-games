@@ -2,6 +2,11 @@ class_name EclipseGridBoard
 extends Control
 
 ## Eclipse Grid board UI — draws the grid, cells, and relation clues; handles tap input.
+##
+## Accessibility: an invisible Button child is maintained for every cell so that
+## screen readers can announce the cell state and relation clues.  These buttons
+## have MOUSE_FILTER_IGNORE so they never intercept pointer events; focus handling
+## and tap routing are done by the board's own _gui_input.
 
 signal cell_tapped(index: int)
 
@@ -11,6 +16,9 @@ var cells: Array[int] = []
 var h_relations: Dictionary = {}
 var v_relations: Dictionary = {}
 var error_cells: Array[int] = []
+
+## Invisible accessibility buttons — one per cell, rebuilt on setup().
+var _cell_buttons: Array[Button] = []
 
 const EMPTY := EclipseGridSolver.EMPTY
 const PLUS  := EclipseGridSolver.PLUS
@@ -33,17 +41,82 @@ func setup(sz: int, gv: Array[int], cr: Array[int], hr: Dictionary, vr: Dictiona
 	h_relations = hr
 	v_relations = vr
 	error_cells.clear()
+	_rebuild_cell_buttons()
 	queue_redraw()
 
 
 func update_cells(cr: Array[int]) -> void:
 	cells = cr.duplicate()
+	_update_cell_button_texts()
 	queue_redraw()
 
 
 func update_errors(errs: Array[int]) -> void:
 	error_cells = errs.duplicate()
 	queue_redraw()
+
+
+# ---------------------------------------------------------------------------
+# Accessibility
+# ---------------------------------------------------------------------------
+
+## Rebuild invisible Button children used by screen readers.
+func _rebuild_cell_buttons() -> void:
+	for btn in _cell_buttons:
+		if is_instance_valid(btn):
+			btn.queue_free()
+	_cell_buttons.clear()
+	for idx in grid_size * grid_size:
+		var btn := Button.new()
+		btn.flat = true
+		# Invisible to pointer; keyboard / AT navigation still works.
+		btn.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		btn.focus_mode = Control.FOCUS_NONE
+		btn.self_modulate = Color(0.0, 0.0, 0.0, 0.0)
+		btn.text = _cell_accessible_text(idx)
+		add_child(btn)
+		_cell_buttons.append(btn)
+
+
+## Update accessible text for each cell without rebuilding the node tree.
+func _update_cell_button_texts() -> void:
+	for i in mini(cells.size(), _cell_buttons.size()):
+		if is_instance_valid(_cell_buttons[i]):
+			_cell_buttons[i].text = _cell_accessible_text(i)
+
+
+## Return a human-readable description of the cell at flat index `idx`.
+func _cell_accessible_text(idx: int) -> String:
+	if grid_size <= 0:
+		return ""
+	var row := idx / grid_size
+	var col := idx % grid_size
+	var val: int = cells[idx] if idx < cells.size() else EMPTY
+	var is_given: bool = idx < givens.size() and givens[idx] != EMPTY
+
+	var glyph: String
+	match val:
+		PLUS:  glyph = "plus"
+		MINUS: glyph = "minus"
+		_:     glyph = "empty"
+
+	var parts: Array[String] = [glyph]
+	if is_given:
+		parts.append("given")
+
+	var pos := Vector2i(col, row)
+	# Horizontal clues
+	if h_relations.has(pos):
+		parts.append("right neighbor %s" % ("equals" if h_relations[pos] == EQ else "not-equals"))
+	if col > 0 and h_relations.has(Vector2i(col - 1, row)):
+		parts.append("left neighbor %s" % ("equals" if h_relations[Vector2i(col - 1, row)] == EQ else "not-equals"))
+	# Vertical clues
+	if v_relations.has(pos):
+		parts.append("below neighbor %s" % ("equals" if v_relations[pos] == EQ else "not-equals"))
+	if row > 0 and v_relations.has(Vector2i(col, row - 1)):
+		parts.append("above neighbor %s" % ("equals" if v_relations[Vector2i(col, row - 1)] == EQ else "not-equals"))
+
+	return "Row %d col %d: %s" % [row + 1, col + 1, ", ".join(parts)]
 
 
 # ---------------------------------------------------------------------------
