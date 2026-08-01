@@ -671,3 +671,93 @@ func test_count_solutions_returns_minus_one_when_cancelled_during_area_constrain
 	assert_eq(result, -1,
 		"count_solutions must return -1 (not 0) when cancelled during area-constrained enumeration")
 
+
+
+# ---------------------------------------------------------------------------
+# Stats history mode filtering
+# ---------------------------------------------------------------------------
+
+const StatsScreenScript := preload("res://scripts/shikaku/shikaku_stats_screen.gd")
+const _TEST_STATS_FILTER_PATH := "user://test_shikaku_stats_filter.cfg"
+
+
+func test_stats_history_standard_mode_excludes_shapes_entries() -> void:
+	# _get_time_history_for_size_mode must NOT mix Shapes entries into
+	# Standard history — history with mode=RULE_SET_SHAPES must be excluded.
+	var orig_path := GameStatsManager.save_path
+	GameStatsManager.save_path = _TEST_STATS_FILTER_PATH
+	GameStatsManager.clear("shikaku")
+
+	GameStatsManager.record("shikaku", {
+		"type": "completion", "grid_size": 5, "time": 120.0,
+		"mode": ShikakuLogic.RULE_SET_STANDARD,
+	})
+	GameStatsManager.record("shikaku", {
+		"type": "completion", "grid_size": 5, "time": 200.0,
+		"mode": ShikakuLogic.RULE_SET_SHAPES,
+	})
+
+	# Instantiate without adding to scene tree so _ready() is not triggered
+	# (which would access @onready UI nodes absent in the test context).
+	var screen := StatsScreenScript.new()
+	var standard_times: Array = screen._get_time_history_for_size_mode(5, ShikakuLogic.RULE_SET_STANDARD)
+	screen.free()
+
+	assert_eq(standard_times.size(), 1, "Standard history must include only Standard entries")
+	assert_eq(standard_times[0], 120.0, "Standard history must contain the Standard entry time")
+
+	GameStatsManager.save_path = orig_path
+	if FileAccess.file_exists(_TEST_STATS_FILTER_PATH):
+		DirAccess.remove_absolute(_TEST_STATS_FILTER_PATH)
+
+
+func test_stats_history_shapes_mode_excludes_standard_entries() -> void:
+	# _get_time_history_for_size_mode must NOT mix Standard entries into
+	# Shapes history — history with mode=RULE_SET_STANDARD must be excluded.
+	var orig_path := GameStatsManager.save_path
+	GameStatsManager.save_path = _TEST_STATS_FILTER_PATH
+	GameStatsManager.clear("shikaku")
+
+	GameStatsManager.record("shikaku", {
+		"type": "completion", "grid_size": 7, "time": 90.0,
+		"mode": ShikakuLogic.RULE_SET_STANDARD,
+	})
+	GameStatsManager.record("shikaku", {
+		"type": "completion", "grid_size": 7, "time": 150.0,
+		"mode": ShikakuLogic.RULE_SET_SHAPES,
+	})
+
+	var screen := StatsScreenScript.new()
+	var shapes_times: Array = screen._get_time_history_for_size_mode(7, ShikakuLogic.RULE_SET_SHAPES)
+	screen.free()
+
+	assert_eq(shapes_times.size(), 1, "Shapes history must include only Shapes entries")
+	assert_eq(shapes_times[0], 150.0, "Shapes history must contain the Shapes entry time")
+
+	GameStatsManager.save_path = orig_path
+	if FileAccess.file_exists(_TEST_STATS_FILTER_PATH):
+		DirAccess.remove_absolute(_TEST_STATS_FILTER_PATH)
+
+
+func test_stats_history_entries_without_mode_treated_as_standard() -> void:
+	# Legacy entries without a "mode" key must be counted as Standard.
+	var orig_path := GameStatsManager.save_path
+	GameStatsManager.save_path = _TEST_STATS_FILTER_PATH
+	GameStatsManager.clear("shikaku")
+
+	GameStatsManager.record("shikaku", {
+		"type": "completion", "grid_size": 5, "time": 180.0,
+		# No "mode" key — legacy entry
+	})
+
+	var screen := StatsScreenScript.new()
+	var standard_times: Array = screen._get_time_history_for_size_mode(5, ShikakuLogic.RULE_SET_STANDARD)
+	var shapes_times: Array = screen._get_time_history_for_size_mode(5, ShikakuLogic.RULE_SET_SHAPES)
+	screen.free()
+
+	assert_eq(standard_times.size(), 1, "Legacy entries (no mode key) must appear in Standard history")
+	assert_eq(shapes_times.size(), 0, "Legacy entries must not appear in Shapes history")
+
+	GameStatsManager.save_path = orig_path
+	if FileAccess.file_exists(_TEST_STATS_FILTER_PATH):
+		DirAccess.remove_absolute(_TEST_STATS_FILTER_PATH)

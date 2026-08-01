@@ -26,33 +26,36 @@ func get_mode() -> int:
 ## (data returned unchanged) so _can_resume_from can catch the corruption.
 func _migrate(data: Dictionary, _from_version: int) -> Dictionary:
 	if data.has("numbers") and not data.has("anchors"):
-		var numbers: Dictionary = data.get("numbers", {})
-		if numbers is Dictionary:
-			var anchors: Dictionary = {}
-			for key in numbers.keys():
-				var pos: Vector2i
-				if key is Vector2i:
-					pos = key
-				else:
-					var parts: PackedStringArray = str(key).split(",")
-					if parts.size() != 2:
-						push_warning("ShikakuSaveAdapter: migration aborted — malformed key '%s'" % str(key))
-						return data
-					var col_str := parts[0].strip_edges()
-					var row_str := parts[1].strip_edges()
-					if not col_str.is_valid_int() or not row_str.is_valid_int():
-						push_warning("ShikakuSaveAdapter: migration aborted — non-integer key '%s'" % str(key))
-						return data
-					pos = Vector2i(int(col_str), int(row_str))
-				var val = numbers[key]
-				if not (val is int):
-					push_warning("ShikakuSaveAdapter: migration aborted — non-integer value for key '%s'" % str(key))
+		var raw_numbers = data.get("numbers")
+		if not (raw_numbers is Dictionary):
+			push_warning("ShikakuSaveAdapter: migration aborted — 'numbers' is not a Dictionary")
+			return data
+		var numbers: Dictionary = raw_numbers as Dictionary
+		var anchors: Dictionary = {}
+		for key in numbers.keys():
+			var pos: Vector2i
+			if key is Vector2i:
+				pos = key
+			else:
+				var parts: PackedStringArray = str(key).split(",")
+				if parts.size() != 2:
+					push_warning("ShikakuSaveAdapter: migration aborted — malformed key '%s'" % str(key))
 					return data
-				anchors["%d,%d" % [pos.x, pos.y]] = {
-					"area": val as int,
-					"shape": ShikakuLogic.SHAPE_ABSENT,
-				}
-			data["anchors"] = anchors
+				var col_str := parts[0].strip_edges()
+				var row_str := parts[1].strip_edges()
+				if not col_str.is_valid_int() or not row_str.is_valid_int():
+					push_warning("ShikakuSaveAdapter: migration aborted — non-integer key '%s'" % str(key))
+					return data
+				pos = Vector2i(int(col_str), int(row_str))
+			var val = numbers[key]
+			if not (val is int):
+				push_warning("ShikakuSaveAdapter: migration aborted — non-integer value for key '%s'" % str(key))
+				return data
+			anchors["%d,%d" % [pos.x, pos.y]] = {
+				"area": val as int,
+				"shape": ShikakuLogic.SHAPE_ABSENT,
+			}
+		data["anchors"] = anchors
 		if not data.has("mode"):
 			data["mode"] = ShikakuLogic.RULE_SET_STANDARD
 	return data

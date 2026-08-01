@@ -10,10 +10,10 @@ const MODE_STANDARD := ShikakuLogic.RULE_SET_STANDARD
 const MODE_SHAPES := ShikakuLogic.RULE_SET_SHAPES
 
 ## Leaderboard mode strings for the Shapes variant (indexed to match size option order).
-const SHAPES_LEADERBOARD_MODES := PackedStringArray([
+static var SHAPES_LEADERBOARD_MODES := PackedStringArray([
 	"shapes_5", "shapes_7", "shapes_8", "shapes_10", "shapes_12", "shapes_15"
 ])
-const SHAPES_LEADERBOARD_LABELS := PackedStringArray([
+static var SHAPES_LEADERBOARD_LABELS := PackedStringArray([
 	"Shapes 5×5", "Shapes 7×7", "Shapes 8×8", "Shapes 10×10", "Shapes 12×12", "Shapes 15×15"
 ])
 
@@ -132,3 +132,22 @@ func _setup_leaderboard_button(stats_btn: Button) -> void:
 
 func _on_mode_changed(index: int) -> void:
 	_mode_index = index
+
+
+## Override to use mode-aware abandon counter key.
+## Standard games use "abandoned_s{width}"; Shapes games use "abandoned_shapes_s{width}".
+func _on_abandon_confirmed() -> void:
+	if not config or config.abandon_stat_prefix.is_empty():
+		super._on_abandon_confirmed()
+		return
+	var save_data := GameSaveManager.load_game(config.game_id)
+	var stat_val: int = save_data.get(config.abandon_stat_save_key, config.abandon_stat_default)
+	var saved_mode: int = save_data.get("mode", ShikakuLogic.RULE_SET_STANDARD)
+	var prefix: String
+	if saved_mode == ShikakuLogic.RULE_SET_SHAPES:
+		prefix = "abandoned_shapes_s"
+	else:
+		prefix = config.abandon_stat_prefix
+	GameStatsManager.increment_counter(config.game_id, prefix + str(stat_val))
+	GameStatsManager.set_counter(config.game_id, "current_streak", 0)
+	GameStatsManager.set_counter("general", "current_win_streak", 0)

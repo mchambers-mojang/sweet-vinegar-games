@@ -472,6 +472,37 @@ func test_shikaku_adapter_migration_rejects_whole_save_on_float_value() -> void:
 
 
 # ---------------------------------------------------------------------------
+# Fix 2 (current batch) — non-Dictionary 'numbers' rejected before typed assignment
+# ---------------------------------------------------------------------------
+
+func test_shikaku_adapter_migration_rejects_non_dict_numbers_integer() -> void:
+	# 'numbers' as an integer must be rejected before any typed Dictionary
+	# assignment, not after — the runtime type-check guard must fire first.
+	var adapter := ShikakuSaveAdapter.new()
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "numbers": 42})
+	assert_false(adapter.can_resume(),
+		"Non-Dictionary 'numbers' (integer) must cause migration to be rejected")
+
+
+func test_shikaku_adapter_migration_rejects_non_dict_numbers_string() -> void:
+	# 'numbers' as a string (e.g. "not_a_dict") must be rejected with a warning
+	# rather than a runtime error from the typed assignment.
+	var adapter := ShikakuSaveAdapter.new()
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "numbers": "not_a_dict"})
+	assert_false(adapter.can_resume(),
+		"Non-Dictionary 'numbers' (string) must cause migration to be rejected")
+
+
+func test_shikaku_adapter_migration_rejects_non_dict_numbers_array() -> void:
+	# An Array value for 'numbers' must be rejected cleanly before the typed
+	# Dictionary assignment, since Array is not a Dictionary subtype.
+	var adapter := ShikakuSaveAdapter.new()
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "numbers": [1, 2, 3]})
+	assert_false(adapter.can_resume(),
+		"Non-Dictionary 'numbers' (Array) must cause migration to be rejected")
+
+
+# ---------------------------------------------------------------------------
 # GameSaveAdapter — restore_if_resumable (avoids double load)
 # ---------------------------------------------------------------------------
 

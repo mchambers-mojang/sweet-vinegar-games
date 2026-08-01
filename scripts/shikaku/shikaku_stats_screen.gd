@@ -35,31 +35,15 @@ func _build_stats_ui() -> void:
 
 	_add_separator()
 
-	# Per-size stats
+	# Standard per-size stats
+	_add_header("Standard")
 	for s in SIZES:
-		_add_header(SIZE_NAMES[s])
+		_add_size_section(s, ShikakuLogic.RULE_SET_STANDARD)
 
-		var best_ms: int = GameStatsManager.get_counter("shikaku", "best_s%d" % s)
-		var best: float = float(best_ms) / 1000.0 if best_ms > 0 else -1.0
-		_add_stat_row("Best Time", TimeFormat.format_time(best, true) if best >= 0 else "--")
-
-		var history: Array = _get_time_history_for_size(s)
-		var avg: float = _compute_average(history)
-		_add_stat_row("Average Time", TimeFormat.format_time(avg, true) if avg >= 0 else "--")
-
-		if not history.is_empty():
-			_add_time_graph(history)
-
-		var started: int = GameStatsManager.get_counter("shikaku", "started_s%d" % s)
-		var completed: int = GameStatsManager.get_counter("shikaku", "completed_s%d" % s)
-		var abandoned: int = GameStatsManager.get_counter("shikaku", "abandoned_s%d" % s)
-		_add_stat_row("Started / Completed", "%d / %d" % [started, completed])
-		_add_stat_row("Abandoned", str(abandoned))
-
-		var rate: float = (float(completed) / float(started) * 100.0) if started > 0 else 0.0
-		_add_stat_row("Completion Rate", "%.0f%%" % rate)
-
-		_add_separator()
+	# Shapes per-size stats
+	_add_header("Shapes")
+	for s in SIZES:
+		_add_size_section(s, ShikakuLogic.RULE_SET_SHAPES)
 
 	# Reset button
 	var reset_btn := Button.new()
@@ -69,10 +53,47 @@ func _build_stats_ui() -> void:
 	stats_list.add_child(reset_btn)
 
 
+## Render per-size stats rows for a given mode (Standard or Shapes).
+func _add_size_section(s: int, mode: int) -> void:
+	var mode_prefix := "shapes_" if mode == ShikakuLogic.RULE_SET_SHAPES else ""
+	_add_subheader(SIZE_NAMES[s])
+
+	var best_ms: int = GameStatsManager.get_counter("shikaku", "best_%ss%d" % [mode_prefix, s])
+	var best: float = float(best_ms) / 1000.0 if best_ms > 0 else -1.0
+	_add_stat_row("Best Time", TimeFormat.format_time(best, true) if best >= 0 else "--")
+
+	var history: Array = _get_time_history_for_size_mode(s, mode)
+	var avg: float = _compute_average(history)
+	_add_stat_row("Average Time", TimeFormat.format_time(avg, true) if avg >= 0 else "--")
+
+	if not history.is_empty():
+		_add_time_graph(history)
+
+	var started: int = GameStatsManager.get_counter("shikaku", "started_%ss%d" % [mode_prefix, s])
+	var completed: int = GameStatsManager.get_counter("shikaku", "completed_%ss%d" % [mode_prefix, s])
+	var abandoned: int = GameStatsManager.get_counter("shikaku", "abandoned_%ss%d" % [mode_prefix, s])
+	_add_stat_row("Started / Completed", "%d / %d" % [started, completed])
+	_add_stat_row("Abandoned", str(abandoned))
+
+	var rate: float = (float(completed) / float(started) * 100.0) if started > 0 else 0.0
+	_add_stat_row("Completion Rate", "%.0f%%" % rate)
+
+	_add_separator()
+
+
 func _add_header(text: String) -> void:
 	var label := Label.new()
 	label.text = text
 	label.add_theme_font_size_override("font_size", 20)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.mouse_filter = Control.MOUSE_FILTER_PASS
+	stats_list.add_child(label)
+
+
+func _add_subheader(text: String) -> void:
+	var label := Label.new()
+	label.text = text
+	label.add_theme_font_size_override("font_size", 16)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.mouse_filter = Control.MOUSE_FILTER_PASS
 	stats_list.add_child(label)
@@ -135,11 +156,16 @@ func _on_reset_pressed() -> void:
 	dialog.canceled.connect(func() -> void: dialog.queue_free())
 
 
-func _get_time_history_for_size(s: int) -> Array:
+## Return completed-game times for a given grid size and mode.
+## History entries include a "mode" field; entries without it default to Standard.
+func _get_time_history_for_size_mode(s: int, mode: int) -> Array:
 	var all_history: Array = GameStatsManager.get_history("shikaku")
 	var times: Array = []
 	for entry in all_history:
-		if entry is Dictionary and entry.get("grid_size") == s and entry.has("time"):
+		if not (entry is Dictionary):
+			continue
+		var entry_mode: int = entry.get("mode", ShikakuLogic.RULE_SET_STANDARD)
+		if entry.get("grid_size") == s and entry_mode == mode and entry.has("time"):
 			times.append(entry["time"])
 	return times
 
