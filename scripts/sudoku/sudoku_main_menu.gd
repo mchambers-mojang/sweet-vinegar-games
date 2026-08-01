@@ -12,14 +12,14 @@ const RULE_SET_ANTI_KING := 2
 const RULE_SET_KILLER := 3
 const RULE_SET_MINI := 4
 
-const ANTI_KNIGHT_MODES := PackedStringArray(["antiknight_easy", "antiknight_medium", "antiknight_hard", "antiknight_expert"])
-const ANTI_KNIGHT_LABELS := PackedStringArray(["Anti-Knight Easy", "Anti-Knight Medium", "Anti-Knight Hard", "Anti-Knight Expert"])
-const ANTI_KING_MODES := PackedStringArray(["antiking_easy", "antiking_medium", "antiking_hard", "antiking_expert"])
-const ANTI_KING_LABELS := PackedStringArray(["Anti-King Easy", "Anti-King Medium", "Anti-King Hard", "Anti-King Expert"])
-const KILLER_MODES := PackedStringArray(["killer_easy", "killer_medium", "killer_hard", "killer_expert"])
-const KILLER_LABELS := PackedStringArray(["Killer Easy", "Killer Medium", "Killer Hard", "Killer Expert"])
-const MINI_MODES := PackedStringArray(["mini"])
-const MINI_LABELS := PackedStringArray(["Mini 6×6"])
+const ANTI_KNIGHT_MODES := ["antiknight_easy", "antiknight_medium", "antiknight_hard", "antiknight_expert"]
+const ANTI_KNIGHT_LABELS := ["Anti-Knight Easy", "Anti-Knight Medium", "Anti-Knight Hard", "Anti-Knight Expert"]
+const ANTI_KING_MODES := ["antiking_easy", "antiking_medium", "antiking_hard", "antiking_expert"]
+const ANTI_KING_LABELS := ["Anti-King Easy", "Anti-King Medium", "Anti-King Hard", "Anti-King Expert"]
+const KILLER_MODES := ["killer_easy", "killer_medium", "killer_hard", "killer_expert"]
+const KILLER_LABELS := ["Killer Easy", "Killer Medium", "Killer Hard", "Killer Expert"]
+const MINI_MODES := ["mini"]
+const MINI_LABELS := ["Mini 6×6"]
 
 var _rule_set_index: int = RULE_SET_STANDARD
 var _rule_set_button: OptionButton = null
@@ -31,6 +31,18 @@ func _init() -> void:
 
 func _get_save_adapter() -> GameSaveAdapter:
 	return SudokuSaveAdapter.new()
+
+
+func _get_help_topic() -> String:
+	match _rule_set_index:
+		RULE_SET_ANTI_KNIGHT:
+			return "sudoku_anti_knight"
+		RULE_SET_ANTI_KING:
+			return "sudoku_anti_king"
+		RULE_SET_KILLER:
+			return "sudoku_killer"
+		_:
+			return "sudoku"
 
 
 func _on_menu_ready() -> void:
@@ -94,7 +106,7 @@ func _setup_leaderboard_button(stats_btn: Button) -> void:
 	var labels: PackedStringArray = PackedStringArray()
 	var opt_btn := get_node_or_null("%DifficultyButton") as OptionButton
 
-	# Standard modes (from config, skip empty Evil slot — Evil difficulty has no leaderboard support)
+	# Standard modes
 	for i in range(config.leaderboard_modes.size()):
 		var m: String = config.leaderboard_modes[i]
 		if m.is_empty():

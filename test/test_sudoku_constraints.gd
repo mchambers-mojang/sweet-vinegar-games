@@ -429,3 +429,16 @@ func test_constrained_generate_has_more_clues_than_standard_target() -> void:
 	assert_true(clue_count > standard_target,
 		"Anti-Knight Easy clue count (%d) must exceed standard target (%d)" % [clue_count, standard_target])
 
+
+func test_anti_king_generation_completes_within_ui_budget() -> void:
+	var gen := SudokuGenerator.new()
+	for difficulty in SudokuSolver.Difficulty.values():
+		var started_ms := Time.get_ticks_msec()
+		var result := gen.generate(difficulty, 42, [AntiKingConstraint.new()])
+		var elapsed_ms := Time.get_ticks_msec() - started_ms
+
+		assert_false(result.is_empty(),
+			"Anti-King difficulty %d generation must succeed" % difficulty)
+		assert_lt(elapsed_ms, 3000,
+			"Anti-King difficulty %d must complete within 3 seconds, took %d ms"
+			% [difficulty, elapsed_ms])

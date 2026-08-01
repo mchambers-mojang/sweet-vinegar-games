@@ -98,7 +98,7 @@ var _neon_colors: Dictionary = {
 	"text_given": Color(0.0, 2.0, 1.6),             # HDR cyan text — blooms
 	"text_placed": Color(2.0, 0.3, 1.8),            # HDR hot pink — blooms
 	"text_error": Color(2.0, 0.0, 0.2),             # HDR red — blooms
-	"text_pencil": Color(0.2, 0.15, 0.5),
+	"text_pencil": Color(0.55, 0.5, 0.9),
 	"text_primary": Color(0.0, 2.0, 1.6),           # HDR cyan — same as text_given
 	"text_secondary": Color(2.0, 0.3, 1.8),         # HDR hot pink — same as text_placed
 	"button_bg": Color(0.08, 0.06, 0.18),

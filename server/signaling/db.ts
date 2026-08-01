@@ -46,6 +46,7 @@ export const BOARD_CONFIG: Record<string, BoardConfigEntry> = {
   'sudoku:medium':                { sort: 'asc',  min: 15,  max: 7200   },
   'sudoku:hard':                  { sort: 'asc',  min: 30,  max: 7200   },
   'sudoku:expert':                { sort: 'asc',  min: 60,  max: 7200   },
+  'sudoku:evil':                  { sort: 'asc',  min: 90,  max: 7200   },
   'sudoku:antiknight_easy':       { sort: 'asc',  min: 10,  max: 7200   },
   'sudoku:antiknight_medium':     { sort: 'asc',  min: 15,  max: 7200   },
   'sudoku:antiknight_hard':       { sort: 'asc',  min: 30,  max: 7200   },
@@ -176,6 +177,17 @@ export function deletePlayerScores(
   if (deleteProfile) {
     db.prepare('DELETE FROM players WHERE device_id = ?').run(device_id);
   }
+}
+
+export function deletePlayerScore(
+  db: Database.Database,
+  device_id: string,
+  game: string,
+  mode: string
+): void {
+  db.prepare(
+    'DELETE FROM scores WHERE device_id = ? AND game = ? AND mode = ?'
+  ).run(device_id, game, mode);
 }
 
 export function getLeaderboard(
