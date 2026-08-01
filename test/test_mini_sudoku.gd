@@ -254,7 +254,7 @@ func test_logic_mini_place_digit() -> void:
 			break
 	assert_true(empty_idx >= 0, "Puzzle should have empty cells")
 	var correct_val := logic.solution[empty_idx]
-	var res := logic.place(empty_idx, correct_val)
+	var res := logic.place_number(empty_idx, correct_val)
 	assert_eq(res.cell_index, empty_idx)
 	assert_eq(logic.current_grid[empty_idx], correct_val)
 
@@ -386,3 +386,131 @@ func _make_array(size: int, value: int) -> Array:
 	arr.resize(size)
 	arr.fill(value)
 	return arr
+
+
+# ---------------------------------------------------------------------------
+# 6. Regression: save adapter rejects malformed current_grid / solution
+# ---------------------------------------------------------------------------
+
+func test_save_adapter_rejects_mismatched_current_grid_size() -> void:
+	## Regression for: malformed Mini saves can crash resume.
+	## current_grid with wrong size must be treated as corrupted.
+	var adapter := SudokuSaveAdapter.new()
+	var data := {
+		"puzzle": _make_array(36, 0),
+		"solution": _make_array(36, 1),
+		"current_grid": _make_array(9, 0),   # Wrong: 9 instead of 36
+		"grid_spec_id": "mini_6x6",
+		"difficulty": 0,
+	}
+	data["puzzle"][0] = 1
+	GameSaveManager.save_game("sudoku", data)
+	var can_resume: bool = adapter.can_resume()
+	assert_false(can_resume, "Adapter must reject a save whose current_grid size does not match spec")
+
+
+func test_save_adapter_rejects_mismatched_solution_size() -> void:
+	## Regression for: malformed Mini saves can crash resume.
+	## solution with wrong size must be treated as corrupted.
+	var adapter := SudokuSaveAdapter.new()
+	var data := {
+		"puzzle": _make_array(36, 0),
+		"solution": _make_array(81, 1),   # Wrong: 81 instead of 36
+		"current_grid": _make_array(36, 0),
+		"grid_spec_id": "mini_6x6",
+		"difficulty": 0,
+	}
+	data["puzzle"][0] = 1
+	data["current_grid"][0] = 1
+	GameSaveManager.save_game("sudoku", data)
+	var can_resume: bool = adapter.can_resume()
+	assert_false(can_resume, "Adapter must reject a save whose solution size does not match spec")
+
+
+func test_save_adapter_rejects_null_current_grid() -> void:
+	## Regression for: malformed Mini saves can crash resume.
+	## Missing current_grid key must be treated as corrupted.
+	var adapter := SudokuSaveAdapter.new()
+	var data := {
+		"puzzle": _make_array(36, 0),
+		"solution": _make_array(36, 1),
+		# current_grid intentionally absent
+		"grid_spec_id": "mini_6x6",
+		"difficulty": 0,
+	}
+	data["puzzle"][0] = 1
+	GameSaveManager.save_game("sudoku", data)
+	var can_resume: bool = adapter.can_resume()
+	assert_false(can_resume, "Adapter must reject a save with no current_grid key")
+
+
+# ---------------------------------------------------------------------------
+# 7. Regression: Mini generator produces uniquely-solvable puzzles
+# ---------------------------------------------------------------------------
+
+func test_generator_6x6_puzzle_is_unique() -> void:
+	## Regression for: human-logic solvability not enforced.
+	## The generator must now run uniqueness analysis for Mini and only
+	## accept puzzles with exactly one solution.
+	var gen := SudokuGenerator.new()
+	var spec := SudokuGridSpec.MINI_6X6
+	var result: Dictionary = gen.generate(SudokuSolver.Difficulty.EASY, 42, [], spec)
+	assert_true(result.has("puzzle"), "Result must contain puzzle")
+	var puzzle: Array = result["puzzle"]
+	var solver := SudokuSolver.new()
+	solver.analyze(puzzle, [], spec)
+	assert_true(solver.is_unique, "Generated Mini puzzle must have a unique solution")
+
+
+func test_generator_6x6_unique_across_seeds() -> void:
+	## Additional uniqueness regression: verify several seeds all produce unique puzzles.
+	var gen := SudokuGenerator.new()
+	var spec := SudokuGridSpec.MINI_6X6
+	for seed_val in [1, 7, 13, 99, 200]:
+		var result: Dictionary = gen.generate(SudokuSolver.Difficulty.EASY, seed_val, [], spec)
+		assert_true(result.has("puzzle"), "Seed %d: result must contain puzzle" % seed_val)
+		var puzzle: Array = result["puzzle"]
+		var solver := SudokuSolver.new()
+		solver.analyze(puzzle, [], spec)
+		assert_true(solver.is_unique, "Seed %d: Mini puzzle must have a unique solution" % seed_val)
+
+
+# ---------------------------------------------------------------------------
+# 8. Regression: SudokuLogic.is_solved() public API
+# ---------------------------------------------------------------------------
+
+func test_logic_is_solved_returns_false_when_incomplete() -> void:
+	## Regression for: test_mini_sudoku called nonexistent is_solved().
+	## The method must exist and return false on a partial board.
+	var logic := LogicScript.new(false, true)
+	logic.spec = SudokuGridSpec.MINI_6X6
+	logic._setup_from_arrays(0, TEST_PUZZLE_6X6, TEST_SOLUTION_6X6)
+	assert_false(logic.is_solved(), "is_solved() must return false when board is incomplete")
+
+
+func test_logic_is_solved_returns_true_when_complete() -> void:
+	## Regression: is_solved() must reflect grid==solution without requiring place_number.
+	var logic := LogicScript.new(false, true)
+	logic.spec = SudokuGridSpec.MINI_6X6
+	logic._setup_from_arrays(0, TEST_PUZZLE_6X6, TEST_SOLUTION_6X6)
+	for i in 36:
+		logic.current_grid[i] = logic.solution[i]
+	assert_true(logic.is_solved(), "is_solved() must return true when all cells match solution")
+
+
+func test_logic_place_number_api_exists() -> void:
+	## Regression for: tests called nonexistent place() instead of place_number().
+	## Verify place_number() exists and returns a PlaceResult with expected fields.
+	var logic := LogicScript.new(false, true)
+	logic.spec = SudokuGridSpec.MINI_6X6
+	logic._setup_from_arrays(0, TEST_PUZZLE_6X6, TEST_SOLUTION_6X6)
+	var empty_idx := -1
+	for i in 36:
+		if logic.puzzle[i] == 0:
+			empty_idx = i
+			break
+	assert_true(empty_idx >= 0, "Test puzzle must have at least one empty cell")
+	var result := logic.place_number(empty_idx, logic.solution[empty_idx])
+	assert_true(result.valid, "place_number() result must have valid field")
+	assert_true(result.placed, "place_number() of correct value must be placed")
+	assert_eq(result.cell_index, empty_idx, "place_number() result must carry cell_index")

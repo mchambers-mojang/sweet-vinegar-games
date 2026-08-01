@@ -65,6 +65,22 @@ func _can_resume_from(data: Dictionary) -> bool:
 		push_warning("SudokuSaveAdapter: corrupted save — puzzle has %d cells, expected %d for '%s'" % [puzzle_size, spec.cell_count, spec_id])
 		return false
 
+	# Validate current_grid and solution sizes to prevent index-out-of-bounds on resume
+	var current_grid = data.get("current_grid", null)
+	if not (current_grid is Array):
+		push_warning("SudokuSaveAdapter: corrupted save — current_grid is missing or not an array")
+		return false
+	if (current_grid as Array).size() != spec.cell_count:
+		push_warning("SudokuSaveAdapter: corrupted save — current_grid has %d cells, expected %d for '%s'" % [(current_grid as Array).size(), spec.cell_count, spec_id])
+		return false
+	var solution = data.get("solution", null)
+	if not (solution is Array):
+		push_warning("SudokuSaveAdapter: corrupted save — solution is missing or not an array")
+		return false
+	if (solution as Array).size() != spec.cell_count:
+		push_warning("SudokuSaveAdapter: corrupted save — solution has %d cells, expected %d for '%s'" % [(solution as Array).size(), spec.cell_count, spec_id])
+		return false
+
 	# Validate cage data for killer saves
 	if data.get("is_killer", false):
 		var cages = data.get("killer_cages", null)

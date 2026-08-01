@@ -529,6 +529,12 @@ func is_board_locked() -> bool:
 	return is_completed or is_failed
 
 
+## Returns true when all cells in the current grid match the solution.
+## Convenience wrapper so callers don't need to access private state directly.
+func is_solved() -> bool:
+	return _check_win()
+
+
 ## Returns true when there is at least one action to undo.
 func can_undo() -> bool:
 	return _undo_stack.can_undo()

@@ -66,8 +66,10 @@ func generate(difficulty: SudokuSolver.Difficulty, seed: int = -1, constraints: 
 		if puzzle.is_empty():
 			continue
 
-		# For easy/medium, skip the expensive difficulty analysis and just accept
-		if difficulty <= SudokuSolver.Difficulty.MEDIUM:
+		# For easy/medium on standard-sized grids, skip the expensive difficulty
+		# analysis and just accept. Mini 6×6 is cheap to analyze, and uniqueness
+		# verification is required to enforce human-logic solvability.
+		if difficulty <= SudokuSolver.Difficulty.MEDIUM and s.id != "mini_6x6":
 			return {
 				"puzzle": puzzle,
 				"solution": full_grid,
