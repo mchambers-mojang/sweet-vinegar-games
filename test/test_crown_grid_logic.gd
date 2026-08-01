@@ -174,10 +174,10 @@ func test_auto_mark_undo_removes_auto_marks() -> void:
 	logic.tap_cell(1, 0)
 	logic.tap_cell(1, 0)  # crown with auto-marks
 	logic.undo()
-	# Auto-marks should be removed
+	# Auto-marks should be removed; cell (1,0) returns to EXCLUDED (its pre-crown state)
 	assert_eq(logic.get_cell(0, 0), CrownGridLogic.CELL_EMPTY)
 	assert_eq(logic.get_cell(1, 1), CrownGridLogic.CELL_EMPTY)
-	assert_eq(logic.get_cell(1, 0), CrownGridLogic.CELL_EMPTY)
+	assert_eq(logic.get_cell(1, 0), CrownGridLogic.CELL_EXCLUDED)
 
 
 # ---------------------------------------------------------------------------
@@ -293,6 +293,48 @@ func test_hint_applies_crown_step() -> void:
 	var hint := logic.use_hint()
 	assert_true(hint.applied)
 	assert_eq(logic.hints_used, 1)
+
+
+## Focused regression: when a crown hint fires with auto_mark=true, the
+## HintResult.auto_marked list must be populated.  This is the data the game
+## screen consumes to record the "exclusions_painted" replay event.
+func test_hint_crown_populates_auto_marked_when_auto_mark_enabled() -> void:
+	logic = CrownGridLogic.new()
+	logic.init_new_game(4, _regions_4x4(), _solution_4x4(), true)  # auto_mark=true
+	# Force a crown hint: exclude all row-0 cells except the solution col (1).
+	var to_exclude: Array[Vector2i] = [Vector2i(0, 0), Vector2i(2, 0), Vector2i(3, 0)]
+	logic.paint_excluded(to_exclude)
+	var hint := logic.use_hint()
+	assert_true(hint.applied, "Hint must be applied")
+	assert_eq(hint.new_state, CrownGridLogic.CELL_CROWN,
+			"Hint must place a Crown (not an exclusion)")
+	assert_false(hint.auto_marked.is_empty(),
+			"Crown hint with auto_mark=true must populate auto_marked for replay recording")
+
+
+## Focused regression: hint_crown undo entry always includes auto_marked and
+## old_states so the save adapter's required-field requirement is never
+## triggered by a legitimately-saved game.
+func test_hint_crown_undo_entry_includes_required_fields() -> void:
+	logic = CrownGridLogic.new()
+	logic.init_new_game(4, _regions_4x4(), _solution_4x4(), true)  # auto_mark=true
+	var to_exclude: Array[Vector2i] = [Vector2i(0, 0), Vector2i(2, 0), Vector2i(3, 0)]
+	logic.paint_excluded(to_exclude)
+	logic.use_hint()  # places a crown via hint
+	var serialized := logic.serialize()
+	var undo_stack: Array = serialized.get("undo_stack", [])
+	assert_false(undo_stack.is_empty(), "undo_stack must not be empty after a hint")
+	# Find the hint_crown entry
+	var crown_entry: Dictionary = {}
+	for entry in undo_stack:
+		if str(entry.get("action", "")) == "hint_crown":
+			crown_entry = entry
+			break
+	assert_false(crown_entry.is_empty(), "A hint_crown undo entry must be present")
+	assert_true(crown_entry.has("auto_marked"),
+			"hint_crown entry must always include auto_marked")
+	assert_true(crown_entry.has("old_states"),
+			"hint_crown entry must always include old_states")
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="HelpContent" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/help/help_content.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+title = "Crown Grid"
+body = "Place exactly one Crown (♛) in each row, column, and colored region.\n\nNo two Crowns may be diagonally adjacent.\n\n• Tap once to mark a cell as Excluded (×)\n• Tap again to place a Crown (♛)\n• Tap a third time to clear the cell\n• Drag to paint Excluded marks across multiple cells\n• Use Hint if you get stuck"

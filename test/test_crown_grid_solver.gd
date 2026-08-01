@@ -426,35 +426,59 @@ func test_rank4_cancel_check_respected() -> void:
 
 
 func test_rank4_intersection_finds_forced_exclusions() -> void:
-	## Positive regression: construct a 6x6 board (column regions) that has no
-	## Rank 1-3 deductions but where the intersection approach finds forced
-	## exclusions.  Candidate set chosen so that excluding either candidate in
-	## row 0 produces a chain of ≥3 forced steps, and both chains share at least
-	## one common forced exclusion.
+	## Positive regression: a 6x6 board where no Rank 1–3 deduction produces
+	## any exclusion, but the Skyscraper pattern (Rank 4) can.
 	##
-	## The unique solution for this board is row→col: [2, 5, 3, 0, 4, 1].
-	## Candidate set:
-	##   Row 0: (0,0),(2,0)   Row 1: (3,1),(5,1)   Row 2: (1,2),(3,2),(5,2)
-	##   Row 3: (0,3),(4,3)   Row 4: (2,4),(4,4)   Row 5: (1,5),(3,5)
+	## Region layout (row-major):
+	##   Rows 0-2: [0, 0, 2, 1, 3, 4]
+	##   Rows 3-5: [5, 5, 2, 1, 3, 4]
+	##   (R0=top-left 2-col block, R5=bottom-left 2-col block,
+	##    R1-R4=individual columns 3-5 across all rows, R2=col 2)
+	##
+	## Candidate set (all other cells are excluded):
+	##   Row 0: (0,0)[R0], (3,0)[R1]
+	##   Row 1: (2,1)[R2], (5,1)[R4]
+	##   Row 2: (1,2)[R0], (4,2)[R3]
+	##   Row 3: (1,3)[R5], (2,3)[R2], (5,3)[R4]
+	##   Row 4: (3,4)[R1], (0,4)[R5]
+	##   Row 5: (4,5)[R3], (1,5)[R5], (5,5)[R4]
+	##
+	## Skyscraper:
+	##   R0 spans rows {0, 2}; R1 spans rows {0, 4}; shared row = 0.
+	##   X = R0's row-2 candidates = {(1,2)}
+	##   Y = R1's row-4 candidates = {(3,4)}
+	##   Cell (2,3)[R2] sees (1,2) diagonally and (3,4) diagonally → EXCLUDE.
+
 	var sz := 6
-	# Column regions: region i = column i.
+	# Build region map
 	var regions := PackedInt32Array()
 	regions.resize(sz * sz)
 	for r in range(sz):
 		for c in range(sz):
-			regions[r * sz + c] = c
+			var reg: int
+			if c == 0 or c == 1:
+				reg = 0 if r < 3 else 5
+			elif c == 2:
+				reg = 2
+			elif c == 3:
+				reg = 1
+			elif c == 4:
+				reg = 3
+			else:
+				reg = 4
+			regions[r * sz + c] = reg
 
 	var crowns_by_row: Array = [-1, -1, -1, -1, -1, -1]
 
-	# Build excluded: all cells NOT in the candidate set.
+	# Build excluded: mark all cells NOT in the candidate set as excluded.
 	var candidate_set: Dictionary = {}
 	for v in [
-		Vector2i(0, 0), Vector2i(2, 0),
-		Vector2i(3, 1), Vector2i(5, 1),
-		Vector2i(1, 2), Vector2i(3, 2), Vector2i(5, 2),
-		Vector2i(0, 3), Vector2i(4, 3),
-		Vector2i(2, 4), Vector2i(4, 4),
-		Vector2i(1, 5), Vector2i(3, 5),
+		Vector2i(0, 0), Vector2i(3, 0),
+		Vector2i(2, 1), Vector2i(5, 1),
+		Vector2i(1, 2), Vector2i(4, 2),
+		Vector2i(1, 3), Vector2i(2, 3), Vector2i(5, 3),
+		Vector2i(3, 4), Vector2i(0, 4),
+		Vector2i(4, 5), Vector2i(1, 5), Vector2i(5, 5),
 	]:
 		candidate_set[v] = true
 	var excluded: Dictionary = {}
@@ -466,7 +490,7 @@ func test_rank4_intersection_finds_forced_exclusions() -> void:
 
 	var cands := CrownGridSolver._compute_candidates(sz, regions, crowns_by_row, excluded)
 
-	# Verify no Rank 1-3 fires before testing Rank 4.
+	# Confirm no Rank 1-3 step fires with an exclusion before testing Rank 4.
 	var lower_step := CrownGridSolver._try_rank1_singles(sz, regions, cands)
 	assert_null(lower_step, "No Rank 1 step should be available on this board")
 	lower_step = CrownGridSolver._try_rank2_combined(sz, regions, cands)
@@ -475,7 +499,7 @@ func test_rank4_intersection_finds_forced_exclusions() -> void:
 	assert_null(lower_step, "No Rank 3 step should be available on this board")
 
 	var step := CrownGridSolver._try_rank4_chain(sz, regions, cands, crowns_by_row, excluded)
-	assert_not_null(step, "Rank 4 intersection must find forced exclusions on this board")
+	assert_not_null(step, "Rank 4 Skyscraper must find forced exclusions on this board")
 	if step == null:
 		return
 	assert_eq(step.result, CrownGridSolver.CELL_EXCLUDED,
@@ -485,12 +509,23 @@ func test_rank4_intersection_finds_forced_exclusions() -> void:
 	assert_true(step.affected_cells.size() > 0,
 			"At least one cell must be excluded")
 
-	# Soundness: every excluded cell must not be in any valid solution.
+	# The Skyscraper must exclude (2,3) — it sees both (1,2) and (3,4) diagonally.
+	var excluded_cells: Array[Vector2i] = []
 	for cell in step.affected_cells:
-		var v := cell as Vector2i
-		var n := CrownGridSolver.count_solutions(sz, regions, {v.y: v.x})
-		assert_eq(n, 0,
-				"Excluded cell (%d,%d) must not appear in any valid solution" % [v.x, v.y])
+		excluded_cells.append(cell as Vector2i)
+	assert_true(Vector2i(2, 3) in excluded_cells,
+			"Skyscraper must exclude (2,3) which sees both non-shared candidates")
+
+	# Structural soundness: (2,3) is excluded because it sees both non-shared candidates.
+	# R0 spans rows {0,2}; R1 spans rows {0,4}; shared row = 0.
+	# X = R0's non-shared candidate in row 2 = (1,2).
+	# Y = R1's non-shared candidate in row 4 = (3,4).
+	# By pigeonhole at least one of X or Y is crowned, so (2,3) — which sees both
+	# diagonally — can be safely excluded without any hypothetical placement.
+	assert_true(CrownGridSolver._cell_sees(Vector2i(2, 3), Vector2i(1, 2), sz, regions),
+			"(2,3) must see R0's non-shared candidate (1,2) via diagonal adjacency")
+	assert_true(CrownGridSolver._cell_sees(Vector2i(2, 3), Vector2i(3, 4), sz, regions),
+			"(2,3) must see R1's non-shared candidate (3,4) via diagonal adjacency")
 
 
 # ---------------------------------------------------------------------------

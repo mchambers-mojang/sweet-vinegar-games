@@ -383,138 +383,191 @@ static func _find_locked_subset(
 
 
 # ---------------------------------------------------------------------------
-# Rank 4 — Non-branching forcing chain (intersection approach)
+# Rank 4 — Skyscraper (non-speculative pigeonhole deduction)
 # ---------------------------------------------------------------------------
 
-## For each unit (row, column, or region), consider all remaining candidates.
-## For each candidate C in the unit, hypothetically EXCLUDE C and propagate
-## rank-1/2/3 deductions to collect the cells that are newly forced to be
-## excluded in that branch.  Any cell that appears in the forced-exclusion set
-## of EVERY branch (given ≥3 propagation steps in each branch) can safely be
-## excluded — because exactly one candidate in the unit must be the crown, and
-## in every case that cell ends up excluded.
+## For each pair of regions (Ri, Rj) whose remaining candidates span exactly
+## 2 rows (row-Skyscraper) or exactly 2 columns (column-Skyscraper) with
+## exactly one shared row/column:
 ##
-## Soundness follows from the monotonicity of rank-1/2/3 deductions: the real
-## game state (with the true crown placed) has at least as many exclusions as
-## the simulation (which only adds the single assumed exclusion), so every
-## forced exclusion found in simulation is also forced in reality.  No
-## backtracking or solution counting is required.
+##   Let X = Ri's candidates in its *non-shared* row/col
+##   Let Y = Rj's candidates in its *non-shared* row/col
 ##
-## cancel_check is polled at the start of each unit, each candidate branch, and
-## after each inner propagation step.
+## Because each row (or column) can hold only one Crown, Ri and Rj cannot both
+## use the shared unit.  Therefore at least one of X or Y must contain the
+## true Crown.  Any candidate cell Z outside Ri and Rj that "sees" every cell
+## of X and every cell of Y is eliminated regardless of which choice is made,
+## so Z can be safely excluded.
+##
+## "Sees" means: same row, same column, same region, or diagonally adjacent
+## (|Δrow| = |Δcol| = 1).
+##
+## This deduction is purely non-speculative — no hypothetical placements or
+## branch propagation are used.  The argument follows directly from the
+## one-Crown-per-unit pigeonhole constraint.
+##
+## cancel_check is polled between each candidate region pair.
 static func _try_rank4_chain(
 		size: int,
 		regions: PackedInt32Array,
 		cands: Dictionary,
-		crowns_by_row: Array,
-		excluded: Dictionary,
+		_crowns_by_row: Array,
+		_excluded: Dictionary,
 		cancel_check: Callable = Callable()) -> SolveStep:
 
-	# Iterate unit types: 0=rows, 1=columns, 2=regions.
-	for unit_type in range(3):
-		for unit_idx in range(size):
+	# ---- Collect bi-row and bi-col region descriptors ----
+	# birow[i] = {reg, rows:[r_a,r_b], ca:[cells in r_a], cb:[cells in r_b]}
+	# bicol[i] = {reg, cols:[c_a,c_b], ca:[cells in c_a], cb:[cells in c_b]}
+	var birow: Array = []
+	var bicol: Array = []
+
+	for reg in range(size):
+		var rc := _cands_in_region(cands, reg, size, regions)
+		if rc.is_empty():
+			continue
+
+		var rows := _unique_rows(rc)
+		if rows.size() == 2:
+			var ca: Array[Vector2i] = []
+			var cb: Array[Vector2i] = []
+			for cell in rc:
+				if (cell as Vector2i).y == rows[0]:
+					ca.append(cell as Vector2i)
+				else:
+					cb.append(cell as Vector2i)
+			birow.append({"reg": reg, "rows": rows, "ca": ca, "cb": cb})
+
+		var cols := _unique_cols(rc)
+		if cols.size() == 2:
+			var ca: Array[Vector2i] = []
+			var cb: Array[Vector2i] = []
+			for cell in rc:
+				if (cell as Vector2i).x == cols[0]:
+					ca.append(cell as Vector2i)
+				else:
+					cb.append(cell as Vector2i)
+			bicol.append({"reg": reg, "cols": cols, "ca": ca, "cb": cb})
+
+	# ---- Row-based Skyscraper ----
+	# Pairs where both regions span exactly 2 rows, sharing exactly 1.
+	for i in range(birow.size()):
+		for j in range(i + 1, birow.size()):
 			if cancel_check.is_valid() and cancel_check.call():
 				return null
 
-			# Collect candidates in this unit.
-			var unit_cands: Array[Vector2i] = []
-			match unit_type:
-				0:
-					unit_cands = _cands_in_row(cands, unit_idx)
-				1:
-					unit_cands = _cands_in_col(cands, unit_idx, size)
-				2:
-					unit_cands = _cands_in_region(cands, unit_idx, size, regions)
+			var ri: Dictionary = birow[i]
+			var rj: Dictionary = birow[j]
+			var ri_rows: Array = ri["rows"]
+			var rj_rows: Array = rj["rows"]
 
-			if unit_cands.size() < 2:
-				continue  # Rank 1 handles single-candidate units.
-
-			var intersection: Dictionary = {}  # Vector2i → true
-			var first_branch := true
-			var all_branches_qualify := true
-
-			for assumed_cell in unit_cands:
-				if cancel_check.is_valid() and cancel_check.call():
-					return null
-
-				var assumed := assumed_cell as Vector2i
-
-				# Simulate excluding this candidate and propagate.
-				var sim_crowns: Array = crowns_by_row.duplicate()
-				var sim_excluded: Dictionary = excluded.duplicate()
-				sim_excluded[assumed] = true
-				var sim_cands := _compute_candidates(size, regions, sim_crowns, sim_excluded)
-
-				# Cells newly forced to be excluded in this branch (not in the
-				# original excluded set, and not the assumed cell itself).
-				var branch_forced: Dictionary = {}
-				var chain_steps := 0
-
-				for _iter in range(size * size):
-					if cancel_check.is_valid() and cancel_check.call():
-						return null
-
-					var step := _try_rank1_singles(size, regions, sim_cands)
-					if step == null:
-						step = _try_rank2_combined(size, regions, sim_cands)
-					if step == null:
-						step = _try_rank3_locked(size, regions, sim_cands, cancel_check)
-					if step == null:
-						break  # No more forced deductions in this branch.
-					if cancel_check.is_valid() and cancel_check.call():
-						return null
-
-					chain_steps += 1
-					for affected_cell in step.affected_cells:
-						var v := affected_cell as Vector2i
-						if step.result == CELL_CROWN:
-							sim_crowns[v.y] = v.x
-							# Capture all exclusions produced by crown propagation.
-							var pre_excl := sim_excluded.duplicate()
-							_exclude_from_crown(size, regions, sim_crowns, sim_excluded, v)
-							for ec in sim_excluded:
-								if not pre_excl.has(ec) and not excluded.has(ec) and ec != assumed:
-									branch_forced[ec] = true
-						else:
-							sim_excluded[v] = true
-							if not excluded.has(v) and v != assumed:
-								branch_forced[v] = true
-					sim_cands = _compute_candidates(size, regions, sim_crowns, sim_excluded)
-
-				if chain_steps < 3:
-					all_branches_qualify = false
-					break  # Unit disqualified; no Rank-4 deduction possible here.
-
-				if first_branch:
-					intersection = branch_forced.duplicate()
-					first_branch = false
+			# Identify the single shared row and the two non-shared rows.
+			var shared := -1
+			var ri_uniq := -1
+			var rj_uniq := -1
+			for r in ri_rows:
+				if r == rj_rows[0] or r == rj_rows[1]:
+					if shared >= 0:
+						shared = -2  # more than one shared row — skip
+						break
+					shared = r
 				else:
-					var new_intersection: Dictionary = {}
-					for cell in intersection:
-						if branch_forced.has(cell):
-							new_intersection[cell] = true
-					intersection = new_intersection
-
-				if intersection.is_empty():
-					break  # No common forced exclusions remain; try next unit.
-
-			if not all_branches_qualify or first_branch:
+					ri_uniq = r
+			if shared < 0:
 				continue
-			if intersection.is_empty():
-				continue
+			for r in rj_rows:
+				if r != shared:
+					rj_uniq = r
 
-			# Return all cells in the intersection as forced exclusions.
+			# X = Ri's candidates in the non-shared row (must be the crown if
+			#     the shared row is taken by Rj).
+			# Y = Rj's candidates in the non-shared row.
+			var X: Array[Vector2i] = ri["ca"] if ri_rows[0] == ri_uniq else ri["cb"]
+			var Y: Array[Vector2i] = rj["ca"] if rj_rows[0] == rj_uniq else rj["cb"]
+
 			var to_exclude: Array[Vector2i] = []
-			for cell in intersection:
-				to_exclude.append(cell as Vector2i)
+			for cell in cands:
+				var v := cell as Vector2i
+				var rv := regions[v.y * size + v.x]
+				if rv == ri["reg"] or rv == rj["reg"]:
+					continue
+				if _cell_sees_all(v, X, size, regions) and _cell_sees_all(v, Y, size, regions):
+					to_exclude.append(v)
 
-			var unit_names := ["row", "column", "region"]
-			return SolveStep.new(
-				"Forcing chain: all %s-%d candidates lead to this exclusion after 3+ steps" % [
-					unit_names[unit_type], unit_idx],
-				to_exclude, CELL_EXCLUDED, RANK_CHAIN)
+			if not to_exclude.is_empty():
+				return SolveStep.new(
+					"Skyscraper (rows): regions %d and %d share row %d" % [
+						ri["reg"], rj["reg"], shared],
+					to_exclude, CELL_EXCLUDED, RANK_CHAIN)
+
+	# ---- Column-based Skyscraper ----
+	for i in range(bicol.size()):
+		for j in range(i + 1, bicol.size()):
+			if cancel_check.is_valid() and cancel_check.call():
+				return null
+
+			var ci: Dictionary = bicol[i]
+			var cj: Dictionary = bicol[j]
+			var ci_cols: Array = ci["cols"]
+			var cj_cols: Array = cj["cols"]
+
+			var shared := -1
+			var ci_uniq := -1
+			var cj_uniq := -1
+			for c in ci_cols:
+				if c == cj_cols[0] or c == cj_cols[1]:
+					if shared >= 0:
+						shared = -2
+						break
+					shared = c
+				else:
+					ci_uniq = c
+			if shared < 0:
+				continue
+			for c in cj_cols:
+				if c != shared:
+					cj_uniq = c
+
+			var X: Array[Vector2i] = ci["ca"] if ci_cols[0] == ci_uniq else ci["cb"]
+			var Y: Array[Vector2i] = cj["ca"] if cj_cols[0] == cj_uniq else cj["cb"]
+
+			var to_exclude: Array[Vector2i] = []
+			for cell in cands:
+				var v := cell as Vector2i
+				var rv := regions[v.y * size + v.x]
+				if rv == ci["reg"] or rv == cj["reg"]:
+					continue
+				if _cell_sees_all(v, X, size, regions) and _cell_sees_all(v, Y, size, regions):
+					to_exclude.append(v)
+
+			if not to_exclude.is_empty():
+				return SolveStep.new(
+					"Skyscraper (cols): regions %d and %d share col %d" % [
+						ci["reg"], cj["reg"], shared],
+					to_exclude, CELL_EXCLUDED, RANK_CHAIN)
 
 	return null
+
+
+## Return true if cell `a` "sees" cell `b`: they share a row, column, region,
+## or are diagonally adjacent (|Δrow| = |Δcol| = 1).  A cell does not see itself.
+static func _cell_sees(a: Vector2i, b: Vector2i, size: int, regions: PackedInt32Array) -> bool:
+	if a == b:
+		return false
+	if a.y == b.y or a.x == b.x:
+		return true
+	if regions[a.y * size + a.x] == regions[b.y * size + b.x]:
+		return true
+	return absi(a.y - b.y) == 1 and absi(a.x - b.x) == 1
+
+
+## Return true if cell `a` sees every cell in `group`.
+static func _cell_sees_all(
+		a: Vector2i, group: Array[Vector2i],
+		size: int, regions: PackedInt32Array) -> bool:
+	for b in group:
+		if not _cell_sees(a, b, size, regions):
+			return false
+	return true
 
 
 # ---------------------------------------------------------------------------

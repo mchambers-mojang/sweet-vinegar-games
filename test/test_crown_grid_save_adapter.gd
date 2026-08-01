@@ -506,7 +506,8 @@ func test_hint_exclude_entry_changed_oob_rejected() -> void:
 
 func test_valid_tap_entry_in_bounds_accepted() -> void:
 	var d := _valid_save()
-	d["undo_stack"] = [{"action": "tap", "cell": [0, 0], "from": 0, "to": 1, "auto_marked": []}]
+	d["undo_stack"] = [{"action": "tap", "cell": [0, 0], "from": 0, "to": 1,
+			"auto_marked": [], "old_states": {}}]
 	assert_true(adapter._can_resume_from(d),
 			"Valid tap entry with in-bounds coordinates must be accepted")
 
@@ -550,7 +551,7 @@ func test_hint_crown_auto_marked_oob_coord_rejected() -> void:
 func test_hint_crown_auto_marked_valid_accepted() -> void:
 	var d := _valid_save()
 	d["undo_stack"] = [{"action": "hint_crown", "cell": [2, 3],
-			"auto_marked": [[0, 3], [1, 3]]}]
+			"auto_marked": [[0, 3], [1, 3]], "old_states": {}}]
 	assert_true(adapter._can_resume_from(d),
 			"hint_crown entry with valid auto_marked coordinates must be accepted")
 
@@ -586,7 +587,7 @@ func test_tap_old_states_invalid_value_rejected() -> void:
 func test_tap_old_states_valid_accepted() -> void:
 	var d := _valid_save()
 	d["undo_stack"] = [{"action": "tap", "cell": [0, 0], "from": 0, "to": 1,
-			"old_states": {"0,0": 0, "1,0": 0}}]
+			"auto_marked": [], "old_states": {"0,0": 0, "1,0": 0}}]
 	assert_true(adapter._can_resume_from(d),
 			"tap entry with valid old_states must be accepted")
 
@@ -626,7 +627,55 @@ func test_hint_exclude_old_states_oob_key_rejected() -> void:
 func test_hint_crown_old_states_invalid_state_value_rejected() -> void:
 	var d := _valid_save()
 	d["undo_stack"] = [{"action": "hint_crown", "cell": [1, 1],
-			"old_states": {"1,1": 9}}]
+			"auto_marked": [], "old_states": {"1,1": 9}}]
 	assert_false(adapter._can_resume_from(d),
 			"hint_crown entry with invalid old_states cell state must be rejected")
+
+
+# ---------------------------------------------------------------------------
+# Required fields: auto_marked and old_states are now mandatory (fix 2)
+# ---------------------------------------------------------------------------
+
+func test_tap_entry_missing_auto_marked_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "tap", "cell": [0, 0], "from": 0, "to": 1,
+			"old_states": {}}]
+	assert_false(adapter._can_resume_from(d),
+			"tap entry without auto_marked must be rejected")
+
+
+func test_tap_entry_missing_old_states_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "tap", "cell": [0, 0], "from": 0, "to": 1,
+			"auto_marked": []}]
+	assert_false(adapter._can_resume_from(d),
+			"tap entry without old_states must be rejected")
+
+
+func test_paint_entry_missing_old_states_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "paint", "changed": [[0, 1]]}]
+	assert_false(adapter._can_resume_from(d),
+			"paint entry without old_states must be rejected")
+
+
+func test_hint_crown_entry_missing_auto_marked_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "hint_crown", "cell": [0, 0], "old_states": {}}]
+	assert_false(adapter._can_resume_from(d),
+			"hint_crown entry without auto_marked must be rejected")
+
+
+func test_hint_crown_entry_missing_old_states_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "hint_crown", "cell": [0, 0], "auto_marked": []}]
+	assert_false(adapter._can_resume_from(d),
+			"hint_crown entry without old_states must be rejected")
+
+
+func test_hint_exclude_entry_missing_old_states_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "hint_exclude", "changed": [[0, 0]]}]
+	assert_false(adapter._can_resume_from(d),
+			"hint_exclude entry without old_states must be rejected")
 

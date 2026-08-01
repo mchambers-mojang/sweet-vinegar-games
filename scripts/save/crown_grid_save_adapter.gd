@@ -239,41 +239,47 @@ static func _validate_undo_entry(entry: Variant, sz: int = -1) -> bool:
 				return false
 			if not _validate_cell_state(d["from"]) or not _validate_cell_state(d["to"]):
 				return false
-			if d.has("auto_marked"):
-				if not _validate_auto_marked(d["auto_marked"], sz):
-					return false
-			if d.has("old_states"):
-				if not _validate_old_states(d["old_states"], sz):
-					return false
+			if not d.has("auto_marked"):
+				return false
+			if not _validate_auto_marked(d["auto_marked"], sz):
+				return false
+			if not d.has("old_states"):
+				return false
+			if not _validate_old_states(d["old_states"], sz):
+				return false
 		"paint":
 			if not d.has("changed") or not (d["changed"] is Array):
 				return false
 			for item in (d["changed"] as Array):
 				if not _validate_cell_coord(item, sz):
 					return false
-			if d.has("old_states"):
-				if not _validate_old_states(d["old_states"], sz):
-					return false
+			if not d.has("old_states"):
+				return false
+			if not _validate_old_states(d["old_states"], sz):
+				return false
 		"hint_crown":
 			if not d.has("cell"):
 				return false
 			if not _validate_cell_coord(d["cell"], sz):
 				return false
-			if d.has("auto_marked"):
-				if not _validate_auto_marked(d["auto_marked"], sz):
-					return false
-			if d.has("old_states"):
-				if not _validate_old_states(d["old_states"], sz):
-					return false
+			if not d.has("auto_marked"):
+				return false
+			if not _validate_auto_marked(d["auto_marked"], sz):
+				return false
+			if not d.has("old_states"):
+				return false
+			if not _validate_old_states(d["old_states"], sz):
+				return false
 		"hint_exclude":
 			if not d.has("changed") or not (d["changed"] is Array):
 				return false
 			for item in (d["changed"] as Array):
 				if not _validate_cell_coord(item, sz):
 					return false
-			if d.has("old_states"):
-				if not _validate_old_states(d["old_states"], sz):
-					return false
+			if not d.has("old_states"):
+				return false
+			if not _validate_old_states(d["old_states"], sz):
+				return false
 		_:
 			return false
 	return true
