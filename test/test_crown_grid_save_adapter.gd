@@ -9,6 +9,8 @@ extends GutTest
 ## Build a save dictionary with regions laid out as columns (region i = column i).
 ## The solution uses an even-first zigzag pattern so no two consecutive crowns
 ## are diagonally adjacent, making it a valid Crown Grid solution.
+## The tier is derived automatically from size so that the tier/size mapping is
+## always valid (Easy=6, Medium=7, Hard=8, Expert=9).
 func _valid_save(size: int = 6) -> Dictionary:
 	var regions: Array = []
 	for i in range(size * size):
@@ -22,9 +24,16 @@ func _valid_save(size: int = 6) -> Dictionary:
 	var cells: Array = []
 	for i in range(size * size):
 		cells.append(0)
+	var tier: int
+	match size:
+		6: tier = 0
+		7: tier = 1
+		8: tier = 2
+		9: tier = 3
+		_: tier = 0
 	return {
 		"size": size,
-		"tier": 0,
+		"tier": tier,
 		"regions": regions,
 		"solution": solution,
 		"cells": cells,
@@ -101,10 +110,44 @@ func test_invalid_tier_4_rejected() -> void:
 
 
 func test_valid_tiers_accepted() -> void:
+	# Each tier must be accepted only when paired with its matching board size.
+	var tier_sizes: Dictionary = {0: 6, 1: 7, 2: 8, 3: 9}
 	for t in [0, 1, 2, 3]:
-		var d := _valid_save()
-		d["tier"] = t
-		assert_true(adapter._can_resume_from(d), "Tier %d should be accepted" % t)
+		var d := _valid_save(tier_sizes[t])
+		assert_true(adapter._can_resume_from(d), "Tier %d with size %d should be accepted" % [t, tier_sizes[t]])
+
+
+# ---------------------------------------------------------------------------
+# Tier/size mismatch validation (fix 3)
+# ---------------------------------------------------------------------------
+
+func test_tier_size_mismatch_easy_rejected() -> void:
+	# Tier 0 (Easy) requires size 6.  Build a valid size-9 save, then override
+	# tier to 0 so only the tier/size mapping check fires.
+	var d := _valid_save(9)
+	d["tier"] = 0  # Mismatch: tier 0 (Easy) expects size 6, not 9
+	assert_false(adapter._can_resume_from(d),
+			"Tier 0 (Easy) with size 9 must be rejected")
+
+
+func test_tier_size_mismatch_expert_rejected() -> void:
+	# Tier 3 (Expert) requires size 9. A size-6 save with tier=3 must be rejected.
+	var d := _valid_save(6)
+	d["tier"] = 3  # Mismatch: Expert expects size 9, not 6
+	assert_false(adapter._can_resume_from(d),
+			"Tier 3 (Expert) with size 6 must be rejected")
+
+
+func test_tier_size_medium_correct() -> void:
+	# Tier 1 (Medium) with size 7 must be accepted.
+	assert_true(adapter._can_resume_from(_valid_save(7)),
+			"Tier 1 (Medium) with size 7 must be accepted")
+
+
+func test_tier_size_hard_correct() -> void:
+	# Tier 2 (Hard) with size 8 must be accepted.
+	assert_true(adapter._can_resume_from(_valid_save(8)),
+			"Tier 2 (Hard) with size 8 must be accepted")
 
 
 # ---------------------------------------------------------------------------
@@ -466,4 +509,124 @@ func test_valid_tap_entry_in_bounds_accepted() -> void:
 	d["undo_stack"] = [{"action": "tap", "cell": [0, 0], "from": 0, "to": 1, "auto_marked": []}]
 	assert_true(adapter._can_resume_from(d),
 			"Valid tap entry with in-bounds coordinates must be accepted")
+
+
+# ---------------------------------------------------------------------------
+# auto_marked coordinate validation (fix 2)
+# ---------------------------------------------------------------------------
+
+func test_tap_entry_auto_marked_oob_coord_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "tap", "cell": [0, 0], "from": 0, "to": 2,
+			"auto_marked": [[99, 0]]}]
+	assert_false(adapter._can_resume_from(d),
+			"tap entry with out-of-bounds auto_marked coordinate must be rejected")
+
+
+func test_tap_entry_auto_marked_non_array_element_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "tap", "cell": [0, 0], "from": 0, "to": 2,
+			"auto_marked": ["bad"]}]
+	assert_false(adapter._can_resume_from(d),
+			"tap entry with non-array auto_marked element must be rejected")
+
+
+func test_tap_entry_auto_marked_valid_accepted() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "tap", "cell": [0, 0], "from": 0, "to": 2,
+			"auto_marked": [[1, 0], [2, 0]]}]
+	assert_true(adapter._can_resume_from(d),
+			"tap entry with valid auto_marked coordinates must be accepted")
+
+
+func test_hint_crown_auto_marked_oob_coord_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "hint_crown", "cell": [0, 0],
+			"auto_marked": [[0, 99]]}]
+	assert_false(adapter._can_resume_from(d),
+			"hint_crown entry with out-of-bounds auto_marked coordinate must be rejected")
+
+
+func test_hint_crown_auto_marked_valid_accepted() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "hint_crown", "cell": [2, 3],
+			"auto_marked": [[0, 3], [1, 3]]}]
+	assert_true(adapter._can_resume_from(d),
+			"hint_crown entry with valid auto_marked coordinates must be accepted")
+
+
+# ---------------------------------------------------------------------------
+# old_states validation (fix 2)
+# ---------------------------------------------------------------------------
+
+func test_tap_old_states_non_dict_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "tap", "cell": [0, 0], "from": 0, "to": 1,
+			"old_states": "bad"}]
+	assert_false(adapter._can_resume_from(d),
+			"tap entry with non-dict old_states must be rejected")
+
+
+func test_tap_old_states_oob_key_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "tap", "cell": [0, 0], "from": 0, "to": 1,
+			"old_states": {"99,0": 0}}]
+	assert_false(adapter._can_resume_from(d),
+			"tap entry with out-of-bounds old_states key must be rejected")
+
+
+func test_tap_old_states_invalid_value_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "tap", "cell": [0, 0], "from": 0, "to": 1,
+			"old_states": {"0,0": 5}}]
+	assert_false(adapter._can_resume_from(d),
+			"tap entry with invalid old_states value must be rejected")
+
+
+func test_tap_old_states_valid_accepted() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "tap", "cell": [0, 0], "from": 0, "to": 1,
+			"old_states": {"0,0": 0, "1,0": 0}}]
+	assert_true(adapter._can_resume_from(d),
+			"tap entry with valid old_states must be accepted")
+
+
+func test_paint_old_states_non_string_key_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "paint", "changed": [[0, 0]],
+			"old_states": {42: 0}}]
+	assert_false(adapter._can_resume_from(d),
+			"paint entry with non-string old_states key must be rejected")
+
+
+func test_paint_old_states_malformed_key_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "paint", "changed": [[0, 0]],
+			"old_states": {"not_coords": 0}}]
+	assert_false(adapter._can_resume_from(d),
+			"paint entry with malformed old_states key must be rejected")
+
+
+func test_paint_old_states_valid_accepted() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "paint", "changed": [[0, 1]],
+			"old_states": {"0,1": 0}}]
+	assert_true(adapter._can_resume_from(d),
+			"paint entry with valid old_states must be accepted")
+
+
+func test_hint_exclude_old_states_oob_key_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "hint_exclude", "changed": [[0, 0]],
+			"old_states": {"0,99": 0}}]
+	assert_false(adapter._can_resume_from(d),
+			"hint_exclude entry with out-of-bounds old_states key must be rejected")
+
+
+func test_hint_crown_old_states_invalid_state_value_rejected() -> void:
+	var d := _valid_save()
+	d["undo_stack"] = [{"action": "hint_crown", "cell": [1, 1],
+			"old_states": {"1,1": 9}}]
+	assert_false(adapter._can_resume_from(d),
+			"hint_crown entry with invalid old_states cell state must be rejected")
 

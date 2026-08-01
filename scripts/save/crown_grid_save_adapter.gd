@@ -6,6 +6,8 @@ class_name CrownGridSaveAdapter extends GameSaveAdapter
 
 const VALID_TIERS := [0, 1, 2, 3]
 const VALID_ASSISTANCE_MODES := [0, 1]
+## Maps each tier to its required board size (Easy→6, Medium→7, Hard→8, Expert→9).
+const TIER_TO_SIZE := {0: 6, 1: 7, 2: 8, 3: 9}
 
 
 func _get_game_id() -> String:
@@ -34,6 +36,12 @@ func _can_resume_from(data: Dictionary) -> bool:
 	var tier = data.get("tier", null)
 	if typeof(tier) != TYPE_INT or not VALID_TIERS.has(tier as int):
 		push_warning("CrownGridSaveAdapter: corrupted save — invalid tier")
+		return false
+
+	# Validate tier-to-size mapping
+	var expected_size: int = TIER_TO_SIZE.get(tier as int, -1)
+	if expected_size != sz:
+		push_warning("CrownGridSaveAdapter: corrupted save — tier/size mismatch")
 		return false
 
 	# Validate assistance_mode
@@ -231,26 +239,40 @@ static func _validate_undo_entry(entry: Variant, sz: int = -1) -> bool:
 				return false
 			if not _validate_cell_state(d["from"]) or not _validate_cell_state(d["to"]):
 				return false
-			if d.has("auto_marked") and not (d["auto_marked"] is Array):
-				return false
+			if d.has("auto_marked"):
+				if not _validate_auto_marked(d["auto_marked"], sz):
+					return false
+			if d.has("old_states"):
+				if not _validate_old_states(d["old_states"], sz):
+					return false
 		"paint":
 			if not d.has("changed") or not (d["changed"] is Array):
 				return false
 			for item in (d["changed"] as Array):
 				if not _validate_cell_coord(item, sz):
 					return false
+			if d.has("old_states"):
+				if not _validate_old_states(d["old_states"], sz):
+					return false
 		"hint_crown":
 			if not d.has("cell"):
 				return false
 			if not _validate_cell_coord(d["cell"], sz):
 				return false
-			if d.has("auto_marked") and not (d["auto_marked"] is Array):
-				return false
+			if d.has("auto_marked"):
+				if not _validate_auto_marked(d["auto_marked"], sz):
+					return false
+			if d.has("old_states"):
+				if not _validate_old_states(d["old_states"], sz):
+					return false
 		"hint_exclude":
 			if not d.has("changed") or not (d["changed"] is Array):
 				return false
 			for item in (d["changed"] as Array):
 				if not _validate_cell_coord(item, sz):
+					return false
+			if d.has("old_states"):
+				if not _validate_old_states(d["old_states"], sz):
 					return false
 		_:
 			return false
@@ -281,3 +303,39 @@ static func _validate_cell_state(v: Variant) -> bool:
 		return false
 	var st := int(v)
 	return st >= 0 and st <= 2
+
+
+## Return true when v is an Array of valid 2-element coordinate arrays.
+## Each element must satisfy _validate_cell_coord with the given sz bound.
+static func _validate_auto_marked(v: Variant, sz: int = -1) -> bool:
+	if not (v is Array):
+		return false
+	for item in (v as Array):
+		if not _validate_cell_coord(item, sz):
+			return false
+	return true
+
+
+## Return true when v is a Dictionary whose keys are "x,y" coordinate strings
+## with components in [0, sz) and whose values are valid cell states (0–2).
+## If sz <= 0, the coordinate range check is skipped.
+static func _validate_old_states(v: Variant, sz: int = -1) -> bool:
+	if not (v is Dictionary):
+		return false
+	for key in (v as Dictionary):
+		if typeof(key) != TYPE_STRING:
+			return false
+		var parts := str(key).split(",")
+		if parts.size() != 2:
+			return false
+		if not parts[0].is_valid_int() or not parts[1].is_valid_int():
+			return false
+		if sz > 0:
+			var kx := int(parts[0])
+			var ky := int(parts[1])
+			if kx < 0 or kx >= sz or ky < 0 or ky >= sz:
+				return false
+		var val: Variant = (v as Dictionary)[key]
+		if not _validate_cell_state(val):
+			return false
+	return true

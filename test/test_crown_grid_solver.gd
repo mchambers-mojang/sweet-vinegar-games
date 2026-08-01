@@ -361,12 +361,12 @@ func test_find_next_step_hint_respects_diagonal_constraint() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Rank 4 contradiction-based detection (fix 1 regression)
+# Rank 4 non-branching intersection (fix 1 regression)
 # ---------------------------------------------------------------------------
 
 func test_rank4_on_empty_board_safe() -> void:
-	## _try_rank4_chain on an empty symmetric board with column regions must not
-	## crash and must only produce valid in-range cell coordinates when it does fire.
+	## _try_rank4_chain on an empty symmetric board must not crash and must only
+	## produce valid in-range cell coordinates when it does fire.
 	var r4 := _regions_from_array([
 		[0, 1, 2, 3],
 		[0, 1, 2, 3],
@@ -386,9 +386,9 @@ func test_rank4_on_empty_board_safe() -> void:
 			assert_true(v.y >= 0 and v.y < 4, "Affected cell row must be in range")
 
 
-func test_rank4_proposed_exclusions_validated_by_solution_count() -> void:
+func test_rank4_any_excluded_cell_not_in_valid_solution() -> void:
 	## Any cell emitted by _try_rank4_chain must not appear in any valid solution.
-	## We verify this by confirming count_solutions({row: col}) == 0 for each cell.
+	## Verified externally via count_solutions to confirm soundness.
 	var r4 := _regions_from_array([
 		[0, 1, 2, 3],
 		[0, 1, 2, 3],
@@ -425,34 +425,72 @@ func test_rank4_cancel_check_respected() -> void:
 	assert_null(step, "_try_rank4_chain with immediate cancel must return null")
 
 
-func test_has_contradiction_detects_empty_row() -> void:
-	## _has_contradiction must return true when an unsatisfied row has no candidates.
-	var r4 := _regions_from_array([
-		[0, 1, 2, 3],
-		[0, 1, 2, 3],
-		[0, 1, 2, 3],
-		[0, 1, 2, 3],
-	])
-	var sim_crowns: Array = [-1, -1, -1, -1]
-	# Empty candidate set — every unit has no candidates
-	var empty_cands: Dictionary = {}
-	assert_true(CrownGridSolver._has_contradiction(4, r4, sim_crowns, empty_cands),
-			"Empty candidates with unsatisfied rows must be a contradiction")
+func test_rank4_intersection_finds_forced_exclusions() -> void:
+	## Positive regression: construct a 6x6 board (column regions) that has no
+	## Rank 1-3 deductions but where the intersection approach finds forced
+	## exclusions.  Candidate set chosen so that excluding either candidate in
+	## row 0 produces a chain of ≥3 forced steps, and both chains share at least
+	## one common forced exclusion.
+	##
+	## The unique solution for this board is row→col: [2, 5, 3, 0, 4, 1].
+	## Candidate set:
+	##   Row 0: (0,0),(2,0)   Row 1: (3,1),(5,1)   Row 2: (1,2),(3,2),(5,2)
+	##   Row 3: (0,3),(4,3)   Row 4: (2,4),(4,4)   Row 5: (1,5),(3,5)
+	var sz := 6
+	# Column regions: region i = column i.
+	var regions := PackedInt32Array()
+	regions.resize(sz * sz)
+	for r in range(sz):
+		for c in range(sz):
+			regions[r * sz + c] = c
 
+	var crowns_by_row: Array = [-1, -1, -1, -1, -1, -1]
 
-func test_has_contradiction_false_when_all_satisfied() -> void:
-	## _has_contradiction must return false when all units are already satisfied.
-	var r4 := _regions_from_array([
-		[0, 1, 2, 3],
-		[0, 1, 2, 3],
-		[0, 1, 2, 3],
-		[0, 1, 2, 3],
-	])
-	# All rows satisfied — no unsatisfied unit can be empty
-	var sim_crowns: Array = [1, 3, 0, 2]
-	var empty_cands: Dictionary = {}
-	assert_false(CrownGridSolver._has_contradiction(4, r4, sim_crowns, empty_cands),
-			"Fully solved board must not be a contradiction")
+	# Build excluded: all cells NOT in the candidate set.
+	var candidate_set: Dictionary = {}
+	for v in [
+		Vector2i(0, 0), Vector2i(2, 0),
+		Vector2i(3, 1), Vector2i(5, 1),
+		Vector2i(1, 2), Vector2i(3, 2), Vector2i(5, 2),
+		Vector2i(0, 3), Vector2i(4, 3),
+		Vector2i(2, 4), Vector2i(4, 4),
+		Vector2i(1, 5), Vector2i(3, 5),
+	]:
+		candidate_set[v] = true
+	var excluded: Dictionary = {}
+	for r in range(sz):
+		for c in range(sz):
+			var cell := Vector2i(c, r)
+			if not candidate_set.has(cell):
+				excluded[cell] = true
+
+	var cands := CrownGridSolver._compute_candidates(sz, regions, crowns_by_row, excluded)
+
+	# Verify no Rank 1-3 fires before testing Rank 4.
+	var lower_step := CrownGridSolver._try_rank1_singles(sz, regions, cands)
+	assert_null(lower_step, "No Rank 1 step should be available on this board")
+	lower_step = CrownGridSolver._try_rank2_combined(sz, regions, cands)
+	assert_null(lower_step, "No Rank 2 step should be available on this board")
+	lower_step = CrownGridSolver._try_rank3_locked(sz, regions, cands)
+	assert_null(lower_step, "No Rank 3 step should be available on this board")
+
+	var step := CrownGridSolver._try_rank4_chain(sz, regions, cands, crowns_by_row, excluded)
+	assert_not_null(step, "Rank 4 intersection must find forced exclusions on this board")
+	if step == null:
+		return
+	assert_eq(step.result, CrownGridSolver.CELL_EXCLUDED,
+			"Rank 4 must only produce exclusion steps")
+	assert_eq(step.rank, CrownGridSolver.RANK_CHAIN,
+			"Step rank must be RANK_CHAIN")
+	assert_true(step.affected_cells.size() > 0,
+			"At least one cell must be excluded")
+
+	# Soundness: every excluded cell must not be in any valid solution.
+	for cell in step.affected_cells:
+		var v := cell as Vector2i
+		var n := CrownGridSolver.count_solutions(sz, regions, {v.y: v.x})
+		assert_eq(n, 0,
+				"Excluded cell (%d,%d) must not appear in any valid solution" % [v.x, v.y])
 
 
 # ---------------------------------------------------------------------------
