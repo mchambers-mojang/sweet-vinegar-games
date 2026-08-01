@@ -247,14 +247,9 @@ static func _validate_undo_entry(entry: Variant, sz: int = -1) -> bool:
 				return false
 			if not _validate_old_states(d["old_states"], sz):
 				return false
-			# Cross-validate: cell and every auto_marked cell must appear in old_states
-			if not _validate_cell_in_old_states(d["cell"], d["old_states"]):
-				return false
-			for am in (d["auto_marked"] as Array):
-				if not _validate_cell_in_old_states(am, d["old_states"]):
-					return false
-			# Exact-set check: old_states must not contain extra coordinates
-			if (d["old_states"] as Dictionary).size() != 1 + (d["auto_marked"] as Array).size():
+			# Exact-set equality: build expected key set from cell + auto_marked,
+			# reject duplicate coordinates, then verify old_states matches exactly.
+			if not _validate_cell_auto_marked_old_states(d["cell"], d["auto_marked"], d["old_states"]):
 				return false
 		"paint":
 			if not d.has("changed") or not (d["changed"] is Array):
@@ -266,12 +261,9 @@ static func _validate_undo_entry(entry: Variant, sz: int = -1) -> bool:
 				return false
 			if not _validate_old_states(d["old_states"], sz):
 				return false
-			# Cross-validate: every changed cell must appear in old_states
-			for item in (d["changed"] as Array):
-				if not _validate_cell_in_old_states(item, d["old_states"]):
-					return false
-			# Exact-set check: old_states must not contain extra coordinates
-			if (d["old_states"] as Dictionary).size() != (d["changed"] as Array).size():
+			# Exact-set equality: changed cells must exactly match old_states keys,
+			# no duplicates allowed in changed.
+			if not _validate_changed_old_states(d["changed"], d["old_states"]):
 				return false
 		"hint_crown":
 			if not d.has("cell"):
@@ -286,14 +278,9 @@ static func _validate_undo_entry(entry: Variant, sz: int = -1) -> bool:
 				return false
 			if not _validate_old_states(d["old_states"], sz):
 				return false
-			# Cross-validate: cell and every auto_marked cell must appear in old_states
-			if not _validate_cell_in_old_states(d["cell"], d["old_states"]):
-				return false
-			for am in (d["auto_marked"] as Array):
-				if not _validate_cell_in_old_states(am, d["old_states"]):
-					return false
-			# Exact-set check: old_states must not contain extra coordinates
-			if (d["old_states"] as Dictionary).size() != 1 + (d["auto_marked"] as Array).size():
+			# Exact-set equality: build expected key set from cell + auto_marked,
+			# reject duplicate coordinates, then verify old_states matches exactly.
+			if not _validate_cell_auto_marked_old_states(d["cell"], d["auto_marked"], d["old_states"]):
 				return false
 		"hint_exclude":
 			if not d.has("changed") or not (d["changed"] is Array):
@@ -305,12 +292,9 @@ static func _validate_undo_entry(entry: Variant, sz: int = -1) -> bool:
 				return false
 			if not _validate_old_states(d["old_states"], sz):
 				return false
-			# Cross-validate: every changed cell must appear in old_states
-			for item in (d["changed"] as Array):
-				if not _validate_cell_in_old_states(item, d["old_states"]):
-					return false
-			# Exact-set check: old_states must not contain extra coordinates
-			if (d["old_states"] as Dictionary).size() != (d["changed"] as Array).size():
+			# Exact-set equality: changed cells must exactly match old_states keys,
+			# no duplicates allowed in changed.
+			if not _validate_changed_old_states(d["changed"], d["old_states"]):
 				return false
 		_:
 			return false
@@ -386,5 +370,63 @@ static func _validate_old_states(v: Variant, sz: int = -1) -> bool:
 				return false
 		var val: Variant = (v as Dictionary)[key]
 		if not _validate_cell_state(val):
+			return false
+	return true
+
+
+## Validate that (cell + auto_marked) form a unique coordinate set that exactly
+## matches the keys of old_states.  Returns false if any coordinate in auto_marked
+## duplicates an earlier one or duplicates the primary cell, and false if old_states
+## has any key not in that set (or is missing any key from the set).
+## Precondition: cell has already been validated by _validate_cell_coord and
+## auto_marked by _validate_auto_marked, so each element is a 2-element int Array.
+static func _validate_cell_auto_marked_old_states(
+		cell: Variant,
+		auto_marked: Variant,
+		old_states: Variant) -> bool:
+	if not (old_states is Dictionary):
+		return false
+	var os_dict := old_states as Dictionary
+	var expected_keys: Dictionary = {}
+	var ca := cell as Array
+	var ck := "%d,%d" % [int(ca[0]), int(ca[1])]
+	expected_keys[ck] = true
+	for am in (auto_marked as Array):
+		var am_arr := am as Array
+		var amk := "%d,%d" % [int(am_arr[0]), int(am_arr[1])]
+		if expected_keys.has(amk):
+			return false  # duplicate coordinate
+		expected_keys[amk] = true
+	if os_dict.size() != expected_keys.size():
+		return false
+	for k in expected_keys:
+		if not os_dict.has(k):
+			return false
+	return true
+
+
+## Validate that changed forms a unique coordinate set that exactly matches the
+## keys of old_states.  Returns false if any coordinate in changed is duplicated
+## or if old_states has any key not in that set (or is missing any key from the
+## set).
+## Precondition: each element of changed has already been validated by
+## _validate_cell_coord, so each element is a 2-element int Array.
+static func _validate_changed_old_states(
+		changed: Variant,
+		old_states: Variant) -> bool:
+	if not (old_states is Dictionary):
+		return false
+	var os_dict := old_states as Dictionary
+	var expected_keys: Dictionary = {}
+	for item in (changed as Array):
+		var item_arr := item as Array
+		var ik := "%d,%d" % [int(item_arr[0]), int(item_arr[1])]
+		if expected_keys.has(ik):
+			return false  # duplicate coordinate
+		expected_keys[ik] = true
+	if os_dict.size() != expected_keys.size():
+		return false
+	for k in expected_keys:
+		if not os_dict.has(k):
 			return false
 	return true

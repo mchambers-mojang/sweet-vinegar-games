@@ -228,23 +228,22 @@ func use_hint() -> HintResult:
 		return result
 
 	# Build current board state for solver.
-	# Only confirmed Crown placements are forwarded.  Player Excluded marks are
-	# deliberately not passed — hints must be derivable from puzzle logic alone,
-	# independent of unproven player notes.
+	# Only solution-confirmed Crown placements are forwarded so that wrong or
+	# contradictory free-mode Crowns cannot pollute the solver's deductions.
+	# Player Excluded marks are also not passed — hints must be derivable from
+	# puzzle logic alone, independent of unproven player notes.
 	var crowns_by_row: Array = []
 	crowns_by_row.resize(size)
 	crowns_by_row.fill(-1)
 	for r in range(size):
 		for c in range(size):
 			if int(cells[r * size + c]) == CELL_CROWN:
-				crowns_by_row[r] = c
+				if solution.size() == size and int(solution[r]) == c:
+					crowns_by_row[r] = c
 
 	var step := CrownGridSolver.find_next_step(size, regions, crowns_by_row, {})
 	if step == null:
 		return result
-
-	hints_used += 1
-	result.applied = true
 
 	if step.result == CrownGridSolver.CELL_CROWN and not step.affected_cells.is_empty():
 		var hint_cell: Vector2i = step.affected_cells[0]
@@ -265,6 +264,8 @@ func use_hint() -> HintResult:
 			"auto_marked": auto_marked,
 			"old_states": old_states,
 		})
+		hints_used += 1
+		result.applied = true
 	else:
 		var changed: Array[Vector2i] = []
 		var old_states: Dictionary = {}
@@ -282,6 +283,8 @@ func use_hint() -> HintResult:
 				"changed": changed,
 				"old_states": old_states,
 			})
+			hints_used += 1
+			result.applied = true
 
 	_recompute_completion()
 	result.game_won = is_completed

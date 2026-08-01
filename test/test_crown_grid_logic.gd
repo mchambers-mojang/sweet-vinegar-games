@@ -387,3 +387,59 @@ func test_auto_mark_empty_when_disabled() -> void:
 	var result := logic.tap_cell(1, 0)  # → crown
 	assert_true(result.auto_marked.is_empty(),
 			"auto_marked should be empty when auto_mark is off")
+
+
+# ---------------------------------------------------------------------------
+# Fix 1: wrong free-mode Crowns must not poison solver hint input
+# ---------------------------------------------------------------------------
+
+## Board: 4×4 column-regions, solution = [1, 3, 0, 2].
+## After 3 solution-confirmed Crowns: (col=1,row=0), (col=3,row=1), (col=0,row=2),
+## row 3 has a naked single at (col=2,row=3).
+## Placing an additional WRONG Crown at (col=0,row=3) — solution says col=2 for
+## row 3 — would (without the fix) mark row 3 as occupied in crowns_by_row,
+## causing find_next_step to return null.  With the fix the wrong Crown is
+## filtered out and the rank-1 hint at (col=2,row=3) is still found.
+func test_hint_ignores_wrong_free_mode_crown() -> void:
+	logic.tap_cell(1, 0); logic.tap_cell(1, 0)  # correct Crown at (col=1,row=0) [sol[0]=1]
+	logic.tap_cell(3, 1); logic.tap_cell(3, 1)  # correct Crown at (col=3,row=1) [sol[1]=3]
+	logic.tap_cell(0, 2); logic.tap_cell(0, 2)  # correct Crown at (col=0,row=2) [sol[2]=0]
+	logic.tap_cell(0, 3); logic.tap_cell(0, 3)  # wrong Crown at (col=0,row=3) [sol[3]=2≠0]
+	var hint := logic.use_hint()
+	assert_true(hint.applied,
+			"Hint must be found even when a wrong free-mode Crown occupies the board")
+	assert_eq(hint.new_state, CrownGridLogic.CELL_CROWN,
+			"Hint must be a Crown placement (naked single at row 3)")
+
+
+# ---------------------------------------------------------------------------
+# Fix 2: exclusion hints that change nothing must not increment hints_used
+# ---------------------------------------------------------------------------
+
+## Board: 6×6, region = col-index for (row<5, col<5); region 5 otherwise.
+## Solution = [0, 2, 4, 1, 3, 5] (valid: unique cols, unique regions, no diagonal adj).
+## On a fresh board, region 0 (col 0, rows 0-4) is locked to col 0 →
+## rank-2 "region locked to col" fires and suggests excluding (col=0, row=5).
+## Pre-paint (col=0, row=5) as CELL_EXCLUDED; use_hint() must be a no-op.
+func test_hint_noop_exclusion_does_not_increment_hints_used() -> void:
+	var sz := 6
+	var solution6: Array[int] = [0, 2, 4, 1, 3, 5]
+	var regions6 := PackedInt32Array()
+	regions6.resize(sz * sz)
+	for r in range(sz):
+		for c in range(sz):
+			if r < 5 and c < 5:
+				regions6[r * sz + c] = c  # regions 0-4 = column index
+			else:
+				regions6[r * sz + c] = 5  # region 5 = row 5 + col 5
+	var logic6 := CrownGridLogic.new()
+	logic6.init_new_game(sz, regions6, solution6)
+	# Pre-paint the cell the solver will suggest excluding so the hint is a no-op.
+	var paint: Array[Vector2i] = [Vector2i(0, 5)]  # (col=0, row=5) in region 5
+	logic6.paint_excluded(paint)
+	var prev_hints := logic6.hints_used
+	var hint := logic6.use_hint()
+	assert_false(hint.applied,
+			"No-op exclusion hint must not set applied=true")
+	assert_eq(logic6.hints_used, prev_hints,
+			"hints_used must not increment for a no-op exclusion hint")

@@ -779,3 +779,50 @@ func test_hint_exclude_extra_old_states_key_rejected() -> void:
 	assert_false(adapter._can_resume_from(d),
 			"hint_exclude entry with extra old_states key must be rejected")
 
+
+
+# ---------------------------------------------------------------------------
+# Fix 3: duplicate coordinates bypass exact history validation
+# ---------------------------------------------------------------------------
+
+func test_tap_auto_marked_duplicate_coords_rejected() -> void:
+	var d := _valid_save()
+	# auto_marked contains [1, 0] twice; even though old_states size matches
+	# 1 + 2 = 3, the duplicate means a real unrelated key could be injected.
+	d["undo_stack"] = [{"action": "tap", "cell": [0, 0], "from": 0, "to": 1,
+			"auto_marked": [[1, 0], [1, 0]],
+			"old_states": {"0,0": 0, "1,0": 0, "2,0": 0}}]
+	assert_false(adapter._can_resume_from(d),
+			"tap entry with duplicate auto_marked coordinates must be rejected")
+
+
+func test_hint_crown_auto_marked_duplicate_coords_rejected() -> void:
+	var d := _valid_save()
+	# auto_marked contains [1, 0] twice; this would allow old_states to include
+	# an extra unrelated coordinate while passing the length check.
+	d["undo_stack"] = [{"action": "hint_crown", "cell": [0, 0],
+			"auto_marked": [[1, 0], [1, 0]],
+			"old_states": {"0,0": 0, "1,0": 0, "2,0": 0}}]
+	assert_false(adapter._can_resume_from(d),
+			"hint_crown entry with duplicate auto_marked coordinates must be rejected")
+
+
+func test_paint_changed_duplicate_coords_rejected() -> void:
+	var d := _valid_save()
+	# changed contains [0, 1] twice; old_states has 2 keys matching the inflated
+	# count but one is unrelated — this should be caught as a duplicate.
+	d["undo_stack"] = [{"action": "paint",
+			"changed": [[0, 1], [0, 1]],
+			"old_states": {"0,1": 0, "1,1": 0}}]
+	assert_false(adapter._can_resume_from(d),
+			"paint entry with duplicate changed coordinates must be rejected")
+
+
+func test_hint_exclude_changed_duplicate_coords_rejected() -> void:
+	var d := _valid_save()
+	# changed contains [0, 1] twice; same pattern as paint above.
+	d["undo_stack"] = [{"action": "hint_exclude",
+			"changed": [[0, 1], [0, 1]],
+			"old_states": {"0,1": 0, "1,1": 0}}]
+	assert_false(adapter._can_resume_from(d),
+			"hint_exclude entry with duplicate changed coordinates must be rejected")
