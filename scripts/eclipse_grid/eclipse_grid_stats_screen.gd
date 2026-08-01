@@ -4,6 +4,9 @@ extends Control
 
 const TimeFormat := preload("res://scripts/utils/time_format.gd")
 
+# Scene paths kept local until Eclipse Grid is registered in the shared collection.
+const SCENE_MENU := "res://scenes/eclipse_grid_menu.tscn"
+
 @onready var back_button: Button = %BackButton
 @onready var stats_list: VBoxContainer = %StatsList
 
@@ -13,7 +16,7 @@ const SIZES: Array[int] = [4, 6, 8, 10]
 
 func _ready() -> void:
 	back_button.pressed.connect(func() -> void:
-		SceneTransition.navigate(Scenes.ECLIPSE_GRID_MENU)
+		SceneTransition.navigate(SCENE_MENU)
 	)
 	_build_stats_ui()
 	_apply_theme()

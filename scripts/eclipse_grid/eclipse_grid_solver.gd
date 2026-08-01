@@ -638,55 +638,87 @@ static func _relation_chain_rank3(
 		cells: Array[int],
 		h_relations: Dictionary,
 		v_relations: Dictionary) -> SolverStep:
-	# A longer relation chain (length >= 3) or a row/column interaction
-	# spanning 3+ cells.  We use trial-and-error within a single row/column
-	# to detect forced values without global branching.
+	# Enumerate all valid completions of each line with 3+ empty cells.
+	# A cell is forced when it takes the same value in every valid completion —
+	# no hypothesis testing; we derive the result from exhaustive local enumeration.
 	for r in size:
-		var step := _line_trial_rank3(size, cells, h_relations, v_relations, r, true)
+		var step := _line_forced_rank3(size, cells, h_relations, v_relations, r, true)
 		if step:
 			return step
 	for c in size:
-		var step := _line_trial_rank3(size, cells, h_relations, v_relations, c, false)
+		var step := _line_forced_rank3(size, cells, h_relations, v_relations, c, false)
 		if step:
 			return step
 	return null
 
 
-static func _line_trial_rank3(
+static func _line_forced_rank3(
 		size: int,
 		cells: Array[int],
 		h_relations: Dictionary,
 		v_relations: Dictionary,
 		line: int,
 		is_row: bool) -> SolverStep:
-	# Collect empty positions in this line
 	var empties: Array[int] = []
 	for i in size:
 		var idx := line * size + i if is_row else i * size + line
 		if cells[idx] == EMPTY:
 			empties.append(i)
-	if empties.size() < 3 or empties.size() > size - 1:
-		return null
-	# For each empty position, check if both PLUS and MINUS lead to contradiction
-	for target_pos in empties:
-		var target_idx: int = line * size + target_pos if is_row else target_pos * size + line
-		var forced_val := -1
-		for try_val in [PLUS, MINUS]:
-			cells[target_idx] = try_val
-			var ok: bool
-			if is_row:
-				ok = _check_partial_line(cells, size, line, true, h_relations, v_relations)
-			else:
-				ok = _check_partial_line(cells, size, line, false, h_relations, v_relations)
-			if not ok:
-				# This value causes immediate contradiction → the other must be correct
-				forced_val = MINUS if try_val == PLUS else PLUS
-			cells[target_idx] = EMPTY
-		if forced_val != -1:
+	if empties.size() < 3 or empties.size() >= size:
+		return null  # Rank 1/2 handles fewer empties; a fully-empty line yields no deduction
+
+	# Enumerate all valid assignments for this line's empty positions
+	var valid_assignments: Array[Array] = []
+	_enum_line_completions(size, cells, h_relations, v_relations, line, is_row, empties, 0, valid_assignments)
+
+	if valid_assignments.size() < 2:
+		return null  # 0 = contradiction (shouldn't happen); 1 = already uniquely forced
+
+	# A position is forced when it holds the same value in every valid completion
+	for i in empties.size():
+		var first_val: int = int(valid_assignments[0][i])
+		var all_same := true
+		for assignment in valid_assignments:
+			if int(assignment[i]) != first_val:
+				all_same = false
+				break
+		if all_same:
+			var pos: int = empties[i]
+			var target_idx: int = line * size + pos if is_row else pos * size + line
 			var af: Array[int] = [target_idx]
 			var line_type := "row" if is_row else "col"
-			return SolverStep.new("Rank-3 %s %d trial-elimination forces position %d" % [line_type, line, target_pos], af, forced_val, RANK_3)
+			return SolverStep.new(
+				"Rank-3 %s %d: all valid patterns force position %d" % [line_type, line, pos],
+				af, first_val, RANK_3)
 	return null
+
+
+## Enumerate all valid assignments for the empty positions in a line.
+## Fills results with arrays [val_0, val_1, ...] corresponding to empties[0], empties[1], ...
+static func _enum_line_completions(
+		size: int,
+		cells: Array[int],
+		h_relations: Dictionary,
+		v_relations: Dictionary,
+		line: int,
+		is_row: bool,
+		empties: Array[int],
+		depth: int,
+		results: Array[Array]) -> void:
+	if depth == empties.size():
+		var assignment: Array = []
+		for pos in empties:
+			var idx := line * size + pos if is_row else pos * size + line
+			assignment.append(cells[idx])
+		results.append(assignment)
+		return
+	var pos: int = empties[depth]
+	var idx: int = line * size + pos if is_row else pos * size + line
+	for val in [PLUS, MINUS]:
+		cells[idx] = val
+		if _check_partial_line(cells, size, line, is_row, h_relations, v_relations):
+			_enum_line_completions(size, cells, h_relations, v_relations, line, is_row, empties, depth + 1, results)
+		cells[idx] = EMPTY
 
 
 # ---------------------------------------------------------------------------
@@ -698,26 +730,87 @@ static func _global_quota_chain(
 		cells: Array[int],
 		h_relations: Dictionary,
 		v_relations: Dictionary) -> SolverStep:
-	# Multi-row/column interaction: if one glyph is forced by crossing quota/run
-	# constraints across multiple rows and columns.
-	# Implementation: for each empty cell, try both values and check if one leads
-	# to global inconsistency using the partial consistency checker.
-	for idx in cells.size():
-		if cells[idx] != EMPTY:
-			continue
-		var forced_val := -1
-		for try_val in [PLUS, MINUS]:
-			cells[idx] = try_val
-			if not is_consistent(size, cells, h_relations, v_relations):
-				forced_val = MINUS if try_val == PLUS else PLUS
+	# Cross-line quota analysis: enumerate all valid completions of each line,
+	# then filter out completions that would violate the opposing dimension's
+	# (quota or no-three) constraints.  A cell is forced when it holds the same
+	# value in every completion that survives the two-dimensional filter.
+	# This looks at two dimensions simultaneously (hence Rank 4) but performs
+	# no global speculation — it only checks the local row and column constraints
+	# for each candidate placement.
+	for r in size:
+		var step := _cross_quota_line(size, cells, h_relations, v_relations, r, true)
+		if step:
+			return step
+	for c in size:
+		var step := _cross_quota_line(size, cells, h_relations, v_relations, c, false)
+		if step:
+			return step
+	return null
+
+
+static func _cross_quota_line(
+		size: int,
+		cells: Array[int],
+		h_relations: Dictionary,
+		v_relations: Dictionary,
+		line: int,
+		is_row: bool) -> SolverStep:
+	var empties: Array[int] = []
+	for i in size:
+		var idx := line * size + i if is_row else i * size + line
+		if cells[idx] == EMPTY:
+			empties.append(i)
+	if empties.size() < 2:
+		return null
+
+	# Enumerate all completions valid for this line alone
+	var raw_completions: Array[Array] = []
+	_enum_line_completions(size, cells, h_relations, v_relations, line, is_row, empties, 0, raw_completions)
+
+	if raw_completions.size() < 2:
+		return null
+
+	# Filter: keep only completions that also satisfy each opposing-dimension line
+	var valid_completions: Array[Array] = []
+	for completion in raw_completions:
+		var ok := true
+		for i in empties.size():
+			var pos: int = empties[i]
+			var val: int = int(completion[i])
+			var idx: int = line * size + pos if is_row else pos * size + line
+			cells[idx] = val
+			# For a row, the opposing dimension is the column indexed by pos; vice-versa.
+			var opp_ok: bool
+			if is_row:
+				opp_ok = _check_partial_line(cells, size, pos, false, h_relations, v_relations)
+			else:
+				opp_ok = _check_partial_line(cells, size, pos, true, h_relations, v_relations)
 			cells[idx] = EMPTY
-			if forced_val != -1:
+			if not opp_ok:
+				ok = false
 				break
-		if forced_val != -1:
-			var r := idx / size
-			var c := idx % size
-			var af: Array[int] = [idx]
-			return SolverStep.new("Global quota/chain forces row %d col %d" % [r, c], af, forced_val, RANK_4)
+		if ok:
+			valid_completions.append(completion)
+
+	if valid_completions.size() < 2:
+		return null
+
+	# Find positions forced in all surviving completions
+	for i in empties.size():
+		var first_val: int = int(valid_completions[0][i])
+		var all_same := true
+		for completion in valid_completions:
+			if int(completion[i]) != first_val:
+				all_same = false
+				break
+		if all_same:
+			var pos: int = empties[i]
+			var target_idx: int = line * size + pos if is_row else pos * size + line
+			var af: Array[int] = [target_idx]
+			var line_type := "row" if is_row else "col"
+			return SolverStep.new(
+				"Rank-4 %s %d: cross-line forces position %d" % [line_type, line, pos],
+				af, first_val, RANK_4)
 	return null
 
 

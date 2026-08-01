@@ -6,6 +6,10 @@ extends GameScreen
 ## slow for size 10).  Cancellation is polled at each generation checkpoint so
 ## teardown always joins promptly.
 
+# Scene paths kept local until Eclipse Grid is registered in the shared collection.
+const SCENE_GAME := "res://scenes/eclipse_grid_game.tscn"
+const SCENE_MENU := "res://scenes/eclipse_grid_menu.tscn"
+
 const SIZE_LABELS: Dictionary = {4: "Easy 4×4", 6: "Medium 6×6", 8: "Hard 8×8", 10: "Expert 10×10"}
 
 # Game state
@@ -41,7 +45,7 @@ func _get_game_id() -> String:
 
 
 func _get_scene_path() -> String:
-	return Scenes.ECLIPSE_GRID_GAME
+	return SCENE_GAME
 
 
 func _get_save_adapter() -> GameSaveAdapter:
@@ -122,13 +126,19 @@ func _get_settings_snapshot() -> Dictionary:
 
 func _setup_game(saved_data: Dictionary) -> void:
 	if saved_data.is_empty():
-		# New game: use pre-generated data from background thread
+		# Restore the generation seed: begin_session() overwrites random_seed with
+		# _create_session_seed() before calling _setup_game(), so we must recover
+		# the actual gen_seed from _pending_data here.
+		var gen_seed: int = int(_pending_data.get("random_seed", 0))
+		if gen_seed != 0:
+			random_seed = gen_seed
 		logic.init_new_game(grid_size, random_seed, _pending_data)
 		_pending_data = {}
 	else:
 		logic.init_from_save(saved_data)
 	grid_size = logic.size
 	random_seed = logic.random_seed
+	board.setup(logic.size, logic.givens, logic.cells, logic.h_relations, logic.v_relations)
 	_refresh_board()
 	size_label.text = SIZE_LABELS.get(grid_size, "%d×%d" % [grid_size, grid_size])
 	_update_button_states()
@@ -205,7 +215,7 @@ func _on_generation_complete() -> void:
 		push_error("EclipseGridGameScreen: generation failed")
 		_suppress_auto_resume = true
 		return
-	random_seed = int(_pending_data.get("random_seed", 0))
+	# random_seed is restored inside _setup_game() from _pending_data["random_seed"]
 	begin_session()
 
 
@@ -313,7 +323,7 @@ func _on_back() -> void:
 	_save_current_state()
 	if not logic.is_completed:
 		_stats.set_counter("general", "current_win_streak", 0)
-	SceneTransition.navigate(Scenes.ECLIPSE_GRID_MENU)
+	SceneTransition.navigate(SCENE_MENU)
 
 
 # ---------------------------------------------------------------------------
@@ -395,7 +405,7 @@ func _show_win_dialog() -> void:
 	dialog.custom_action.connect(func(action: StringName) -> void:
 		if action == "menu":
 			dialog.queue_free()
-			SceneTransition.navigate(Scenes.ECLIPSE_GRID_MENU)
+			SceneTransition.navigate(SCENE_MENU)
 		elif action == "bookmark":
 			var ok: bool = _storage.bookmark_latest_replay()
 			dialog.dialog_text += "\n\n%s" % ("✓ Replay bookmarked!" if ok else "✗ No replay to bookmark")
@@ -404,7 +414,7 @@ func _show_win_dialog() -> void:
 
 func _restart_same_game() -> void:
 	var sz := grid_size
-	SceneTransition.navigate(Scenes.ECLIPSE_GRID_GAME, func(scene: Node) -> void:
+	SceneTransition.navigate(SCENE_GAME, func(scene: Node) -> void:
 		var p := LaunchParams.new()
 		p.option_value = sz
 		scene.launch(p)

@@ -73,13 +73,15 @@ static func generate(size: int, seed: int, cancel_check: Callable = Callable()) 
 		if not unique:
 			continue
 
-		# Step 5: Solver analysis for difficulty rank (informational only).
+		# Step 5: Analyse difficulty rank; only accept puzzles within the target rank.
 		var analysis: EclipseGridSolver.Analysis = EclipseGridSolver.analyze(
 				size, givens, h_relations, v_relations, cancel_check)
 		if cancel_check.is_valid() and cancel_check.call():
 			return {}
-		# _minimize_givens guarantees human-solvability; is_unique should be true.
-		# Accept the puzzle regardless of max_rank — size label provides difficulty context.
+		# Enforce difficulty ceiling: reject puzzles that require techniques
+		# harder than the rank corresponding to this board size.
+		if analysis.max_rank > required_rank(size):
+			continue
 
 		return {
 			"size": size,

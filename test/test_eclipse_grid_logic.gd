@@ -107,24 +107,50 @@ func test_game_completes_when_all_filled_correctly() -> void:
 
 func test_strict_mode_rejects_wrong_value() -> void:
 	logic.assistance_mode = EclipseGridLogic.ASSIST_STRICT
-	# Index 2 solution is MINUS (checkerboard: r=0,c=2 → (0+2)%2=0 → PLUS… wait)
-	# Let me check: r=0,c=2 → (0+2)%2=0 → PLUS
 	var sol := _sol4()
-	var correct_val := sol[2]  # PLUS
-	var wrong_val := MINUS if correct_val == PLUS else PLUS
+	var correct_val := sol[2]  # PLUS (r=0,c=2 → (0+2)%2=0 → PLUS)
 
-	# Force PLUS into cell first so cycle goes EMPTY→PLUS
-	# If correct_val is PLUS, cycling once gives PLUS (correct), which should pass.
-	# We need to get to the wrong value: cycle twice from EMPTY (EMPTY→PLUS→MINUS)
-	logic.cycle_cell(2)  # → PLUS
-	if correct_val == MINUS:
-		# PLUS is wrong here — should be rejected
-		assert_true(logic.cells[2] == EMPTY or logic.cells[2] == PLUS)  # depends on impl
+	# Cycling from EMPTY once: if PLUS is correct, it should be placed.
+	# If PLUS is wrong (i.e. correct_val is MINUS), the implementation advances past
+	# PLUS to MINUS automatically, so we should land on MINUS (not get rejected).
+	var result: EclipseGridLogic.SetGlyphResult = logic.cycle_cell(2)
+
+	if correct_val == PLUS:
+		# First cycle gives the correct PLUS — no rejection
+		assert_false(result.rejected)
+		assert_eq(result.new_value, PLUS)
+		# Second cycle: PLUS → wrong MINUS — should be rejected
+		var r2: EclipseGridLogic.SetGlyphResult = logic.cycle_cell(2)
+		assert_true(r2.rejected)
 	else:
-		# PLUS is correct here, try to go PLUS→MINUS (wrong)
-		var result: EclipseGridLogic.SetGlyphResult = logic.cycle_cell(2)
-		if result.new_value == MINUS:
-			assert_true(result.rejected)
+		# correct_val == MINUS: first cycle skips over wrong PLUS, lands on correct MINUS
+		assert_false(result.rejected)
+		assert_eq(result.new_value, MINUS)
+
+
+func test_strict_mode_minus_reachable_when_plus_is_wrong() -> void:
+	## Regression test for the strict-mode MINUS-trap bug:
+	## when PLUS is the wrong glyph, cycling from EMPTY must still reach MINUS
+	## without the player being stuck retrying PLUS forever.
+	var l2 := EclipseGridLogic.new()
+	# Build a puzzle where cell index 0 correct value is MINUS.
+	# Solution row 0: -, +, -, + (all MINUS at even indices for a non-checkerboard).
+	var sol: Array[int] = [MINUS, PLUS, MINUS, PLUS,
+						   PLUS, MINUS, PLUS, MINUS,
+						   MINUS, PLUS, MINUS, PLUS,
+						   PLUS, MINUS, PLUS, MINUS]
+	# Only cell 0 is empty (free to cycle)
+	var gv: Array[int] = sol.duplicate()
+	gv[0] = EMPTY
+	l2.init_from_save(_make_save_data(4, sol, gv))
+	l2.assistance_mode = EclipseGridLogic.ASSIST_STRICT
+
+	# Cell 0 solution is MINUS. First cycle (EMPTY→PLUS) is wrong.
+	# The fix must skip PLUS and land on MINUS.
+	var result: EclipseGridLogic.SetGlyphResult = l2.cycle_cell(0)
+	assert_false(result.rejected, "Correct value must not be reported as rejected")
+	assert_eq(result.new_value, MINUS, "Must skip wrong PLUS and land on correct MINUS")
+	assert_eq(l2.cells[0], MINUS, "Cell must be set to MINUS")
 
 
 func test_free_mode_allows_wrong_value() -> void:
@@ -275,3 +301,76 @@ func test_completed_save_not_resumable() -> void:
 		cells_arr.append(1)
 	var done_data := {"size": 4, "cells": cells_arr, "is_completed": true}
 	assert_false(adapter._can_resume_from(done_data))
+
+
+# ---------------------------------------------------------------------------
+# Save adapter — comprehensive validation (regression for corrupt-save crash)
+# ---------------------------------------------------------------------------
+
+func test_save_adapter_rejects_unsupported_size() -> void:
+	var adapter := EclipseGridSaveAdapter.new()
+	var cells_arr: Array = []
+	for _i in 25:
+		cells_arr.append(0)
+	# Size 5 is not a supported board size
+	var bad_data := {"size": 5, "cells": cells_arr}
+	assert_false(adapter._can_resume_from(bad_data))
+
+
+func test_save_adapter_rejects_invalid_cell_value() -> void:
+	var adapter := EclipseGridSaveAdapter.new()
+	var cells_arr: Array = []
+	for _i in 16:
+		cells_arr.append(0)
+	cells_arr[3] = 99  # invalid glyph
+	var bad_data := {"size": 4, "cells": cells_arr}
+	assert_false(adapter._can_resume_from(bad_data))
+
+
+func test_save_adapter_rejects_wrong_cells_length() -> void:
+	var adapter := EclipseGridSaveAdapter.new()
+	var cells_arr: Array = [0, 1, 0]  # too short for 4×4
+	var bad_data := {"size": 4, "cells": cells_arr}
+	assert_false(adapter._can_resume_from(bad_data))
+
+
+func test_save_adapter_rejects_invalid_relation_value() -> void:
+	var adapter := EclipseGridSaveAdapter.new()
+	var cells_arr: Array = []
+	for _i in 16:
+		cells_arr.append(0)
+	# Relation value 99 is not EQ(1) or NEQ(2)
+	var bad_data := {
+		"size": 4,
+		"cells": cells_arr,
+		"h_relations": {"0,0": 99},
+	}
+	assert_false(adapter._can_resume_from(bad_data))
+
+
+func test_save_adapter_rejects_out_of_bounds_relation_key() -> void:
+	var adapter := EclipseGridSaveAdapter.new()
+	var cells_arr: Array = []
+	for _i in 16:
+		cells_arr.append(0)
+	# Column 3 has no right neighbour in a 4×4 board — out of bounds
+	var bad_data := {
+		"size": 4,
+		"cells": cells_arr,
+		"h_relations": {"3,0": 1},
+	}
+	assert_false(adapter._can_resume_from(bad_data))
+
+
+func test_save_adapter_accepts_valid_relations() -> void:
+	var adapter := EclipseGridSaveAdapter.new()
+	var cells_arr: Array = []
+	for _i in 16:
+		cells_arr.append(0)
+	var ok_data := {
+		"size": 4,
+		"cells": cells_arr,
+		"h_relations": {"0,0": 1, "1,1": 2},
+		"v_relations": {"0,0": 2},
+	}
+	assert_true(adapter._can_resume_from(ok_data))

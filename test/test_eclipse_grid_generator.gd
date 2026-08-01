@@ -174,3 +174,31 @@ func _assert_valid_result(result: Dictionary, expected_size: int) -> void:
 	# Unique solution
 	var count: int = EclipseGridSolver.count_solutions(expected_size, givens, hr, vr, 2)
 	assert_eq(count, 1, "Puzzle must have exactly one solution")
+
+
+# ---------------------------------------------------------------------------
+# Difficulty rank enforcement (regression for unenforced max_rank)
+# ---------------------------------------------------------------------------
+
+func test_size_4_puzzle_max_rank_1() -> void:
+	## 4×4 is labelled "Easy" — the generated puzzle must be solvable with
+	## at most Rank-1 techniques.
+	for seed in [1, 7, 42, 100]:
+		var result: Dictionary = EclipseGridGenerator.generate(4, seed)
+		if result.is_empty():
+			continue
+		var max_rank: int = result.get("max_rank", 0)
+		assert_lte(max_rank, EclipseGridSolver.RANK_1,
+			"4×4 puzzle (seed %d) must not exceed Rank 1; got %d" % [seed, max_rank])
+
+
+func test_size_6_puzzle_max_rank_2() -> void:
+	## 6×6 is labelled "Medium" — the generated puzzle must be solvable with
+	## at most Rank-2 techniques.
+	for seed in [1, 7, 42, 100]:
+		var result: Dictionary = EclipseGridGenerator.generate(6, seed)
+		if result.is_empty():
+			continue
+		var max_rank: int = result.get("max_rank", 0)
+		assert_lte(max_rank, EclipseGridSolver.RANK_2,
+			"6×6 puzzle (seed %d) must not exceed Rank 2; got %d" % [seed, max_rank])
