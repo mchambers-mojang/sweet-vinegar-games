@@ -757,21 +757,29 @@ static func _line_propagate_rank3(
 # Rank 4 techniques
 # ---------------------------------------------------------------------------
 
-## Rank-4 technique: k≥3 line-completion forcing.
+## Rank-4 technique: k≥3 cross-line completion forcing.
 ##
 ## For each row (or column) that still has 3 or more empty cells after
 ## Rank-1/2/3 exhaustion, enumerates all complete assignments of those cells
-## satisfying (a) line quota, (b) no-three-consecutive, and (c) all in-line
-## relation clues (EQ / NEQ) among the k cells.  If every valid assignment
-## places the same value at some position, that cell is forced at RANK_4.
+## and filters each candidate by TWO independent constraint sets:
 ##
-## This strictly extends Rank-2 (k=2 pairs) and Rank-3 (EQ-pair patterns):
-## it considers k≥3 simultaneously, capturing NEQ constraints and multi-cell
-## interactions that lower ranks cannot see.  Enumerating the full row forces
-## a specific column value — so the deduction genuinely spans multiple
-## columns (or multiple rows for column analysis).
+##   (a) In-line: the line's own quota, no-three-consecutive, and all EQ/NEQ
+##       relation clues within the line — via _check_partial_line for the
+##       primary dimension.
 ##
-## Does NOT modify cells[].  Uses a local duplicate for in-line validation.
+##   (b) Cross-line: each assigned cell must also be consistent with its
+##       perpendicular line (quota, no-three, and adjacent relation clues in
+##       the column for row analysis; in the row for column analysis) — via a
+##       second _check_partial_line call for the perpendicular dimension.
+##       This ensures that no candidate which would immediately violate a
+##       column (or row) constraint is treated as valid.
+##
+## If every cross-line-valid assignment places the same value at some position,
+## that cell is forced at RANK_4.  The deduction genuinely spans multiple rows
+## and columns: the primary-dimension completion provides in-line candidates,
+## and the cross-dimension check filters them using perpendicular board state.
+##
+## Does NOT modify cells[].  Uses a local duplicate for validation.
 static func _global_quota_chain(
 		size: int,
 		cells: Array[int],
@@ -865,8 +873,18 @@ static func _line_completion_rank4(
 		for i in k:
 			var idx: int = line * size + empties[i] if is_row else empties[i] * size + line
 			trial[idx] = PLUS if ((combo >> i) & 1) else MINUS
-		# Validate the completed line (quota, no-three, all in-line relations).
+		# In-line validation: quota, no-three, and all in-line relation clues.
 		var ok := _check_partial_line(trial, size, line, is_row, h_relations, v_relations)
+		# Cross-line validation: each assigned cell must also satisfy the
+		# perpendicular dimension (column for row analysis, row for column
+		# analysis).  This enforces quota, no-three, and adjacent relation
+		# clues across multiple rows/columns simultaneously.
+		if ok:
+			for i in k:
+				var perp := empties[i]
+				if not _check_partial_line(trial, size, perp, not is_row, h_relations, v_relations):
+					ok = false
+					break
 		# Restore trial before using the result.
 		for i in k:
 			var idx: int = line * size + empties[i] if is_row else empties[i] * size + line

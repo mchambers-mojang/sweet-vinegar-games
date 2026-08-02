@@ -172,6 +172,11 @@ func launch(params: LaunchParams) -> void:
 	grid_size = params.option_value
 	if grid_size not in [4, 6, 8, 10]:
 		grid_size = 4
+	# Suppress the deferred _try_auto_resume() that fires after _ready().
+	# Without this, an existing save can resume while generation runs in the
+	# background and then be overwritten when begin_session() is called from
+	# _on_generation_complete().
+	_suppress_auto_resume = true
 	_gen_cancelled = false
 	_show_spinner(true)
 	_gen_thread = Thread.new()
