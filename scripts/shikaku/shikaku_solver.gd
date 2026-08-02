@@ -90,6 +90,16 @@ static func count_solutions(width: int, height: int, anchors: Dictionary, max_co
 	covered.resize(width * height)
 	covered.fill(0)
 	var entries: Array[Dictionary] = _build_entries(anchors)
+	# Static MRV: sort entries by initial candidate count so the most constrained
+	# anchors (fewest valid placements on an empty grid) are placed first.
+	# This minimises the branching factor at the root of the search tree.
+	for entry in entries:
+		var initial_rects := _enumerate_rects_for_anchor(
+			entry["pos"], entry["anchor"], width, height, covered)
+		entry["_mrv"] = initial_rects.size()
+	entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("_mrv", 9999)) < int(b.get("_mrv", 9999))
+	)
 	var count := [0]
 	var cancelled := [false]
 	_count_backtrack(width, height, entries, 0, covered, count, max_count, cancel_check, cancel_check.is_valid(), cancelled)
@@ -373,9 +383,132 @@ static func _count_backtrack(
 				break
 
 		if not conflict:
-			_count_backtrack(width, height, entries, idx + 1, covered, count, max_count, cancel_check, do_cancel, cancelled)
+			# Forward checking: before recursing, verify every remaining unplaced
+			# anchor still has at least one non-conflicting candidate.  Pruning
+			# dead-end branches here is critical for large grids with many
+			# unconstrained (shape-only) anchors that each have hundreds of
+			# candidate rectangles.
+			var feasible := true
+			for fi in range(idx + 1, entries.size()):
+				var fpos: Vector2i = entries[fi]["pos"]
+				if covered[fpos.y * width + fpos.x] != 0:
+					continue  # anchor cell already covered – skip
+				if not _has_any_feasible_candidate(fi, entries, width, height, covered):
+					feasible = false
+					break
+			if feasible:
+				_count_backtrack(width, height, entries, idx + 1, covered, count, max_count, cancel_check, do_cancel, cancelled)
 
 		_mark_covered(rect, width, covered, 0)
+
+
+## Fast feasibility check for forward-checking in the backtracker.
+## Returns true when anchor [param anchor_idx] can still be covered by at least one
+## non-conflicting rectangle given the current [param covered] state.
+## For unconstrained (shape-only) anchors when this is the only remaining
+## unconstrained anchor, computes the exact required area from the global coverage
+## constraint instead of iterating all possible areas — a much tighter check.
+static func _has_any_feasible_candidate(
+		anchor_idx: int, entries: Array[Dictionary],
+		width: int, height: int, covered: PackedByteArray) -> bool:
+	var pos: Vector2i = entries[anchor_idx]["pos"]
+	var anchor: Dictionary = entries[anchor_idx]["anchor"]
+	var anchor_area: int = int(anchor.get("area", 0))
+	var anchor_shape: int = int(anchor.get("shape", ShikakuLogic.SHAPE_ABSENT))
+
+	if anchor_area > 0:
+		# Area-constrained: only divisor pairs to check — very few.
+		for w in range(1, anchor_area + 1):
+			if anchor_area % w != 0:
+				continue
+			var h := anchor_area / w
+			if not _shape_matches(w, h, anchor_shape):
+				continue
+			if _has_placement_of_size(pos, w, h, width, height, covered, entries, anchor_idx):
+				return true
+		return false
+	else:
+		# No area constraint. Count uncovered cells and how much area the remaining
+		# area-constrained anchors will consume. If this is the only unconstrained
+		# anchor, its required area is fixed — only check that specific area.
+		var uncovered_count := 0
+		for c in covered:
+			if c == 0:
+				uncovered_count += 1
+
+		var other_unconstrained := 0
+		var fixed_area_remaining := 0
+		for k in range(entries.size()):
+			if k == anchor_idx:
+				continue
+			var kpos: Vector2i = entries[k]["pos"]
+			if covered[kpos.y * width + kpos.x] != 0:
+				continue  # already placed
+			var k_area: int = int(entries[k]["anchor"].get("area", 0))
+			if k_area > 0:
+				fixed_area_remaining += k_area
+			else:
+				other_unconstrained += 1
+
+		if other_unconstrained == 0:
+			# This is the only remaining unconstrained anchor.  Its area is
+			# exactly uncovered_cells minus the area of all future area-constrained
+			# placements.  Checking only this required area is far tighter than
+			# iterating all sizes from 1 upward and gives near-instant pruning
+			# when the shape constraint eliminates that area.
+			var required_area := uncovered_count - fixed_area_remaining
+			if required_area <= 0:
+				return false
+			for w in range(1, required_area + 1):
+				if required_area % w != 0:
+					continue
+				var h := required_area / w
+				if not _shape_matches(w, h, anchor_shape):
+					continue
+				if _has_placement_of_size(pos, w, h, width, height, covered, entries, anchor_idx):
+					return true
+			return false
+		else:
+			# Multiple unconstrained anchors remain: iterate by increasing area
+			# for fast early exit on dense grids.
+			for area in range(1, width * height + 1):
+				for w in range(1, area + 1):
+					if area % w != 0:
+						continue
+					var h := area / w
+					if not _shape_matches(w, h, anchor_shape):
+						continue
+					if _has_placement_of_size(pos, w, h, width, height, covered, entries, anchor_idx):
+						return true
+			return false
+
+
+## Returns true when a [param w]×[param h] rectangle that contains [param pos]
+## can be placed: all its cells are clear in [param covered] and it does not
+## capture any other anchor position.
+static func _has_placement_of_size(
+		pos: Vector2i, w: int, h: int,
+		width: int, height: int, covered: PackedByteArray,
+		entries: Array[Dictionary], anchor_idx: int) -> bool:
+	var min_col := maxi(0, pos.x - w + 1)
+	var max_col := mini(width - w, pos.x)
+	var min_row := maxi(0, pos.y - h + 1)
+	var max_row := mini(height - h, pos.y)
+	for r in range(min_row, max_row + 1):
+		for c in range(min_col, max_col + 1):
+			var rect := Rect2i(c, r, w, h)
+			if not _rect_is_clear(rect, width, covered):
+				continue
+			var conflict := false
+			for j in range(entries.size()):
+				if j == anchor_idx:
+					continue
+				if rect.has_point(entries[j]["pos"] as Vector2i):
+					conflict = true
+					break
+			if not conflict:
+				return true
+	return false
 
 
 ## Enumerate all candidate rectangles for a given anchor position and clue.

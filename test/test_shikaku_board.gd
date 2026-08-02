@@ -199,7 +199,10 @@ func test_add_rect_sets_rect_is_wrong_false_by_default() -> void:
 func test_refresh_error_state_marks_wrong_rects() -> void:
 	board.add_rect(Rect2i(0, 0, 2, 2))
 	board.add_rect(Rect2i(2, 0, 3, 1))
-	var wrong: Array[Rect2i] = [Rect2i(0, 0, 2, 2)]
+	# Use explicit typed-array construction: array literals are untyped in GDScript
+	# 4.6.3 and cause a silent type-mismatch through dynamic dispatch.
+	var wrong: Array[Rect2i] = []
+	wrong.append(Rect2i(0, 0, 2, 2))
 	board.refresh_error_state(wrong)
 	assert_true(board.rect_is_wrong[0], "Rect matching wrong list must be flagged")
 	assert_false(board.rect_is_wrong[1], "Rect not in wrong list must not be flagged")
@@ -207,16 +210,21 @@ func test_refresh_error_state_marks_wrong_rects() -> void:
 
 func test_refresh_error_state_clears_previous_errors() -> void:
 	board.add_rect(Rect2i(0, 0, 2, 2))
-	board.refresh_error_state([Rect2i(0, 0, 2, 2)])
+	var wrong: Array[Rect2i] = []
+	wrong.append(Rect2i(0, 0, 2, 2))
+	board.refresh_error_state(wrong)
 	assert_true(board.rect_is_wrong[0])
-	board.refresh_error_state([])
+	var empty: Array[Rect2i] = []
+	board.refresh_error_state(empty)
 	assert_false(board.rect_is_wrong[0], "After clearing wrong list, rect must no longer be flagged")
 
 
 func test_remove_rect_removes_from_error_tracking() -> void:
 	board.add_rect(Rect2i(0, 0, 2, 2))
 	board.add_rect(Rect2i(2, 0, 3, 1))
-	board.refresh_error_state([Rect2i(0, 0, 2, 2)])
+	var wrong: Array[Rect2i] = []
+	wrong.append(Rect2i(0, 0, 2, 2))
+	board.refresh_error_state(wrong)
 	board.remove_rect(0)
 	assert_eq(board.rect_is_wrong.size(), 1,
 		"rect_is_wrong must be kept in sync with placed_rects after remove")
@@ -224,7 +232,9 @@ func test_remove_rect_removes_from_error_tracking() -> void:
 
 func test_setup_clears_error_state() -> void:
 	board.add_rect(Rect2i(0, 0, 2, 2))
-	board.refresh_error_state([Rect2i(0, 0, 2, 2)])
+	var wrong: Array[Rect2i] = []
+	wrong.append(Rect2i(0, 0, 2, 2))
+	board.refresh_error_state(wrong)
 	board.setup(5, 5, {Vector2i(1, 1): {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT}})
 	assert_true(board.rect_is_wrong.is_empty(),
 		"rect_is_wrong must be cleared on setup()")
