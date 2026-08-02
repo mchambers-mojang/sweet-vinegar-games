@@ -735,3 +735,50 @@ func test_rank4_reachable_through_analyze() -> void:
 			assert_eq(s.result_value, MINUS, "Rank-4 forces col 1 = MINUS")
 			break
 
+
+# ---------------------------------------------------------------------------
+# Fix: Rank-4 cross-line (perpendicular-dimension) filtering
+# ---------------------------------------------------------------------------
+
+func test_rank4_cross_line_filters_column_quota_directly() -> void:
+	## Regression for _line_completion_rank4 cross-line filtering.
+	##
+	## Board 6×6 (half=3):
+	##   col 0 filled cells: (0,0)=+, (1,0)=+, (2,0)=−, (4,0)=+  →  plus_fixed=3=half.
+	##   row 3: [_, _, _, −, +, −]  →  empties at cols {0,1,2}, plus_needed=2, minus_needed=1.
+	##   No h_rels in row 3.
+	##
+	## In-line check alone: all three combos (+,+,−), (+,−,+), (−,+,+) pass quota and
+	## no-three, so every position has both PLUS and MINUS as candidates → no step.
+	##
+	## Cross-line check for col 0: placing PLUS at (3,0) gives col 0 plus_count=4 > half=3
+	## → quota overflow → both (+,+,−) and (+,−,+) are rejected.  Only (−,+,+) survives.
+	## → (3,0)=MINUS is forced at RANK_4.
+	##
+	## Note: through analyze(), Rank-1 _quota_completion would preempt this by forcing
+	## the col-0 empties to MINUS before Rank-4 runs.  This test calls _global_quota_chain
+	## directly to verify the cross-line filtering code path is exercised and correct.
+	## Removing the cross-line check causes this test to return null (no step found).
+	var cells: Array[int] = [
+		PLUS,  EMPTY, EMPTY, EMPTY, EMPTY, EMPTY,  # row 0: (0,0)=+
+		PLUS,  EMPTY, EMPTY, EMPTY, EMPTY, EMPTY,  # row 1: (1,0)=+
+		MINUS, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY,  # row 2: (2,0)=−
+		EMPTY, EMPTY, EMPTY, MINUS, PLUS,  MINUS,  # row 3: empties at cols 0,1,2
+		PLUS,  EMPTY, EMPTY, EMPTY, EMPTY, EMPTY,  # row 4: (4,0)=+
+		EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY,  # row 5: all empty
+	]
+	# Col 0 summary: rows 0,1,4=PLUS, row 2=MINUS, rows 3,5=EMPTY → plus_fixed=3=half.
+	var snapshot: Array[int] = cells.duplicate()
+	var step: EclipseGridSolver.SolverStep = \
+		EclipseGridSolver._global_quota_chain(6, cells, {}, {})
+	assert_eq(cells, snapshot, "_global_quota_chain must not mutate cells[]")
+	assert_not_null(step,
+		"Cross-line quota overflow must filter the two PLUS-at-col-0 combos, " +
+		"leaving only (−,+,+) and forcing (3,0)=MINUS at RANK_4")
+	if step != null:
+		assert_eq(step.rank, EclipseGridSolver.RANK_4, "Step must be labeled RANK_4")
+		assert_eq(step.affected_cells[0], 18,
+			"Flat index 18 = row 3, col 0 (3*6+0)")
+		assert_eq(step.result_value, MINUS,
+			"Cross-line filtering forces (3,0)=MINUS: placing PLUS would overflow col 0 quota")
+
