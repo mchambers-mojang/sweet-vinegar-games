@@ -472,24 +472,25 @@ func test_rank4_propagates_rank2_in_trial() -> void:
 
 func test_rank4_step_has_rank4_label() -> void:
 	## If _global_quota_chain returns a step, it must be labeled RANK_4.
-	## Build a nearly complete 6×6 where Rank-1 through Rank-3 are all
-	## exhausted but one cell can be forced by contradiction.
-	## Row/col analysis alone cannot determine index 14 (row 2, col 2).
+	## 6×6 board: row 0 = [+, _, _, _, +, -] with NEQ clue between cols 2 and 3.
+	## Rows 1–5 are fully filled (alternating + Rank-1/2/3 stall on row 0's 3 empties).
+	## With NEQ(col2,col3): combo (col1=+,col2=−,col3=−) violates NEQ → filtered.
+	## The two remaining combos both place MINUS at col 1 → Rank-4 forces col 1 = MINUS.
 	var cells: Array[int] = [
+		PLUS,  EMPTY, EMPTY, EMPTY, PLUS,  MINUS,
 		PLUS,  MINUS, PLUS,  MINUS, PLUS,  MINUS,
 		MINUS, PLUS,  MINUS, PLUS,  MINUS, PLUS,
-		PLUS,  MINUS, EMPTY, MINUS, PLUS,  MINUS,
-		MINUS, PLUS,  MINUS, PLUS,  MINUS, PLUS,
 		PLUS,  MINUS, PLUS,  MINUS, PLUS,  MINUS,
 		MINUS, PLUS,  MINUS, PLUS,  MINUS, PLUS,
+		MINUS, EMPTY, EMPTY, EMPTY, MINUS, PLUS,
 	]
+	var h_rels := { Vector2i(2, 0): NEQ }
 	var step: EclipseGridSolver.SolverStep = \
-		EclipseGridSolver._global_quota_chain(6, cells, {}, {})
-	# Exactly one empty cell: Rank-4 chain must force it.
-	assert_not_null(step, "_global_quota_chain must find a forced step for 1 empty cell")
+		EclipseGridSolver._global_quota_chain(6, cells, h_rels, {})
+	assert_not_null(step, "_global_quota_chain must find a forced step for this NEQ board")
 	if step != null:
 		assert_eq(step.rank, EclipseGridSolver.RANK_4,
-			"Chain step must be labeled RANK_4")
+			"Step must be labeled RANK_4")
 
 
 func test_rank3_skips_line_without_inline_relations() -> void:
@@ -660,26 +661,77 @@ func test_rank3_pattern_c_eq_quota_overflow() -> void:
 
 
 func test_rank4_non_speculative_read_only() -> void:
-	## _global_quota_chain must be a read-only direct check: no cells.duplicate(),
-	## no trial placements, no propagation loops.  Verify: (a) cells[] is not
-	## mutated, and (b) the function forces the empty cell via row-quota check alone.
-	## Row 2: [+,-,_,-,+,-] → minus=3=half → MINUS blocked → force PLUS.
+	## _global_quota_chain must not mutate cells[]; it uses a local duplicate
+	## for trial validation only.  Also verify it returns the correct forced step.
+	## Same board as test_rank4_step_has_rank4_label: row 0 has 3 empties and a
+	## NEQ clue between cols 2 and 3.  All valid in-line completions agree that
+	## col 1 must be MINUS → step at flat index 1, value MINUS, rank RANK_4.
 	var cells: Array[int] = [
+		PLUS,  EMPTY, EMPTY, EMPTY, PLUS,  MINUS,
 		PLUS,  MINUS, PLUS,  MINUS, PLUS,  MINUS,
 		MINUS, PLUS,  MINUS, PLUS,  MINUS, PLUS,
-		PLUS,  MINUS, EMPTY, MINUS, PLUS,  MINUS,
-		MINUS, PLUS,  MINUS, PLUS,  MINUS, PLUS,
 		PLUS,  MINUS, PLUS,  MINUS, PLUS,  MINUS,
 		MINUS, PLUS,  MINUS, PLUS,  MINUS, PLUS,
+		MINUS, EMPTY, EMPTY, EMPTY, MINUS, PLUS,
 	]
+	var h_rels := { Vector2i(2, 0): NEQ }
 	var snapshot: Array[int] = cells.duplicate()
 	var step: EclipseGridSolver.SolverStep = \
-		EclipseGridSolver._global_quota_chain(6, cells, {}, {})
+		EclipseGridSolver._global_quota_chain(6, cells, h_rels, {})
 	assert_eq(cells, snapshot,
-		"_global_quota_chain must not modify cells[] (non-speculative, read-only)")
-	assert_not_null(step, "Read-only row-quota check must detect blocked candidate")
+		"_global_quota_chain must not modify cells[] (uses local trial copy)")
+	assert_not_null(step, "Must detect the forced MINUS at col 1 of row 0")
 	if step != null:
 		assert_eq(step.rank, EclipseGridSolver.RANK_4, "Must be RANK_4")
-		assert_eq(step.affected_cells[0], 14, "flat index 14 = row 2, col 2")
-		assert_eq(step.result_value, PLUS,
-			"MINUS blocked by row quota → force PLUS")
+		assert_eq(step.affected_cells[0], 1, "flat index 1 = row 0, col 1")
+		assert_eq(step.result_value, MINUS,
+			"NEQ(col2,col3) eliminates the combo placing PLUS at col1 → force MINUS")
+
+
+func test_rank4_reachable_through_analyze() -> void:
+	## End-to-end regression: analyze() must reach _global_quota_chain and emit
+	## at least one RANK_4 step for a board where Rank-1, 2, and 3 all stall.
+	##
+	## 6×6 board, half=3.
+	## Row 0: [+, _, _, _, +, -]   — 3 empties at cols 1/2/3, plus_needed=1, minus_needed=2.
+	## Rows 1–5: fully filled alternating rows (no Rank-1/2/3 deductions possible).
+	## h_relations: NEQ at Vector2i(2, 0) links col 2 and col 3 of row 0.
+	##
+	## Rank-1 check: row 0 has 3 empties, quota not full → null. ✓
+	## Rank-2 combined-local: each valid k=2 sub-pair leaves at least 2 valid assignments
+	##   (the NEQ only matters when both NEQ endpoints are in the combo) → null. ✓
+	## Rank-3 pattern: NEQ clue, not EQ → Patterns A/B/C do not apply → null. ✓
+	## Rank-4: enumerate all 2^3=8 combos with n_plus=1.
+	##   combo (col1=+,col2=−,col3=−): NEQ(col2,col3)=(−,−) → same value → invalid.
+	##   combo (col1=−,col2=+,col3=−): NEQ=(+,−) → valid.
+	##   combo (col1=−,col2=−,col3=+): NEQ=(−,+) → valid.
+	##   Both valid combos have col1=MINUS → forced. Step: index 1, MINUS, RANK_4. ✓
+	var cells: Array[int] = [
+		PLUS,  EMPTY, EMPTY, EMPTY, PLUS,  MINUS,
+		PLUS,  MINUS, PLUS,  MINUS, PLUS,  MINUS,
+		MINUS, PLUS,  MINUS, PLUS,  MINUS, PLUS,
+		PLUS,  MINUS, PLUS,  MINUS, PLUS,  MINUS,
+		MINUS, PLUS,  MINUS, PLUS,  MINUS, PLUS,
+		MINUS, EMPTY, EMPTY, EMPTY, MINUS, PLUS,
+	]
+	var h_rels := { Vector2i(2, 0): NEQ }
+	var analysis: EclipseGridSolver.Analysis = EclipseGridSolver.analyze(
+			6, cells, h_rels, {})
+	assert_true(analysis.steps.size() > 0,
+		"analyze() must produce at least one step")
+	var found_rank4 := false
+	for step_var in analysis.steps:
+		var s: EclipseGridSolver.SolverStep = step_var
+		assert_gte(s.rank, EclipseGridSolver.RANK_1, "All steps must have rank >= 1")
+		assert_lte(s.rank, EclipseGridSolver.RANK_4, "All steps must have rank <= 4")
+		if s.rank == EclipseGridSolver.RANK_4:
+			found_rank4 = true
+	assert_true(found_rank4, "At least one step must be labeled RANK_4")
+	# Verify the first Rank-4 step forces row 0 col 1 = MINUS.
+	for step_var in analysis.steps:
+		var s: EclipseGridSolver.SolverStep = step_var
+		if s.rank == EclipseGridSolver.RANK_4:
+			assert_eq(s.affected_cells[0], 1, "First Rank-4 step at flat index 1 (row 0, col 1)")
+			assert_eq(s.result_value, MINUS, "Rank-4 forces col 1 = MINUS")
+			break
+

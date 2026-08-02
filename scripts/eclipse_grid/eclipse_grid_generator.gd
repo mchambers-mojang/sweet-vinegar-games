@@ -15,18 +15,20 @@ const EQ    := EclipseGridSolver.EQ
 const NEQ   := EclipseGridSolver.NEQ
 
 ## Maximum attempts to find an acceptable puzzle per call.
+## Expert (10×10) puzzles require Rank-4 reasoning, which occurs less
+## frequently; allow more attempts so generation succeeds reliably.
 const MAX_ATTEMPTS := 30
+const MAX_ATTEMPTS_EXPERT := 100
 
 
 ## Required maximum solver rank for each size.
-## Size 4 → rank 1, size 6 → rank 2, size 8/10 → rank 3.
-## All four tiers use only non-speculative deduction rules; Expert (10×10)
-## achieves its higher difficulty through board size rather than a higher rank.
+## Size 4 → rank 1, size 6 → rank 2, size 8 → rank 3, size 10 → rank 4.
 static func required_rank(size: int) -> int:
 	match size:
 		4:  return 1
 		6:  return 2
-		_:  return 3
+		8:  return 3
+		_:  return 4
 
 
 ## Generate a puzzle.
@@ -40,7 +42,7 @@ static func generate(size: int, seed: int, cancel_check: Callable = Callable()) 
 	# Precompute valid rows once for this size.
 	var valid_rows: Array[Array] = _get_valid_rows(size)
 
-	for _attempt in MAX_ATTEMPTS:
+	for _attempt in (MAX_ATTEMPTS_EXPERT if size >= 10 else MAX_ATTEMPTS):
 		if cancel_check.is_valid() and cancel_check.call():
 			return {}
 

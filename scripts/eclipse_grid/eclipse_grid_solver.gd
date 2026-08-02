@@ -757,106 +757,144 @@ static func _line_propagate_rank3(
 # Rank 4 techniques
 # ---------------------------------------------------------------------------
 
-## Rank-4 technique: direct cross-dimension feasibility.
+## Rank-4 technique: k≥3 line-completion forcing.
 ##
-## For each empty cell (r, c) and each candidate value V, reads the current
-## board state to check whether V is immediately blocked by row quota, column
-## quota, row no-three, column no-three, or an adjacent relation clue.
-## If one candidate is blocked the other is forced at RANK_4.
-## Does NOT modify cells[] and makes no trial placements.
+## For each row (or column) that still has 3 or more empty cells after
+## Rank-1/2/3 exhaustion, enumerates all complete assignments of those cells
+## satisfying (a) line quota, (b) no-three-consecutive, and (c) all in-line
+## relation clues (EQ / NEQ) among the k cells.  If every valid assignment
+## places the same value at some position, that cell is forced at RANK_4.
+##
+## This strictly extends Rank-2 (k=2 pairs) and Rank-3 (EQ-pair patterns):
+## it considers k≥3 simultaneously, capturing NEQ constraints and multi-cell
+## interactions that lower ranks cannot see.  Enumerating the full row forces
+## a specific column value — so the deduction genuinely spans multiple
+## columns (or multiple rows for column analysis).
+##
+## Does NOT modify cells[].  Uses a local duplicate for in-line validation.
 static func _global_quota_chain(
 		size: int,
 		cells: Array[int],
 		h_relations: Dictionary,
 		v_relations: Dictionary) -> SolverStep:
 	var half := size / 2
+	# Row analysis: lines with 3 or more empty cells.
 	for r in size:
+		var empties: Array[int] = []
 		for c in size:
-			var idx := r * size + c
-			if cells[idx] != EMPTY:
-				continue
-			for v in [PLUS, MINUS]:
-				if _is_blocked(size, cells, h_relations, v_relations, half, r, c, v):
-					var forced_v: int = _opposite(v)
-					var af: Array[int] = [idx]
-					return SolverStep.new(
-						"Rank-4 (%d,%d) cannot be %s" % [r, c, "+" if v == PLUS else "-"],
-						af, forced_v, RANK_4)
+			if cells[r * size + c] == EMPTY:
+				empties.append(c)
+		if empties.size() < 3:
+			continue
+		var step := _line_completion_rank4(
+				size, cells, h_relations, v_relations, r, empties, true, half)
+		if step:
+			return step
+	# Column analysis: lines with 3 or more empty cells.
+	for c in size:
+		var empties: Array[int] = []
+		for r in size:
+			if cells[r * size + c] == EMPTY:
+				empties.append(r)
+		if empties.size() < 3:
+			continue
+		var step := _line_completion_rank4(
+				size, cells, h_relations, v_relations, c, empties, false, half)
+		if step:
+			return step
 	return null
 
 
-## Returns true if placing value v at (r, c) is immediately blocked by quota,
-## no-three, or an adjacent relation clue — reads cells[] without modifying it.
-static func _is_blocked(
+## Enumerate all valid in-line complete assignments for a line's k empty
+## cells; return a forced step if all valid assignments agree on one cell.
+##
+## [param line]    row (is_row=true) or column (is_row=false) index
+## [param empties] indices of empty cells within the line, in order
+## [param is_row]  direction of enumeration
+##
+## Validity of a candidate assignment is determined by _check_partial_line,
+## which validates quota, no-three, and ALL in-line relation clues between
+## the now-filled cells.  Because all k empties are filled before checking,
+## the line is complete and every relation clue in it is evaluated.
+##
+## Capped at k≤10 (2^10 = 1024 combos) to bound work; returns null for
+## wider lines.  Does NOT modify cells[].
+static func _line_completion_rank4(
 		size: int,
 		cells: Array[int],
 		h_relations: Dictionary,
 		v_relations: Dictionary,
-		half: int,
-		r: int,
-		c: int,
-		v: int) -> bool:
-	# Row quota
-	var row_v := 0
+		line: int,
+		empties: Array[int],
+		is_row: bool,
+		half: int) -> SolverStep:
+	var k := empties.size()
+	if k > 10:
+		return null
+	# Count the quota already satisfied by fixed (non-empty) cells.
+	var plus_fixed := 0
+	var minus_fixed := 0
 	for i in size:
-		if cells[r * size + i] == v:
-			row_v += 1
-	if row_v + 1 > half:
-		return true
-
-	# Column quota
-	var col_v := 0
-	for i in size:
-		if cells[i * size + c] == v:
-			col_v += 1
-	if col_v + 1 > half:
-		return true
-
-	# Row no-three
-	var rl  := c >= 1         and cells[r * size + c - 1] == v
-	var rr  := c + 1 < size   and cells[r * size + c + 1] == v
-	var rl2 := c >= 2         and cells[r * size + c - 2] == v
-	var rr2 := c + 2 < size   and cells[r * size + c + 2] == v
-	if (rl and rl2) or (rr and rr2) or (rl and rr):
-		return true
-
-	# Column no-three
-	var cu  := r >= 1         and cells[(r - 1) * size + c] == v
-	var cd  := r + 1 < size   and cells[(r + 1) * size + c] == v
-	var cu2 := r >= 2         and cells[(r - 2) * size + c] == v
-	var cd2 := r + 2 < size   and cells[(r + 2) * size + c] == v
-	if (cu and cu2) or (cd and cd2) or (cu and cd):
-		return true
-
-	# Horizontal relation clues
-	if c >= 1:
-		var rel_l: int = h_relations.get(Vector2i(c - 1, r), 0)
-		if rel_l != 0 and cells[r * size + c - 1] != EMPTY:
-			var lv: int = cells[r * size + c - 1]
-			if (rel_l == EQ and lv != v) or (rel_l == NEQ and lv == v):
-				return true
-	if c + 1 < size:
-		var rel_r: int = h_relations.get(Vector2i(c, r), 0)
-		if rel_r != 0 and cells[r * size + c + 1] != EMPTY:
-			var rv: int = cells[r * size + c + 1]
-			if (rel_r == EQ and rv != v) or (rel_r == NEQ and rv == v):
-				return true
-
-	# Vertical relation clues
-	if r >= 1:
-		var rel_u: int = v_relations.get(Vector2i(c, r - 1), 0)
-		if rel_u != 0 and cells[(r - 1) * size + c] != EMPTY:
-			var uv: int = cells[(r - 1) * size + c]
-			if (rel_u == EQ and uv != v) or (rel_u == NEQ and uv == v):
-				return true
-	if r + 1 < size:
-		var rel_d: int = v_relations.get(Vector2i(c, r), 0)
-		if rel_d != 0 and cells[(r + 1) * size + c] != EMPTY:
-			var dv: int = cells[(r + 1) * size + c]
-			if (rel_d == EQ and dv != v) or (rel_d == NEQ and dv == v):
-				return true
-
-	return false
+		var v: int = cells[line * size + i] if is_row else cells[i * size + line]
+		if v == PLUS:
+			plus_fixed += 1
+		elif v == MINUS:
+			minus_fixed += 1
+	var plus_needed  := half - plus_fixed
+	var minus_needed := half - minus_fixed
+	if plus_needed < 0 or minus_needed < 0 or plus_needed + minus_needed != k:
+		return null
+	# Track which values appear across all valid assignments per position.
+	var can_plus:  Array[bool] = []
+	var can_minus: Array[bool] = []
+	for _i in k:
+		can_plus.append(false)
+		can_minus.append(false)
+	# Use a local copy so cells[] is never modified.
+	var trial: Array[int] = cells.duplicate()
+	var total := 1 << k
+	for combo in total:
+		# Reject assignments whose PLUS count is wrong.
+		var n_plus := 0
+		for i in k:
+			if (combo >> i) & 1:
+				n_plus += 1
+		if n_plus != plus_needed:
+			continue
+		# Place this assignment into the trial copy.
+		for i in k:
+			var idx: int = line * size + empties[i] if is_row else empties[i] * size + line
+			trial[idx] = PLUS if ((combo >> i) & 1) else MINUS
+		# Validate the completed line (quota, no-three, all in-line relations).
+		var ok := _check_partial_line(trial, size, line, is_row, h_relations, v_relations)
+		# Restore trial before using the result.
+		for i in k:
+			var idx: int = line * size + empties[i] if is_row else empties[i] * size + line
+			trial[idx] = EMPTY
+		if not ok:
+			continue
+		# Record which values this valid assignment uses.
+		for i in k:
+			if (combo >> i) & 1:
+				can_plus[i] = true
+			else:
+				can_minus[i] = true
+	# Return the first position forced to a single value.
+	var ltype := "row" if is_row else "col"
+	for i in k:
+		if can_plus[i] and not can_minus[i]:
+			var idx: int = line * size + empties[i] if is_row else empties[i] * size + line
+			var af: Array[int] = [idx]
+			return SolverStep.new(
+				"Rank-4 %s %d pos %d: all valid completions force PLUS" % [ltype, line, empties[i]],
+				af, PLUS, RANK_4)
+		if can_minus[i] and not can_plus[i]:
+			var idx: int = line * size + empties[i] if is_row else empties[i] * size + line
+			var af: Array[int] = [idx]
+			return SolverStep.new(
+				"Rank-4 %s %d pos %d: all valid completions force MINUS" % [ltype, line, empties[i]],
+				af, MINUS, RANK_4)
+	return null
 
 
 # ---------------------------------------------------------------------------
