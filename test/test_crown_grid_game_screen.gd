@@ -355,6 +355,9 @@ func test_on_hint_records_and_replays_correctly() -> void:
 
 	assert_false(hint_events.is_empty(),
 			"_on_hint() must record a hint_applied event")
+	if hint_events.is_empty():
+		screen.free()
+		return
 	var hint_payload: Dictionary = hint_events[0]["payload"]
 	assert_eq(hint_payload.get("col", -1), 0,
 			"hint_applied col must be 0 (crown position in row 0)")

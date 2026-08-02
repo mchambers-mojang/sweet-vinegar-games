@@ -31,11 +31,9 @@ const TIER_SIZES := {
 }
 
 # Required minimum rank per tier.
-# TIER_MEDIUM accepts rank 1 or 2: the 7x7 board size itself lifts difficulty
-# above Easy, so we do not also require a rank-2 reasoning step.
 const TIER_MIN_RANK := {
 	TIER_EASY: CrownGridSolver.RANK_SINGLE,
-	TIER_MEDIUM: CrownGridSolver.RANK_SINGLE,
+	TIER_MEDIUM: CrownGridSolver.RANK_COMBINED,
 	TIER_HARD: CrownGridSolver.RANK_LOCKED,
 	TIER_EXPERT: CrownGridSolver.RANK_CHAIN,  # must require at least one rank-4 step
 }
