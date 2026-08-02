@@ -233,3 +233,29 @@ func test_count_solutions_non_unique() -> void:
 	var count := ShikakuSolver.count_solutions(4, 4, anchors, 2)
 	# May have 1 or 2+ solutions depending on layout; just verify it runs.
 	assert_true(count >= 1)
+
+
+# ---------------------------------------------------------------------------
+# Regression: exhaustive enumeration must find large required rectangles
+# ---------------------------------------------------------------------------
+
+func test_count_solutions_exhaustive_finds_large_required_rect() -> void:
+	# 5×2 grid (10 cells) with a single SHAPE_WIDE anchor at (2, 0).
+	# The only valid partition uses a 5×2 rectangle (area=10, WIDE since 5>2).
+	# A capped enumerator (max_area_hint=8) would exclude area-10 candidates
+	# and return 0; exhaustive enumeration must return 1.
+	var anchors := {
+		Vector2i(2, 0): {"area": 0, "shape": ShikakuLogic.SHAPE_WIDE},
+	}
+	var count := ShikakuSolver.count_solutions(5, 2, anchors, 2)
+	assert_eq(count, 1, "count_solutions must find the unique 5×2 solution despite area > 8")
+
+
+func test_is_human_solvable_with_large_required_rect() -> void:
+	# Same 5×2 grid: the SHAPE_WIDE anchor has exactly one candidate (5×2).
+	# is_human_solvable must detect the forced placement and return true.
+	var anchors := {
+		Vector2i(2, 0): {"area": 0, "shape": ShikakuLogic.SHAPE_WIDE},
+	}
+	assert_true(ShikakuSolver.is_human_solvable(5, 2, anchors),
+		"is_human_solvable must place the forced 5×2 WIDE rect (area > old cap of 8)")

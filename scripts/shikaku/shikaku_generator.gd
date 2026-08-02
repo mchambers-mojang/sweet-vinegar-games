@@ -57,12 +57,12 @@ static func generate(width: int, height: int, seed: int = -1, rule_set: int = Sh
 				return {}
 			continue
 		var anchors := _derive_standard_anchors(solution, rng)
-		var n := ShikakuSolver.count_solutions(width, height, anchors, 2, cancel_check, max_area)
+		var n := ShikakuSolver.count_solutions(width, height, anchors, 2, cancel_check)
 		if n == -1:
 			return {}
 		if n != 1:
 			continue
-		if not ShikakuSolver.is_human_solvable(width, height, anchors, cancel_check, max_area):
+		if not ShikakuSolver.is_human_solvable(width, height, anchors, cancel_check):
 			if cancel_check.is_valid() and cancel_check.call():
 				return {}
 			continue
@@ -94,7 +94,7 @@ static func _generate_shapes(width: int, height: int, rng: RandomNumberGenerator
 		# not human-solvable (and therefore cannot be minimised safely), or when cancelled.
 		# On success it guarantees the returned anchors dict is human-solvable, which
 		# also implies uniqueness (forced placements lead to exactly one solution).
-		var anchors := _derive_shapes_anchors(solution, rng, width, height, cancel_check, max_area)
+		var anchors := _derive_shapes_anchors(solution, rng, width, height, cancel_check)
 		if anchors.is_empty():
 			if cancel_check.is_valid() and cancel_check.call():
 				return {}
@@ -125,14 +125,10 @@ static func _derive_standard_anchors(solution: Array[Rect2i], rng: RandomNumberG
 ## preserving human-solvability (which implies a unique solution).
 ## Using is_human_solvable (O(linear propagation)) instead of count_solutions
 ## (O(exponential backtracking)) for each minimization step keeps generation fast.
-## [param max_area] is passed as max_area_hint to is_human_solvable so that
-## unconstrained-anchor candidate enumeration is capped at the partition's
-## maximum rectangle area — dramatically reducing per-call cost on large grids.
 ## Returns {} if the initial full-clue puzzle is not human-solvable, or if cancelled.
 static func _derive_shapes_anchors(
 		solution: Array[Rect2i], rng: RandomNumberGenerator,
-		width: int, height: int, cancel_check: Callable = Callable(),
-		max_area: int = 8) -> Dictionary:
+		width: int, height: int, cancel_check: Callable = Callable()) -> Dictionary:
 	# First pass: assign positions and full area+shape clues.
 	var anchor_data: Array[Dictionary] = []
 	for rect in solution:
@@ -158,7 +154,7 @@ static func _derive_shapes_anchors(
 	# Human-solvability implies uniqueness (forced placements yield exactly one
 	# solution), so this replaces the expensive count_solutions initial check.
 	# If the initial combined puzzle is not human-solvable, reject this partition.
-	if not ShikakuSolver.is_human_solvable(width, height, anchors, cancel_check, max_area):
+	if not ShikakuSolver.is_human_solvable(width, height, anchors, cancel_check):
 		return {}
 
 	# Second pass: try to minimize each anchor.
@@ -176,14 +172,14 @@ static func _derive_shapes_anchors(
 		if orig_shape != ShikakuLogic.SHAPE_ABSENT and orig_shape != ShikakuLogic.SHAPE_ANY:
 			var test_anchors := anchors.duplicate()
 			test_anchors[pos] = {"area": 0, "shape": orig_shape}
-			if ShikakuSolver.is_human_solvable(width, height, test_anchors, cancel_check, max_area):
+			if ShikakuSolver.is_human_solvable(width, height, test_anchors, cancel_check):
 				anchors[pos] = {"area": 0, "shape": orig_shape}
 				continue
 
 		# Try area-only (drop shape).
 		var test_anchors_ao := anchors.duplicate()
 		test_anchors_ao[pos] = {"area": orig_area, "shape": ShikakuLogic.SHAPE_ABSENT}
-		if ShikakuSolver.is_human_solvable(width, height, test_anchors_ao, cancel_check, max_area):
+		if ShikakuSolver.is_human_solvable(width, height, test_anchors_ao, cancel_check):
 			anchors[pos] = {"area": orig_area, "shape": ShikakuLogic.SHAPE_ABSENT}
 			continue
 
