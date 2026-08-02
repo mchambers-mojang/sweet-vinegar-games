@@ -182,7 +182,7 @@ static func _derive_shapes_anchors(
 		var orig_area: int = anchor_data[i]["area"]
 		var orig_shape: int = anchor_data[i]["shape"]
 		# Save originals so we can restore if both minimisations fail.
-		var orig_anchor := entries[i]["anchor"]
+		var orig_anchor: Dictionary = entries[i]["anchor"]
 		var orig_cands: Array = base_candidates[i]
 
 		# Try shape-only (drop area).
