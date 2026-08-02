@@ -784,54 +784,90 @@ func test_rank4_cross_line_filters_column_quota_directly() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Fix: Rank-4 genuine cross-line column no-three — reachable through analyze()
+# Fix: Rank-4 genuine cross-line through analyze() — perpendicular cascade
 # ---------------------------------------------------------------------------
 
-func test_rank4_column_nothree_reachable_through_analyze() -> void:
-	## Regression: Rank-4 column k=4 no-three elimination must be reachable through
-	## the full analyze() pipeline where Ranks 1, 2, and 3 all stall first.
+func test_rank4_perpendicular_cascade_through_analyze() -> void:
+	## Regression: a RANK_4 forced deduction that requires the perpendicular
+	## quota-cascade check (_check_perp_feasibility) and is reachable through
+	## analyze() with Ranks 1, 2, and 3 all stalling first.
 	##
-	## 6×6 board (half=3), no relation clues:
-	##   Row 0: [−, +, −, +, −, +]  (complete)
-	##   Row 1: [_, +, −, −, +, _]  (empties at c0/c5; 2+/2− in c1–c4)
-	##   Row 2: [_, −, +, +, −, _]  (empties at c0/c5; 2+/2− in c1–c4)
-	##   Row 3: [_, +, −, −, +, _]  (empties at c0/c5)
-	##   Row 4: [_, −, +, +, −, _]  (empties at c0/c5)
-	##   Row 5: [−, −, +, −, +, +]  (complete)
+	## 6×6 board (half=3); v_rel NEQ at (col=1, rows 3–4):
+	##   Row 0: [E, −, E, E, E, E]
+	##   Row 1: [E, +, E, E, E, E]
+	##   Row 2: [E, E, E, −, +, +]  ← empties at c0/c1/c2; plus_fixed=2
+	##   Row 3: [E, E, E, E, E, E]
+	##   Row 4: [E, E, E, E, E, E]
+	##   Row 5: [E, +, E, E, E, E]
 	##
-	## Column 0: rows 0,5=MINUS; rows 1–4=EMPTY; plus_fixed=0,minus_fixed=2 → need 3+/1−.
-	## Column 5: rows 0,5=PLUS;  rows 1–4=EMPTY; plus_fixed=2,minus_fixed=0 → need 1+/3−.
-	## Columns 1–4: fully filled with no empties.
+	## Col 1: fixed row0=−, row1=+, row5=+; empties rows 2/3/4.
+	##   plus_fixed=2, minus_fixed=1; needs 1+/2−.
+	##   v_rel NEQ between rows 3 and 4 of col 1.
 	##
 	## Why Ranks 1–3 all stall:
-	##   Rank-1 quota: col 0 has 0+/2−, col 5 has 2+/0− — neither equals half=3.
-	##   Rank-1 adjacent-pair/sandwich: every EMPTY neighbour of an existing pair is
-	##     already non-empty; no EMPTY cell is sandwiched between equal non-empty values.
-	##   Rank-2 combined-local: each 2-empty row allows (+,−) and (−,+) — no consensus.
-	##   Rank-3 pattern: no EQ/NEQ clues — guard fires immediately → null.
+	##   Rank-1 quota: no row or column has plus=half or minus=half. ✓
+	##   Rank-1 adjacent-pair: col4/col5 pair in row 2 (both PLUS) has no empty
+	##     neighbour (col3=MINUS left, col6 OOB right); no other pairs. ✓
+	##   Rank-1 sandwich/direct-relation: no (V,E,V) patterns; v_rel NEQ has
+	##     both endpoints empty. ✓
+	##   Rank-2 combined-local: no line has exactly 2 empty cells. ✓
+	##   Rank-3: no EQ clues anywhere → guard fires → null for every line. ✓
 	##
-	## Why Rank-4 succeeds (column 0, k=4, n_plus_needed=3):
-	##   4 combos have n_plus=3 out of C(4,2)=6:
-	##     (+,+,+,−) → trial col=[−,+,+,+,−,−] → run of 3 at rows 1–3 → INVALID.
-	##     (+,+,−,+) → trial col=[−,+,+,−,+,−] → max run=2 → valid.
-	##     (+,−,+,+) → trial col=[−,+,−,+,+,−] → max run=2 → valid.
-	##     (−,+,+,+) → trial col=[−,−,+,+,+,−] → run of 3 at rows 2–4 → INVALID.
-	##   Both valid combos assign row1(col0)=PLUS → forced at RANK_4.
-	##   analyze() must return this as the first Rank-4 step at flat index 6.
+	## Why Rank-4 succeeds (row 2 primary analysis, k=3, empties=[c0,c1,c2]):
+	##   In-line: (P,M,M), (M,P,M), (M,M,P) all pass quota and no-three with
+	##     no h_rels in row 2 → all three combos are in-line valid.
+	##
+	##   _check_perp_feasibility for col 1 when combo (M,P,M) places col1=PLUS:
+	##     trial col1 = [−,+,PLUS,E,E,+] → plus=3=half.
+	##     Cascade forces rows 3 and 4 to MINUS.
+	##     Scratch col1 = [−,+,PLUS,−,−,+].
+	##     v_rel NEQ(rows 3,4): MINUS≠MINUS → VIOLATION → infeasible.
+	##   Combo (M,P,M) is eliminated.
+	##
+	##   Remaining valid combos: (P,M,M) and (M,M,P) — both assign col1=MINUS.
+	##   → (row 2, col 1) = MINUS forced at RANK_4 (flat index 13 = 2×6+1).
+	##
+	##   The perpendicular constraint is essential: without the v_rel the cascade
+	##   scratch passes all checks, all three combos survive, and _global_quota_chain
+	##   returns null — verified by the assertion below.
 	var E := EclipseGridSolver.EMPTY
 	var P := EclipseGridSolver.PLUS
 	var M := EclipseGridSolver.MINUS
 	var cells: Array[int] = [
-		M, P, M, P, M, P,  # row 0 (complete)
-		E, P, M, M, P, E,  # row 1 (empties at c0, c5)
-		E, M, P, P, M, E,  # row 2
-		E, P, M, M, P, E,  # row 3
-		E, M, P, P, M, E,  # row 4
-		M, M, P, M, P, P,  # row 5 (complete)
+		E, M, E, E, E, E,  # row 0: col1=−
+		E, P, E, E, E, E,  # row 1: col1=+
+		E, E, E, M, P, P,  # row 2: empties c0/c1/c2; plus_fixed=2
+		E, E, E, E, E, E,  # row 3
+		E, E, E, E, E, E,  # row 4
+		E, P, E, E, E, E,  # row 5: col1=+
 	]
-	var analysis: EclipseGridSolver.Analysis = EclipseGridSolver.analyze(6, cells, {}, {})
-	assert_true(analysis.steps.size() > 0,
-		"analyze() must produce at least one step on this board")
+	# v_rel NEQ between rows 3 and 4 of col 1.
+	var v_rels := { Vector2i(1, 3): EclipseGridSolver.NEQ }
+
+	# The perpendicular constraint is essential: without it every row-2 combo
+	# passes the cross-line check and _global_quota_chain finds no forced cell.
+	var step_no_vrel: EclipseGridSolver.SolverStep = \
+		EclipseGridSolver._global_quota_chain(6, cells, {}, {})
+	assert_null(step_no_vrel,
+		"Without v_rel NEQ, row-2 cascade passes for all combos → no Rank-4 step")
+
+	# With the v_rel the cascade eliminates combo (M,P,M) → (row2,col1)=MINUS forced.
+	var snapshot: Array[int] = cells.duplicate()
+	var step_direct: EclipseGridSolver.SolverStep = \
+		EclipseGridSolver._global_quota_chain(6, cells, {}, v_rels)
+	assert_eq(cells, snapshot, "_global_quota_chain must not mutate cells[]")
+	assert_not_null(step_direct,
+		"v_rel NEQ cascade must eliminate (M,P,M) and force (row2,col1)=MINUS at RANK_4")
+	if step_direct != null:
+		assert_eq(step_direct.rank, EclipseGridSolver.RANK_4, "Step must be labeled RANK_4")
+		assert_eq(step_direct.affected_cells[0], 13,
+			"Flat index 13 = row 2, col 1 (2×6+1)")
+		assert_eq(step_direct.result_value, M,
+			"Perpendicular cascade forces (row2,col1)=MINUS")
+
+	# Verify reachable through the full analyze() pipeline with Ranks 1–3 stalling.
+	var analysis: EclipseGridSolver.Analysis = \
+		EclipseGridSolver.analyze(6, cells, {}, v_rels)
 	var found_rank4 := false
 	for step_var in analysis.steps:
 		var s: EclipseGridSolver.SolverStep = step_var
@@ -839,14 +875,12 @@ func test_rank4_column_nothree_reachable_through_analyze() -> void:
 			found_rank4 = true
 			break
 	assert_true(found_rank4,
-		"analyze() must emit at least one RANK_4 step " +
-		"(column-0 k=4 no-three elimination after Rank-1/2/3 stall)")
-	# The first RANK_4 step must force (row 1, col 0) = PLUS (flat index = 1×6+0 = 6).
+		"analyze() must emit at least one RANK_4 step after Ranks 1–3 stall")
 	for step_var in analysis.steps:
 		var s: EclipseGridSolver.SolverStep = step_var
 		if s.rank == EclipseGridSolver.RANK_4:
-			assert_eq(s.affected_cells[0], 6,
-				"First RANK_4 step must be at flat index 6 (row 1, col 0)")
-			assert_eq(s.result_value, EclipseGridSolver.PLUS,
-				"Rank-4 must force (row 1, col 0) = PLUS via col-0 no-three elimination")
+			assert_eq(s.affected_cells[0], 13,
+				"First RANK_4 step must be (row2,col1) at flat index 13")
+			assert_eq(s.result_value, M,
+				"Perpendicular cascade forces (row2,col1)=MINUS")
 			break

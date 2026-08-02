@@ -764,20 +764,19 @@ static func _line_propagate_rank3(
 ## and filters each candidate by TWO independent constraint sets:
 ##
 ##   (a) In-line: the line's own quota, no-three-consecutive, and all EQ/NEQ
-##       relation clues within the line — via _check_partial_line for the
-##       primary dimension.
+##       relation clues within the line.
 ##
-##   (b) Cross-line: each assigned cell must also be consistent with its
-##       perpendicular line (quota, no-three, and adjacent relation clues in
-##       the column for row analysis; in the row for column analysis) — via a
-##       second _check_partial_line call for the perpendicular dimension.
-##       This ensures that no candidate which would immediately violate a
-##       column (or row) constraint is treated as valid.
+##   (b) Cross-line: each assigned cell is tested against its perpendicular
+##       line using _check_perp_feasibility, which includes a quota-cascade
+##       step: if the assignment exhausts the perpendicular line's quota,
+##       the remaining empties are forced to the opposite type and the
+##       resulting state is re-validated for no-three and relation clues.
+##       This detects infeasibilities invisible to the immediate per-cell
+##       check — for example, a v-relation NEQ between two positions that
+##       are both force-filled with the same value when quota is exhausted.
 ##
-## If every cross-line-valid assignment places the same value at some position,
-## that cell is forced at RANK_4.  The deduction genuinely spans multiple rows
-## and columns: the primary-dimension completion provides in-line candidates,
-## and the cross-dimension check filters them using perpendicular board state.
+## If every valid (in-line + cross-line) assignment places the same value at
+## some position, that cell is forced at RANK_4.
 ##
 ## Does NOT modify cells[].  Uses a local duplicate for validation.
 static func _global_quota_chain(
@@ -813,6 +812,64 @@ static func _global_quota_chain(
 	return null
 
 
+## Extended perpendicular-line feasibility check used by _line_completion_rank4.
+##
+## After one cell has been placed into [param trial] by a primary-line combo,
+## this function checks whether the perpendicular line [param perp] remains
+## feasible.  It extends the immediate _check_partial_line check with a
+## quota-cascade step:
+##
+##   If the placed value brings the perpendicular line's PLUS (or MINUS) count
+##   to exactly half, all remaining empty cells in that line are logically
+##   forced to the opposite type.  The resulting fully-determined state is then
+##   re-validated for no-three and every in-line relation clue.
+##
+## This detects infeasibilities that are invisible to _check_partial_line alone
+## (which only sees the one newly-placed cell) — for example, a v-relation NEQ
+## clue between two positions that are both force-filled with MINUS when the
+## PLUS quota is exhausted by the primary-line assignment.  Such a violation is
+## only visible after propagating the quota-forced consequences.
+##
+## Does NOT modify [param trial].
+static func _check_perp_feasibility(
+		trial: Array[int],
+		size: int,
+		perp: int,
+		is_row: bool,
+		h_relations: Dictionary,
+		v_relations: Dictionary) -> bool:
+	# 1. Immediate quota / no-three / relation check.
+	if not _check_partial_line(trial, size, perp, is_row, h_relations, v_relations):
+		return false
+	var half := size / 2
+	# 2. Count quota and collect remaining empties in the perpendicular line.
+	var plus := 0
+	var minus := 0
+	var empties: Array[int] = []
+	for i in size:
+		var idx: int = perp * size + i if is_row else i * size + perp
+		match trial[idx]:
+			PLUS:  plus += 1
+			MINUS: minus += 1
+			_:     empties.append(i)
+	if empties.is_empty():
+		return true
+	# 3. Determine if quota exhaustion forces all remaining empties.
+	var forced := EMPTY
+	if plus == half:
+		forced = MINUS
+	elif minus == half:
+		forced = PLUS
+	if forced == EMPTY:
+		return true  # No cascade possible at this step.
+	# 4. Apply forced values to a scratch copy and re-validate the line.
+	var scratch: Array[int] = trial.duplicate()
+	for pos in empties:
+		var idx: int = perp * size + pos if is_row else pos * size + perp
+		scratch[idx] = forced
+	return _check_partial_line(scratch, size, perp, is_row, h_relations, v_relations)
+
+
 ## Enumerate all valid in-line complete assignments for a line's k empty
 ## cells; return a forced step if all valid assignments agree on one cell.
 ##
@@ -820,10 +877,17 @@ static func _global_quota_chain(
 ## [param empties] indices of empty cells within the line, in order
 ## [param is_row]  direction of enumeration
 ##
-## Validity of a candidate assignment is determined by _check_partial_line,
-## which validates quota, no-three, and ALL in-line relation clues between
-## the now-filled cells.  Because all k empties are filled before checking,
-## the line is complete and every relation clue in it is evaluated.
+## Validity of a candidate assignment is determined by two checks:
+##
+##   (a) In-line (_check_partial_line): quota, no-three, and all EQ/NEQ
+##       relation clues within the primary line.
+##
+##   (b) Cross-line (_check_perp_feasibility): each assigned cell is also
+##       tested against its perpendicular line, including a quota-cascade
+##       step that propagates forced consequences and re-validates relation
+##       clues.  This catches infeasibilities invisible to the immediate
+##       per-cell check — e.g. a v-rel NEQ between two cells that are both
+##       forced to MINUS after the primary assignment exhausts column quota.
 ##
 ## Capped at k≤10 (2^10 = 1024 combos) to bound work; returns null for
 ## wider lines.  Does NOT modify cells[].
@@ -875,14 +939,17 @@ static func _line_completion_rank4(
 			trial[idx] = PLUS if ((combo >> i) & 1) else MINUS
 		# In-line validation: quota, no-three, and all in-line relation clues.
 		var ok := _check_partial_line(trial, size, line, is_row, h_relations, v_relations)
-		# Cross-line validation: each assigned cell must also satisfy the
-		# perpendicular dimension (column for row analysis, row for column
-		# analysis).  This enforces quota, no-three, and adjacent relation
-		# clues across multiple rows/columns simultaneously.
+		# Cross-line validation: each assigned cell must also be consistent
+		# with its perpendicular line.  _check_perp_feasibility extends the
+		# immediate quota/no-three/relation check with a cascade step: if the
+		# new value exhausts the perpendicular line's quota, the remaining
+		# empties are forced to the opposite type and the resulting state is
+		# re-validated — catching relation violations that only emerge after
+		# propagating those forced consequences.
 		if ok:
 			for i in k:
 				var perp := empties[i]
-				if not _check_partial_line(trial, size, perp, not is_row, h_relations, v_relations):
+				if not _check_perp_feasibility(trial, size, perp, not is_row, h_relations, v_relations):
 					ok = false
 					break
 		# Restore trial before using the result.
