@@ -154,6 +154,20 @@ static func is_human_solvable(width: int, height: int, anchors: Dictionary, canc
 ## local work copies so successive calls with the same arrays are independent.
 ## Intended for the generator's per-anchor minimisation loop, which calls
 ## is_human_solvable dozens of times with only one anchor changed each call.
+##
+## Performance notes:
+## - anchor_at is maintained incrementally (cleared when an anchor is placed)
+##   instead of rebuilt from scratch each while-loop pass.
+## - uncovered_count, fixed_area_remaining, unconstrained_count are tracked
+##   incrementally so area_limit can be re-derived after every placement.
+## - area_limit is a sound upper bound on any unconstrained anchor's area:
+##   uncovered − fixed_area_remaining − (other_unconstrained_count).
+##   base_candidates for unconstrained anchors are sorted by area ascending
+##   (see _enumerate_rects_for_anchor_empty), so iterating up to area_limit
+##   and breaking early can reduce candidate work by orders of magnitude.
+## - Phase 2 uses PackedInt32Array (direct index) instead of Dictionary to
+##   avoid GDScript hash overhead; valid_rects per anchor are cached once and
+##   reused in the second-pass restriction step.
 static func _is_human_solvable_from_entries(
 		width: int, height: int,
 		entries: Array[Dictionary],
@@ -172,42 +186,80 @@ static func _is_human_solvable_from_entries(
 	for e in entries:
 		work_entries.append({"pos": e["pos"], "anchor": e["anchor"]})
 
+	# --- Incremental bookkeeping (avoids full scan on each while-loop pass) ---
+	# anchor_at: 1 for cells that have an unplaced anchor; cleared when placed.
+	var anchor_at := PackedByteArray()
+	anchor_at.resize(width * height)
+	anchor_at.fill(0)
+	# Per-anchor area and constrained flag for O(1) lookup.
+	var anchor_areas := PackedInt32Array()
+	anchor_areas.resize(n)
+	var unconstrained_flags := PackedByteArray()
+	unconstrained_flags.resize(n)
+	var uncovered_count := width * height
+	var fixed_area_remaining := 0
+	var unconstrained_count := 0
+	for j in range(n):
+		var ap: Vector2i = work_entries[j]["pos"]
+		anchor_at[ap.y * width + ap.x] = 1
+		var j_area: int = int(work_entries[j]["anchor"].get("area", 0))
+		anchor_areas[j] = j_area
+		if j_area > 0:
+			fixed_area_remaining += j_area
+			unconstrained_flags[j] = 0
+		else:
+			unconstrained_count += 1
+			unconstrained_flags[j] = 1
+
 	var changed := true
 	while changed:
 		if do_cancel and cancel_check.call():
 			return false
 		changed = false
 
-		# Precompute anchor positions of all UNPLACED anchors.
-		# Used by _filter_with_anchor_at for O(n_rects × avg_area) conflict
-		# filtering instead of the O(n_rects × n_anchors) scan.
-		var anchor_at := PackedByteArray()
-		anchor_at.resize(width * height)
-		anchor_at.fill(0)
-		for j in range(n):
-			if placed[j] == 0:
-				var ap: Vector2i = work_entries[j]["pos"]
-				anchor_at[ap.y * width + ap.x] = 1
+		# Sound upper bound on area for any single unconstrained anchor.
+		# In any valid complete tiling, fixed-area anchors consume exactly
+		# fixed_area_remaining cells and each of the other unconstrained anchors
+		# needs ≥ 1 cell, so the current one covers at most the remainder.
+		# Because base_candidates for unconstrained anchors are area-ascending,
+		# we can break early when this limit is exceeded.
+		var area_limit := uncovered_count - fixed_area_remaining - maxi(0, unconstrained_count - 1)
 
 		# ------------------------------------------------------------------
 		# Phase 1: Forced single candidate
+		# Combined coverage + anchor_at filter in a single pass to avoid the
+		# intermediate all_rects allocation used in the previous implementation.
 		# ------------------------------------------------------------------
 		for i in range(n):
 			if placed[i] != 0:
 				continue
 			var pos: Vector2i = work_entries[i]["pos"]
-			# Filter pre-computed candidates by current coverage.
-			var all_rects: Array[Rect2i] = []
+			var is_unc: bool = unconstrained_flags[i] != 0
+			var valid_rects: Array[Rect2i] = []
 			for rect in base_candidates[i]:
-				if _rect_is_clear(rect, width, covered):
-					all_rects.append(rect)
-			if all_rects.is_empty() and do_cancel and cancel_check.call():
+				if is_unc and rect.size.x * rect.size.y > area_limit:
+					break  # base_candidates sorted by area asc for unconstrained
+				if not _rect_is_clear(rect, width, covered):
+					continue
+				if not _passes_anchor_at(rect, pos, anchor_at, width):
+					continue
+				valid_rects.append(rect)
+			if valid_rects.is_empty() and do_cancel and cancel_check.call():
 				return false
-			var valid_rects: Array[Rect2i] = _filter_with_anchor_at(all_rects, pos, anchor_at, width)
 			valid_rects = _apply_required_cells(valid_rects, work_entries[i])
 			if valid_rects.size() == 1:
-				_mark_covered(valid_rects[0], width, covered, 1)
+				var placed_rect := valid_rects[0]
+				_mark_covered(placed_rect, width, covered, 1)
 				placed[i] = 1
+				# Update incremental bookkeeping.
+				var rect_area := placed_rect.size.x * placed_rect.size.y
+				uncovered_count -= rect_area
+				if is_unc:
+					unconstrained_count -= 1
+				else:
+					fixed_area_remaining -= anchor_areas[i]
+				anchor_at[pos.y * width + pos.x] = 0
+				area_limit = uncovered_count - fixed_area_remaining - maxi(0, unconstrained_count - 1)
 				changed = true
 			elif valid_rects.is_empty():
 				return false
@@ -217,59 +269,86 @@ static func _is_human_solvable_from_entries(
 
 		# ------------------------------------------------------------------
 		# Phase 2: Cell-ownership elimination
-		# Build map: uncovered cell → set of DISTINCT anchor indices that can
-		# reach it (deduplicated so an anchor with multiple valid candidates
-		# covering the same cell counts only once).
+		# owner_map: flat PackedInt32Array indexed by cell.
+		#   -1 = no unplaced anchor candidate reaches this cell
+		#    k = unique anchor index (0..n-1) can cover this cell
+		#   -2 = multiple anchors can cover this cell
+		# Avoids GDScript Dictionary/hash overhead on the inner cell loop.
 		# ------------------------------------------------------------------
-		var cell_owners: Dictionary = {}  # Vector2i -> Array[int]
+		var owner_map := PackedInt32Array()
+		owner_map.resize(width * height)
+		owner_map.fill(-1)
+
 		for i in range(n):
 			if placed[i] != 0:
 				continue
 			var pos: Vector2i = work_entries[i]["pos"]
-			var all_rects: Array[Rect2i] = []
+			var is_unc: bool = unconstrained_flags[i] != 0
+			var valid_rects: Array[Rect2i] = []
 			for rect in base_candidates[i]:
-				if _rect_is_clear(rect, width, covered):
-					all_rects.append(rect)
+				if is_unc and rect.size.x * rect.size.y > area_limit:
+					break
+				if not _rect_is_clear(rect, width, covered):
+					continue
+				if not _passes_anchor_at(rect, pos, anchor_at, width):
+					continue
+				valid_rects.append(rect)
 			if do_cancel and cancel_check.call():
 				return false
-			var valid_rects: Array[Rect2i] = _filter_with_anchor_at(all_rects, pos, anchor_at, width)
 			valid_rects = _apply_required_cells(valid_rects, work_entries[i])
 			for rect in valid_rects:
 				for r in range(rect.position.y, rect.position.y + rect.size.y):
 					for c in range(rect.position.x, rect.position.x + rect.size.x):
-						var cell := Vector2i(c, r)
-						if not cell_owners.has(cell):
-							cell_owners[cell] = []
-						# Deduplicate: record each anchor index at most once
-						# per cell, regardless of how many of its candidates
-						# cover that cell.
-						var owners_list: Array = cell_owners[cell] as Array
-						if not owners_list.has(i):
-							owners_list.append(i)
+						var idx := r * width + c
+						if covered[idx] != 0:
+							continue
+						# Deduplicate: record each distinct anchor index at most once.
+						var cur := owner_map[idx]
+						if cur == -1:
+							owner_map[idx] = i
+						elif cur != i:
+							owner_map[idx] = -2  # multiple owners
 
-		# For each cell that only one anchor can cover, restrict that anchor.
-		for cell in cell_owners.keys():
-			var owners: Array = cell_owners[cell] as Array
-			if owners.size() != 1:
+		# For each cell with a unique owner, restrict that anchor's candidates.
+		# Re-filter from base_candidates (with updated required_cells) so any
+		# constraints added earlier in this second pass are reflected.
+		for cell_idx in range(owner_map.size()):
+			if covered[cell_idx] != 0:
 				continue
-			var owner_idx: int = owners[0]
+			var owner_idx := owner_map[cell_idx]
+			if owner_idx < 0:
+				continue  # -1 (none) or -2 (multiple owners)
 			if placed[owner_idx] != 0:
 				continue
-			var pos: Vector2i = work_entries[owner_idx]["pos"]
-			var all_rects: Array[Rect2i] = []
+			var cell := Vector2i(cell_idx % width, cell_idx / width)
+			var opos: Vector2i = work_entries[owner_idx]["pos"]
+			var is_unc_o: bool = unconstrained_flags[owner_idx] != 0
+			var valid_rects: Array[Rect2i] = []
 			for rect in base_candidates[owner_idx]:
-				if _rect_is_clear(rect, width, covered):
-					all_rects.append(rect)
-			var valid_rects: Array[Rect2i] = _filter_with_anchor_at(all_rects, pos, anchor_at, width)
+				if is_unc_o and rect.size.x * rect.size.y > area_limit:
+					break
+				if not _rect_is_clear(rect, width, covered):
+					continue
+				if not _passes_anchor_at(rect, opos, anchor_at, width):
+					continue
+				valid_rects.append(rect)
 			valid_rects = _apply_required_cells(valid_rects, work_entries[owner_idx])
 			# Keep only candidates that contain the uniquely-owned cell.
 			var restricted: Array[Rect2i] = []
 			for rect in valid_rects:
-				if rect.has_point(cell as Vector2i):
+				if rect.has_point(cell):
 					restricted.append(rect)
 			if restricted.size() == 1:
 				_mark_covered(restricted[0], width, covered, 1)
 				placed[owner_idx] = 1
+				var rect_area := restricted[0].size.x * restricted[0].size.y
+				uncovered_count -= rect_area
+				if is_unc_o:
+					unconstrained_count -= 1
+				else:
+					fixed_area_remaining -= anchor_areas[owner_idx]
+				anchor_at[opos.y * width + opos.x] = 0
+				area_limit = uncovered_count - fixed_area_remaining - maxi(0, unconstrained_count - 1)
 				changed = true
 			elif restricted.size() > 1:
 				# Cannot place yet, but record that this anchor must cover
@@ -311,6 +390,20 @@ static func _apply_required_cells(rects: Array[Rect2i], entry: Dictionary) -> Ar
 		if ok:
 			filtered.append(rect)
 	return filtered
+
+
+## Single-rect variant of _filter_with_anchor_at: returns true when [param rect]
+## does not contain any unplaced anchor other than [param self_pos].
+## Used by _is_human_solvable_from_entries for a combined filter pass that
+## avoids allocating the intermediate all_rects array.
+static func _passes_anchor_at(rect: Rect2i, self_pos: Vector2i, anchor_at: PackedByteArray, grid_width: int) -> bool:
+	for r in range(rect.position.y, rect.position.y + rect.size.y):
+		for c in range(rect.position.x, rect.position.x + rect.size.x):
+			if c == self_pos.x and r == self_pos.y:
+				continue  # own anchor cell — never a conflict
+			if anchor_at[r * grid_width + c] != 0:
+				return false
+	return true
 
 
 ## Fast O(n_rects × avg_rect_area) filter: reject any rect that covers another
@@ -704,6 +797,11 @@ static func _collect_rects_containing(
 ## reducing pre-computation cost from O(n_cands × avg_rect_area) to O(n_cands).
 ## Used for the one-time base-candidate pre-computation in count_solutions,
 ## is_human_solvable, and the generator's minimisation loop.
+##
+## For unconstrained anchors (area == 0) the result is sorted by area ascending.
+## This enables _is_human_solvable_from_entries to apply a sound early-stopping
+## break when the dynamic area_limit is reached, dramatically reducing the
+## candidate work for shape-only anchors on large grids.
 static func _enumerate_rects_for_anchor_empty(
 		pos: Vector2i, anchor: Dictionary,
 		width: int, height: int) -> Array[Rect2i]:
@@ -720,11 +818,22 @@ static func _enumerate_rects_for_anchor_empty(
 				continue
 			_collect_rects_containing_empty(pos, w, h, width, height, rects)
 	else:
-		for w in range(1, width + 1):
-			for h in range(1, height + 1):
-				if not _shape_matches(w, h, anchor_shape):
+		# Iterate (w,h) pairs in ascending area order so the result is sorted
+		# by area.  Outer loop: target area 1..W*H.  Inner loop: divisors dw
+		# of target_area with dw ≤ width.  Total inner iterations ≤
+		# Σ(a=1..W) a + Σ(a=W+1..W*H) W ≈ W²/2 + W*(W*H-W) ≈ W²*H, which
+		# for 15×15 is ~3 300 — similar to the original 15×15=225 nested loop
+		# for viable pairs, with the benefit of guaranteed area ordering.
+		for target_area in range(1, width * height + 1):
+			for dw in range(1, mini(target_area, width) + 1):
+				if target_area % dw != 0:
 					continue
-				_collect_rects_containing_empty(pos, w, h, width, height, rects)
+				var dh := target_area / dw
+				if dh > height:
+					continue
+				if not _shape_matches(dw, dh, anchor_shape):
+					continue
+				_collect_rects_containing_empty(pos, dw, dh, width, height, rects)
 
 	return rects
 
