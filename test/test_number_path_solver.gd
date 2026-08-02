@@ -86,12 +86,17 @@ func test_barrier_on_grid_with_path_around() -> void:
 
 
 func test_solve_returns_path_starting_at_checkpoint_1() -> void:
-	var cps := _make_checkpoints([[2, 2], [0, 0]])
-	var result := NumberPathSolver.solve(3, 3, cps, [])
-	if result.get("solved", false):
-		var path: Array = result.get("path", [])
-		assert_false(path.is_empty())
-		assert_eq(path[0], Vector2i(2, 2))
+	# 1×4 grid with CP1 at the far end (3,0) and CP2 at (0,0).
+	# Each step has exactly one free neighbor so rank-1 deduction solves it in
+	# full; the solver must return solved=true and a path that begins at CP1=(3,0),
+	# not at the grid origin (0,0).
+	var cps := _make_checkpoints([[3, 0], [0, 0]])
+	var result := NumberPathSolver.solve(4, 1, cps, [])
+	assert_true(result.get("solved", false), "Solver must complete the 1×4 puzzle")
+	var path: Array = result.get("path", [])
+	assert_false(path.is_empty(), "Solved path must not be empty")
+	assert_eq(path[0], Vector2i(3, 0), "Path must start at checkpoint 1 (3,0), not the grid origin")
+	assert_eq(path.size(), 4, "Path must cover all 4 cells")
 
 
 func test_count_solutions_immediate_cancel_small_grid() -> void:
