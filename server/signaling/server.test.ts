@@ -583,6 +583,15 @@ describe('Score Endpoints', () => {
     expect(atMax.status).toBe(200);
   });
 
+  test('POST /scores accepts Evil Sudoku times', async () => {
+    const res = await httpRequest({
+      method: 'POST', port, path: '/scores',
+      body: { device_id: TEST_UUID, game: 'sudoku', mode: 'evil', value: 120 },
+    });
+    expect(res.status).toBe(200);
+    expect((res.body as Record<string, unknown>).accepted).toBe(true);
+  });
+
   test('POST /scores rejects unknown game:mode combo', async () => {
     const res = await httpRequest({
       method: 'POST', port, path: '/scores',
@@ -662,6 +671,29 @@ describe('Delete Scores Endpoint', () => {
     const lb = await httpRequest({ method: 'GET', port, path: `/leaderboard?game=sudoku&mode=easy&device_id=${TEST_UUID2}` });
     const body = lb.body as Record<string, unknown>;
     expect(body.player_score).toBe(150);
+  });
+
+  test('DELETE /scores/:device_id with game and mode removes only that board', async () => {
+    const res = await httpRequest({
+      method: 'DELETE',
+      port,
+      path: `/scores/${TEST_UUID}?game=sudoku&mode=easy`,
+    });
+    expect(res.status).toBe(204);
+
+    const easy = await httpRequest({
+      method: 'GET',
+      port,
+      path: `/leaderboard?game=sudoku&mode=easy&device_id=${TEST_UUID}`,
+    });
+    expect((easy.body as Record<string, unknown>).player_score).toBeNull();
+
+    const medium = await httpRequest({
+      method: 'GET',
+      port,
+      path: `/leaderboard?game=sudoku&mode=medium&device_id=${TEST_UUID}`,
+    });
+    expect((medium.body as Record<string, unknown>).player_score).toBe(200);
   });
 
   test('DELETE /scores/:device_id with purge_profile=true also removes the player profile', async () => {
@@ -857,4 +889,3 @@ describe('openDb — mount point validation', () => {
     expect(valid).toContain(JOURNAL_MODE);
   });
 });
-

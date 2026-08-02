@@ -2,7 +2,15 @@ extends GutTest
 
 ## Unit tests for HelpContent resource loading and structure.
 
-const GAMES: Array[String] = ["sudoku", "shikaku", "blockudoku", "carom"]
+const GAMES: Array[String] = [
+	"sudoku",
+	"sudoku_anti_knight",
+	"sudoku_anti_king",
+	"sudoku_killer",
+	"shikaku",
+	"blockudoku",
+	"carom",
+]
 
 
 func _load(game_mode: String) -> HelpContent:
@@ -29,6 +37,34 @@ func test_all_help_resources_have_non_empty_body() -> void:
 
 func test_sudoku_help_title_is_correct() -> void:
 	assert_eq(_load("sudoku").title, "Sudoku")
+
+
+func test_sudoku_variant_help_describes_special_rules() -> void:
+	assert_string_contains(_load("sudoku_anti_knight").body, "knight's move")
+	assert_string_contains(_load("sudoku_anti_king").body, "diagonally")
+	assert_string_contains(_load("sudoku_killer").body, "cage")
+
+
+func test_sudoku_menu_help_topic_tracks_selected_rule_set() -> void:
+	var menu = load("res://scripts/sudoku/sudoku_main_menu.gd").new()
+	menu._rule_set_index = menu.RULE_SET_ANTI_KNIGHT
+	assert_eq(menu._get_help_topic(), "sudoku_anti_knight")
+	menu._rule_set_index = menu.RULE_SET_ANTI_KING
+	assert_eq(menu._get_help_topic(), "sudoku_anti_king")
+	menu._rule_set_index = menu.RULE_SET_KILLER
+	assert_eq(menu._get_help_topic(), "sudoku_killer")
+	menu.free()
+
+
+func test_sudoku_game_help_topic_tracks_active_rule_set() -> void:
+	var game = load("res://scripts/sudoku/sudoku_game_screen.gd").new()
+	game.rule_set = game.RULE_SET_ANTI_KNIGHT
+	assert_eq(game._get_help_topic(), "sudoku_anti_knight")
+	game.rule_set = game.RULE_SET_ANTI_KING
+	assert_eq(game._get_help_topic(), "sudoku_anti_king")
+	game.rule_set = game.RULE_SET_KILLER
+	assert_eq(game._get_help_topic(), "sudoku_killer")
+	game.free()
 
 
 func test_shikaku_help_title_is_correct() -> void:

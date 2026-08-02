@@ -10,6 +10,12 @@ func _make_palette() -> ThemePalette:
 	return PaletteScript.new()
 
 
+func _contrast_ratio(foreground: Color, background: Color) -> float:
+	var lighter := maxf(foreground.get_luminance(), background.get_luminance())
+	var darker := minf(foreground.get_luminance(), background.get_luminance())
+	return (lighter + 0.05) / (darker + 0.05)
+
+
 # ---------------------------------------------------------------------------
 # build_custom — static derivation logic
 # ---------------------------------------------------------------------------
@@ -159,6 +165,16 @@ func test_set_mode_neon_text_given_is_hdr() -> void:
 	var tg := pal.get_color("text_given")
 	assert_true(tg.r > 1.0 or tg.g > 1.0 or tg.b > 1.0,
 		"Neon text_given should have an HDR component > 1.0")
+
+
+func test_set_mode_neon_pencil_marks_are_readable() -> void:
+	var pal := _make_palette()
+	pal.set_mode("neon")
+	var ratio := _contrast_ratio(
+		pal.get_color("text_pencil"),
+		pal.get_color("cell_background")
+	)
+	assert_gte(ratio, 4.5, "Neon pencil marks must contrast with empty cells")
 
 
 func test_get_color_unknown_key_returns_magenta() -> void:

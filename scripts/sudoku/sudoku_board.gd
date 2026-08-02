@@ -1,7 +1,7 @@
 class_name SudokuBoard
 extends Control
 
-## The 9x9 Sudoku grid UI
+## The Sudoku grid UI — supports dynamic grid sizes via SudokuGridSpec.
 
 signal cell_selected(index: int)
 
@@ -10,6 +10,10 @@ var selected_index: int = -1
 var show_row_col_box: bool = false
 var filter_number: int = 0
 var filter_color: Color = Color.TRANSPARENT
+
+## Active grid specification — determines layout, line positions, and cell count.
+## Set via configure_for_spec() before loading a puzzle.
+var spec: SudokuGridSpec = SudokuGridSpec.STANDARD_9X9
 
 ## Killer Sudoku cage data.  Array of { "cells": Array[int], "sum": int }.
 ## Empty when not in killer mode.
@@ -32,10 +36,29 @@ func _ready() -> void:
 	AppTheme.theme_changed.connect(func(_d: bool) -> void: queue_redraw(); _redraw_cells())
 
 
+## (Re)configure the board for a new grid specification.
+## Destroys and recreates all cells; call before loading a puzzle.
+func configure_for_spec(p_spec: SudokuGridSpec) -> void:
+	if spec.id == p_spec.id and not cells.is_empty():
+		return
+	spec = p_spec
+	# Remove existing cells
+	for cell in cells:
+		cell.queue_free()
+	cells.clear()
+	cage_data.clear()
+	_cell_cage_map.clear()
+	selected_index = -1
+	_create_cells()
+	_calc_and_cache_layout()
+	_layout_cells()
+	queue_redraw()
+
+
 func _create_cells() -> void:
-	for i in 81:
+	for i in spec.cell_count:
 		var cell := SudokuCell.new()
-		cell.setup(i)
+		cell.setup(i, spec.size, spec.sym_max)
 		cell.cell_pressed.connect(_on_cell_pressed)
 		add_child(cell)
 		cells.append(cell)
@@ -52,17 +75,22 @@ func select_cell(index: int) -> void:
 
 
 func _update_highlighting() -> void:
-	var sel_row := selected_index / 9 if selected_index >= 0 else -1
-	var sel_col := selected_index % 9 if selected_index >= 0 else -1
-	var sel_box := (sel_row / 3) * 3 + sel_col / 3 if selected_index >= 0 else -1
+	var n := spec.size
+	var sel_row := selected_index / n if selected_index >= 0 else -1
+	var sel_col := selected_index % n if selected_index >= 0 else -1
+	var sel_box_row := (sel_row / spec.region_h) if selected_index >= 0 else -1
+	var sel_box_col := (sel_col / spec.region_w) if selected_index >= 0 else -1
 	var sel_value := cells[selected_index].value if selected_index >= 0 else 0
 	var sel_color: Color = cells[selected_index].cell_color if selected_index >= 0 else Color.TRANSPARENT
 
 	for cell in cells:
 		cell.set_selected(cell.index == selected_index)
+		var cell_box_row := cell.row / spec.region_h
+		var cell_box_col := cell.col / spec.region_w
 		cell.set_highlighted(
 			selected_index >= 0 and cell.index != selected_index and (
-				cell.row == sel_row or cell.col == sel_col or cell.box == sel_box
+				cell.row == sel_row or cell.col == sel_col or
+				(cell_box_row == sel_box_row and cell_box_col == sel_box_col)
 			) and show_row_col_box
 		)
 		# Same-number: from selected cell or filter
@@ -82,7 +110,7 @@ func _update_highlighting() -> void:
 
 
 func load_puzzle(puzzle: Array[int]) -> void:
-	for i in 81:
+	for i in spec.cell_count:
 		cells[i].pencil_marks.clear()
 		cells[i].cell_color = Color.TRANSPARENT
 		cells[i].is_error = false
@@ -97,7 +125,7 @@ func load_puzzle(puzzle: Array[int]) -> void:
 
 
 func load_state(current_grid: Array[int], puzzle: Array[int], pencil_marks: Dictionary, cell_colors: Dictionary) -> void:
-	for i in 81:
+	for i in spec.cell_count:
 		var is_given := puzzle[i] != 0
 		cells[i].is_given = is_given
 		cells[i].value = current_grid[i]
@@ -118,15 +146,15 @@ func load_state(current_grid: Array[int], puzzle: Array[int], pencil_marks: Dict
 
 func get_current_grid() -> Array[int]:
 	var grid: Array[int] = []
-	grid.resize(81)
-	for i in 81:
+	grid.resize(spec.cell_count)
+	for i in spec.cell_count:
 		grid[i] = cells[i].value
 	return grid
 
 
 func get_pencil_marks_dict() -> Dictionary:
 	var result := {}
-	for i in 81:
+	for i in spec.cell_count:
 		if cells[i].pencil_marks.size() > 0:
 			result[str(i)] = cells[i].pencil_marks.duplicate()
 	return result
@@ -134,7 +162,7 @@ func get_pencil_marks_dict() -> Dictionary:
 
 func get_cell_colors_dict() -> Dictionary:
 	var result := {}
-	for i in 81:
+	for i in spec.cell_count:
 		if cells[i].cell_color != Color.TRANSPARENT:
 			result[str(i)] = cells[i].cell_color.to_html()
 	return result
@@ -151,7 +179,7 @@ func set_cages(cage_dicts: Array) -> void:
 		cell.cage_anchor_sum = 0
 
 	# Build cell → cage lookup and set anchor sum labels
-	_cell_cage_map.resize(81)
+	_cell_cage_map.resize(spec.cell_count)
 	_cell_cage_map.fill(-1)
 	for i in cage_data.size():
 		var d: Dictionary = cage_data[i]
@@ -194,6 +222,7 @@ var _grid_rect: Rect2 = Rect2()
 
 
 func _calc_and_cache_layout() -> void:
+	var n := spec.size
 	var available := size
 	var grid_px := floori(minf(available.x, available.y))
 
@@ -201,36 +230,49 @@ func _calc_and_cache_layout() -> void:
 	var thick := int(THICK_LINE)
 	var thin := int(THIN_LINE)
 
-	# Total line pixels: 4 thick + 6 thin
-	var total_lines := 4 * thick + 6 * thin
-	var cell_px := (grid_px - total_lines) / 9  # integer cell size
-	var actual_grid := cell_px * 9 + total_lines
+	# Compute line counts: (n-1) internal lines + 2 outer borders
+	# Thick lines appear between regions; thin lines appear within regions.
+	# Rows: thick lines at region boundaries
+	var thick_row_count := 2 + (n / spec.region_h - 1)  # outer borders + between bands
+	var thin_row_count := n - 1 - (n / spec.region_h - 1)  # remaining internal lines
+	var total_row_lines := thick_row_count * thick + thin_row_count * thin
 
-	var ox := floori((available.x - actual_grid) / 2.0)
-	var oy := floori((available.y - actual_grid) / 2.0)
+	var thick_col_count := 2 + (n / spec.region_w - 1)
+	var thin_col_count := n - 1 - (n / spec.region_w - 1)
+	var total_col_lines := thick_col_count * thick + thin_col_count * thin
+
+	var max_lines := maxi(total_row_lines, total_col_lines)
+	var cell_px := (grid_px - max_lines) / n
+	var actual_grid_w := cell_px * n + total_col_lines
+	var actual_grid_h := cell_px * n + total_row_lines
+
+	var ox := floori((available.x - actual_grid_w) / 2.0)
+	var oy := floori((available.y - actual_grid_h) / 2.0)
 
 	_cell_w = float(cell_px)
 	_cell_h = float(cell_px)
-	_grid_rect = Rect2(Vector2(ox, oy), Vector2(actual_grid, actual_grid))
+	_grid_rect = Rect2(Vector2(ox, oy), Vector2(actual_grid_w, actual_grid_h))
 
 	# Build position arrays — each entry is the pixel X or Y where that cell starts
 	_col_positions.clear()
 	_row_positions.clear()
 
 	var x := ox + thick  # Start after left border
-	for c in 9:
+	for c in n:
 		_col_positions.append(float(x))
 		x += cell_px
-		if (c + 1) % 3 == 0:
-			x += thick  # Thick line after every 3rd cell
+		var next_col_is_region_boundary := (c + 1) % spec.region_w == 0
+		if next_col_is_region_boundary:
+			x += thick
 		else:
 			x += thin
 
 	var y := oy + thick  # Start after top border
-	for r in 9:
+	for r in n:
 		_row_positions.append(float(y))
 		y += cell_px
-		if (r + 1) % 3 == 0:
+		var next_row_is_region_boundary := (r + 1) % spec.region_h == 0
+		if next_row_is_region_boundary:
 			y += thick
 		else:
 			y += thin
@@ -241,9 +283,10 @@ func _layout_cells() -> void:
 		return
 	_calc_and_cache_layout()
 
-	for i in 81:
-		var r := i / 9
-		var c := i % 9
+	var n := spec.size
+	for i in spec.cell_count:
+		var r := i / n
+		var c := i % n
 		cells[i].position = Vector2(_col_positions[c], _row_positions[r])
 		cells[i].size = Vector2(_cell_w, _cell_h)
 
@@ -251,8 +294,9 @@ func _layout_cells() -> void:
 
 
 func get_cell_rect(index: int) -> Rect2:
-	var r := index / 9
-	var c := index % 9
+	var n := spec.size
+	var r := index / n
+	var c := index % n
 	if c < _col_positions.size() and r < _row_positions.size():
 		return Rect2(Vector2(_col_positions[c], _row_positions[r]), Vector2(_cell_w, _cell_h))
 	return Rect2()
@@ -288,6 +332,7 @@ func _draw() -> void:
 	var thick_color := tm.get_color("grid_line_thick")
 	var neon_mode := tm.is_neon
 
+	var n := spec.size
 	var ox := _grid_rect.position.x
 	var oy := _grid_rect.position.y
 	var gw := _grid_rect.size.x
@@ -298,15 +343,17 @@ func _draw() -> void:
 	# Fill entire grid rect with thick color (outer border + box dividers show through)
 	draw_rect(_grid_rect, thick_color)
 
-	# Draw thin lines between cells within each box
-	for r in range(1, 9):
-		if r % 3 == 0:
+	# Draw thin lines between cells within each region
+	for r in range(1, n):
+		var is_region_boundary := r % spec.region_h == 0
+		if is_region_boundary:
 			continue
 		var y := _row_positions[r] - thin
 		draw_rect(Rect2(Vector2(ox, y), Vector2(gw, thin)), thin_color)
 
-	for c in range(1, 9):
-		if c % 3 == 0:
+	for c in range(1, n):
+		var is_region_boundary := c % spec.region_w == 0
+		if is_region_boundary:
 			continue
 		var x := _col_positions[c] - thin
 		draw_rect(Rect2(Vector2(x, oy), Vector2(thin, gh)), thin_color)
@@ -335,11 +382,12 @@ func _draw_cage_outlines(neon_mode: bool) -> void:
 		cage_color.a = 0.90
 
 	var margin := 2.0  # inset from cell edge so cage lines don't overlap grid lines
+	var n := spec.size
 
-	for i in 81:
+	for i in spec.cell_count:
 		var ci: int = _cell_cage_map[i]
-		var r := i / 9
-		var c := i % 9
+		var r := i / n
+		var c := i % n
 
 		var cx := _col_positions[c]
 		var cy := _row_positions[r]
@@ -348,7 +396,7 @@ func _draw_cage_outlines(neon_mode: bool) -> void:
 
 		# Check each of the 4 edges: top, bottom, left, right
 		# Top edge (between row r-1 and row r)
-		var top_nb := (r - 1) * 9 + c
+		var top_nb := (r - 1) * n + c
 		if r == 0 or _cell_cage_map[top_nb] != ci:
 			draw_dashed_line(
 				Vector2(cx + margin, cy),
@@ -356,15 +404,15 @@ func _draw_cage_outlines(neon_mode: bool) -> void:
 				cage_color, CAGE_LINE, CAGE_DASH)
 
 		# Bottom edge (between row r and row r+1)
-		var bot_nb := (r + 1) * 9 + c
-		if r == 8 or _cell_cage_map[bot_nb] != ci:
+		var bot_nb := (r + 1) * n + c
+		if r == n - 1 or _cell_cage_map[bot_nb] != ci:
 			draw_dashed_line(
 				Vector2(cx + margin, cy + ch),
 				Vector2(cx + cw - margin, cy + ch),
 				cage_color, CAGE_LINE, CAGE_DASH)
 
 		# Left edge (between col c-1 and col c)
-		var left_nb := r * 9 + (c - 1)
+		var left_nb := r * n + (c - 1)
 		if c == 0 or _cell_cage_map[left_nb] != ci:
 			draw_dashed_line(
 				Vector2(cx, cy + margin),
@@ -372,8 +420,8 @@ func _draw_cage_outlines(neon_mode: bool) -> void:
 				cage_color, CAGE_LINE, CAGE_DASH)
 
 		# Right edge (between col c and col c+1)
-		var right_nb := r * 9 + (c + 1)
-		if c == 8 or _cell_cage_map[right_nb] != ci:
+		var right_nb := r * n + (c + 1)
+		if c == n - 1 or _cell_cage_map[right_nb] != ci:
 			draw_dashed_line(
 				Vector2(cx + cw, cy + margin),
 				Vector2(cx + cw, cy + ch - margin),

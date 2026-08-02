@@ -250,8 +250,7 @@ func _ready() -> void:
 		var btn := Button.new()
 		btn.text = "How to Play"
 		btn.custom_minimum_size = Vector2(0, 50)
-		var topic := _get_help_topic()
-		btn.pressed.connect(func() -> void: HowToPlay.show_for(self, topic))
+		btn.pressed.connect(func() -> void: HowToPlay.show_for(self, _get_help_topic()))
 		settings_btn.get_parent().add_child(btn)
 		settings_btn.get_parent().move_child(btn, settings_btn.get_index())
 
