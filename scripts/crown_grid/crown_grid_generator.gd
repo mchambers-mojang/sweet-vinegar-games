@@ -56,7 +56,10 @@ const MAX_REGION_ATTEMPTS := 50
 static func generate(tier: int, seed: int, cancel_check: Callable = Callable()) -> Dictionary:
 	var size: int = TIER_SIZES.get(tier, 6)
 	var rng := RandomNumberGenerator.new()
-	rng.seed = seed
+	# Incorporate tier into the RNG seed so each tier explores a distinct board
+	# space for the same user-visible seed.  TIER_EASY (0) is unchanged; each
+	# higher tier is offset by a multiple of 2^32 within the 64-bit seed space.
+	rng.seed = int(seed) + int(tier) * 4294967296
 
 	for attempt in range(MAX_OUTER_ATTEMPTS):
 		if cancel_check.is_valid() and cancel_check.call():

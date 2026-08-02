@@ -134,19 +134,13 @@ func test_generate_easy_correct_size() -> void:
 
 
 func test_generate_medium_correct_size() -> void:
-	# Try a deterministic set of seeds; a 7x7 board requiring RANK_COMBINED must
-	# be findable.  Seed 2 is tried first so it remains the "canonical" Medium seed
-	# once confirmed; fall back to additional seeds if needed.
-	var result: Dictionary = {}
-	for s in [2, 5, 7, 11, 17, 42]:
-		result = CrownGridGenerator.generate(CrownGridGenerator.TIER_MEDIUM, s)
-		if not result.is_empty():
-			break
-	assert_false(result.is_empty(),
-			"TIER_MEDIUM generation must succeed for at least one seed in [2,5,7,11,17,42]")
+	var result := CrownGridGenerator.generate(CrownGridGenerator.TIER_MEDIUM, 2)
+	assert_false(result.is_empty(), "Generation must succeed for TIER_MEDIUM seed 2")
 	if result.is_empty():
 		return
 	assert_eq(result["size"], 7)
+	assert_eq(result["rank"], CrownGridSolver.RANK_COMBINED,
+			"TIER_MEDIUM seed 2 must produce a Rank-2 (RANK_COMBINED) puzzle")
 
 
 func test_generate_returns_empty_on_cancellation() -> void:
