@@ -131,22 +131,30 @@ static func _rank1_forced(state: _SolverState) -> Dictionary:
 			"result": cell,
 		}
 
-	# Next unvisited checkpoint has only one reachable approach
+	# Next unvisited checkpoint has only one reachable approach (the current head).
+	# head is always visited, so it never appears in free_neighbors(next_cp).
+	# Instead, check if head is directly adjacent to next_cp and then temporarily
+	# block next_cp in the BFS to determine whether any of its free neighbours are
+	# accessible from head without routing through next_cp.  If none are, head is
+	# the sole viable predecessor and we must step there immediately.
 	var next_cp := state.next_checkpoint()
-	if next_cp != Vector2i(-1, -1):
-		var cp_neighbors := state.free_neighbors(next_cp)
-		var reachable: Array[Vector2i] = []
-		for nb in cp_neighbors:
+	if next_cp != Vector2i(-1, -1) and state.is_adjacent_reachable_from_head(next_cp):
+		var cp_free_neighbors := state.free_neighbors(next_cp)
+		var cp_idx: int = next_cp.y * state.width + next_cp.x
+		state.visited[cp_idx] = 1
+		var alt_approach := false
+		for nb in cp_free_neighbors:
 			if state.can_reach_from_head(nb):
-				reachable.append(nb)
-		if reachable.size() == 1 and reachable[0] == head:
-			if state.is_adjacent_reachable_from_head(next_cp):
-				return {
-					"rank": RANK_FORCED,
-					"reason": "next checkpoint only approach",
-					"affected": [next_cp],
-					"result": next_cp,
-				}
+				alt_approach = true
+				break
+		state.visited[cp_idx] = 0
+		if not alt_approach:
+			return {
+				"rank": RANK_FORCED,
+				"reason": "next checkpoint only approach",
+				"affected": [next_cp],
+				"result": next_cp,
+			}
 
 	# Dead-end prevention: if a free neighbor of head has degree 1 (only connected
 	# to head), we MUST go there or it becomes permanently isolated.

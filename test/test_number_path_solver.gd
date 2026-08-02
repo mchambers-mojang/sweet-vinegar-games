@@ -139,3 +139,35 @@ func test_can_complete_from_accepts_fully_connected_state() -> void:
 	var cps := _make_checkpoints([[0, 0], [2, 2]])
 	var count := NumberPathSolver.count_solutions(3, 3, cps, [], 2)
 	assert_true(count >= 1, "3×3 with diagonal checkpoints must have at least one solution")
+
+
+# --- Regression: Rank-1 checkpoint-approach deduction was dead code (fix) ---
+# Previously `free_neighbors(next_cp)` excluded visited cells, so head (always
+# visited) could never equal reachable[0] and the deduction never fired.
+# The fix checks adjacency separately and temporarily blocks next_cp in the
+# BFS so we know whether head is truly the sole approach.
+
+func test_rank1_checkpoint_approach_fires() -> void:
+	# 3×2 grid (width=3, height=2):
+	#   (0,0)[CP1]  (1,0)[CP2]  (2,0)
+	#   (0,1)       (1,1)       (2,1)[CP3]
+	# Barrier DIR_RIGHT at {r:1, c:0} blocks (0,1)↔(1,1).
+	# From the start head=(0,0):
+	#   • candidates = [(1,0), (0,1)]  → size=2, "single free neighbor" does NOT fire.
+	#   • next_cp = (1,0), directly adjacent to head  ✓
+	#   • free_neighbors(1,0) = [(2,0), (1,1)]
+	#   • with (1,0) blocked in BFS: from (0,0) → (0,1) → barrier, stuck.
+	#     Neither (2,0) nor (1,1) is reachable without going through (1,0).
+	#   → "next checkpoint only approach" must fire and deduce move to (1,0).
+	var cps := _make_checkpoints([[0, 0], [1, 0], [2, 1]])
+	var barriers: Array[Dictionary] = [{"r": 1, "c": 0, "dir": NumberPathLogic.DIR_RIGHT}]
+	var result := NumberPathSolver.solve(3, 2, cps, barriers)
+	var steps: Array = result.get("steps", [])
+	var found := false
+	for step in steps:
+		if step.get("reason", "") == "next checkpoint only approach":
+			found = true
+			assert_eq(step.get("result", Vector2i(-1, -1)), Vector2i(1, 0),
+					"CP-approach deduction must force move to next checkpoint (1,0)")
+			break
+	assert_true(found, "Rank-1 'next checkpoint only approach' deduction must fire")
