@@ -123,8 +123,10 @@ static func _derive_standard_anchors(solution: Array[Rect2i], rng: RandomNumberG
 ## Derive generalized anchors for Shapes mode.
 ## Each anchor gets its rectangle's shape class, then tries to minimize clues while
 ## preserving human-solvability (which implies a unique solution).
-## Using is_human_solvable (O(linear propagation)) instead of count_solutions
-## (O(exponential backtracking)) for each minimization step keeps generation fast.
+## Pre-computes candidate rectangles on the empty grid once (using the fast
+## _enumerate_rects_for_anchor_empty), then for each minimisation test updates only
+## the one changed anchor's candidates — reducing total enumeration work from
+## O(n_anchors × n_minimisation_steps) to O(n_anchors + n_minimisation_steps).
 ## Returns {} if the initial full-clue puzzle is not human-solvable, or if cancelled.
 static func _derive_shapes_anchors(
 		solution: Array[Rect2i], rng: RandomNumberGenerator,
@@ -150,40 +152,64 @@ static func _derive_shapes_anchors(
 	for d in anchor_data:
 		anchors[d["pos"]] = {"area": d["area"], "shape": d["shape"]}
 
+	# Build entries and base_candidates parallel arrays (same index as anchor_data).
+	# Entries are read-only by _is_human_solvable_from_entries; we mutate them
+	# here only to update the anchor clue before each incremental test call.
+	var entries: Array[Dictionary] = []
+	var base_candidates: Array = []
+	for d in anchor_data:
+		entries.append({"pos": d["pos"], "anchor": {"area": d["area"], "shape": d["shape"]}})
+	if cancel_check.is_valid() and cancel_check.call():
+		return {}
+	# Pre-compute all candidates on the empty grid once.  Only the changed
+	# anchor's candidates are re-computed per minimisation step below.
+	for i in range(entries.size()):
+		if cancel_check.is_valid() and cancel_check.call():
+			return {}
+		base_candidates.append(ShikakuSolver._enumerate_rects_for_anchor_empty(
+			entries[i]["pos"], entries[i]["anchor"], width, height))
+
 	# Verify that the initial full-clue puzzle is human-solvable.
-	# Human-solvability implies uniqueness (forced placements yield exactly one
-	# solution), so this replaces the expensive count_solutions initial check.
-	# If the initial combined puzzle is not human-solvable, reject this partition.
-	if not ShikakuSolver.is_human_solvable(width, height, anchors, cancel_check):
+	if not ShikakuSolver._is_human_solvable_from_entries(width, height, entries, base_candidates, cancel_check):
 		return {}
 
 	# Second pass: try to minimize each anchor.
 	# Commit a minimization only when the resulting puzzle remains human-solvable.
-	# Because each committed step is verified, the final anchors dict is
-	# guaranteed to be human-solvable (and therefore uniquely solvable) by induction.
-	for d in anchor_data:
+	for i in range(anchor_data.size()):
 		if cancel_check.is_valid() and cancel_check.call():
 			return {}
-		var pos: Vector2i = d["pos"]
-		var orig_area: int = d["area"]
-		var orig_shape: int = d["shape"]
+		var pos: Vector2i = anchor_data[i]["pos"]
+		var orig_area: int = anchor_data[i]["area"]
+		var orig_shape: int = anchor_data[i]["shape"]
+		# Save originals so we can restore if both minimisations fail.
+		var orig_anchor := entries[i]["anchor"]
+		var orig_cands: Array = base_candidates[i]
 
 		# Try shape-only (drop area).
 		if orig_shape != ShikakuLogic.SHAPE_ABSENT and orig_shape != ShikakuLogic.SHAPE_ANY:
-			var test_anchors := anchors.duplicate()
-			test_anchors[pos] = {"area": 0, "shape": orig_shape}
-			if ShikakuSolver.is_human_solvable(width, height, test_anchors, cancel_check):
-				anchors[pos] = {"area": 0, "shape": orig_shape}
+			var test_anchor := {"area": 0, "shape": orig_shape}
+			entries[i]["anchor"] = test_anchor
+			base_candidates[i] = ShikakuSolver._enumerate_rects_for_anchor_empty(
+				pos, test_anchor, width, height)
+			if ShikakuSolver._is_human_solvable_from_entries(width, height, entries, base_candidates, cancel_check):
+				anchors[pos] = test_anchor
+				# entries[i] and base_candidates[i] already hold the committed state.
 				continue
+			# Restore before trying area-only.
+			entries[i]["anchor"] = orig_anchor
+			base_candidates[i] = orig_cands
 
 		# Try area-only (drop shape).
-		var test_anchors_ao := anchors.duplicate()
-		test_anchors_ao[pos] = {"area": orig_area, "shape": ShikakuLogic.SHAPE_ABSENT}
-		if ShikakuSolver.is_human_solvable(width, height, test_anchors_ao, cancel_check):
-			anchors[pos] = {"area": orig_area, "shape": ShikakuLogic.SHAPE_ABSENT}
+		var test_anchor_ao := {"area": orig_area, "shape": ShikakuLogic.SHAPE_ABSENT}
+		entries[i]["anchor"] = test_anchor_ao
+		base_candidates[i] = ShikakuSolver._enumerate_rects_for_anchor_empty(
+			pos, test_anchor_ao, width, height)
+		if ShikakuSolver._is_human_solvable_from_entries(width, height, entries, base_candidates, cancel_check):
+			anchors[pos] = test_anchor_ao
 			continue
-
-		# Keep combined (area + shape).
+		# Restore (keep combined area + shape).
+		entries[i]["anchor"] = orig_anchor
+		base_candidates[i] = orig_cands
 		anchors[pos] = {"area": orig_area, "shape": orig_shape}
 
 	return anchors

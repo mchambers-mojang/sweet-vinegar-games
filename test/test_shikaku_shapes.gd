@@ -126,7 +126,7 @@ func test_shapes_mode_generates_15x15() -> void:
 	var anchors: Dictionary = gen.get("anchors", {})
 	var solution: Array[Rect2i] = gen.get("solution", [])
 	assert_true(anchors.size() > 0, "15x15 Shapes should have anchors")
-	assert_lt(elapsed_ms, 60000, "15x15 Shapes generation must complete within 60 seconds (took %d ms)" % elapsed_ms)
+	assert_lt(elapsed_ms, 3000, "15x15 Shapes generation must complete within 3 seconds (took %d ms)" % elapsed_ms)
 	assert_true(ShikakuSolver.validate_anchors(15, 15, anchors, solution),
 		"15x15 Shapes solution should validate")
 	assert_eq(ShikakuSolver.count_solutions(15, 15, anchors, 2), 1,

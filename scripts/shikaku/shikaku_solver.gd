@@ -90,16 +90,20 @@ static func count_solutions(width: int, height: int, anchors: Dictionary, max_co
 	covered.resize(width * height)
 	covered.fill(0)
 	var entries: Array[Dictionary] = _build_entries(anchors)
-	# Static MRV: sort entries by initial candidate count so the most constrained
-	# anchors (fewest valid placements on an empty grid) are placed first.
-	# This minimises the branching factor at the root of the search tree.
+	# Pre-compute all candidate rectangles on the empty grid once, then reuse
+	# them throughout the backtracker by filtering with _rect_is_clear.  This
+	# avoids re-enumerating (w,h) pairs at every node — critical for shape-only
+	# anchors with many candidates on large grids.
+	# Also use the candidate count as the MRV key for static root ordering.
 	var do_cancel_mrv := cancel_check.is_valid()
 	for entry in entries:
 		if do_cancel_mrv and cancel_check.call():
 			return -1
-		var initial_rects := _enumerate_rects_for_anchor(
-			entry["pos"], entry["anchor"], width, height, covered, cancel_check)
-		entry["_mrv"] = initial_rects.size()
+		var cands := _enumerate_rects_for_anchor_empty(entry["pos"], entry["anchor"], width, height)
+		if do_cancel_mrv and cancel_check.call():
+			return -1
+		entry["_base_cands"] = cands
+		entry["_mrv"] = cands.size()
 	entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return int(a.get("_mrv", 9999)) < int(b.get("_mrv", 9999))
 	)
@@ -124,33 +128,49 @@ static func count_solutions(width: int, height: int, anchors: Dictionary, max_co
 ## yields >1 candidates, record the required cell in the entry so subsequent
 ## Phase 1 passes can use the narrowed candidate set.
 ##
-## Candidates for every anchor are pre-computed once on the empty grid and then
-## filtered by current coverage each iteration, avoiding repeated (w,h) pair
-## enumeration — a significant speedup for shape-only anchors on large grids.
+## Candidates for every anchor are pre-computed once on the empty grid
+## (_enumerate_rects_for_anchor_empty, no coverage check) and then filtered by
+## current coverage each iteration — a significant speedup for shape-only anchors
+## on large grids.  The empty-grid pre-computation itself is fast because it
+## skips the per-placement _rect_is_clear scan.
 ## Returns false when cancelled (conservative: treated as not human-solvable).
 static func is_human_solvable(width: int, height: int, anchors: Dictionary, cancel_check: Callable = Callable()) -> bool:
 	var do_cancel := cancel_check.is_valid()
-	var covered := PackedByteArray()
-	covered.resize(width * height)
-	covered.fill(0)
 	var entries: Array[Dictionary] = _build_entries(anchors)
-	var placed := PackedByteArray()
-	placed.resize(entries.size())
-	placed.fill(0)
-
-	# Pre-compute all candidate rectangles for every anchor on the empty grid.
-	# Subsequent iterations filter this cached set by current coverage instead
-	# of re-enumerating (w,h) pairs, giving a significant speedup for
-	# shape-only anchors that generate many candidates on large grids.
-	# Covered is all-zero here so the pre-computed set is the maximal one.
+	# Pre-compute on empty grid using the fast (no _rect_is_clear) variant.
 	var base_candidates: Array = []
 	for i in range(entries.size()):
 		if do_cancel and cancel_check.call():
 			return false
-		base_candidates.append(_enumerate_rects_for_anchor(
-			entries[i]["pos"], entries[i]["anchor"], width, height, covered, cancel_check))
-		if do_cancel and cancel_check.call():
-			return false
+		base_candidates.append(_enumerate_rects_for_anchor_empty(
+			entries[i]["pos"], entries[i]["anchor"], width, height))
+	return _is_human_solvable_from_entries(width, height, entries, base_candidates, cancel_check)
+
+
+## Internal variant of is_human_solvable that accepts pre-computed base_candidates
+## so the expensive empty-grid enumeration phase can be shared across many calls.
+## [param entries] must be a parallel array to [param base_candidates] with the
+## same ordering; both are treated as read-only — propagation state is kept in
+## local work copies so successive calls with the same arrays are independent.
+## Intended for the generator's per-anchor minimisation loop, which calls
+## is_human_solvable dozens of times with only one anchor changed each call.
+static func _is_human_solvable_from_entries(
+		width: int, height: int,
+		entries: Array[Dictionary],
+		base_candidates: Array,
+		cancel_check: Callable = Callable()) -> bool:
+	var do_cancel := cancel_check.is_valid()
+	var covered := PackedByteArray()
+	covered.resize(width * height)
+	covered.fill(0)
+	var n := entries.size()
+	var placed := PackedByteArray()
+	placed.resize(n)
+	placed.fill(0)
+	# Work entries: local copy so required_cells do not bleed between calls.
+	var work_entries: Array[Dictionary] = []
+	for e in entries:
+		work_entries.append({"pos": e["pos"], "anchor": e["anchor"]})
 
 	var changed := true
 	while changed:
@@ -160,25 +180,22 @@ static func is_human_solvable(width: int, height: int, anchors: Dictionary, canc
 
 		# Precompute anchor positions of all UNPLACED anchors.
 		# Used by _filter_with_anchor_at for O(n_rects × avg_area) conflict
-		# filtering instead of the O(n_rects × n_anchors) scan in
-		# _filter_anchor_candidates.  Placed anchors' cells are already in
-		# `covered`, so their positions are excluded from enumeration by
-		# _collect_rects_containing — making a per-iteration build sufficient.
+		# filtering instead of the O(n_rects × n_anchors) scan.
 		var anchor_at := PackedByteArray()
 		anchor_at.resize(width * height)
 		anchor_at.fill(0)
-		for j in range(entries.size()):
+		for j in range(n):
 			if placed[j] == 0:
-				var ap: Vector2i = entries[j]["pos"]
+				var ap: Vector2i = work_entries[j]["pos"]
 				anchor_at[ap.y * width + ap.x] = 1
 
 		# ------------------------------------------------------------------
 		# Phase 1: Forced single candidate
 		# ------------------------------------------------------------------
-		for i in range(entries.size()):
+		for i in range(n):
 			if placed[i] != 0:
 				continue
-			var pos: Vector2i = entries[i]["pos"]
+			var pos: Vector2i = work_entries[i]["pos"]
 			# Filter pre-computed candidates by current coverage.
 			var all_rects: Array[Rect2i] = []
 			for rect in base_candidates[i]:
@@ -187,7 +204,7 @@ static func is_human_solvable(width: int, height: int, anchors: Dictionary, canc
 			if all_rects.is_empty() and do_cancel and cancel_check.call():
 				return false
 			var valid_rects: Array[Rect2i] = _filter_with_anchor_at(all_rects, pos, anchor_at, width)
-			valid_rects = _apply_required_cells(valid_rects, entries[i])
+			valid_rects = _apply_required_cells(valid_rects, work_entries[i])
 			if valid_rects.size() == 1:
 				_mark_covered(valid_rects[0], width, covered, 1)
 				placed[i] = 1
@@ -205,10 +222,10 @@ static func is_human_solvable(width: int, height: int, anchors: Dictionary, canc
 		# covering the same cell counts only once).
 		# ------------------------------------------------------------------
 		var cell_owners: Dictionary = {}  # Vector2i -> Array[int]
-		for i in range(entries.size()):
+		for i in range(n):
 			if placed[i] != 0:
 				continue
-			var pos: Vector2i = entries[i]["pos"]
+			var pos: Vector2i = work_entries[i]["pos"]
 			var all_rects: Array[Rect2i] = []
 			for rect in base_candidates[i]:
 				if _rect_is_clear(rect, width, covered):
@@ -216,7 +233,7 @@ static func is_human_solvable(width: int, height: int, anchors: Dictionary, canc
 			if do_cancel and cancel_check.call():
 				return false
 			var valid_rects: Array[Rect2i] = _filter_with_anchor_at(all_rects, pos, anchor_at, width)
-			valid_rects = _apply_required_cells(valid_rects, entries[i])
+			valid_rects = _apply_required_cells(valid_rects, work_entries[i])
 			for rect in valid_rects:
 				for r in range(rect.position.y, rect.position.y + rect.size.y):
 					for c in range(rect.position.x, rect.position.x + rect.size.x):
@@ -238,13 +255,13 @@ static func is_human_solvable(width: int, height: int, anchors: Dictionary, canc
 			var owner_idx: int = owners[0]
 			if placed[owner_idx] != 0:
 				continue
-			var pos: Vector2i = entries[owner_idx]["pos"]
+			var pos: Vector2i = work_entries[owner_idx]["pos"]
 			var all_rects: Array[Rect2i] = []
 			for rect in base_candidates[owner_idx]:
 				if _rect_is_clear(rect, width, covered):
 					all_rects.append(rect)
 			var valid_rects: Array[Rect2i] = _filter_with_anchor_at(all_rects, pos, anchor_at, width)
-			valid_rects = _apply_required_cells(valid_rects, entries[owner_idx])
+			valid_rects = _apply_required_cells(valid_rects, work_entries[owner_idx])
 			# Keep only candidates that contain the uniquely-owned cell.
 			var restricted: Array[Rect2i] = []
 			for rect in valid_rects:
@@ -257,9 +274,9 @@ static func is_human_solvable(width: int, height: int, anchors: Dictionary, canc
 			elif restricted.size() > 1:
 				# Cannot place yet, but record that this anchor must cover
 				# this cell so Phase 1 can use the narrowed candidate set.
-				if not entries[owner_idx].has("required_cells"):
-					entries[owner_idx]["required_cells"] = []
-				var req: Array = entries[owner_idx]["required_cells"] as Array
+				if not work_entries[owner_idx].has("required_cells"):
+					work_entries[owner_idx]["required_cells"] = []
+				var req: Array = work_entries[owner_idx]["required_cells"] as Array
 				if not req.has(cell):
 					req.append(cell)
 					changed = true
@@ -431,31 +448,49 @@ static func _count_backtrack(
 
 	var entry := entries[idx]
 	var pos: Vector2i = entry["pos"]
-	var anchor: Dictionary = entry["anchor"]
 
 	if covered[pos.y * width + pos.x] != 0:
 		_count_backtrack(width, height, entries, idx + 1, covered, count, max_count, cancel_check, do_cancel, cancelled)
 		return
 
-	var rects := _enumerate_rects_for_anchor(pos, anchor, width, height, covered, cancel_check)
-	# Propagate cancellation flag: _enumerate_rects_for_anchor returns [] when
-	# cancelled, which is indistinguishable from "no candidates" unless we re-poll.
+	# Filter pre-computed candidates by current coverage.  Pre-computed on empty
+	# grid, so _rect_is_clear is the only filter needed here — conflict checking
+	# is handled by the anchor_at bitmask below.
+	var rects: Array[Rect2i] = []
+	for rect in entry.get("_base_cands", []):
+		if _rect_is_clear(rect, width, covered):
+			rects.append(rect)
 	if do_cancel and cancel_check.call():
 		cancelled[0] = true
 		return
+
+	# Build anchor_at bitmask for unplaced (uncovered) anchors.  Using a bitmask
+	# reduces conflict checking from O(n_entries) per candidate to O(rect_area).
+	var anchor_at := PackedByteArray()
+	anchor_at.resize(width * height)
+	anchor_at.fill(0)
+	for e_idx in range(entries.size()):
+		if e_idx == idx:
+			continue
+		var ep: Vector2i = entries[e_idx]["pos"]
+		if covered[ep.y * width + ep.x] == 0:
+			anchor_at[ep.y * width + ep.x] = 1
 
 	for rect in rects:
 		if count[0] >= max_count or cancelled[0]:
 			return
 		_mark_covered(rect, width, covered, 1)
 
+		# Check conflict: does this rect contain another unplaced anchor?
 		var conflict := false
-		for e_idx in range(entries.size()):
-			if e_idx == idx:
-				continue
-			var other_pos: Vector2i = entries[e_idx]["pos"]
-			if rect.has_point(other_pos):
-				conflict = true
+		for r in range(rect.position.y, rect.position.y + rect.size.y):
+			for c in range(rect.position.x, rect.position.x + rect.size.x):
+				if c == pos.x and r == pos.y:
+					continue  # own anchor cell
+				if anchor_at[r * width + c] != 0:
+					conflict = true
+					break
+			if conflict:
 				break
 
 		if not conflict:
@@ -662,6 +697,51 @@ static func _collect_rects_containing(
 			var rect := Rect2i(c, r, w, h)
 			if _rect_is_clear(rect, width, covered):
 				out.append(rect)
+
+
+## Fast variant of _enumerate_rects_for_anchor for empty grids (covered = all 0).
+## Skips the per-placement _rect_is_clear scan (always true on empty grid),
+## reducing pre-computation cost from O(n_cands × avg_rect_area) to O(n_cands).
+## Used for the one-time base-candidate pre-computation in count_solutions,
+## is_human_solvable, and the generator's minimisation loop.
+static func _enumerate_rects_for_anchor_empty(
+		pos: Vector2i, anchor: Dictionary,
+		width: int, height: int) -> Array[Rect2i]:
+	var anchor_area: int = int(anchor.get("area", 0))
+	var anchor_shape: int = int(anchor.get("shape", ShikakuLogic.SHAPE_ABSENT))
+	var rects: Array[Rect2i] = []
+
+	if anchor_area > 0:
+		for w in range(1, anchor_area + 1):
+			if anchor_area % w != 0:
+				continue
+			var h := anchor_area / w
+			if not _shape_matches(w, h, anchor_shape):
+				continue
+			_collect_rects_containing_empty(pos, w, h, width, height, rects)
+	else:
+		for w in range(1, width + 1):
+			for h in range(1, height + 1):
+				if not _shape_matches(w, h, anchor_shape):
+					continue
+				_collect_rects_containing_empty(pos, w, h, width, height, rects)
+
+	return rects
+
+
+## Fast variant of _collect_rects_containing for empty grids.
+## Appends all (col, row) window positions without a coverage check.
+static func _collect_rects_containing_empty(
+		pos: Vector2i, w: int, h: int,
+		width: int, height: int,
+		out: Array[Rect2i]) -> void:
+	var min_col := maxi(0, pos.x - w + 1)
+	var max_col := mini(width - w, pos.x)
+	var min_row := maxi(0, pos.y - h + 1)
+	var max_row := mini(height - h, pos.y)
+	for r in range(min_row, max_row + 1):
+		for c in range(min_col, max_col + 1):
+			out.append(Rect2i(c, r, w, h))
 
 
 ## True when a w×h rectangle satisfies the given shape constraint.
