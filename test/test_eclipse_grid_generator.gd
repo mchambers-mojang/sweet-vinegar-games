@@ -249,3 +249,25 @@ func test_relation_clues_are_minimized() -> void:
 		assert_false(a.is_unique,
 			"v_relation %s must be necessary after minimization" % str(key))
 		vr[key] = saved
+
+
+# ---------------------------------------------------------------------------
+# is_unique requirement (regression for missing analysis.is_unique check)
+# ---------------------------------------------------------------------------
+
+func test_generated_puzzle_is_human_solver_unique() -> void:
+	## The generator must require analysis.is_unique=true before accepting a puzzle.
+	## Verify that every accepted puzzle can be uniquely completed by the human solver,
+	## not merely by exhaustive search.
+	for seed in [1, 7, 42, 100]:
+		var result: Dictionary = EclipseGridGenerator.generate(4, seed)
+		if result.is_empty():
+			continue
+		var givens: Array[int] = []
+		givens.assign(result["givens"])
+		var hr: Dictionary = result.get("h_relations", {})
+		var vr: Dictionary = result.get("v_relations", {})
+		var analysis: EclipseGridSolver.Analysis = EclipseGridSolver.analyze(
+			result["size"], givens, hr, vr)
+		assert_true(analysis.is_unique,
+			"Generated 4×4 puzzle (seed %d) must be uniquely solvable by the human solver" % seed)

@@ -455,12 +455,8 @@ func test_rank4_chain_trial_placement_does_not_mutate_input() -> void:
 # ---------------------------------------------------------------------------
 
 func test_rank4_propagates_rank2_in_trial() -> void:
-	## When _global_quota_chain tries a candidate value and propagates, it must
-	## use Rank-2 (combined_local / relation_propagation) in addition to Rank-1.
-	## If only Rank-1 is used, the trial copy may remain consistent even when the
-	## candidate leads to a Rank-2 contradiction.
-	## Verify: _global_quota_chain does NOT mutate the original cells array after
-	## using full propagation (regression for speculative mutation).
+	## _global_quota_chain is now non-speculative and reads cells[] directly.
+	## Verify it does NOT mutate the original cells array (no trial placement).
 	var cells: Array[int] = [
 		PLUS,  MINUS, EMPTY, MINUS, PLUS,  MINUS,
 		MINUS, PLUS,  MINUS, PLUS,  MINUS, PLUS,
@@ -586,9 +582,9 @@ func test_rank3_does_not_mislabel_rank1_in_analyze() -> void:
 
 func test_rank3_enumerate_finds_eq_forced_cell() -> void:
 	## Row 0 = [+, _, _, _, _, -] with EQ between positions 1 and 2.
-	## With plus_needed=2, minus_needed=2 in 4 empties, and EQ(pos1==pos2),
-	## only one valid line completion exists: pos1=MINUS,pos2=MINUS,pos3=PLUS,pos4=PLUS.
-	## No Rank-1 or Rank-2 technique can detect this; it requires enumeration.
+	## Pattern A fires: cells[0]=PLUS (left neighbour), EQ(1,2) → cells[1] must be
+	## MINUS (placing PLUS would make cells[0,1,2]=PLUS,PLUS,PLUS → no-three).
+	## No Rank-1 or Rank-2 technique can detect this directly.
 	var cells: Array[int] = [
 		PLUS, EMPTY, EMPTY, EMPTY, EMPTY, MINUS,
 		MINUS, PLUS, MINUS, PLUS, MINUS, PLUS,
@@ -601,11 +597,89 @@ func test_rank3_enumerate_finds_eq_forced_cell() -> void:
 	var step: EclipseGridSolver.SolverStep = \
 		EclipseGridSolver._line_propagate_rank3(6, cells, h_rels, {}, 0, true)
 	assert_not_null(step,
-		"_line_propagate_rank3 must find forced cell when EQ relation creates unique completion")
+		"_line_propagate_rank3 must find forced cell (Pattern A: EQ + left-neighbour)")
 	if step != null:
 		assert_eq(step.rank, EclipseGridSolver.RANK_3,
 			"Must be labeled RANK_3")
 		assert_eq(step.affected_cells[0], 1,
 			"pos 1 (flat index 1) is the first forced cell")
 		assert_eq(step.result_value, MINUS,
-			"pos 1 is forced to MINUS by unique completion")
+			"pos 1 is forced to MINUS: placing PLUS would create PLUS,PLUS,PLUS triple")
+
+
+# ---------------------------------------------------------------------------
+# Rank-3 Pattern B / Pattern C regressions
+# ---------------------------------------------------------------------------
+
+func test_rank3_pattern_b_eq_right_neighbour() -> void:
+	## Pattern B: EQ(p, p+1) + right-neighbour cells[p+2]=V → force cells[p+1]=¬V.
+	## p=0, EQ(0,1), cells[2]=PLUS.  Placing PLUS at cells[1] would via EQ force
+	## cells[0]=PLUS → triple (0,1,2)=PLUS,PLUS,PLUS → no-three violation.
+	## cells[p-1] is out-of-bounds so Pattern A cannot fire; Pattern B fires.
+	var cells: Array[int] = [
+		EMPTY, EMPTY, PLUS,  EMPTY, EMPTY, EMPTY,
+		MINUS, PLUS,  MINUS, PLUS,  MINUS, PLUS,
+		PLUS,  MINUS, PLUS,  MINUS, PLUS,  MINUS,
+		MINUS, PLUS,  MINUS, PLUS,  MINUS, PLUS,
+		PLUS,  MINUS, PLUS,  MINUS, PLUS,  MINUS,
+		MINUS, PLUS,  MINUS, PLUS,  MINUS, PLUS,
+	]
+	var h_rels := { Vector2i(0, 0): EQ }
+	var step: EclipseGridSolver.SolverStep = \
+		EclipseGridSolver._line_propagate_rank3(6, cells, h_rels, {}, 0, true)
+	assert_not_null(step, "Pattern B must return a step")
+	if step != null:
+		assert_eq(step.rank, EclipseGridSolver.RANK_3, "Must be RANK_3")
+		assert_eq(step.affected_cells[0], 1, "pos 1 (flat index 1) is forced")
+		assert_eq(step.result_value, MINUS,
+			"cells[2]=PLUS → placing PLUS at pos 1 creates triple → force MINUS")
+
+
+func test_rank3_pattern_c_eq_quota_overflow() -> void:
+	## Pattern C: EQ(p, p+1) + plus_needed=1 → EQ pair cannot be PLUS,PLUS (adds 2)
+	## → both cells must be MINUS.  Neither Pattern A nor B applies here because
+	## cells[p-1] and cells[p+2] are both EMPTY.
+	## Row 0: [+, _, _, _, _, +], EQ(2,3), plus_needed=1.
+	var cells: Array[int] = [
+		PLUS,  EMPTY, EMPTY, EMPTY, EMPTY, PLUS,
+		MINUS, PLUS,  MINUS, PLUS,  MINUS, PLUS,
+		PLUS,  MINUS, PLUS,  MINUS, PLUS,  MINUS,
+		MINUS, PLUS,  MINUS, PLUS,  MINUS, PLUS,
+		PLUS,  MINUS, PLUS,  MINUS, PLUS,  MINUS,
+		MINUS, PLUS,  MINUS, PLUS,  MINUS, PLUS,
+	]
+	var h_rels := { Vector2i(2, 0): EQ }
+	var step: EclipseGridSolver.SolverStep = \
+		EclipseGridSolver._line_propagate_rank3(6, cells, h_rels, {}, 0, true)
+	assert_not_null(step, "Pattern C must return a step when plus_needed=1 and EQ pair present")
+	if step != null:
+		assert_eq(step.rank, EclipseGridSolver.RANK_3, "Must be RANK_3")
+		assert_eq(step.affected_cells[0], 2, "pos 2 (flat index 2) is forced")
+		assert_eq(step.result_value, MINUS,
+			"EQ pair as PLUS,PLUS would overflow quota → both must be MINUS")
+
+
+func test_rank4_non_speculative_read_only() -> void:
+	## _global_quota_chain must be a read-only direct check: no cells.duplicate(),
+	## no trial placements, no propagation loops.  Verify: (a) cells[] is not
+	## mutated, and (b) the function forces the empty cell via row-quota check alone.
+	## Row 2: [+,-,_,-,+,-] → minus=3=half → MINUS blocked → force PLUS.
+	var cells: Array[int] = [
+		PLUS,  MINUS, PLUS,  MINUS, PLUS,  MINUS,
+		MINUS, PLUS,  MINUS, PLUS,  MINUS, PLUS,
+		PLUS,  MINUS, EMPTY, MINUS, PLUS,  MINUS,
+		MINUS, PLUS,  MINUS, PLUS,  MINUS, PLUS,
+		PLUS,  MINUS, PLUS,  MINUS, PLUS,  MINUS,
+		MINUS, PLUS,  MINUS, PLUS,  MINUS, PLUS,
+	]
+	var snapshot: Array[int] = cells.duplicate()
+	var step: EclipseGridSolver.SolverStep = \
+		EclipseGridSolver._global_quota_chain(6, cells, {}, {})
+	assert_eq(cells, snapshot,
+		"_global_quota_chain must not modify cells[] (non-speculative, read-only)")
+	assert_not_null(step, "Read-only row-quota check must detect blocked candidate")
+	if step != null:
+		assert_eq(step.rank, EclipseGridSolver.RANK_4, "Must be RANK_4")
+		assert_eq(step.affected_cells[0], 14, "flat index 14 = row 2, col 2")
+		assert_eq(step.result_value, PLUS,
+			"MINUS blocked by row quota → force PLUS")

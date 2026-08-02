@@ -19,13 +19,14 @@ const MAX_ATTEMPTS := 30
 
 
 ## Required maximum solver rank for each size.
-## Size 4 → rank 1, size 6 → rank 2, size 8 → rank 3, size 10 → rank 4.
+## Size 4 → rank 1, size 6 → rank 2, size 8/10 → rank 3.
+## All four tiers use only non-speculative deduction rules; Expert (10×10)
+## achieves its higher difficulty through board size rather than a higher rank.
 static func required_rank(size: int) -> int:
 	match size:
 		4:  return 1
 		6:  return 2
-		8:  return 3
-		_:  return 4
+		_:  return 3
 
 
 ## Generate a puzzle.
@@ -83,9 +84,11 @@ static func generate(size: int, seed: int, cancel_check: Callable = Callable()) 
 				size, givens, h_relations, v_relations, cancel_check)
 		if cancel_check.is_valid() and cancel_check.call():
 			return {}
-		# Enforce exact difficulty tier: reject puzzles that are too easy (rank below
-		# required) or too hard (rank above required) for this board size.
-		if analysis.max_rank != required_rank(size):
+		# Enforce exact difficulty tier: also require that the human solver can
+		# uniquely complete the puzzle (analysis.is_unique) — this ensures hints
+		# and auto-complete always work correctly and that the puzzle is not merely
+		# unique by exhaustive search but also human-logic-solvable.
+		if not analysis.is_unique or analysis.max_rank != required_rank(size):
 			continue
 
 		return {

@@ -41,7 +41,12 @@ var v_relations: Dictionary = {} ## Vertical clues
 
 var is_completed: bool = false
 var hints_used: int = 0
-var assistance_mode: int = ASSIST_FREE
+## Changing assistance_mode clears any pending rejected cycle state so that
+## cycle_cell() always restarts from the current accepted cell value.
+var assistance_mode: int = ASSIST_FREE:
+	set(value):
+		assistance_mode = value
+		_rejected_cells.clear()
 
 var _undo_stack: UndoStack = UndoStack.new()
 

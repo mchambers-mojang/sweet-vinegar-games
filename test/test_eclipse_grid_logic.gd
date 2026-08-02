@@ -1023,3 +1023,41 @@ func test_save_adapter_rejects_rejected_cells_invalid_key() -> void:
 	data["rejected_cells"] = {0: PLUS}  # Int key instead of string — invalid
 	assert_false(adapter._can_resume_from(data),
 		"Save adapter must reject rejected_cells with non-string key")
+
+
+# ---------------------------------------------------------------------------
+# Fix 4 — _rejected_cells cleared when assistance_mode changes
+# ---------------------------------------------------------------------------
+
+func test_rejected_cells_cleared_when_mode_changes() -> void:
+	## When assistance_mode is reassigned, any pending rejected cycle state
+	## (_rejected_cells) must be cleared so that cycle_cell() restarts from the
+	## current accepted cell value rather than from the rejected position.
+	var l2 := EclipseGridLogic.new()
+	var sol: Array[int] = [MINUS, PLUS, MINUS, PLUS,
+						   PLUS, MINUS, PLUS, MINUS,
+						   MINUS, PLUS, MINUS, PLUS,
+						   PLUS, MINUS, PLUS, MINUS]
+	var gv: Array[int] = sol.duplicate()
+	gv[0] = EMPTY
+	l2.init_from_save(_make_save_data(4, sol, gv))
+	l2.assistance_mode = EclipseGridLogic.ASSIST_STRICT
+
+	# Cell 0 solution is MINUS. First tap: PLUS is wrong → rejected, cycle advances.
+	var r1: EclipseGridLogic.SetGlyphResult = l2.cycle_cell(0)
+	assert_true(r1.rejected, "Wrong PLUS must be rejected in strict mode")
+	# cells[0] stays EMPTY; _rejected_cells[0] = PLUS (internal cycle position).
+	assert_eq(l2.cells[0], EMPTY,
+		"Rejected glyph must not appear in cells[] in strict mode")
+
+	# Switch to free mode: _rejected_cells must be cleared.
+	l2.assistance_mode = EclipseGridLogic.ASSIST_FREE
+
+	# Next tap must cycle from the accepted value (EMPTY) → PLUS, not from the
+	# rejected position PLUS → MINUS.
+	var r2: EclipseGridLogic.SetGlyphResult = l2.cycle_cell(0)
+	assert_false(r2.rejected, "Free mode must not reject values")
+	assert_eq(r2.new_value, PLUS,
+		"Cycle must restart from EMPTY → PLUS after _rejected_cells cleared on mode change")
+	assert_eq(l2.cells[0], PLUS,
+		"Cell accepts PLUS in free mode after cleared rejected state")
