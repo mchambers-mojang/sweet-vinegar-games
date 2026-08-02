@@ -225,9 +225,10 @@ static func _is_human_solvable_from_entries(
 			unconstrained_count += 1
 			unconstrained_flags[j] = 1
 
-	# work_cands: Phase 1 result cache, reused in Phase 2 to avoid a second
-	# base_candidates scan.  Updated each Phase 1 pass to reflect current
-	# coverage, anchor conflicts, area_limit, and required_cells.
+	# work_cands: Phase 1 result cache, reused in Phase 2 restriction to benefit
+	# from required_cells narrowing applied in Phase 1 (_apply_required_cells).
+	# Phase 2 owner_map building uses base_candidates directly so it reflects
+	# ALL Phase-1 placements, not just those before each anchor was processed.
 	var work_cands: Array = []
 	for _i in range(n):
 		work_cands.append([])
@@ -261,7 +262,7 @@ static func _is_human_solvable_from_entries(
 					continue
 				valid_rects.append(rect)
 			valid_rects = _apply_required_cells(valid_rects, work_entries[i])
-			work_cands[i] = valid_rects  # cache for Phase 2 owner_map + restriction
+			work_cands[i] = valid_rects  # cache for Phase 2 restriction (required_cells narrowing)
 			if valid_rects.size() == 1:
 				_mark_covered(valid_rects[0], width, covered, 1)
 				placed[i] = 1
@@ -288,9 +289,11 @@ static func _is_human_solvable_from_entries(
 		#   -1 = no unplaced anchor candidate reaches this cell
 		#    k = unique anchor index (0..n-1) can cover this cell
 		#   -2 = multiple anchors can cover this cell
-		# Use Phase 1 cached work_cands — already coverage-filtered and
-		# anchor-conflict-free — so no per-candidate _rect_is_clear or
-		# _passes_anchor_at call is needed here.
+		# Rebuild from base_candidates with current coverage so the map
+		# reflects ALL Phase-1 placements (not just those before each anchor
+		# was processed).  Accurate ownership leads to more unique-owner
+		# cells detected per pass, fewer required_cells iterations, and
+		# better overall convergence.
 		# ------------------------------------------------------------------
 		var owner_map := PackedInt32Array()
 		owner_map.resize(width * height)
@@ -300,10 +303,15 @@ static func _is_human_solvable_from_entries(
 		for i in range(n):
 			if placed[i] != 0:
 				continue
+			var pos_i: Vector2i = work_entries[i]["pos"]
 			var is_unc_i: bool = unconstrained_flags[i] != 0
-			for rect in work_cands[i]:
+			for rect in base_candidates[i]:
 				if is_unc_i and rect.size.x * rect.size.y > al:
-					break  # work_cands area-sorted for unconstrained (inherits base order)
+					break  # base_candidates area-sorted ascending for unconstrained
+				if not _rect_is_clear(rect, width, covered):
+					continue
+				if not _passes_anchor_at(rect, pos_i, anchor_at, width):
+					continue
 				for r in range(rect.position.y, rect.position.y + rect.size.y):
 					for c in range(rect.position.x, rect.position.x + rect.size.x):
 						var idx := r * width + c
@@ -315,7 +323,8 @@ static func _is_human_solvable_from_entries(
 			if do_cancel and cancel_check.call():
 				return false
 
-		# For each cell with a unique owner, use Phase 1 cache + _rect_is_clear
+		# For each cell with a unique owner, use the Phase-1 candidate cache
+		# (work_cands, which includes required_cells narrowing) + _rect_is_clear
 		# to handle coverage changes from within-Phase-2 forced placements.
 		# Accumulate required_cells; Phase 1 on the next pass applies them.
 		for cell_idx in range(owner_map.size()):
@@ -329,7 +338,8 @@ static func _is_human_solvable_from_entries(
 			var cell := Vector2i(cell_idx % width, cell_idx / width)
 			var opos: Vector2i = work_entries[owner_idx]["pos"]
 			var is_unc_o: bool = unconstrained_flags[owner_idx] != 0
-			# Use Phase 1 cache; re-apply _rect_is_clear for mid-loop placements.
+			# Restrict using work_cands (Phase-1 cache with required_cells applied);
+			# re-check _rect_is_clear for mid-Phase-2 coverage changes.
 			var restricted: Array[Rect2i] = []
 			for rect in work_cands[owner_idx]:
 				if is_unc_o and rect.size.x * rect.size.y > al:

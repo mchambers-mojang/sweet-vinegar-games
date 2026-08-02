@@ -128,11 +128,12 @@ static func _derive_standard_anchors(solution: Array[Rect2i], rng: RandomNumberG
 ## the one changed anchor's candidates — reducing total enumeration work from
 ## O(n_anchors × n_minimisation_steps) to O(n_anchors + n_minimisation_steps).
 ##
-## On large grids (>8×8), TALL and WIDE anchors are only minimised to area-only
-## (never shape-only).  Shape-only TALL/WIDE candidates are O(100+) on such grids,
-## making propagation and uniqueness checks prohibitively expensive.  SQUARE
-## shape-only is still tried at all sizes because its candidates are bounded by
-## {1×1, 2×2, 3×3, …} — at most ~14 even on a 15×15 grid.
+## On large grids (>8×8), TALL and WIDE anchors are kept combined (area+shape)
+## without any minimisation attempt.  Both shape-only and area-only tests for
+## TALL/WIDE anchors are expensive on large grids: area-only removes the shape
+## constraint and adds many divisor-pair candidates, causing _is_human_solvable_from_entries
+## to run many propagation iterations on each (typically failing) test.  SQUARE
+## anchors are still fully minimised at all sizes (bounded candidate counts).
 ##
 ## Returns {} if the initial full-clue puzzle is not human-solvable, or if cancelled.
 static func _derive_shapes_anchors(
@@ -180,13 +181,12 @@ static func _derive_shapes_anchors(
 	if not ShikakuSolver._is_human_solvable_from_entries(width, height, entries, base_candidates, cancel_check):
 		return {}
 
-	# On large grids (more than 8×8) restrict shape-only minimisation to SQUARE
-	# anchors.  For TALL and WIDE anchors on large grids, a shape-only clue
-	# (area == 0) produces O(100+) candidates whose area is bounded only by the
-	# loose dynamic area_limit, making both _is_human_solvable_from_entries and
-	# count_solutions prohibitively slow.  SQUARE shape-only candidates are
-	# bounded by {1×1, 2×2, 3×3, …} — at most ~14 even on a 15×15 grid — so
-	# they remain fast at any supported grid size.
+	# On large grids (more than 8×8) restrict minimisation to SQUARE anchors only.
+	# TALL and WIDE anchors are kept combined because:
+	#   shape-only (area=0): O(100+) unconstrained candidates on large grids.
+	#   area-only (shape=ABSENT): adds extra divisor-pair candidates; each failing
+	#   propagation test runs many iterations before concluding non-solvability.
+	# SQUARE candidates are bounded (1×1, 2×2, …, k×k) and remain fast at any size.
 	var large_grid := width * height > 64
 
 	# Second pass: try to minimize each anchor.
@@ -223,16 +223,23 @@ static func _derive_shapes_anchors(
 			base_candidates[i] = orig_cands
 
 		# Try area-only (drop shape).
-		var test_anchor_ao := {"area": orig_area, "shape": ShikakuLogic.SHAPE_ABSENT}
-		entries[i]["anchor"] = test_anchor_ao
-		base_candidates[i] = ShikakuSolver._enumerate_rects_for_anchor_empty(
-			pos, test_anchor_ao, width, height)
-		if ShikakuSolver._is_human_solvable_from_entries(width, height, entries, base_candidates, cancel_check):
-			anchors[pos] = test_anchor_ao
-			continue
-		# Restore (keep combined area + shape).
-		entries[i]["anchor"] = orig_anchor
-		base_candidates[i] = orig_cands
+		# On large grids, skip area-only for TALL and WIDE anchors: removing the
+		# shape constraint greatly expands the candidate set (all divisor pairs vs.
+		# only the tall-or-wide subset).  Each failing test runs many propagation
+		# iterations before confirming non-solvability, making 15×15 generation
+		# prohibitively slow.  SQUARE area-only is still tried at all sizes because
+		# its candidate count is bounded by the anchor's area divisors.
+		if not large_grid or orig_shape == ShikakuLogic.SHAPE_SQUARE:
+			var test_anchor_ao := {"area": orig_area, "shape": ShikakuLogic.SHAPE_ABSENT}
+			entries[i]["anchor"] = test_anchor_ao
+			base_candidates[i] = ShikakuSolver._enumerate_rects_for_anchor_empty(
+				pos, test_anchor_ao, width, height)
+			if ShikakuSolver._is_human_solvable_from_entries(width, height, entries, base_candidates, cancel_check):
+				anchors[pos] = test_anchor_ao
+				continue
+			# Restore before keeping combined.
+			entries[i]["anchor"] = orig_anchor
+			base_candidates[i] = orig_cands
 		anchors[pos] = {"area": orig_area, "shape": orig_shape}
 
 	return anchors
