@@ -91,10 +91,30 @@ static func count_solutions(width: int, height: int, anchors: Dictionary, max_co
 	covered.fill(0)
 	var entries: Array[Dictionary] = _build_entries(anchors)
 	# Pre-compute all candidate rectangles on the empty grid once, then reuse
-	# them throughout the backtracker by filtering with _rect_is_clear.  This
+	# them throughout the backtracker by filtering with _rect_is_feasible.  This
 	# avoids re-enumerating (w,h) pairs at every node — critical for shape-only
 	# anchors with many candidates on large grids.
 	# Also use the candidate count as the MRV key for static root ordering.
+	#
+	# is_anchor: static bitmask of all anchor positions (never changes during search).
+	# Combined with the live covered array, it replaces the per-node anchor_at rebuild.
+	var is_anchor := PackedByteArray()
+	is_anchor.resize(width * height)
+	is_anchor.fill(0)
+	# Per-entry cached fields for O(1) access in the backtracker.
+	var uncovered_count := width * height
+	var fixed_area_remaining := 0
+	var unconstrained_count := 0
+	for entry in entries:
+		var pos: Vector2i = entry["pos"]
+		is_anchor[pos.y * width + pos.x] = 1
+		var entry_area: int = int(entry["anchor"].get("area", 0))
+		entry["_area"] = entry_area
+		entry["_is_unc"] = entry_area == 0
+		if entry_area > 0:
+			fixed_area_remaining += entry_area
+		else:
+			unconstrained_count += 1
 	var do_cancel_mrv := cancel_check.is_valid()
 	for entry in entries:
 		if do_cancel_mrv and cancel_check.call():
@@ -109,7 +129,9 @@ static func count_solutions(width: int, height: int, anchors: Dictionary, max_co
 	)
 	var count := [0]
 	var cancelled := [false]
-	_count_backtrack(width, height, entries, 0, covered, count, max_count, cancel_check, cancel_check.is_valid(), cancelled)
+	_count_backtrack(width, height, entries, 0, covered, count, max_count,
+			cancel_check, cancel_check.is_valid(), cancelled,
+			is_anchor, uncovered_count, fixed_area_remaining, unconstrained_count)
 	if cancelled[0]:
 		return -1
 	return count[0]
@@ -525,7 +547,9 @@ static func _backtrack(
 static func _count_backtrack(
 		width: int, height: int, entries: Array[Dictionary],
 		idx: int, covered: PackedByteArray, count: Array, max_count: int,
-		cancel_check: Callable, do_cancel: bool, cancelled: Array) -> void:
+		cancel_check: Callable, do_cancel: bool, cancelled: Array,
+		is_anchor: PackedByteArray,
+		uncovered_count: int, fixed_area_remaining: int, unconstrained_count: int) -> void:
 	if count[0] >= max_count:
 		return
 	if do_cancel and cancel_check.call():
@@ -541,198 +565,114 @@ static func _count_backtrack(
 
 	var entry := entries[idx]
 	var pos: Vector2i = entry["pos"]
+	var is_unc: bool = entry.get("_is_unc", false)
+	var entry_area: int = int(entry.get("_area", 0))
 
 	if covered[pos.y * width + pos.x] != 0:
-		_count_backtrack(width, height, entries, idx + 1, covered, count, max_count, cancel_check, do_cancel, cancelled)
+		_count_backtrack(width, height, entries, idx + 1, covered, count, max_count,
+				cancel_check, do_cancel, cancelled, is_anchor,
+				uncovered_count, fixed_area_remaining, unconstrained_count)
 		return
 
-	# Filter pre-computed candidates by current coverage.  Pre-computed on empty
-	# grid, so _rect_is_clear is the only filter needed here — conflict checking
-	# is handled by the anchor_at bitmask below.
+	# Sound upper bound: in any valid tiling, fixed-area anchors consume exactly
+	# fixed_area_remaining cells and each of the other unconstrained_count − 1
+	# unconstrained anchors needs ≥ 1 cell.  The current unconstrained anchor can
+	# cover at most the remainder — so candidates sorted by area asc can break early.
+	var area_limit := uncovered_count - fixed_area_remaining - maxi(0, unconstrained_count - 1)
+
+	# Filter base candidates using _rect_is_feasible: a single-pass check that
+	# combines the coverage test (_rect_is_clear) and the anchor-conflict test
+	# (no other unplaced anchor inside the rect).  Using the static is_anchor
+	# bitmask + the live covered array replaces the per-node anchor_at rebuild.
 	var rects: Array[Rect2i] = []
 	for rect in entry.get("_base_cands", []):
-		if _rect_is_clear(rect, width, covered):
+		if is_unc and rect.size.x * rect.size.y > area_limit:
+			break  # _base_cands sorted by area asc for unconstrained
+		if _rect_is_feasible(rect, pos, is_anchor, covered, width):
 			rects.append(rect)
 	if do_cancel and cancel_check.call():
 		cancelled[0] = true
 		return
 
-	# Build anchor_at bitmask for unplaced (uncovered) anchors.  Using a bitmask
-	# reduces conflict checking from O(n_entries) per candidate to O(rect_area).
-	var anchor_at := PackedByteArray()
-	anchor_at.resize(width * height)
-	anchor_at.fill(0)
-	for e_idx in range(entries.size()):
-		if e_idx == idx:
-			continue
-		var ep: Vector2i = entries[e_idx]["pos"]
-		if covered[ep.y * width + ep.x] == 0:
-			anchor_at[ep.y * width + ep.x] = 1
-
 	for rect in rects:
 		if count[0] >= max_count or cancelled[0]:
 			return
+		var rect_area := rect.size.x * rect.size.y
 		_mark_covered(rect, width, covered, 1)
 
-		# Check conflict: does this rect contain another unplaced anchor?
-		var conflict := false
-		for r in range(rect.position.y, rect.position.y + rect.size.y):
-			for c in range(rect.position.x, rect.position.x + rect.size.x):
-				if c == pos.x and r == pos.y:
-					continue  # own anchor cell
-				if anchor_at[r * width + c] != 0:
-					conflict = true
-					break
-			if conflict:
-				break
+		# Update incremental bookkeeping after placing this rect.
+		var new_uncovered := uncovered_count - rect_area
+		var new_fixed := fixed_area_remaining
+		var new_unc := unconstrained_count
+		if is_unc:
+			new_unc -= 1
+		else:
+			new_fixed -= entry_area
 
-		if not conflict:
-			# Forward checking: before recursing, verify every remaining unplaced
-			# anchor still has at least one non-conflicting candidate.  Pruning
-			# dead-end branches here is critical for large grids with many
-			# unconstrained (shape-only) anchors that each have hundreds of
-			# candidate rectangles.
-			var feasible := true
-			for fi in range(idx + 1, entries.size()):
-				var fpos: Vector2i = entries[fi]["pos"]
-				if covered[fpos.y * width + fpos.x] != 0:
-					continue  # anchor cell already covered – skip
-				if not _has_any_feasible_candidate(fi, entries, width, height, covered, cancel_check, do_cancel):
-					feasible = false
-					break
-			if do_cancel and cancel_check.call():
-				cancelled[0] = true
-				_mark_covered(rect, width, covered, 0)
-				return
-			if feasible:
-				_count_backtrack(width, height, entries, idx + 1, covered, count, max_count, cancel_check, do_cancel, cancelled)
+		# Forward checking: verify every remaining unplaced anchor still has at
+		# least one feasible candidate.  Use the same is_anchor + covered approach
+		# with a shared fi_area_limit (sound for ALL remaining unconstrained anchors:
+		# each of the new_unc − 1 others needs ≥ 1 cell).
+		var fi_area_limit := new_uncovered - new_fixed - maxi(0, new_unc - 1)
+		var feasible := true
+		for fi in range(idx + 1, entries.size()):
+			if cancelled[0]:
+				break
+			var fpos: Vector2i = entries[fi]["pos"]
+			if covered[fpos.y * width + fpos.x] != 0:
+				continue  # anchor already covered — skip
+			if not _has_any_feasible_cand_fast(entries[fi], is_anchor, covered, width, fi_area_limit):
+				feasible = false
+				break
+		if do_cancel and cancel_check.call():
+			cancelled[0] = true
+			_mark_covered(rect, width, covered, 0)
+			return
+		if feasible:
+			_count_backtrack(width, height, entries, idx + 1, covered, count, max_count,
+					cancel_check, do_cancel, cancelled, is_anchor,
+					new_uncovered, new_fixed, new_unc)
 
 		_mark_covered(rect, width, covered, 0)
 
 
 ## Fast feasibility check for forward-checking in the backtracker.
-## Returns true when anchor [param anchor_idx] can still be covered by at least one
-## non-conflicting rectangle given the current [param covered] state.
-## For unconstrained (shape-only) anchors when this is the only remaining
-## unconstrained anchor, computes the exact required area from the global coverage
-## constraint instead of iterating all possible areas — a much tighter check.
-## When multiple unconstrained anchors remain, iterates areas up to the sound
-## upper bound: uncovered_cells − fixed_area_remaining − other_unconstrained_count
-## (each other unconstrained anchor needs ≥ 1 cell, so this anchor can have at
-## most the remainder — sound for any valid solution regardless of generated size).
-## Returns false conservatively when cancelled.
-static func _has_any_feasible_candidate(
-		anchor_idx: int, entries: Array[Dictionary],
-		width: int, height: int, covered: PackedByteArray,
-		cancel_check: Callable = Callable(), do_cancel: bool = false) -> bool:
-	var pos: Vector2i = entries[anchor_idx]["pos"]
-	var anchor: Dictionary = entries[anchor_idx]["anchor"]
-	var anchor_area: int = int(anchor.get("area", 0))
-	var anchor_shape: int = int(anchor.get("shape", ShikakuLogic.SHAPE_ABSENT))
-
-	if anchor_area > 0:
-			# Area-constrained: only divisor pairs to check — very few.
-			for w in range(1, anchor_area + 1):
-				if anchor_area % w != 0:
-					continue
-				var h := anchor_area / w
-				if not _shape_matches(w, h, anchor_shape):
-					continue
-				if _has_placement_of_size(pos, w, h, width, height, covered, entries, anchor_idx):
-					return true
-			return false
-	else:
-			# No area constraint. Count uncovered cells and how much area the remaining
-			# area-constrained anchors will consume. If this is the only unconstrained
-			# anchor, its required area is fixed — only check that specific area.
-			var uncovered_count := 0
-			for c in covered:
-				if c == 0:
-					uncovered_count += 1
-
-			var other_unconstrained := 0
-			var fixed_area_remaining := 0
-			for k in range(entries.size()):
-				if k == anchor_idx:
-					continue
-				var kpos: Vector2i = entries[k]["pos"]
-				if covered[kpos.y * width + kpos.x] != 0:
-					continue  # already placed
-				var k_area: int = int(entries[k]["anchor"].get("area", 0))
-				if k_area > 0:
-					fixed_area_remaining += k_area
-				else:
-					other_unconstrained += 1
-
-			if other_unconstrained == 0:
-				# This is the only remaining unconstrained anchor.  Its area is
-				# exactly uncovered_cells minus the area of all future area-constrained
-				# placements.  Checking only this required area is far tighter than
-				# iterating all sizes from 1 upward and gives near-instant pruning
-				# when the shape constraint eliminates that area.
-				var required_area := uncovered_count - fixed_area_remaining
-				if required_area <= 0:
-					return false
-				for w in range(1, required_area + 1):
-					if required_area % w != 0:
-						continue
-					var h := required_area / w
-					if not _shape_matches(w, h, anchor_shape):
-						continue
-					if _has_placement_of_size(pos, w, h, width, height, covered, entries, anchor_idx):
-						return true
-				return false
-			else:
-				# Multiple unconstrained anchors remain. Iterate by increasing area
-				# for fast early exit on dense grids.
-				# Sound upper bound: each of the other_unconstrained anchors needs ≥ 1
-				# cell, and fixed-area anchors need exactly their stated area.
-				# This anchor can therefore cover at most the remaining cells after
-				# reserving one cell per other unconstrained anchor and subtracting the
-				# fixed-area demand — a tighter, sound cap vs. width*height.
-				var area_limit := uncovered_count - fixed_area_remaining - other_unconstrained
-				if area_limit <= 0:
-					return false
-				for area in range(1, area_limit + 1):
-					if do_cancel and cancel_check.call():
-						return false  # conservative: treat cancelled as infeasible
-					for w in range(1, area + 1):
-						if area % w != 0:
-							continue
-						var h := area / w
-						if not _shape_matches(w, h, anchor_shape):
-							continue
-						if _has_placement_of_size(pos, w, h, width, height, covered, entries, anchor_idx):
-							return true
-				return false
-
-
-## Returns true when a [param w]×[param h] rectangle that contains [param pos]
-## can be placed: all its cells are clear in [param covered] and it does not
-## capture any other anchor position.
-static func _has_placement_of_size(
-		pos: Vector2i, w: int, h: int,
-		width: int, height: int, covered: PackedByteArray,
-		entries: Array[Dictionary], anchor_idx: int) -> bool:
-	var min_col := maxi(0, pos.x - w + 1)
-	var max_col := mini(width - w, pos.x)
-	var min_row := maxi(0, pos.y - h + 1)
-	var max_row := mini(height - h, pos.y)
-	for r in range(min_row, max_row + 1):
-		for c in range(min_col, max_col + 1):
-			var rect := Rect2i(c, r, w, h)
-			if not _rect_is_clear(rect, width, covered):
-				continue
-			var conflict := false
-			for j in range(entries.size()):
-				if j == anchor_idx:
-					continue
-				if rect.has_point(entries[j]["pos"] as Vector2i):
-					conflict = true
-					break
-			if not conflict:
-				return true
+## Iterates pre-computed base candidates (already area-sorted for unconstrained
+## anchors) and returns true as soon as one passes _rect_is_feasible.
+## For unconstrained anchors, breaks early when candidate area exceeds area_limit
+## (the sound upper bound derived from the global coverage constraint).
+static func _has_any_feasible_cand_fast(
+		entry: Dictionary,
+		is_anchor: PackedByteArray, covered: PackedByteArray,
+		width: int, area_limit: int) -> bool:
+	var pos: Vector2i = entry["pos"]
+	var fi_is_unc: bool = entry.get("_is_unc", false)
+	for crect in entry.get("_base_cands", []):
+		if fi_is_unc and crect.size.x * crect.size.y > area_limit:
+			break  # sorted by area asc for unconstrained entries
+		if _rect_is_feasible(crect, pos, is_anchor, covered, width):
+			return true
 	return false
+
+
+## Combined single-pass feasibility test: returns true when [param rect]
+## (a) has all cells uncovered and (b) contains no unplaced anchor other than
+## [param self_pos].  An unplaced anchor is detected via the static
+## [param is_anchor] bitmask together with the live [param covered] array —
+## no separate anchor_at rebuild is needed.
+static func _rect_is_feasible(
+		rect: Rect2i, self_pos: Vector2i,
+		is_anchor: PackedByteArray, covered: PackedByteArray,
+		grid_width: int) -> bool:
+	for r in range(rect.position.y, rect.position.y + rect.size.y):
+		for c in range(rect.position.x, rect.position.x + rect.size.x):
+			var cell := r * grid_width + c
+			if covered[cell] != 0:
+				return false  # cell already taken
+			if c != self_pos.x or r != self_pos.y:
+				if is_anchor[cell] != 0:
+					return false  # another unplaced anchor inside this rect
+	return true
 
 
 ## Enumerate all candidate rectangles for a given anchor position and clue.
@@ -764,8 +704,8 @@ static func _enumerate_rects_for_anchor(
 	else:
 		# No area constraint: exhaustively enumerate all (w,h) pairs that fit
 		# in the grid.  Alternate solutions may use rectangles of any valid
-		# size, so no area cap is applied — see _has_any_feasible_candidate for
-		# the sound forward-checking bound used in the backtracker instead.
+		# size, so no area cap is applied — the sound area_limit forward-checking
+		# bound in _count_backtrack prunes infeasible branches instead.
 		for w in range(1, width + 1):
 			if do_cancel and cancel_check.call():
 				return []
