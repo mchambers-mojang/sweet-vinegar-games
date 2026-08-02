@@ -146,6 +146,11 @@ class TestCrownGridScreen extends CrownGridGameScreen:
 	func _apply_panel_theme() -> void:
 		pass
 
+	## Override to skip the win ceremony — it accesses board/@onready nodes
+	## and get_tree(), which are unavailable outside a live scene tree.
+	func _handle_win() -> void:
+		pass
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -262,21 +267,33 @@ func test_resume_game_starts_session_from_save() -> void:
 ## auto-marked cells so the game screen can record the "exclusions_painted"
 ## replay event.  This test confirms the logic contract that the recording
 ## logic in _on_hint() depends on.
+##
+## Fixture: 6x6 column-region board, solution [0, 2, 4, 1, 3, 5].
+## Five solution-correct Crowns are placed in rows 1-5 (with auto_mark disabled
+## so no cells are pre-excluded), leaving only (col=0, row=0) as a candidate.
+## auto_mark is then enabled so the hint Crown at (0,0) generates auto-marks.
 func test_hint_crown_result_carries_auto_marked_cells() -> void:
 	var logic := CrownGridLogic.new()
-	# Build a 4x4 board with column regions and a known solution [1,0,3,2].
-	var sz := 4
+	var sz := 6
 	var regions := PackedInt32Array()
 	regions.resize(sz * sz)
 	for r in range(sz):
 		for c in range(sz):
 			regions[r * sz + c] = c
-	var solution: Array[int] = [1, 0, 3, 2]
-	logic.init_new_game(sz, regions, solution, true)  # auto_mark=true
+	var solution: Array[int] = [0, 2, 4, 1, 3, 5]
 
-	# Force a crown hint on row 0 by excluding all candidates except (1,0).
-	var to_exclude: Array[Vector2i] = [Vector2i(0, 0), Vector2i(2, 0), Vector2i(3, 0)]
-	logic.paint_excluded(to_exclude)
+	# Init WITHOUT auto_mark so setup Crowns do not pre-exclude adjacent cells.
+	logic.init_new_game(sz, regions, solution, false)
+
+	# Place solution-correct Crowns in rows 1-5, forcing a naked single in row 0.
+	# tap_cell cycles Empty→Excluded→Crown, so call it twice per cell.
+	for r in range(1, sz):
+		var c: int = int(solution[r])
+		logic.tap_cell(c, r)  # Empty → Excluded
+		logic.tap_cell(c, r)  # Excluded → Crown
+
+	# Enable auto_mark before hinting so the hint Crown generates auto-marks.
+	logic.auto_mark = true
 
 	var hint := logic.use_hint()
 	assert_true(hint.applied, "Hint must be applied")
@@ -290,6 +307,12 @@ func test_hint_crown_result_carries_auto_marked_cells() -> void:
 ## _on_hint() must record a hint_applied event followed by an exclusions_painted
 ## event when auto_mark fires; replaying those frames against a CrownGridBoard
 ## must produce the same cell state that the logic has.
+##
+## Fixture: same 6x6 column-region board as _minimal_gen_result.
+## Five solution-correct Crowns are placed in rows 1-5 (auto_mark disabled
+## during setup), leaving only (col=0, row=0) as a candidate.
+## auto_mark is enabled before calling _on_hint() so the Crown hint at (0,0)
+## records both hint_applied and exclusions_painted events.
 func test_on_hint_records_and_replays_correctly() -> void:
 	var recorder := MockRecorder.new()
 	var stats := MockStats.new()
@@ -304,17 +327,21 @@ func test_on_hint_records_and_replays_correctly() -> void:
 	screen._gen_thread = null
 	screen._on_generation_done()
 
-	# Re-init logic with auto_mark=true so Crown hints auto-mark the column.
+	# Re-init logic WITHOUT auto_mark so setup Crowns do not pre-exclude cells.
 	var sz: int = gen["size"]
 	var regions: PackedInt32Array = gen["regions"]
 	var solution: Array[int] = gen["solution"]  # [0, 2, 4, 1, 3, 5]
-	screen.logic.init_new_game(sz, regions, solution, true)
+	screen.logic.init_new_game(sz, regions, solution, false)
 
-	# Force a naked-single Crown hint in row 0: exclude all cols except 0.
-	var to_exclude: Array[Vector2i] = []
-	for c in range(1, sz):
-		to_exclude.append(Vector2i(c, 0))
-	screen.logic.paint_excluded(to_exclude)
+	# Place solution-correct Crowns in rows 1-5, forcing a naked single in row 0.
+	# tap_cell cycles Empty→Excluded→Crown, so call it twice per cell.
+	for r in range(1, sz):
+		var c: int = int(solution[r])
+		screen.logic.tap_cell(c, r)  # Empty → Excluded
+		screen.logic.tap_cell(c, r)  # Excluded → Crown
+
+	# Enable auto_mark so the hint Crown at (0,0) generates auto-marks for recording.
+	screen.logic.auto_mark = true
 
 	# Snapshot recorder state before the hint so we can find the new events.
 	var inputs_before := recorder.inputs.size()
