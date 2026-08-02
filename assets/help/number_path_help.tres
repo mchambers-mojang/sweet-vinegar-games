@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="HelpContent" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/help/help_content.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+title = "Number Path"
+body = "Draw one path through every cell of the grid.\n\n• Start at checkpoint 1 and visit all numbered checkpoints in order.\n• Every cell must be visited exactly once.\n• You cannot cross a barrier (red line) between cells.\n• Drag forward to extend your path.\n• Drag backward over your path to erase it back to that cell.\n• Use Hint if you get stuck."
