@@ -85,7 +85,9 @@ static func solve(width: int, height: int, numbers: Dictionary) -> Array[Rect2i]
 ## Returns early once max_count solutions are found.
 ## anchors: { Vector2i -> {area: int, shape: int} }
 ## Pass [param cancel_check] to abort early; returns -1 if cancelled.
-static func count_solutions(width: int, height: int, anchors: Dictionary, max_count: int = 2, cancel_check: Callable = Callable()) -> int:
+## Pass [param max_area_hint] > 0 to cap unconstrained-anchor enumeration to
+## that area (safe when all solution rects have area ≤ max_area_hint).
+static func count_solutions(width: int, height: int, anchors: Dictionary, max_count: int = 2, cancel_check: Callable = Callable(), max_area_hint: int = 0) -> int:
 	var covered := PackedByteArray()
 	covered.resize(width * height)
 	covered.fill(0)
@@ -98,14 +100,14 @@ static func count_solutions(width: int, height: int, anchors: Dictionary, max_co
 		if do_cancel_mrv and cancel_check.call():
 			return -1
 		var initial_rects := _enumerate_rects_for_anchor(
-			entry["pos"], entry["anchor"], width, height, covered, cancel_check)
+			entry["pos"], entry["anchor"], width, height, covered, cancel_check, max_area_hint)
 		entry["_mrv"] = initial_rects.size()
 	entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return int(a.get("_mrv", 9999)) < int(b.get("_mrv", 9999))
 	)
 	var count := [0]
 	var cancelled := [false]
-	_count_backtrack(width, height, entries, 0, covered, count, max_count, cancel_check, cancel_check.is_valid(), cancelled)
+	_count_backtrack(width, height, entries, 0, covered, count, max_count, cancel_check, cancel_check.is_valid(), cancelled, max_area_hint)
 	if cancelled[0]:
 		return -1
 	return count[0]
@@ -124,8 +126,10 @@ static func count_solutions(width: int, height: int, anchors: Dictionary, max_co
 ## yields >1 candidates, record the required cell in the entry so subsequent
 ## Phase 1 passes can use the narrowed candidate set.
 ##
+## Pass [param max_area_hint] > 0 to cap unconstrained-anchor enumeration (safe
+## when all solution rects have area ≤ max_area_hint, as in generated puzzles).
 ## Returns false when cancelled (conservative: treated as not human-solvable).
-static func is_human_solvable(width: int, height: int, anchors: Dictionary, cancel_check: Callable = Callable()) -> bool:
+static func is_human_solvable(width: int, height: int, anchors: Dictionary, cancel_check: Callable = Callable(), max_area_hint: int = 0) -> bool:
 	var do_cancel := cancel_check.is_valid()
 	var covered := PackedByteArray()
 	covered.resize(width * height)
@@ -141,6 +145,20 @@ static func is_human_solvable(width: int, height: int, anchors: Dictionary, canc
 			return false
 		changed = false
 
+		# Precompute anchor positions of all UNPLACED anchors.
+		# Used by _filter_with_anchor_at for O(n_rects × avg_area) conflict
+		# filtering instead of the O(n_rects × n_anchors) scan in
+		# _filter_anchor_candidates.  Placed anchors' cells are already in
+		# `covered`, so their positions are excluded from enumeration by
+		# _collect_rects_containing — making a per-iteration build sufficient.
+		var anchor_at := PackedByteArray()
+		anchor_at.resize(width * height)
+		anchor_at.fill(0)
+		for j in range(entries.size()):
+			if placed[j] == 0:
+				var ap: Vector2i = entries[j]["pos"]
+				anchor_at[ap.y * width + ap.x] = 1
+
 		# ------------------------------------------------------------------
 		# Phase 1: Forced single candidate
 		# ------------------------------------------------------------------
@@ -148,10 +166,10 @@ static func is_human_solvable(width: int, height: int, anchors: Dictionary, canc
 			if placed[i] != 0:
 				continue
 			var pos: Vector2i = entries[i]["pos"]
-			var all_rects := _enumerate_rects_for_anchor(pos, entries[i]["anchor"], width, height, covered, cancel_check)
+			var all_rects := _enumerate_rects_for_anchor(pos, entries[i]["anchor"], width, height, covered, cancel_check, max_area_hint)
 			if all_rects.is_empty() and do_cancel and cancel_check.call():
 				return false
-			var valid_rects: Array[Rect2i] = _filter_anchor_candidates(all_rects, i, entries, placed)
+			var valid_rects: Array[Rect2i] = _filter_with_anchor_at(all_rects, pos, anchor_at, width)
 			valid_rects = _apply_required_cells(valid_rects, entries[i])
 			if valid_rects.size() == 1:
 				_mark_covered(valid_rects[0], width, covered, 1)
@@ -174,10 +192,10 @@ static func is_human_solvable(width: int, height: int, anchors: Dictionary, canc
 			if placed[i] != 0:
 				continue
 			var pos: Vector2i = entries[i]["pos"]
-			var all_rects := _enumerate_rects_for_anchor(pos, entries[i]["anchor"], width, height, covered, cancel_check)
+			var all_rects := _enumerate_rects_for_anchor(pos, entries[i]["anchor"], width, height, covered, cancel_check, max_area_hint)
 			if do_cancel and cancel_check.call():
 				return false
-			var valid_rects: Array[Rect2i] = _filter_anchor_candidates(all_rects, i, entries, placed)
+			var valid_rects: Array[Rect2i] = _filter_with_anchor_at(all_rects, pos, anchor_at, width)
 			valid_rects = _apply_required_cells(valid_rects, entries[i])
 			for rect in valid_rects:
 				for r in range(rect.position.y, rect.position.y + rect.size.y):
@@ -201,8 +219,8 @@ static func is_human_solvable(width: int, height: int, anchors: Dictionary, canc
 			if placed[owner_idx] != 0:
 				continue
 			var pos: Vector2i = entries[owner_idx]["pos"]
-			var all_rects := _enumerate_rects_for_anchor(pos, entries[owner_idx]["anchor"], width, height, covered, cancel_check)
-			var valid_rects: Array[Rect2i] = _filter_anchor_candidates(all_rects, owner_idx, entries, placed)
+			var all_rects := _enumerate_rects_for_anchor(pos, entries[owner_idx]["anchor"], width, height, covered, cancel_check, max_area_hint)
+			var valid_rects: Array[Rect2i] = _filter_with_anchor_at(all_rects, pos, anchor_at, width)
 			valid_rects = _apply_required_cells(valid_rects, entries[owner_idx])
 			# Keep only candidates that contain the uniquely-owned cell.
 			var restricted: Array[Rect2i] = []
@@ -253,6 +271,32 @@ static func _apply_required_cells(rects: Array[Rect2i], entry: Dictionary) -> Ar
 		if ok:
 			filtered.append(rect)
 	return filtered
+
+
+## Fast O(n_rects × avg_rect_area) filter: reject any rect that covers another
+## unplaced anchor's position, using the precomputed [param anchor_at] bitmask
+## (1 = an unplaced anchor is at that cell, 0 = free).  [param self_pos] is the
+## anchor being placed, so its cell is always allowed inside the candidate rect.
+## Placed anchors' cells are covered and never appear in candidates generated by
+## _collect_rects_containing, so they do not need to be excluded here.
+static func _filter_with_anchor_at(
+		rects: Array[Rect2i], self_pos: Vector2i,
+		anchor_at: PackedByteArray, grid_width: int) -> Array[Rect2i]:
+	var result: Array[Rect2i] = []
+	for rect in rects:
+		var ok := true
+		for r in range(rect.position.y, rect.position.y + rect.size.y):
+			for c in range(rect.position.x, rect.position.x + rect.size.x):
+				if c == self_pos.x and r == self_pos.y:
+					continue  # own anchor cell — never a conflict
+				if anchor_at[r * grid_width + c] != 0:
+					ok = false
+					break
+			if not ok:
+				break
+		if ok:
+			result.append(rect)
+	return result
 
 
 ## Build sorted entry list from anchors dict for backtracking.
@@ -348,7 +392,8 @@ static func _backtrack(
 static func _count_backtrack(
 		width: int, height: int, entries: Array[Dictionary],
 		idx: int, covered: PackedByteArray, count: Array, max_count: int,
-		cancel_check: Callable, do_cancel: bool, cancelled: Array) -> void:
+		cancel_check: Callable, do_cancel: bool, cancelled: Array,
+		max_area_hint: int = 0) -> void:
 	if count[0] >= max_count:
 		return
 	if do_cancel and cancel_check.call():
@@ -367,10 +412,10 @@ static func _count_backtrack(
 	var anchor: Dictionary = entry["anchor"]
 
 	if covered[pos.y * width + pos.x] != 0:
-		_count_backtrack(width, height, entries, idx + 1, covered, count, max_count, cancel_check, do_cancel, cancelled)
+		_count_backtrack(width, height, entries, idx + 1, covered, count, max_count, cancel_check, do_cancel, cancelled, max_area_hint)
 		return
 
-	var rects := _enumerate_rects_for_anchor(pos, anchor, width, height, covered, cancel_check)
+	var rects := _enumerate_rects_for_anchor(pos, anchor, width, height, covered, cancel_check, max_area_hint)
 	# Propagate cancellation flag: _enumerate_rects_for_anchor returns [] when
 	# cancelled, which is indistinguishable from "no candidates" unless we re-poll.
 	if do_cancel and cancel_check.call():
@@ -402,7 +447,7 @@ static func _count_backtrack(
 				var fpos: Vector2i = entries[fi]["pos"]
 				if covered[fpos.y * width + fpos.x] != 0:
 					continue  # anchor cell already covered – skip
-				if not _has_any_feasible_candidate(fi, entries, width, height, covered, cancel_check, do_cancel):
+				if not _has_any_feasible_candidate(fi, entries, width, height, covered, cancel_check, do_cancel, max_area_hint):
 					feasible = false
 					break
 			if do_cancel and cancel_check.call():
@@ -410,7 +455,7 @@ static func _count_backtrack(
 				_mark_covered(rect, width, covered, 0)
 				return
 			if feasible:
-				_count_backtrack(width, height, entries, idx + 1, covered, count, max_count, cancel_check, do_cancel, cancelled)
+				_count_backtrack(width, height, entries, idx + 1, covered, count, max_count, cancel_check, do_cancel, cancelled, max_area_hint)
 
 		_mark_covered(rect, width, covered, 0)
 
@@ -421,11 +466,13 @@ static func _count_backtrack(
 ## For unconstrained (shape-only) anchors when this is the only remaining
 ## unconstrained anchor, computes the exact required area from the global coverage
 ## constraint instead of iterating all possible areas — a much tighter check.
+## Pass [param max_area_hint] > 0 to cap iteration for unconstrained-multiple path.
 ## Returns false conservatively when cancelled.
 static func _has_any_feasible_candidate(
 		anchor_idx: int, entries: Array[Dictionary],
 		width: int, height: int, covered: PackedByteArray,
-		cancel_check: Callable = Callable(), do_cancel: bool = false) -> bool:
+		cancel_check: Callable = Callable(), do_cancel: bool = false,
+		max_area_hint: int = 0) -> bool:
 	var pos: Vector2i = entries[anchor_idx]["pos"]
 	var anchor: Dictionary = entries[anchor_idx]["anchor"]
 	var anchor_area: int = int(anchor.get("area", 0))
@@ -485,8 +532,10 @@ static func _has_any_feasible_candidate(
 				return false
 			else:
 				# Multiple unconstrained anchors remain: iterate by increasing area
-				# for fast early exit on dense grids.
-				for area in range(1, width * height + 1):
+				# for fast early exit on dense grids.  Cap at max_area_hint when set
+				# (safe in generator context where all solution rects have area ≤ max_area_hint).
+				var area_limit := (max_area_hint if max_area_hint > 0 else width * height)
+				for area in range(1, area_limit + 1):
 					if do_cancel and cancel_check.call():
 						return false  # conservative: treat cancelled as infeasible
 					for w in range(1, area + 1):
@@ -530,10 +579,14 @@ static func _has_placement_of_size(
 
 ## Enumerate all candidate rectangles for a given anchor position and clue.
 ## Returns an empty array early if cancelled.
+## Pass [param max_area_hint] > 0 to cap unconstrained-anchor enumeration: only
+## (w,h) pairs with w*h ≤ max_area_hint are generated.  This is sound when all
+## solution rectangles have area ≤ max_area_hint (as guaranteed by the generator
+## for Shapes mode), keeping candidate lists small on large grids.
 static func _enumerate_rects_for_anchor(
 		pos: Vector2i, anchor: Dictionary,
 		width: int, height: int, covered: PackedByteArray,
-		cancel_check: Callable = Callable()) -> Array[Rect2i]:
+		cancel_check: Callable = Callable(), max_area_hint: int = 0) -> Array[Rect2i]:
 	var do_cancel := cancel_check.is_valid()
 	var anchor_area: int = int(anchor.get("area", 0))
 	var anchor_shape: int = int(anchor.get("shape", ShikakuLogic.SHAPE_ABSENT))
@@ -551,12 +604,16 @@ static func _enumerate_rects_for_anchor(
 				continue
 			_collect_rects_containing(pos, w, h, width, height, covered, rects)
 	else:
-		# No area constraint: enumerate all (w,h) pairs that fit in the grid.
-		# This must be exhaustive (no area cap) to ensure sound uniqueness checks.
+		# No area constraint: enumerate (w,h) pairs that fit in the grid.
+		# When max_area_hint > 0, cap at that area so unconstrained anchors
+		# in generator context do not enumerate huge rects (all solution rects
+		# from the generator have area ≤ max_area_hint by construction).
 		for w in range(1, width + 1):
 			if do_cancel and cancel_check.call():
 				return []
 			for h in range(1, height + 1):
+				if max_area_hint > 0 and w * h > max_area_hint:
+					break  # h only grows from here; prune entire h-tail
 				if not _shape_matches(w, h, anchor_shape):
 					continue
 				_collect_rects_containing(pos, w, h, width, height, covered, rects)
