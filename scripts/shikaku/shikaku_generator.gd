@@ -127,6 +127,13 @@ static func _derive_standard_anchors(solution: Array[Rect2i], rng: RandomNumberG
 ## _enumerate_rects_for_anchor_empty), then for each minimisation test updates only
 ## the one changed anchor's candidates — reducing total enumeration work from
 ## O(n_anchors × n_minimisation_steps) to O(n_anchors + n_minimisation_steps).
+##
+## On large grids (>8×8), TALL and WIDE anchors are only minimised to area-only
+## (never shape-only).  Shape-only TALL/WIDE candidates are O(100+) on such grids,
+## making propagation and uniqueness checks prohibitively expensive.  SQUARE
+## shape-only is still tried at all sizes because its candidates are bounded by
+## {1×1, 2×2, 3×3, …} — at most ~14 even on a 15×15 grid.
+##
 ## Returns {} if the initial full-clue puzzle is not human-solvable, or if cancelled.
 static func _derive_shapes_anchors(
 		solution: Array[Rect2i], rng: RandomNumberGenerator,
@@ -173,6 +180,15 @@ static func _derive_shapes_anchors(
 	if not ShikakuSolver._is_human_solvable_from_entries(width, height, entries, base_candidates, cancel_check):
 		return {}
 
+	# On large grids (more than 8×8) restrict shape-only minimisation to SQUARE
+	# anchors.  For TALL and WIDE anchors on large grids, a shape-only clue
+	# (area == 0) produces O(100+) candidates whose area is bounded only by the
+	# loose dynamic area_limit, making both _is_human_solvable_from_entries and
+	# count_solutions prohibitively slow.  SQUARE shape-only candidates are
+	# bounded by {1×1, 2×2, 3×3, …} — at most ~14 even on a 15×15 grid — so
+	# they remain fast at any supported grid size.
+	var large_grid := width * height > 64
+
 	# Second pass: try to minimize each anchor.
 	# Commit a minimization only when the resulting puzzle remains human-solvable.
 	for i in range(anchor_data.size()):
@@ -186,7 +202,14 @@ static func _derive_shapes_anchors(
 		var orig_cands: Array = base_candidates[i]
 
 		# Try shape-only (drop area).
-		if orig_shape != ShikakuLogic.SHAPE_ABSENT and orig_shape != ShikakuLogic.SHAPE_ANY:
+		# Skip TALL/WIDE shape-only on large grids: their unconstrained candidate
+		# sets are too large for efficient propagation and uniqueness checking.
+		var try_shape_only := (
+			orig_shape != ShikakuLogic.SHAPE_ABSENT
+			and orig_shape != ShikakuLogic.SHAPE_ANY
+			and (not large_grid or orig_shape == ShikakuLogic.SHAPE_SQUARE)
+		)
+		if try_shape_only:
 			var test_anchor := {"area": 0, "shape": orig_shape}
 			entries[i]["anchor"] = test_anchor
 			base_candidates[i] = ShikakuSolver._enumerate_rects_for_anchor_empty(
