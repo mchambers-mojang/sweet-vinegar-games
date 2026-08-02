@@ -93,9 +93,12 @@ static func count_solutions(width: int, height: int, anchors: Dictionary, max_co
 	# Static MRV: sort entries by initial candidate count so the most constrained
 	# anchors (fewest valid placements on an empty grid) are placed first.
 	# This minimises the branching factor at the root of the search tree.
+	var do_cancel_mrv := cancel_check.is_valid()
 	for entry in entries:
+		if do_cancel_mrv and cancel_check.call():
+			return -1
 		var initial_rects := _enumerate_rects_for_anchor(
-			entry["pos"], entry["anchor"], width, height, covered)
+			entry["pos"], entry["anchor"], width, height, covered, cancel_check)
 		entry["_mrv"] = initial_rects.size()
 	entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return int(a.get("_mrv", 9999)) < int(b.get("_mrv", 9999))
@@ -224,6 +227,12 @@ static func is_human_solvable(width: int, height: int, anchors: Dictionary, canc
 
 	for i in range(placed.size()):
 		if placed[i] == 0:
+			return false
+	# Verify every grid cell is covered by a placed rectangle.  All anchors
+	# being placed is necessary but not sufficient — an area-1 anchor in a
+	# larger region would leave uncovered cells.
+	for i in covered.size():
+		if covered[i] == 0:
 			return false
 	return true
 
@@ -393,9 +402,13 @@ static func _count_backtrack(
 				var fpos: Vector2i = entries[fi]["pos"]
 				if covered[fpos.y * width + fpos.x] != 0:
 					continue  # anchor cell already covered – skip
-				if not _has_any_feasible_candidate(fi, entries, width, height, covered):
+				if not _has_any_feasible_candidate(fi, entries, width, height, covered, cancel_check, do_cancel):
 					feasible = false
 					break
+			if do_cancel and cancel_check.call():
+				cancelled[0] = true
+				_mark_covered(rect, width, covered, 0)
+				return
 			if feasible:
 				_count_backtrack(width, height, entries, idx + 1, covered, count, max_count, cancel_check, do_cancel, cancelled)
 
@@ -408,79 +421,83 @@ static func _count_backtrack(
 ## For unconstrained (shape-only) anchors when this is the only remaining
 ## unconstrained anchor, computes the exact required area from the global coverage
 ## constraint instead of iterating all possible areas — a much tighter check.
+## Returns false conservatively when cancelled.
 static func _has_any_feasible_candidate(
 		anchor_idx: int, entries: Array[Dictionary],
-		width: int, height: int, covered: PackedByteArray) -> bool:
+		width: int, height: int, covered: PackedByteArray,
+		cancel_check: Callable = Callable(), do_cancel: bool = false) -> bool:
 	var pos: Vector2i = entries[anchor_idx]["pos"]
 	var anchor: Dictionary = entries[anchor_idx]["anchor"]
 	var anchor_area: int = int(anchor.get("area", 0))
 	var anchor_shape: int = int(anchor.get("shape", ShikakuLogic.SHAPE_ABSENT))
 
 	if anchor_area > 0:
-		# Area-constrained: only divisor pairs to check — very few.
-		for w in range(1, anchor_area + 1):
-			if anchor_area % w != 0:
-				continue
-			var h := anchor_area / w
-			if not _shape_matches(w, h, anchor_shape):
-				continue
-			if _has_placement_of_size(pos, w, h, width, height, covered, entries, anchor_idx):
-				return true
-		return false
-	else:
-		# No area constraint. Count uncovered cells and how much area the remaining
-		# area-constrained anchors will consume. If this is the only unconstrained
-		# anchor, its required area is fixed — only check that specific area.
-		var uncovered_count := 0
-		for c in covered:
-			if c == 0:
-				uncovered_count += 1
-
-		var other_unconstrained := 0
-		var fixed_area_remaining := 0
-		for k in range(entries.size()):
-			if k == anchor_idx:
-				continue
-			var kpos: Vector2i = entries[k]["pos"]
-			if covered[kpos.y * width + kpos.x] != 0:
-				continue  # already placed
-			var k_area: int = int(entries[k]["anchor"].get("area", 0))
-			if k_area > 0:
-				fixed_area_remaining += k_area
-			else:
-				other_unconstrained += 1
-
-		if other_unconstrained == 0:
-			# This is the only remaining unconstrained anchor.  Its area is
-			# exactly uncovered_cells minus the area of all future area-constrained
-			# placements.  Checking only this required area is far tighter than
-			# iterating all sizes from 1 upward and gives near-instant pruning
-			# when the shape constraint eliminates that area.
-			var required_area := uncovered_count - fixed_area_remaining
-			if required_area <= 0:
-				return false
-			for w in range(1, required_area + 1):
-				if required_area % w != 0:
+			# Area-constrained: only divisor pairs to check — very few.
+			for w in range(1, anchor_area + 1):
+				if anchor_area % w != 0:
 					continue
-				var h := required_area / w
+				var h := anchor_area / w
 				if not _shape_matches(w, h, anchor_shape):
 					continue
 				if _has_placement_of_size(pos, w, h, width, height, covered, entries, anchor_idx):
 					return true
 			return false
-		else:
-			# Multiple unconstrained anchors remain: iterate by increasing area
-			# for fast early exit on dense grids.
-			for area in range(1, width * height + 1):
-				for w in range(1, area + 1):
-					if area % w != 0:
+	else:
+			# No area constraint. Count uncovered cells and how much area the remaining
+			# area-constrained anchors will consume. If this is the only unconstrained
+			# anchor, its required area is fixed — only check that specific area.
+			var uncovered_count := 0
+			for c in covered:
+				if c == 0:
+					uncovered_count += 1
+
+			var other_unconstrained := 0
+			var fixed_area_remaining := 0
+			for k in range(entries.size()):
+				if k == anchor_idx:
+					continue
+				var kpos: Vector2i = entries[k]["pos"]
+				if covered[kpos.y * width + kpos.x] != 0:
+					continue  # already placed
+				var k_area: int = int(entries[k]["anchor"].get("area", 0))
+				if k_area > 0:
+					fixed_area_remaining += k_area
+				else:
+					other_unconstrained += 1
+
+			if other_unconstrained == 0:
+				# This is the only remaining unconstrained anchor.  Its area is
+				# exactly uncovered_cells minus the area of all future area-constrained
+				# placements.  Checking only this required area is far tighter than
+				# iterating all sizes from 1 upward and gives near-instant pruning
+				# when the shape constraint eliminates that area.
+				var required_area := uncovered_count - fixed_area_remaining
+				if required_area <= 0:
+					return false
+				for w in range(1, required_area + 1):
+					if required_area % w != 0:
 						continue
-					var h := area / w
+					var h := required_area / w
 					if not _shape_matches(w, h, anchor_shape):
 						continue
 					if _has_placement_of_size(pos, w, h, width, height, covered, entries, anchor_idx):
 						return true
-			return false
+				return false
+			else:
+				# Multiple unconstrained anchors remain: iterate by increasing area
+				# for fast early exit on dense grids.
+				for area in range(1, width * height + 1):
+					if do_cancel and cancel_check.call():
+						return false  # conservative: treat cancelled as infeasible
+					for w in range(1, area + 1):
+						if area % w != 0:
+							continue
+						var h := area / w
+						if not _shape_matches(w, h, anchor_shape):
+							continue
+						if _has_placement_of_size(pos, w, h, width, height, covered, entries, anchor_idx):
+							return true
+				return false
 
 
 ## Returns true when a [param w]×[param h] rectangle that contains [param pos]

@@ -90,10 +90,19 @@ func test_shapes_mode_generates_7x7() -> void:
 
 
 func test_shapes_mode_generates_8x8() -> void:
+	var t0 := Time.get_ticks_msec()
 	var gen := ShikakuGenerator.generate(8, 8, 102, ShikakuLogic.RULE_SET_SHAPES)
+	var elapsed_ms := Time.get_ticks_msec() - t0
 	var anchors: Dictionary = gen.get("anchors", {})
 	var solution: Array[Rect2i] = gen.get("solution", [])
-	assert_true(ShikakuSolver.validate_anchors(8, 8, anchors, solution))
+	assert_true(anchors.size() > 0, "8x8 Shapes should have anchors")
+	assert_lt(elapsed_ms, 3000, "8x8 Shapes generation must complete within 3 seconds (took %d ms)" % elapsed_ms)
+	assert_true(ShikakuSolver.validate_anchors(8, 8, anchors, solution),
+		"8x8 Shapes solution should validate")
+	assert_eq(ShikakuSolver.count_solutions(8, 8, anchors, 2), 1,
+		"8x8 Shapes puzzle must have exactly one solution")
+	assert_true(ShikakuSolver.is_human_solvable(8, 8, anchors),
+		"8x8 Shapes puzzle must be human-solvable")
 
 
 func test_shapes_mode_generates_10x10() -> void:
@@ -761,3 +770,73 @@ func test_stats_history_entries_without_mode_treated_as_standard() -> void:
 	GameStatsManager.save_path = orig_path
 	if FileAccess.file_exists(_TEST_STATS_FILTER_PATH):
 		DirAccess.remove_absolute(_TEST_STATS_FILTER_PATH)
+
+
+# ---------------------------------------------------------------------------
+# Fix — human solver must verify full grid coverage, not only anchor placement
+# ---------------------------------------------------------------------------
+
+func test_is_human_solvable_false_when_area1_anchor_leaves_grid_uncovered() -> void:
+	# 2×2 grid, single anchor at (0,0) with area=1.
+	# The only valid rect is 1×1@(0,0), leaving three cells uncovered.
+	# All anchors are placed after one step, but the puzzle has no valid solution
+	# that tiles the whole grid.  Without the full-coverage check,
+	# is_human_solvable would return true (all anchors placed) even though the
+	# grid is not fully tiled.
+	var anchors := _make_anchors([
+		[Vector2i(0, 0), 1, ShikakuLogic.SHAPE_ABSENT],
+	])
+	assert_false(ShikakuSolver.is_human_solvable(2, 2, anchors),
+		"is_human_solvable must return false when placed anchors leave grid cells uncovered")
+
+
+func test_is_human_solvable_true_when_all_cells_covered() -> void:
+	# 2×2 grid, single anchor at (0,0) with area=4 — forced to 2×2 rect.
+	# All anchors placed and all cells covered → human-solvable.
+	var anchors := _make_anchors([
+		[Vector2i(0, 0), 4, ShikakuLogic.SHAPE_ABSENT],
+	])
+	assert_true(ShikakuSolver.is_human_solvable(2, 2, anchors),
+		"is_human_solvable must return true when the single forced placement covers all cells")
+
+
+# ---------------------------------------------------------------------------
+# Fix — MRV enumeration in count_solutions propagates cancel_check
+# ---------------------------------------------------------------------------
+
+func test_count_solutions_mrv_cancellation_does_not_proceed_to_backtrack() -> void:
+	# Before the fix, _enumerate_rects_for_anchor was called without cancel_check
+	# during MRV init, so a cancel that fired inside that call was silently ignored
+	# (returned [] but cancelled[0] was not set, allowing backtracking to start).
+	# After the fix the MRV loop polls cancel_check before each call and returns -1.
+	var anchors := _make_anchors([
+		[Vector2i(0, 0), 0, ShikakuLogic.SHAPE_ANY],
+		[Vector2i(2, 0), 0, ShikakuLogic.SHAPE_ANY],
+	])
+	var cancel_check := func() -> bool: return true  # always cancel
+	var result := ShikakuSolver.count_solutions(3, 2, anchors, 2, cancel_check)
+	assert_eq(result, -1, "count_solutions must return -1 when cancel fires during MRV init")
+
+
+# ---------------------------------------------------------------------------
+# Fix — forward-checking path in _count_backtrack propagates cancel_check
+# ---------------------------------------------------------------------------
+
+func test_count_solutions_forward_check_cancellation_returns_minus_one() -> void:
+	# count_solutions on a puzzle with multiple unconstrained anchors exercises
+	# the forward-checking loop (_has_any_feasible_candidate).  With a callable
+	# that cancels after a few calls, count_solutions must return -1.
+	var anchors := _make_anchors([
+		[Vector2i(0, 0), 0, ShikakuLogic.SHAPE_ANY],
+		[Vector2i(3, 0), 0, ShikakuLogic.SHAPE_ANY],
+		[Vector2i(0, 3), 0, ShikakuLogic.SHAPE_ANY],
+		[Vector2i(3, 3), 0, ShikakuLogic.SHAPE_ANY],
+	])
+	var call_count := [0]
+	# Allow a few calls so MRV init completes, then cancel during backtracking.
+	var cancel_check := func() -> bool:
+		call_count[0] += 1
+		return call_count[0] > 10
+	var result := ShikakuSolver.count_solutions(5, 5, anchors, 2, cancel_check)
+	assert_eq(result, -1,
+		"count_solutions must return -1 when cancel fires during forward-checking")
