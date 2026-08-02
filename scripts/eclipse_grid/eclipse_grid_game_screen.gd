@@ -154,13 +154,7 @@ func _get_analytics_params() -> Dictionary:
 
 
 func _exit_tree() -> void:
-	_set_gen_cancelled()
-	if _gen_thread != null:
-		_gen_thread.wait_to_finish()
-		_gen_thread = null
-	if _spinner_tween != null:
-		_spinner_tween.kill()
-		_spinner_tween = null
+	_cancel_generation()
 	super._exit_tree()
 
 
@@ -222,6 +216,14 @@ func _on_generation_complete() -> void:
 		return
 	# random_seed is restored inside _setup_game() from _pending_data["random_seed"]
 	begin_session()
+
+
+func _cancel_generation() -> void:
+	_set_gen_cancelled()
+	if _gen_thread != null:
+		_gen_thread.wait_to_finish()
+		_gen_thread = null
+	_show_spinner(false)
 
 
 func _set_gen_cancelled() -> void:
@@ -335,9 +337,11 @@ func _on_pause() -> void:
 
 
 func _on_back() -> void:
-	_save_current_state()
-	if not logic.is_completed:
+	_cancel_generation()
+	if _is_initialized() and not logic.is_completed:
 		_stats.set_counter("general", "current_win_streak", 0)
+	if _is_initialized():
+		_save_current_state()
 	SceneTransition.navigate(SCENE_MENU)
 
 

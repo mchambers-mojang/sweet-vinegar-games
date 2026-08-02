@@ -782,3 +782,71 @@ func test_rank4_cross_line_filters_column_quota_directly() -> void:
 		assert_eq(step.result_value, MINUS,
 			"Cross-line filtering forces (3,0)=MINUS: placing PLUS would overflow col 0 quota")
 
+
+# ---------------------------------------------------------------------------
+# Fix: Rank-4 genuine cross-line column no-three — reachable through analyze()
+# ---------------------------------------------------------------------------
+
+func test_rank4_column_nothree_reachable_through_analyze() -> void:
+	## Regression: Rank-4 column k=4 no-three elimination must be reachable through
+	## the full analyze() pipeline where Ranks 1, 2, and 3 all stall first.
+	##
+	## 6×6 board (half=3), no relation clues:
+	##   Row 0: [−, +, −, +, −, +]  (complete)
+	##   Row 1: [_, +, −, −, +, _]  (empties at c0/c5; 2+/2− in c1–c4)
+	##   Row 2: [_, −, +, +, −, _]  (empties at c0/c5; 2+/2− in c1–c4)
+	##   Row 3: [_, +, −, −, +, _]  (empties at c0/c5)
+	##   Row 4: [_, −, +, +, −, _]  (empties at c0/c5)
+	##   Row 5: [−, −, +, −, +, +]  (complete)
+	##
+	## Column 0: rows 0,5=MINUS; rows 1–4=EMPTY; plus_fixed=0,minus_fixed=2 → need 3+/1−.
+	## Column 5: rows 0,5=PLUS;  rows 1–4=EMPTY; plus_fixed=2,minus_fixed=0 → need 1+/3−.
+	## Columns 1–4: fully filled with no empties.
+	##
+	## Why Ranks 1–3 all stall:
+	##   Rank-1 quota: col 0 has 0+/2−, col 5 has 2+/0− — neither equals half=3.
+	##   Rank-1 adjacent-pair/sandwich: every EMPTY neighbour of an existing pair is
+	##     already non-empty; no EMPTY cell is sandwiched between equal non-empty values.
+	##   Rank-2 combined-local: each 2-empty row allows (+,−) and (−,+) — no consensus.
+	##   Rank-3 pattern: no EQ/NEQ clues — guard fires immediately → null.
+	##
+	## Why Rank-4 succeeds (column 0, k=4, n_plus_needed=3):
+	##   4 combos have n_plus=3 out of C(4,2)=6:
+	##     (+,+,+,−) → trial col=[−,+,+,+,−,−] → run of 3 at rows 1–3 → INVALID.
+	##     (+,+,−,+) → trial col=[−,+,+,−,+,−] → max run=2 → valid.
+	##     (+,−,+,+) → trial col=[−,+,−,+,+,−] → max run=2 → valid.
+	##     (−,+,+,+) → trial col=[−,−,+,+,+,−] → run of 3 at rows 2–4 → INVALID.
+	##   Both valid combos assign row1(col0)=PLUS → forced at RANK_4.
+	##   analyze() must return this as the first Rank-4 step at flat index 6.
+	var E := EclipseGridSolver.EMPTY
+	var P := EclipseGridSolver.PLUS
+	var M := EclipseGridSolver.MINUS
+	var cells: Array[int] = [
+		M, P, M, P, M, P,  # row 0 (complete)
+		E, P, M, M, P, E,  # row 1 (empties at c0, c5)
+		E, M, P, P, M, E,  # row 2
+		E, P, M, M, P, E,  # row 3
+		E, M, P, P, M, E,  # row 4
+		M, M, P, M, P, P,  # row 5 (complete)
+	]
+	var analysis: EclipseGridSolver.Analysis = EclipseGridSolver.analyze(6, cells, {}, {})
+	assert_true(analysis.steps.size() > 0,
+		"analyze() must produce at least one step on this board")
+	var found_rank4 := false
+	for step_var in analysis.steps:
+		var s: EclipseGridSolver.SolverStep = step_var
+		if s.rank == EclipseGridSolver.RANK_4:
+			found_rank4 = true
+			break
+	assert_true(found_rank4,
+		"analyze() must emit at least one RANK_4 step " +
+		"(column-0 k=4 no-three elimination after Rank-1/2/3 stall)")
+	# The first RANK_4 step must force (row 1, col 0) = PLUS (flat index = 1×6+0 = 6).
+	for step_var in analysis.steps:
+		var s: EclipseGridSolver.SolverStep = step_var
+		if s.rank == EclipseGridSolver.RANK_4:
+			assert_eq(s.affected_cells[0], 6,
+				"First RANK_4 step must be at flat index 6 (row 1, col 0)")
+			assert_eq(s.result_value, EclipseGridSolver.PLUS,
+				"Rank-4 must force (row 1, col 0) = PLUS via col-0 no-three elimination")
+			break

@@ -890,3 +890,35 @@ func test_eclipse_grid_launch_suppresses_auto_resume() -> void:
 	if s._gen_thread != null:
 		s._gen_thread.wait_to_finish()
 	s.free()
+
+
+func test_eclipse_grid_back_during_generation_does_not_save_invalid_state() -> void:
+	## Regression: pressing Back while background generation is in progress must
+	## cancel the thread and must NOT write a save entry with size=0.
+	##
+	## Without the _is_initialized() guard in _on_back(), _save_current_state() is
+	## called before the game is set up (logic.size == 0), which writes an invalid
+	## save.  The menu then reads the zero-size entry and shows a spurious
+	## "Abandon Game" prompt for a session that was never started.
+	var mock_saves := MockSaves.new()
+	var s := TestEclipseGridScreen.new(
+		MockRecorder.new(), MockStorage.new(), MockCrash.new(), MockAnalytics.new(),
+		MockAchievements.new(), mock_saves, MockStats.new(), MockSound.new(), MockHaptic.new()
+	)
+	var params := LaunchParams.new()
+	params.option_value = 4
+	s.launch(params)
+
+	assert_false(s._is_initialized(),
+		"Game must not be initialized while generation is in progress")
+
+	# Simulate pressing Back before generation completes.
+	s._on_back()
+
+	# No save must be written while logic is uninitialized.
+	assert_false(mock_saves.has_saved_game("eclipse_grid"),
+		"_on_back() during generation must not persist an invalid size=0 save")
+
+	# Clean up the SceneTransition fade started by navigate().
+	SceneTransition.cancel_transition()
+	s.free()
