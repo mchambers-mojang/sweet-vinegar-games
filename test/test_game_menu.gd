@@ -481,3 +481,70 @@ func test_build_launch_params_online_is_false_by_default() -> void:
 	var cfg := MenuConfigScript.new()
 	var p := cfg.build_launch_params(2)
 	assert_false(p.online)
+
+
+# ---------------------------------------------------------------------------
+# ShikakuMenu._on_abandon_confirmed — mode-aware abandon counter
+# ---------------------------------------------------------------------------
+
+const ShikakuMenuScript := preload("res://scripts/shikaku/shikaku_menu.gd")
+const _TEST_SHIKAKU_SAVES_PATH := "user://test_shikaku_menu_saves.cfg"
+const _TEST_SHIKAKU_STATS_PATH := "user://test_shikaku_menu_stats.cfg"
+
+
+func test_shikaku_menu_abandon_standard_increments_standard_counter() -> void:
+	# Redirect both singletons to isolated test files.
+	var orig_gsm := GameSaveManager.save_path
+	var orig_stats := GameStatsManager.save_path
+	GameSaveManager.save_path = _TEST_SHIKAKU_SAVES_PATH
+	GameSaveManager.clear_all()
+	GameStatsManager.save_path = _TEST_SHIKAKU_STATS_PATH
+	GameStatsManager.clear("shikaku")
+
+	GameSaveManager.save_game("shikaku", {"width": 5, "height": 5, "mode": ShikakuLogic.RULE_SET_STANDARD})
+	# Instantiate without adding to scene tree so _ready() is not triggered.
+	var menu := ShikakuMenuScript.new()
+	menu._on_abandon_confirmed()
+	menu.free()
+
+	assert_eq(GameStatsManager.get_counter("shikaku", "abandoned_s5"), 1,
+		"Standard abandon must increment 'abandoned_s5'")
+	assert_eq(GameStatsManager.get_counter("shikaku", "abandoned_shapes_s5"), 0,
+		"Standard abandon must not touch Shapes counter")
+
+	# Restore
+	GameSaveManager.save_path = orig_gsm
+	GameStatsManager.save_path = orig_stats
+	if FileAccess.file_exists(_TEST_SHIKAKU_SAVES_PATH):
+		DirAccess.remove_absolute(_TEST_SHIKAKU_SAVES_PATH)
+	if FileAccess.file_exists(_TEST_SHIKAKU_STATS_PATH):
+		DirAccess.remove_absolute(_TEST_SHIKAKU_STATS_PATH)
+
+
+func test_shikaku_menu_abandon_shapes_increments_shapes_counter() -> void:
+	# Redirect both singletons to isolated test files.
+	var orig_gsm := GameSaveManager.save_path
+	var orig_stats := GameStatsManager.save_path
+	GameSaveManager.save_path = _TEST_SHIKAKU_SAVES_PATH
+	GameSaveManager.clear_all()
+	GameStatsManager.save_path = _TEST_SHIKAKU_STATS_PATH
+	GameStatsManager.clear("shikaku")
+
+	GameSaveManager.save_game("shikaku", {"width": 7, "height": 7, "mode": ShikakuLogic.RULE_SET_SHAPES})
+	# Instantiate without adding to scene tree so _ready() is not triggered.
+	var menu := ShikakuMenuScript.new()
+	menu._on_abandon_confirmed()
+	menu.free()
+
+	assert_eq(GameStatsManager.get_counter("shikaku", "abandoned_shapes_s7"), 1,
+		"Shapes abandon must increment 'abandoned_shapes_s7'")
+	assert_eq(GameStatsManager.get_counter("shikaku", "abandoned_s7"), 0,
+		"Shapes abandon must not touch Standard counter")
+
+	# Restore
+	GameSaveManager.save_path = orig_gsm
+	GameStatsManager.save_path = orig_stats
+	if FileAccess.file_exists(_TEST_SHIKAKU_SAVES_PATH):
+		DirAccess.remove_absolute(_TEST_SHIKAKU_SAVES_PATH)
+	if FileAccess.file_exists(_TEST_SHIKAKU_STATS_PATH):
+		DirAccess.remove_absolute(_TEST_SHIKAKU_STATS_PATH)

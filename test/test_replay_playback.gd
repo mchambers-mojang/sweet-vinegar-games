@@ -290,7 +290,99 @@ func test_shikaku_replay_rejects_seed_incompatible_with_recorded_moves() -> void
 	)
 
 
-# --- Replay scrub behavior ---
+func test_shikaku_replay_adapter_reset_to_state_restores_placed_rects() -> void:
+	# Fix: resumed replays must start with the board's placed_rects already populated
+	# so that rectangle_removed indices match the correct entries.
+	var adapter := ShikakuReplayAdapter.new()
+	var board := Control.new()
+	board.set_script(load("res://scripts/shikaku/shikaku_board.gd"))
+	board.size = Vector2(300, 300)
+	add_child_autofree(board)
+	var initial_state := {
+		"width": 5,
+		"height": 5,
+		"anchors": {"0,0": {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT}},
+		"placed_rects": [{"x": 0, "y": 0, "w": 2, "h": 2}],
+	}
+	adapter.reset_to_state(initial_state, board)
+	assert_eq(board.placed_rects.size(), 1,
+		"reset_to_state must restore placed_rects from initial state")
+	assert_eq(board.placed_rects[0], Rect2i(0, 0, 2, 2),
+		"Restored placed rect must match the initial_state entry")
+
+
+func test_shikaku_replay_adapter_reset_to_state_empty_placed_rects_for_new_game() -> void:
+	# A new-game initial state has no placed_rects; board must start empty.
+	var adapter := ShikakuReplayAdapter.new()
+	var board := Control.new()
+	board.set_script(load("res://scripts/shikaku/shikaku_board.gd"))
+	board.size = Vector2(300, 300)
+	add_child_autofree(board)
+	var initial_state := {
+		"width": 5,
+		"height": 5,
+		"anchors": {"0,0": {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT}},
+	}
+	adapter.reset_to_state(initial_state, board)
+	assert_eq(board.placed_rects.size(), 0,
+		"reset_to_state must produce an empty board when initial_state has no placed_rects")
+
+
+func test_shikaku_replay_adapter_get_initial_state_skips_non_dict_numbers() -> void:
+	# If initial_state["numbers"] is not a Dictionary (e.g. an Array), the legacy
+	# path must not crash and must fall through gracefully (no typed assignment error).
+	var adapter := ShikakuReplayAdapter.new()
+	var replay := {
+		"header": {"game_mode": "shikaku", "seed": -1, "initial_state": {"numbers": [1, 2, 3]}},
+		"frames": [],
+		"footer": {"final_state": {"width": 5, "height": 5}},
+	}
+	# Must not crash; returns whatever the base class gives (likely empty).
+	var result := adapter.get_initial_state(replay)
+	assert_true(result is Dictionary, "get_initial_state must always return a Dictionary")
+
+
+func test_shikaku_replay_adapter_reset_to_state_skips_non_dict_numbers() -> void:
+	# If initial_state["numbers"] is not a Dictionary (e.g. an integer), the legacy
+	# path must not crash and must set up an empty board without error.
+	var adapter := ShikakuReplayAdapter.new()
+	var board := Control.new()
+	board.set_script(load("res://scripts/shikaku/shikaku_board.gd"))
+	board.size = Vector2(300, 300)
+	add_child_autofree(board)
+	var initial_state := {
+		"width": 5,
+		"height": 5,
+		# Corrupt legacy container — integer instead of Dictionary
+		"numbers": 42,
+	}
+	# Must not crash; board must set up with no anchors.
+	adapter.reset_to_state(initial_state, board)
+	assert_eq(board.grid_width, 5,
+		"reset_to_state must still configure grid dimensions")
+	assert_true(board.numbers.is_empty(),
+		"reset_to_state with non-Dictionary 'numbers' must produce no anchors")
+
+
+func test_shikaku_replay_adapter_reset_to_state_skips_array_numbers() -> void:
+	# If initial_state["numbers"] is an Array, same safety guarantee.
+	var adapter := ShikakuReplayAdapter.new()
+	var board := Control.new()
+	board.set_script(load("res://scripts/shikaku/shikaku_board.gd"))
+	board.size = Vector2(300, 300)
+	add_child_autofree(board)
+	var initial_state := {
+		"width": 5,
+		"height": 5,
+		"numbers": [{"x": 0, "y": 0, "v": 6}],
+	}
+	adapter.reset_to_state(initial_state, board)
+	assert_eq(board.grid_width, 5)
+	assert_true(board.numbers.is_empty(),
+		"reset_to_state with Array 'numbers' must produce no anchors")
+
+
+
 
 func test_scrub_to_replays_intermediate_frames_with_suppressed_effects() -> void:
 	var frames: Array[Dictionary] = [

@@ -8,6 +8,7 @@ const SIZE_NAMES := {5: "5×5", 7: "7×7", 8: "8×8", 10: "10×10", 12: "12×12"
 # Game state
 var grid_width: int = 10
 var grid_height: int = 10
+var mode: int = ShikakuLogic.RULE_SET_STANDARD
 var is_paused: bool = false
 var logic: ShikakuLogic = ShikakuLogic.new()
 
@@ -15,6 +16,18 @@ var logic: ShikakuLogic = ShikakuLogic.new()
 var _cheat_active: bool = false
 var _cheat_timer: float = 0.0
 const CHEAT_INTERVAL := 0.3
+
+# Background generation state (follows the KillerSudoku thread pattern)
+## Pre-generated puzzle data stored by the generation thread.
+var _pending_shikaku_data: Dictionary = {}
+## Background generation thread (non-null while generation is running).
+var _gen_thread: Thread = null
+## Mutex protecting _generation_cancelled.
+var _generation_mutex: Mutex = Mutex.new()
+## Set to true before joining the thread so deferred callbacks become no-ops.
+var _generation_cancelled: bool = false
+## Tween driving the "Generating…" spinner animation.
+var _spinner_tween: Tween = null
 
 # Node references
 @onready var board: ShikakuBoard = %ShikakuBoard
@@ -43,7 +56,7 @@ func _get_save_adapter() -> GameSaveAdapter:
 
 
 func _is_initialized() -> bool:
-	return not logic.numbers.is_empty()
+	return not logic.anchors.is_empty()
 
 
 func _is_completed() -> bool:
@@ -54,6 +67,7 @@ func _serialize_state() -> Dictionary:
 	var data: Dictionary = logic.serialize()
 	data["elapsed_time"] = elapsed_time
 	data["replay_id"] = replay_id
+	data["mode"] = mode
 	return data
 
 
@@ -89,20 +103,131 @@ func _on_game_screen_ready() -> void:
 	_update_button_states()
 
 
-func start_new_game(w: int, h: int) -> void:
+func start_new_game(w: int, h: int, p_mode: int = ShikakuLogic.RULE_SET_STANDARD) -> void:
 	grid_width = w
 	grid_height = h
-	begin_session()
+	mode = p_mode
+	_set_generation_cancelled(false)
+	_show_generating_spinner(true)
+	_gen_thread = Thread.new()
+	_gen_thread.start(_run_generation)
+	# begin_session() is called by _on_generation_complete() after the thread finishes.
 
 
 func launch(params: LaunchParams) -> void:
-	start_new_game(params.option_value, params.option_value)
+	start_new_game(params.option_value, params.option_value, params.rule_set)
 
 
 func resume_game(data: Dictionary) -> void:
 	grid_width = data.get("width", 10)
 	grid_height = data.get("height", 10)
+	mode = int(data.get("mode", ShikakuLogic.RULE_SET_STANDARD))
 	begin_session(data)
+
+
+# --- Background generation (follows the KillerSudokuGenerator thread pattern) ---
+
+func _exit_tree() -> void:
+	# Signal cancellation under the mutex so the worker can poll it, then join.
+	_set_generation_cancelled(true)
+	if _gen_thread != null:
+		_gen_thread.wait_to_finish()
+		_gen_thread = null
+	if _spinner_tween != null:
+		_spinner_tween.kill()
+		_spinner_tween = null
+	super._exit_tree()
+
+
+## Mutex-protected write: sets the cancellation flag.
+func _set_generation_cancelled(val: bool) -> void:
+	_generation_mutex.lock()
+	_generation_cancelled = val
+	_generation_mutex.unlock()
+
+
+## Mutex-protected read: returns the current cancellation flag.
+## Safe to call from any thread.
+func _get_generation_cancelled() -> bool:
+	_generation_mutex.lock()
+	var val := _generation_cancelled
+	_generation_mutex.unlock()
+	return val
+
+
+## Runs in a background thread: generates a complete Shikaku puzzle.
+func _run_generation() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var gen_seed := int(Time.get_ticks_usec()) ^ rng.randi()
+	var result: Dictionary = ShikakuGenerator.generate(
+		grid_width, grid_height, gen_seed, mode,
+		func() -> bool: return _get_generation_cancelled()
+	)
+	if result.is_empty():
+		_pending_shikaku_data = {}
+	else:
+		_pending_shikaku_data = result.duplicate()
+		_pending_shikaku_data["random_seed"] = gen_seed
+	if not _get_generation_cancelled():
+		call_deferred("_on_generation_complete")
+
+
+## Called on the main thread after generation finishes.
+func _on_generation_complete() -> void:
+	if _get_generation_cancelled():
+		return
+	if _gen_thread != null:
+		_gen_thread.wait_to_finish()
+		_gen_thread = null
+	_show_generating_spinner(false)
+	if _pending_shikaku_data.is_empty():
+		_suppress_auto_resume = true
+		if SceneTransition.is_transitioning:
+			SceneTransition.transition_completed.connect(
+				_abort_generation_failure, CONNECT_ONE_SHOT | CONNECT_DEFERRED)
+		else:
+			_abort_generation_failure()
+		return
+	begin_session()
+
+
+func _abort_generation_failure() -> void:
+	SceneTransition.navigate(Scenes.SHIKAKU_MENU)
+
+
+## Show or hide the "Generating…" overlay label with animated cycling dots.
+func _show_generating_spinner(visible: bool) -> void:
+	var overlay := get_node_or_null("_GeneratingOverlay")
+	if overlay == null:
+		if not visible:
+			return
+		var lbl := Label.new()
+		lbl.name = "_GeneratingOverlay"
+		lbl.text = "Generating puzzle"
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		lbl.z_index = 10
+		var style := StyleBoxFlat.new()
+		style.bg_color = AppTheme.get_color("background")
+		style.bg_color.a = 0.85
+		lbl.add_theme_stylebox_override("panel", style)
+		add_child(lbl)
+		overlay = lbl
+		lbl.set_meta("dot_frame", 0)
+		_spinner_tween = create_tween().set_loops()
+		_spinner_tween.tween_callback(func() -> void:
+			if is_instance_valid(lbl) and lbl.visible:
+				var frame: int = lbl.get_meta("dot_frame", 0)
+				frame = (frame + 1) % 4
+				lbl.set_meta("dot_frame", frame)
+				lbl.text = "Generating puzzle" + ".".repeat(frame)
+		).set_delay(0.4)
+	overlay.visible = visible
+	if not visible and _spinner_tween != null:
+		_spinner_tween.kill()
+		_spinner_tween = null
 
 
 # --- Session ceremony hooks ---
@@ -112,18 +237,21 @@ func _should_tick_timer() -> bool:
 
 
 func _get_start_crash_params() -> Dictionary:
-	return {"width": grid_width, "height": grid_height}
+	return {"width": grid_width, "height": grid_height, "mode": mode}
 
 
 func _get_resume_crash_params(saved_data: Dictionary) -> Dictionary:
-	return {"width": saved_data.get("width", 10), "height": saved_data.get("height", 10)}
+	return {"width": saved_data.get("width", 10), "height": saved_data.get("height", 10), "mode": saved_data.get("mode", 0)}
 
 
 func _get_initial_state() -> Dictionary:
+	var serialized := logic.serialize()
 	return {
 		"width": grid_width,
 		"height": grid_height,
-		"numbers": logic.serialize().get("numbers", {}),
+		"mode": mode,
+		"anchors": serialized.get("anchors", {}),
+		"placed_rects": serialized.get("placed_rects", []),
 	}
 
 
@@ -133,22 +261,32 @@ func _get_settings_snapshot() -> Dictionary:
 
 func _setup_game(saved_data: Dictionary) -> void:
 	if saved_data.is_empty():
-		logic.init_new_game(grid_width, grid_height, random_seed)
+		# New game — use pre-generated puzzle data produced by _run_generation().
+		var gen_seed := int(_pending_shikaku_data.get("random_seed", random_seed))
+		random_seed = gen_seed
+		logic.init_from_generated(_pending_shikaku_data, gen_seed, mode)
+		_pending_shikaku_data = {}
 	else:
 		logic.init_from_save(saved_data)
 	grid_width = logic.grid_width
 	grid_height = logic.grid_height
+	mode = logic.mode
 	random_seed = logic.random_seed
-	board.setup(grid_width, grid_height, logic.numbers)
+	board.setup(grid_width, grid_height, logic.anchors)
 	for rect in logic.placed_rects:
 		board.add_rect(rect)
+	_refresh_error_display()
 	size_label.text = SIZE_NAMES.get(grid_width, "%dx%d" % [grid_width, grid_height])
 	_update_button_states()
 
 
 func _increment_stats() -> void:
 	_stats.increment_counter("shikaku", "games_started")
-	_stats.increment_counter("shikaku", "started_s%d" % grid_width)
+	var size_key := "started_s%d" % grid_width
+	if mode == ShikakuLogic.RULE_SET_SHAPES:
+		_stats.increment_counter("shikaku", "started_shapes_s%d" % grid_width)
+	else:
+		_stats.increment_counter("shikaku", size_key)
 
 
 func _get_analytics_params() -> Dictionary:
@@ -190,6 +328,7 @@ func _on_rectangle_placed(rect: Rect2i) -> void:
 		"h": rect.size.y,
 	})
 	board.add_rect(rect)
+	_refresh_error_display()
 	_sound.play_place()
 	_haptic.vibrate_light()
 	# Neon shockwave on rect placement
@@ -218,6 +357,7 @@ func _on_rectangle_tapped(index: int) -> void:
 		return
 	_recorder.record_input(elapsed_time, "rectangle_removed", {"index": index})
 	board.remove_rect(index)
+	_refresh_error_display()
 	_haptic.vibrate_light()
 	_update_button_states()
 	_save_current_state()
@@ -248,6 +388,7 @@ func _on_undo() -> void:
 			"h": removed_rect.size.y,
 		})
 		board.add_rect(removed_rect)
+	_refresh_error_display()
 	_update_button_states()
 	_save_current_state()
 
@@ -274,6 +415,7 @@ func _on_redo() -> void:
 				_recorder.record_input(elapsed_time, "rectangle_removed", {"index": i})
 				board.remove_rect(i)
 				break
+	_refresh_error_display()
 	_update_button_states()
 	_save_current_state()
 
@@ -285,6 +427,15 @@ func _on_hint() -> void:
 	if result.rect.is_empty():
 		return
 	_crash.register_user_action("shikaku_hint_used")
+	# Remove any wrong placements that were cleared to unblock the hint rect.
+	# Each removal must be recorded so replay can reproduce the same board state.
+	for removed in result.removed_rects:
+		var removed_rect: Rect2i = _rect_from_dict(removed)
+		for i in range(board.placed_rects.size() - 1, -1, -1):
+			if board.placed_rects[i] == removed_rect:
+				_recorder.record_input(elapsed_time, "rectangle_removed", {"index": i})
+				board.remove_rect(i)
+				break
 	var hint_rect: Rect2i = _rect_from_dict(result.rect)
 	_recorder.record_input(elapsed_time, "rectangle_placed", {
 		"x": hint_rect.position.x,
@@ -293,12 +444,18 @@ func _on_hint() -> void:
 		"h": hint_rect.size.y,
 	})
 	board.add_rect(hint_rect)
+	_refresh_error_display()
 	_sound.play_place()
 	_haptic.vibrate_medium()
 	_update_button_states()
 	if result.game_won:
 		_handle_win()
 	_save_current_state()
+
+
+## Refresh the board's error highlighting to show wrong (non-solution) placements.
+func _refresh_error_display() -> void:
+	board.refresh_error_state(logic.get_wrong_placed_rects())
 
 
 func _on_pause() -> void:
@@ -324,12 +481,18 @@ func _on_back() -> void:
 
 func _handle_win() -> void:
 	GameEvents.game_ended.emit("shikaku", "win", elapsed_time)
-	# Leaderboard: submit completion time for board sizes with registered boards (5/7/10/14).
-	if grid_width in [5, 7, 10, 14]:
-		GameEvents.leaderboard_score_ready.emit("shikaku", str(grid_width), elapsed_time)
+	# Leaderboard: emit with mode-aware key.
+	# Standard: use raw size string (e.g. "5"); Shapes: use "shapes_5".
+	var lb_key: String
+	if mode == ShikakuLogic.RULE_SET_SHAPES:
+		lb_key = "shapes_%d" % grid_width
+	else:
+		lb_key = str(grid_width)
+	GameEvents.leaderboard_score_ready.emit("shikaku", lb_key, elapsed_time)
 	var completed: Dictionary = _recorder.finish_session("win", logic.placed_rects.size(), elapsed_time, {
 		"width": grid_width,
 		"height": grid_height,
+		"mode": mode,
 		"hints_used": logic.hints_used,
 	})
 	_storage.save_replay(completed)
@@ -346,6 +509,7 @@ func _handle_win() -> void:
 		"won": true,
 		"width": grid_width,
 		"height": grid_height,
+		"mode": mode,
 		"elapsed_time": elapsed_time,
 		"hints_used": logic.hints_used,
 	})
@@ -370,7 +534,8 @@ func _handle_win() -> void:
 
 
 func _is_new_best_time() -> bool:
-	var best_ms: int = _stats.get_counter("shikaku", "best_s%d" % grid_width)
+	var mode_prefix := "shapes_" if mode == ShikakuLogic.RULE_SET_SHAPES else ""
+	var best_ms: int = _stats.get_counter("shikaku", "best_%ss%d" % [mode_prefix, grid_width])
 	return best_ms == 0 or elapsed_time < (float(best_ms) / 1000.0)
 
 
@@ -420,8 +585,9 @@ func _show_win_dialog() -> void:
 func _restart_same_game() -> void:
 	var w := grid_width
 	var h := grid_height
+	var m := mode
 	SceneTransition.navigate(Scenes.SHIKAKU_GAME, func(game_scene: Node) -> void:
-		game_scene.start_new_game(w, h)
+		game_scene.start_new_game(w, h, m)
 	)
 
 
@@ -460,17 +626,20 @@ func _rect_from_dict(data: Dictionary) -> Rect2i:
 
 
 func _record_shikaku_completion(grid_size: int, time: float) -> void:
+	var mode_prefix := "shapes_" if mode == ShikakuLogic.RULE_SET_SHAPES else ""
 	_stats.record("shikaku", {
 		"type": "completion",
 		"grid_size": grid_size,
 		"time": time,
+		"mode": mode,
 	})
-	_stats.increment_counter("shikaku", "completed_s%d" % grid_size)
+	_stats.increment_counter("shikaku", "completed_%ss%d" % [mode_prefix, grid_size])
 	# Best time (stored as ms int)
-	var best_ms: int = _stats.get_counter("shikaku", "best_s%d" % grid_size)
+	var best_key := "best_%ss%d" % [mode_prefix, grid_size]
+	var best_ms: int = _stats.get_counter("shikaku", best_key)
 	var time_ms := int(time * 1000)
 	if best_ms == 0 or time_ms < best_ms:
-		_stats.set_counter("shikaku", "best_s%d" % grid_size, time_ms)
+		_stats.set_counter("shikaku", best_key, time_ms)
 	# Streak
 	var streak: int = _stats.get_counter("shikaku", "current_streak") + 1
 	_stats.set_counter("shikaku", "current_streak", streak)

@@ -215,7 +215,8 @@ func test_shikaku_adapter_clear() -> void:
 
 func test_shikaku_adapter_can_resume_with_valid_save() -> void:
 	var adapter := ShikakuSaveAdapter.new()
-	adapter.save({"width": 10, "height": 10, "is_completed": false})
+	var anchors := {"3,3": {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT}}
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors})
 	assert_true(adapter.can_resume())
 
 
@@ -236,6 +237,44 @@ func test_shikaku_adapter_can_resume_false_for_bad_dimensions() -> void:
 	assert_false(adapter.can_resume(), "Zero dimensions must not be resumable")
 
 
+func test_shikaku_adapter_can_resume_false_for_anchor_out_of_bounds() -> void:
+	var adapter := ShikakuSaveAdapter.new()
+	# Anchor at (20, 20) is outside 10×10 grid.
+	var anchors := {"20,20": {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT}}
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors})
+	assert_false(adapter.can_resume(), "Anchor outside grid bounds must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_negative_area() -> void:
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"3,3": {"area": -1, "shape": ShikakuLogic.SHAPE_ABSENT}}
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors})
+	assert_false(adapter.can_resume(), "Negative area must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_invalid_shape_enum() -> void:
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"3,3": {"area": 4, "shape": 99}}
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors})
+	assert_false(adapter.can_resume(), "Unknown shape enum must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_empty_clue_component() -> void:
+	var adapter := ShikakuSaveAdapter.new()
+	# Anchor with area=0 and shape=ABSENT has no constraint — invalid.
+	var anchors := {"3,3": {"area": 0, "shape": ShikakuLogic.SHAPE_ABSENT}}
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors})
+	assert_false(adapter.can_resume(), "Anchor with no clue component must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_true_for_shape_only_anchor() -> void:
+	var adapter := ShikakuSaveAdapter.new()
+	# Shape-only anchor (area=0, shape=SQUARE) is valid.
+	var anchors := {"2,2": {"area": 0, "shape": ShikakuLogic.SHAPE_SQUARE}}
+	adapter.save({"width": 5, "height": 5, "is_completed": false, "anchors": anchors})
+	assert_true(adapter.can_resume(), "Shape-only anchor must be resumable")
+
+
 func test_shikaku_adapter_get_grid_width() -> void:
 	var adapter := ShikakuSaveAdapter.new()
 	adapter.save({"width": 12, "height": 12})
@@ -247,13 +286,230 @@ func test_shikaku_adapter_get_grid_width_default_when_no_save() -> void:
 	assert_eq(adapter.get_grid_width(), 10)
 
 
+# Fix 3 — extended save-adapter validation
+
+func test_shikaku_adapter_can_resume_false_for_invalid_mode() -> void:
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"3,3": {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT}}
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors, "mode": 99})
+	assert_false(adapter.can_resume(), "Unknown mode must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_true_for_shapes_mode() -> void:
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"3,3": {"area": 0, "shape": ShikakuLogic.SHAPE_SQUARE}}
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors, "mode": ShikakuLogic.RULE_SET_SHAPES})
+	assert_true(adapter.can_resume(), "Shapes mode with valid anchor must be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_invalid_solution_rect_out_of_bounds() -> void:
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"3,3": {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT}}
+	var bad_solution := [{"x": 8, "y": 8, "w": 5, "h": 5}]  # far outside 10×10
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors, "solution": bad_solution})
+	assert_false(adapter.can_resume(), "Solution rect outside grid must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_invalid_solution_rect_zero_size() -> void:
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"3,3": {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT}}
+	var bad_solution := [{"x": 0, "y": 0, "w": 0, "h": 3}]  # zero width
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors, "solution": bad_solution})
+	assert_false(adapter.can_resume(), "Solution rect with zero dimension must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_invalid_placed_rect() -> void:
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"3,3": {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT}}
+	var bad_placed := [{"x": -1, "y": 0, "w": 2, "h": 2}]  # negative x
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors, "placed_rects": bad_placed})
+	assert_false(adapter.can_resume(), "Placed rect with negative x must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_invalid_undo_stack_action() -> void:
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"3,3": {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT}}
+	var bad_undo := [{"action": "bogus", "rect": {"x": 0, "y": 0, "w": 2, "h": 2}}]
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors, "undo_stack": bad_undo})
+	assert_false(adapter.can_resume(), "Unknown action in undo_stack must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_undo_stack_rect_out_of_bounds() -> void:
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"3,3": {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT}}
+	var bad_undo := [{"action": "place", "rect": {"x": 9, "y": 9, "w": 5, "h": 5}}]
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors, "undo_stack": bad_undo})
+	assert_false(adapter.can_resume(), "undo_stack rect outside grid must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_non_integer_anchor_key() -> void:
+	# Coercive-parsing fix: "abc,def" must NOT silently parse to (0,0).
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"abc,def": {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT}}
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors})
+	assert_false(adapter.can_resume(), "Non-integer anchor key must not be resumable")
+
+
+# Fix 2 (extended) — non-array fields and coercive rect parsing
+
+func test_shikaku_adapter_can_resume_false_for_solution_as_non_array() -> void:
+	# Fixing the bypass: a non-Array solution value must be rejected outright
+	# rather than silently skipped (the old code only ran validation if is Array).
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"3,3": {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT}}
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors,
+		"solution": "not_an_array"})
+	assert_false(adapter.can_resume(), "Non-Array solution value must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_undo_stack_as_non_array() -> void:
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"3,3": {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT}}
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors,
+		"undo_stack": 42})
+	assert_false(adapter.can_resume(), "Non-Array undo_stack value must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_legacy_numbers_malformed_key() -> void:
+	# Key without comma triggers legacy validation path (no valid anchor added by _migrate).
+	var adapter := ShikakuSaveAdapter.new()
+	adapter.save({"width": 10, "height": 10, "is_completed": false,
+		"numbers": {"garbage": 4}})
+	assert_false(adapter.can_resume(), "Legacy numbers with malformed key must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_rect_with_string_coordinate() -> void:
+	# Coercive-parsing fix: int("garbage") == 0 in GDScript, so "garbage" x-coordinate
+	# must be rejected via the type check rather than silently parsed as x=0.
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"3,3": {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT}}
+	var bad_solution := [{"x": "garbage", "y": 0, "w": 2, "h": 2}]
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors,
+		"solution": bad_solution})
+	assert_false(adapter.can_resume(), "Rect with string coordinate must not be resumable")
+
+
+# ---------------------------------------------------------------------------
+# Fix 2 (current batch) — strict integer enforcement for anchors and rects
+# ---------------------------------------------------------------------------
+
+func test_shikaku_adapter_can_resume_false_for_float_anchor_area() -> void:
+	# Coercive-parsing fix: int(4.5) == 4 silently truncates; float must be rejected.
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"3,3": {"area": 4.5, "shape": ShikakuLogic.SHAPE_ABSENT}}
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors})
+	assert_false(adapter.can_resume(), "Float anchor area must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_string_anchor_area() -> void:
+	# int("bad") == 0 would silently produce area=0 → invalid clue component.
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"3,3": {"area": "bad", "shape": ShikakuLogic.SHAPE_ABSENT}}
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors})
+	assert_false(adapter.can_resume(), "String anchor area must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_float_anchor_shape() -> void:
+	# int(2.5) == 2 would silently truncate a float shape enum.
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"3,3": {"area": 4, "shape": 2.5}}
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors})
+	assert_false(adapter.can_resume(), "Float anchor shape must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_float_rect_coordinate() -> void:
+	# int(0.5) == 0 would silently truncate a float coordinate.
+	var adapter := ShikakuSaveAdapter.new()
+	var anchors := {"3,3": {"area": 4, "shape": ShikakuLogic.SHAPE_ABSENT}}
+	var bad_solution := [{"x": 0.5, "y": 0, "w": 2, "h": 2}]
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors,
+		"solution": bad_solution})
+	assert_false(adapter.can_resume(), "Float rectangle coordinate must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_legacy_float_value() -> void:
+	# Legacy numbers: float values (e.g. 4.5) must be rejected (area must be int).
+	var adapter := ShikakuSaveAdapter.new()
+	adapter.save({"width": 10, "height": 10, "is_completed": false,
+		"numbers": {"2,2": 4.5}})
+	assert_false(adapter.can_resume(), "Legacy number with float value must not be resumable")
+
+
+func test_shikaku_adapter_can_resume_false_for_legacy_noninteger_key_after_migrate() -> void:
+	# _migrate must skip non-integer-key legacy entries so they don't silently
+	# become valid anchors (e.g. "abc,def" → int("abc") == 0 → pos (0,0)).
+	var adapter := ShikakuSaveAdapter.new()
+	# A legacy save with ONLY a non-integer key produces no valid anchors after
+	# migration, so _can_resume_from must return false.
+	adapter.save({"width": 10, "height": 10, "is_completed": false,
+		"numbers": {"abc,def": 4}})
+	assert_false(adapter.can_resume(),
+		"Legacy save with only non-integer key must not be resumable after migration")
+
+
+# ---------------------------------------------------------------------------
+# Fix — migration rejects whole save on any invalid entry (Issue 1)
+# ---------------------------------------------------------------------------
+
+func test_shikaku_adapter_migration_rejects_whole_save_on_partial_corruption() -> void:
+	# _migrate must not silently drop the invalid entry and accept the valid one.
+	# A mixed legacy save (one valid + one malformed key) must not be resumable.
+	var adapter := ShikakuSaveAdapter.new()
+	adapter.save({"width": 10, "height": 10, "is_completed": false,
+		"numbers": {"0,0": 4, "abc,def": 6}})
+	assert_false(adapter.can_resume(),
+		"Partial corruption in legacy numbers must cause the whole save to be rejected")
+
+
+func test_shikaku_adapter_migration_rejects_whole_save_on_float_value() -> void:
+	# _migrate must not silently drop the float entry and keep the valid int entry.
+	# If any value is non-int the migration must abort (return data unchanged).
+	var adapter := ShikakuSaveAdapter.new()
+	adapter.save({"width": 10, "height": 10, "is_completed": false,
+		"numbers": {"0,0": 4, "2,2": 6.5}})
+	assert_false(adapter.can_resume(),
+		"Float value in legacy numbers must cause the whole save to be rejected")
+
+
+# ---------------------------------------------------------------------------
+# Fix 2 (current batch) — non-Dictionary 'numbers' rejected before typed assignment
+# ---------------------------------------------------------------------------
+
+func test_shikaku_adapter_migration_rejects_non_dict_numbers_integer() -> void:
+	# 'numbers' as an integer must be rejected before any typed Dictionary
+	# assignment, not after — the runtime type-check guard must fire first.
+	var adapter := ShikakuSaveAdapter.new()
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "numbers": 42})
+	assert_false(adapter.can_resume(),
+		"Non-Dictionary 'numbers' (integer) must cause migration to be rejected")
+
+
+func test_shikaku_adapter_migration_rejects_non_dict_numbers_string() -> void:
+	# 'numbers' as a string (e.g. "not_a_dict") must be rejected with a warning
+	# rather than a runtime error from the typed assignment.
+	var adapter := ShikakuSaveAdapter.new()
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "numbers": "not_a_dict"})
+	assert_false(adapter.can_resume(),
+		"Non-Dictionary 'numbers' (string) must cause migration to be rejected")
+
+
+func test_shikaku_adapter_migration_rejects_non_dict_numbers_array() -> void:
+	# An Array value for 'numbers' must be rejected cleanly before the typed
+	# Dictionary assignment, since Array is not a Dictionary subtype.
+	var adapter := ShikakuSaveAdapter.new()
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "numbers": [1, 2, 3]})
+	assert_false(adapter.can_resume(),
+		"Non-Dictionary 'numbers' (Array) must cause migration to be rejected")
+
+
 # ---------------------------------------------------------------------------
 # GameSaveAdapter — restore_if_resumable (avoids double load)
 # ---------------------------------------------------------------------------
 
 func test_restore_if_resumable_returns_data_when_valid() -> void:
 	var adapter := ShikakuSaveAdapter.new()
-	adapter.save({"width": 10, "height": 10, "is_completed": false})
+	var anchors := {"5,5": {"area": 10, "shape": 0}}
+	adapter.save({"width": 10, "height": 10, "is_completed": false, "anchors": anchors})
 	var data: Dictionary = adapter.restore_if_resumable()
 	assert_false(data.is_empty(), "restore_if_resumable must return data for a valid save")
 	assert_eq(data["width"], 10)
