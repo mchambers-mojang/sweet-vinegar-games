@@ -61,7 +61,8 @@ static func generate(size: int, seed: int, cancel_check: Callable = Callable()) 
 
 		# Step 3: Minimize clues using human-solver as oracle (fast).
 		var givens: Array[int] = _minimize_givens(
-				size, solution, h_relations, v_relations, rng, cancel_check)
+				size, solution, h_relations, v_relations, rng,
+				required_rank(size), cancel_check)
 		if givens.is_empty():
 			continue
 
@@ -271,14 +272,15 @@ static func _add_relation_clues(
 # ---------------------------------------------------------------------------
 
 ## Minimize given cells using the human solver as the primary oracle.
-## A cell is kept as a given only if removing it makes the human solver unable
-## to fully solve the puzzle from the remaining givens.
+## A cell is kept if removing it makes the human solver unable to finish or
+## raises the puzzle above its size's difficulty tier.
 static func _minimize_givens(
 		size: int,
 		solution: Array[int],
 		h_relations: Dictionary,
 		v_relations: Dictionary,
 		rng: RandomNumberGenerator,
+		max_rank: int,
 		cancel_check: Callable) -> Array[int]:
 	var givens: Array[int] = solution.duplicate()
 
@@ -308,7 +310,7 @@ static func _minimize_givens(
 				return []
 
 			# Check if puzzle is fully solved (all cells filled in the analysis)
-			if analysis.is_unique:
+			if analysis.is_unique and analysis.max_rank <= max_rank:
 				removed_any = true  # Keep cell removed
 			else:
 				givens[idx] = saved  # Cell is needed; restore it

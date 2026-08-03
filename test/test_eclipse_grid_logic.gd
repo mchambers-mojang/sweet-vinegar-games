@@ -142,7 +142,7 @@ func test_strict_mode_rejects_wrong_value() -> void:
 
 	# Cycling from EMPTY once:
 	# - If PLUS is correct: placed without rejection.
-	# - If PLUS is wrong (correct_val == MINUS): placed as rejected (cycle advances).
+	# - If PLUS is wrong (correct_val == MINUS): stored as rejected cycle side-state.
 	var result: EclipseGridLogic.SetGlyphResult = logic.cycle_cell(2)
 
 	if correct_val == PLUS:
@@ -150,7 +150,7 @@ func test_strict_mode_rejects_wrong_value() -> void:
 		assert_false(result.rejected)
 		assert_eq(result.new_value, PLUS)
 		assert_eq(logic.cells[2], PLUS)
-		# Second cycle: PLUS → MINUS (wrong, rejected, placed so cycle continues)
+		# Second cycle: PLUS → MINUS (wrong, rejected into cycle side-state)
 		var r2: EclipseGridLogic.SetGlyphResult = logic.cycle_cell(2)
 		assert_true(r2.rejected, "Wrong MINUS must be marked as rejected")
 		assert_eq(r2.new_value, MINUS, "Cycle must advance to MINUS")
@@ -159,10 +159,10 @@ func test_strict_mode_rejects_wrong_value() -> void:
 		assert_false(r3.rejected, "Erasing (→EMPTY) must not be rejected")
 		assert_eq(r3.new_value, EMPTY, "Cycle must advance to EMPTY (erase)")
 	else:
-		# correct_val == MINUS: first cycle tries PLUS (wrong) → rejected, placed
+		# correct_val == MINUS: first cycle tries PLUS (wrong) → rejected into side-state
 		assert_true(result.rejected, "Wrong PLUS must be marked as rejected")
 		assert_eq(result.new_value, PLUS)
-		assert_eq(logic.cells[2], PLUS, "Wrong PLUS is placed so cycle can advance")
+		assert_eq(logic.cells[2], EMPTY, "Wrong PLUS must not enter the accepted board state")
 		# Second cycle: PLUS → MINUS (correct, no rejection)
 		var r2: EclipseGridLogic.SetGlyphResult = logic.cycle_cell(2)
 		assert_false(r2.rejected, "Correct MINUS must not be rejected")
@@ -188,7 +188,7 @@ func test_strict_mode_minus_reachable_when_plus_is_wrong() -> void:
 	var r1: EclipseGridLogic.SetGlyphResult = l2.cycle_cell(0)
 	assert_true(r1.rejected, "Wrong PLUS must be flagged as rejected")
 	assert_eq(r1.new_value, PLUS, "Cycle advances to PLUS")
-	assert_eq(l2.cells[0], PLUS, "Wrong PLUS is placed so next tap can reach MINUS")
+	assert_eq(l2.cells[0], EMPTY, "Rejected PLUS must not enter the accepted board state")
 
 	# Second tap cycles PLUS → MINUS (correct, no rejection).
 	var r2: EclipseGridLogic.SetGlyphResult = l2.cycle_cell(0)
@@ -208,7 +208,7 @@ func test_strict_mode_erase_always_allowed() -> void:
 	l2.assistance_mode = EclipseGridLogic.ASSIST_STRICT
 	# Place correct PLUS at cell 2 (sol[2] = PLUS for checkerboard)
 	l2.cycle_cell(2)  # → PLUS (correct)
-	# Cycle to MINUS (wrong, rejected, placed)
+	# Cycle to MINUS (wrong, rejected into side-state)
 	l2.cycle_cell(2)  # → MINUS
 	# Cycle to EMPTY (erase) — must be accepted
 	var r: EclipseGridLogic.SetGlyphResult = l2.cycle_cell(2)
@@ -485,7 +485,7 @@ func test_save_adapter_rejects_cells_inconsistent_with_givens() -> void:
 
 func test_strict_mode_allows_erasing_correct_plus() -> void:
 	## In strict mode, cycling a correct PLUS must eventually reach EMPTY (erase).
-	## New behaviour: PLUS → MINUS (rejected, placed) → EMPTY (accepted).
+	## PLUS → MINUS stores a rejected cycle position, then the next tap erases.
 	var l := EclipseGridLogic.new()
 	var sol := _sol4()
 	var gv: Array[int] = sol.duplicate()
@@ -500,7 +500,7 @@ func test_strict_mode_allows_erasing_correct_plus() -> void:
 	assert_eq(r1.new_value, PLUS, "First tap must place correct PLUS")
 	assert_false(r1.rejected, "Placing correct PLUS must not be rejected")
 
-	# Tap 2: PLUS → MINUS (wrong, rejected but placed so cycle advances)
+	# Tap 2: PLUS → MINUS (wrong, rejected into side-state so cycle advances)
 	var r2 := l.cycle_cell(2)
 	assert_true(r2.rejected, "Wrong MINUS must be marked as rejected")
 	assert_eq(r2.new_value, MINUS)
@@ -590,23 +590,22 @@ func test_hint_applies_correct_value_when_player_has_wrong_cells() -> void:
 	## the solution-correct value even when the current cells state is inconsistent.
 	var l := EclipseGridLogic.new()
 	var sol := _sol4()
-	# All cells are givens except cell 2 (free to fill)
+	# Leave cell 2 deducible and cell 4 available for a wrong player entry.
 	var gv: Array[int] = sol.duplicate()
-	for i in range(4, 16):
-		gv[i] = EMPTY
 	gv[2] = EMPTY
+	gv[4] = EMPTY
 	l.init_from_save(_make_save_data(4, sol, gv))
 	l.assistance_mode = EclipseGridLogic.ASSIST_FREE
 
-	# Place the WRONG value at cell 3 to corrupt the solver's view.
-	# (cell 3 correct value is MINUS per checkerboard; we force PLUS)
-	l.set_cell_direct(3, PLUS)  # wrong — now row 0 = [+, -, ?, +] violates quota
+	# Cell 4 should be MINUS; the hint's clean board must ignore this wrong PLUS.
+	l.set_cell_direct(4, PLUS)
 
-	# Request a hint — it must still produce the correct value for some cell.
+	# Row 0 is [+, -, _, -], so quota completion deterministically fills cell 2.
 	var result: EclipseGridLogic.HintResult = l.use_hint()
-	if result.had_step:
-		assert_eq(result.value, sol[result.index],
-			"Hint value must match the solution even when board has wrong cells")
+	assert_true(result.had_step, "A solver-supported hint must be available")
+	assert_eq(result.index, 2, "Hint must fill the deducible row-0 cell")
+	assert_eq(result.value, sol[result.index],
+		"Hint value must match the solution even when board has wrong cells")
 
 
 # ---------------------------------------------------------------------------
@@ -615,7 +614,7 @@ func test_hint_applies_correct_value_when_player_has_wrong_cells() -> void:
 
 func test_strict_undo_skips_rejected_glyph_solution_plus() -> void:
 	## solution[0] = PLUS.
-	## Cycle: EMPTY → PLUS (correct, accepted) → MINUS (rejected, placed for cycle) →
+	## Cycle: EMPTY → PLUS (correct, accepted) → MINUS (rejected into side-state) →
 	##        EMPTY (erase, accepted).
 	## After the accepted EMPTY step, undo should restore to PLUS (not MINUS).
 	var l2 := EclipseGridLogic.new()
@@ -625,6 +624,7 @@ func test_strict_undo_skips_rejected_glyph_solution_plus() -> void:
 						   MINUS, PLUS, MINUS, PLUS]
 	var gv: Array[int] = sol.duplicate()
 	gv[0] = EMPTY
+	gv[1] = EMPTY  # Keep the game active while exercising post-placement undo.
 	l2.init_from_save(_make_save_data(4, sol, gv))
 	l2.assistance_mode = EclipseGridLogic.ASSIST_STRICT
 
@@ -633,10 +633,10 @@ func test_strict_undo_skips_rejected_glyph_solution_plus() -> void:
 	assert_false(r1.rejected)
 	assert_eq(l2.cells[0], PLUS)
 
-	# PLUS → MINUS (wrong, rejected — placed for cycle advancement).
+	# PLUS → MINUS (wrong, rejected into side-state for cycle advancement).
 	var r2: EclipseGridLogic.SetGlyphResult = l2.cycle_cell(0)
 	assert_true(r2.rejected, "Wrong MINUS must be rejected")
-	assert_eq(l2.cells[0], MINUS, "Rejected value placed to allow cycle to advance")
+	assert_eq(l2.cells[0], PLUS, "Rejected value must not replace the accepted PLUS")
 
 	# MINUS → EMPTY (erase, always accepted).
 	var r3: EclipseGridLogic.SetGlyphResult = l2.cycle_cell(0)
@@ -663,13 +663,14 @@ func test_strict_undo_skips_rejected_glyph_solution_minus() -> void:
 						   PLUS, MINUS, PLUS, MINUS]
 	var gv: Array[int] = sol.duplicate()
 	gv[0] = EMPTY
+	gv[1] = EMPTY  # Keep the game active while exercising undo.
 	l2.init_from_save(_make_save_data(4, sol, gv))
 	l2.assistance_mode = EclipseGridLogic.ASSIST_STRICT
 
 	# EMPTY → PLUS (wrong, rejected).
 	var r1: EclipseGridLogic.SetGlyphResult = l2.cycle_cell(0)
 	assert_true(r1.rejected, "Wrong PLUS must be rejected")
-	assert_eq(l2.cells[0], PLUS, "Rejected value placed to allow cycle to advance")
+	assert_eq(l2.cells[0], EMPTY, "Rejected value must not enter the accepted board state")
 
 	# PLUS → MINUS (correct, accepted).
 	var r2: EclipseGridLogic.SetGlyphResult = l2.cycle_cell(0)
@@ -758,79 +759,37 @@ func test_get_broken_relations_returns_empty_when_none_violated() -> void:
 # ---------------------------------------------------------------------------
 
 func test_hint_undo_uses_pre_rejection_value_not_rejected_glyph() -> void:
-	## Scenario: strict mode, solution[0] = PLUS.
-	## Player taps PLUS (correct, accepted), then taps again to MINUS (rejected,
-	## placed for cycle advancement).  Cell now holds rejected MINUS.
-	## use_hint() applies the correct value (PLUS again after it was over-cycled
-	## to EMPTY — or directly fixes the current wrong value).
-	## The undo entry created by use_hint() must record EMPTY (pre-rejection
-	## state) as old_value, not the rejected MINUS.
-	##
-	## Simplified version: start with cell = EMPTY, hint fills PLUS.
-	## After hint, undo should go back to EMPTY.
-	var l2 := EclipseGridLogic.new()
+	## A rejected PLUS at a MINUS solution cell lives only in side-state.
+	## A hint on that cell must record the accepted EMPTY value for undo.
+	var l := EclipseGridLogic.new()
 	var sol: Array[int] = [PLUS, MINUS, PLUS, MINUS,
 						   MINUS, PLUS, MINUS, PLUS,
 						   PLUS, MINUS, PLUS, MINUS,
 						   MINUS, PLUS, MINUS, PLUS]
 	var gv: Array[int] = sol.duplicate()
-	gv[0] = EMPTY
-	l2.init_from_save(_make_save_data(4, sol, gv))
-	l2.assistance_mode = EclipseGridLogic.ASSIST_STRICT
+	gv[1] = EMPTY
+	gv[4] = EMPTY  # Keep the game active after the hint.
+	l.init_from_save(_make_save_data(4, sol, gv))
+	l.assistance_mode = EclipseGridLogic.ASSIST_STRICT
 
-	# Enter wrong value (PLUS is correct; tap to get PLUS, then MINUS = rejected).
-	var r1 := l2.cycle_cell(0)   # EMPTY → PLUS (correct)
-	assert_false(r1.rejected)
-	var r2 := l2.cycle_cell(0)   # PLUS → MINUS (wrong, rejected, placed)
-	assert_true(r2.rejected)
-	assert_eq(l2.cells[0], MINUS, "Rejected MINUS must be in cells")
+	var rejected := l.cycle_cell(1)  # EMPTY → PLUS (wrong)
+	assert_true(rejected.rejected)
+	assert_eq(l.cells[1], EMPTY, "Rejected PLUS must remain outside cells[]")
 
-	# Now hint on another empty cell to get a fresh undo entry.
-	# Reset cell 0 by cycling to EMPTY.
-	var _r3 := l2.cycle_cell(0)   # MINUS → EMPTY
-	assert_eq(l2.cells[0], EMPTY)
-
-	# Now use_hint() on a fresh empty cell (pick cell 1 which might also be empty).
-	# But the board above has cell 1 = MINUS (given = sol[1]).
-	# Use a board where cell 1 is also empty so hint can act on it.
-	var l3 := EclipseGridLogic.new()
-	var sol3: Array[int] = sol.duplicate()
-	var gv3: Array[int] = sol.duplicate()
-	gv3[0] = EMPTY
-	gv3[1] = EMPTY
-	l3.init_from_save(_make_save_data(4, sol3, gv3))
-	l3.assistance_mode = EclipseGridLogic.ASSIST_STRICT
-
-	# Place a rejected glyph at cell 0 (PLUS is correct → MINUS is rejected).
-	var rA := l3.cycle_cell(0)   # EMPTY → PLUS (correct)
-	assert_false(rA.rejected)
-	var rB := l3.cycle_cell(0)   # PLUS → MINUS (rejected)
-	assert_true(rB.rejected)
-	assert_eq(l3.cells[0], MINUS)
-
-	# use_hint() must look at cell 1 (still EMPTY) and fill it correctly.
-	var hint := l3.use_hint()
+	var hint := l.use_hint()
 	assert_true(hint.had_step, "Hint must succeed on the empty cell")
-
-	# The undo entry for the hint must use EMPTY as old_value (not the rejected
-	# MINUS that is currently sitting in cells[0]).
-	assert_true(l3.can_undo())
-	var u := l3.undo()
-	# After undo, the hinted cell must revert to EMPTY.
+	assert_eq(hint.index, 1, "Hint must target the rejected cell")
+	assert_eq(hint.value, MINUS)
+	assert_true(l.can_undo())
+	var u := l.undo()
+	assert_eq(l.cells[1], EMPTY)
 	assert_eq(u.new_value, EMPTY,
 		"Undo after hint must restore EMPTY (old_value before hint), not a rejected glyph")
 
 
 func test_hint_undo_old_value_is_empty_even_when_rejected_glyph_present() -> void:
-	## Directly verify that when hint applies its fix, the undo entry
-	## records old_value = EMPTY (the actual pre-tap state) even if the cell
-	## currently holds a rejected (wrong) glyph from strict mode.
-	##
-	## 4×4, cell 0 = EMPTY in givens, solution[0] = PLUS.
-	## Scenario: cell 0 gets PLUS (correct) via cycle, then MINUS (rejected) via cycle.
-	## _pre_rejection[0] = EMPTY was recorded when PLUS was placed.
-	## Now hint on cell 0 (wrong value MINUS) → hint clears it and fills PLUS.
-	## Undo entry old_value must be EMPTY.
+	## A rejected cycle position on one cell must not contaminate the undo entry
+	## for a hint applied to another empty cell.
 	var l2 := EclipseGridLogic.new()
 	var sol: Array[int] = [PLUS, MINUS, PLUS, MINUS,
 						   MINUS, PLUS, MINUS, PLUS,
@@ -839,33 +798,24 @@ func test_hint_undo_old_value_is_empty_even_when_rejected_glyph_present() -> voi
 	var gv: Array[int] = sol.duplicate()
 	gv[0] = EMPTY
 	gv[1] = EMPTY
-	gv[2] = EMPTY
-	gv[3] = EMPTY
+	gv[4] = EMPTY  # Keep the game active after the hint.
 	l2.init_from_save(_make_save_data(4, sol, gv))
 	l2.assistance_mode = EclipseGridLogic.ASSIST_STRICT
 
-	# Cycle cell 0: EMPTY→PLUS(accepted)→MINUS(rejected, placed).
+	# Cycle cell 0: EMPTY→PLUS(accepted)→MINUS(rejected into side-state).
 	var _r1 := l2.cycle_cell(0)
-	var _r2 := l2.cycle_cell(0)
-	assert_eq(l2.cells[0], MINUS, "Cell 0 should hold rejected MINUS")
+	var rejected := l2.cycle_cell(0)
+	assert_true(rejected.rejected)
+	assert_eq(l2.cells[0], PLUS, "Cell 0 must retain its accepted PLUS")
 
-	# use_hint() should fix cell 0 back to PLUS.
+	# Row 0 is [+, _, +, -], making cell 1 deterministically MINUS.
 	var hint := l2.use_hint()
-	if not hint.had_step:
-		pending("Hint did not apply — solver may prefer another cell; skip")
-		return
-
-	# Whether or not hint targeted cell 0, check undo is clean.
+	assert_true(hint.had_step, "Hint must apply")
+	assert_eq(hint.index, 1)
 	assert_true(l2.can_undo(), "Undo available after hint")
 	var u := l2.undo()
-	# The undo must restore the actual pre-tap state (EMPTY), not the
-	# rejected glyph (MINUS) that was in cells[] at the time hint ran.
-	assert_not_null(u, "Undo must return a result")
-	# new_value of an undo tells us what state we returned to.
-	# The hinted cell was at its old state before the hint — which must be
-	# either EMPTY (if hint targeted cell 0) or remain unchanged.
-	assert_true(u.new_value == EMPTY or u.new_value == PLUS or u.new_value == MINUS,
-		"Undo new_value must be a valid glyph")
+	assert_eq(u.new_value, EMPTY, "Hint undo must restore the hinted cell to EMPTY")
+	assert_eq(l2.cells[0], PLUS, "Undoing the hint must not expose the rejected MINUS")
 
 
 func test_strict_mode_rejected_glyph_not_in_cells() -> void:
@@ -876,6 +826,7 @@ func test_strict_mode_rejected_glyph_not_in_cells() -> void:
 						   PLUS, MINUS, PLUS, MINUS,
 						   MINUS, PLUS, MINUS, PLUS]
 	var gv: Array[int] = sol.duplicate()
+	gv[0] = EMPTY  # Keep the game active after accepting cell 1.
 	gv[1] = EMPTY  # cell 1: solution = MINUS, so tapping PLUS is wrong
 
 	var l := EclipseGridLogic.new()
@@ -945,6 +896,7 @@ func test_rejected_cells_survives_save_resume() -> void:
 						   PLUS, MINUS, PLUS, MINUS,
 						   MINUS, PLUS, MINUS, PLUS]
 	var gv: Array[int] = sol.duplicate()
+	gv[0] = EMPTY  # Keep the game active after accepting cell 1.
 	gv[1] = EMPTY
 
 	var l1 := EclipseGridLogic.new()

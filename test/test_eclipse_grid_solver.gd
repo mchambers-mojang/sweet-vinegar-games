@@ -636,8 +636,8 @@ func test_rank3_pattern_b_eq_right_neighbour() -> void:
 			"cells[2]=PLUS → placing PLUS at pos 1 creates triple → force MINUS")
 
 
-func test_rank3_pattern_c_eq_quota_overflow() -> void:
-	## Pattern C: EQ(p, p+1) + plus_needed=1 → EQ pair cannot be PLUS,PLUS (adds 2)
+func test_rank2_eq_pair_quota_overflow() -> void:
+	## EQ(p, p+1) + plus_needed=1 → EQ pair cannot be PLUS,PLUS (adds 2)
 	## → both cells must be MINUS.  Neither Pattern A nor B applies here because
 	## cells[p-1] and cells[p+2] are both EMPTY.
 	## Row 0: [+, _, _, _, _, +], EQ(2,3), plus_needed=1.
@@ -651,13 +651,30 @@ func test_rank3_pattern_c_eq_quota_overflow() -> void:
 	]
 	var h_rels := { Vector2i(2, 0): EQ }
 	var step: EclipseGridSolver.SolverStep = \
-		EclipseGridSolver._line_propagate_rank3(6, cells, h_rels, {}, 0, true)
-	assert_not_null(step, "Pattern C must return a step when plus_needed=1 and EQ pair present")
+		EclipseGridSolver._eq_pair_quota_rank2(6, cells, h_rels, {})
+	assert_not_null(step, "EQ pair quota interaction must force a step")
 	if step != null:
-		assert_eq(step.rank, EclipseGridSolver.RANK_3, "Must be RANK_3")
+		assert_eq(step.rank, EclipseGridSolver.RANK_2, "Must be RANK_2")
 		assert_eq(step.affected_cells[0], 2, "pos 2 (flat index 2) is forced")
 		assert_eq(step.result_value, MINUS,
 			"EQ pair as PLUS,PLUS would overflow quota → both must be MINUS")
+
+
+func test_rank2_eq_pair_quota_contradiction_returns_no_step() -> void:
+	## The only two empty cells need one PLUS and one MINUS, but EQ requires
+	## them to match.  This line is contradictory, so neither value is forced.
+	var cells: Array[int] = [
+		EMPTY, EMPTY, PLUS,  MINUS, PLUS,  MINUS,
+		MINUS, PLUS,  MINUS, PLUS,  MINUS, PLUS,
+		PLUS,  MINUS, PLUS,  MINUS, PLUS,  MINUS,
+		MINUS, PLUS,  MINUS, PLUS,  MINUS, PLUS,
+		PLUS,  MINUS, PLUS,  MINUS, PLUS,  MINUS,
+		MINUS, PLUS,  MINUS, PLUS,  MINUS, PLUS,
+	]
+	var h_rels := { Vector2i(0, 0): EQ }
+	var step: EclipseGridSolver.SolverStep = \
+		EclipseGridSolver._eq_pair_quota_rank2(6, cells, h_rels, {})
+	assert_null(step, "A contradictory EQ pair must not produce a deduction")
 
 
 func test_rank4_non_speculative_read_only() -> void:
@@ -795,7 +812,7 @@ func test_rank4_perpendicular_cascade_through_analyze() -> void:
 	## 6×6 board (half=3); v_rel NEQ at (col=1, rows 3–4):
 	##   Row 0: [E, −, E, E, E, E]
 	##   Row 1: [E, +, E, E, E, E]
-	##   Row 2: [E, E, E, −, +, +]  ← empties at c0/c1/c2; plus_fixed=2
+	##   Row 2: [E, E, E, +, −, +]  ← empties at c0/c1/c2; plus_fixed=2
 	##   Row 3: [E, E, E, E, E, E]
 	##   Row 4: [E, E, E, E, E, E]
 	##   Row 5: [E, +, E, E, E, E]
@@ -806,8 +823,7 @@ func test_rank4_perpendicular_cascade_through_analyze() -> void:
 	##
 	## Why Ranks 1–3 all stall:
 	##   Rank-1 quota: no row or column has plus=half or minus=half. ✓
-	##   Rank-1 adjacent-pair: col4/col5 pair in row 2 (both PLUS) has no empty
-	##     neighbour (col3=MINUS left, col6 OOB right); no other pairs. ✓
+	##   Rank-1 adjacent-pair: no fixed adjacent pair exists. ✓
 	##   Rank-1 sandwich/direct-relation: no (V,E,V) patterns; v_rel NEQ has
 	##     both endpoints empty. ✓
 	##   Rank-2 combined-local: no line has exactly 2 empty cells. ✓
@@ -836,7 +852,7 @@ func test_rank4_perpendicular_cascade_through_analyze() -> void:
 	var cells: Array[int] = [
 		E, M, E, E, E, E,  # row 0: col1=−
 		E, P, E, E, E, E,  # row 1: col1=+
-		E, E, E, M, P, P,  # row 2: empties c0/c1/c2; plus_fixed=2
+		E, E, E, P, M, P,  # row 2: empties c0/c1/c2; plus_fixed=2
 		E, E, E, E, E, E,  # row 3
 		E, E, E, E, E, E,  # row 4
 		E, P, E, E, E, E,  # row 5: col1=+
@@ -868,19 +884,13 @@ func test_rank4_perpendicular_cascade_through_analyze() -> void:
 	# Verify reachable through the full analyze() pipeline with Ranks 1–3 stalling.
 	var analysis: EclipseGridSolver.Analysis = \
 		EclipseGridSolver.analyze(6, cells, {}, v_rels)
-	var found_rank4 := false
-	for step_var in analysis.steps:
-		var s: EclipseGridSolver.SolverStep = step_var
-		if s.rank == EclipseGridSolver.RANK_4:
-			found_rank4 = true
-			break
-	assert_true(found_rank4,
-		"analyze() must emit at least one RANK_4 step after Ranks 1–3 stall")
-	for step_var in analysis.steps:
-		var s: EclipseGridSolver.SolverStep = step_var
-		if s.rank == EclipseGridSolver.RANK_4:
-			assert_eq(s.affected_cells[0], 13,
-				"First RANK_4 step must be (row2,col1) at flat index 13")
-			assert_eq(s.result_value, M,
-				"Perpendicular cascade forces (row2,col1)=MINUS")
-			break
+	assert_true(analysis.steps.size() > 0,
+		"analyze() must emit a step after Ranks 1–3 stall")
+	if analysis.steps.size() > 0:
+		var first: EclipseGridSolver.SolverStep = analysis.steps[0]
+		assert_eq(first.rank, EclipseGridSolver.RANK_4,
+			"The first analyze() step must be RANK_4, proving Ranks 1–3 stalled")
+		assert_eq(first.affected_cells[0], 13,
+			"First RANK_4 step must be (row2,col1) at flat index 13")
+		assert_eq(first.result_value, M,
+			"Perpendicular cascade forces (row2,col1)=MINUS")

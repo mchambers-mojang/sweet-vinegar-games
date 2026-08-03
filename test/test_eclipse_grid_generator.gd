@@ -51,13 +51,12 @@ func test_same_seed_produces_same_puzzle_size_6() -> void:
 func test_different_seeds_usually_differ() -> void:
 	var a: Dictionary = EclipseGridGenerator.generate(4, 1)
 	var b: Dictionary = EclipseGridGenerator.generate(4, 2)
-	# It is extremely unlikely that two different seeds produce the same puzzle
+	assert_false(a.is_empty(), "Seed 1 must generate a puzzle")
+	assert_false(b.is_empty(), "Seed 2 must generate a puzzle")
 	var a_givens: Array = a.get("givens", [])
 	var b_givens: Array = b.get("givens", [])
-	var same: bool = a_givens == b_givens
-	# We just log — not assert — since technically it's possible but extremely rare
-	if same:
-		push_warning("test_different_seeds_usually_differ: seeds 1 and 2 produced the same puzzle (extremely unlikely)")
+	assert_ne(a_givens, b_givens,
+			"Different deterministic seeds must produce different regression fixtures")
 
 
 # ---------------------------------------------------------------------------

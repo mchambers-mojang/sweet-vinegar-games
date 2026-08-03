@@ -226,6 +226,12 @@ static func _find_next_step(
 	if step:
 		return step
 
+	# An empty EQ pair contributes glyphs in twos, so a line needing exactly
+	# one of a glyph forces the pair to the opposite glyph.
+	step = _eq_pair_quota_rank2(size, cells, h_relations, v_relations)
+	if step:
+		return step
+
 	# Rank 3 techniques
 	step = _relation_chain_rank3(size, cells, h_relations, v_relations)
 	if step:
@@ -631,6 +637,65 @@ static func _propagate_through_empty_v(
 	return SolverStep.new("Relation chain col %d: row %d→%d→%d" % [col, src_row, row, dst_row], af, dst_v, RANK_2)
 
 
+static func _eq_pair_quota_rank2(
+		size: int,
+		cells: Array[int],
+		h_relations: Dictionary,
+		v_relations: Dictionary) -> SolverStep:
+	for r in size:
+		var step := _line_eq_pair_quota_rank2(
+				size, cells, h_relations, v_relations, r, true)
+		if step:
+			return step
+	for c in size:
+		var step := _line_eq_pair_quota_rank2(
+				size, cells, h_relations, v_relations, c, false)
+		if step:
+			return step
+	return null
+
+
+static func _line_eq_pair_quota_rank2(
+		size: int,
+		cells: Array[int],
+		h_relations: Dictionary,
+		v_relations: Dictionary,
+		line: int,
+		is_row: bool) -> SolverStep:
+	var plus_count := 0
+	var minus_count := 0
+	for i in size:
+		var idx := line * size + i if is_row else i * size + line
+		if cells[idx] == PLUS:
+			plus_count += 1
+		elif cells[idx] == MINUS:
+			minus_count += 1
+
+	var plus_needed := size / 2 - plus_count
+	var minus_needed := size / 2 - minus_count
+	if plus_needed != 1 and minus_needed != 1:
+		return null
+	if plus_needed == 1 and minus_needed == 1:
+		return null
+
+	var rel_dict := h_relations if is_row else v_relations
+	var ltype := "row" if is_row else "col"
+	for p in range(size - 1):
+		var idx := line * size + p if is_row else p * size + line
+		var next_idx := line * size + p + 1 if is_row else (p + 1) * size + line
+		var rel_pos := Vector2i(p, line) if is_row else Vector2i(line, p)
+		if cells[idx] != EMPTY or cells[next_idx] != EMPTY \
+				or rel_dict.get(rel_pos, 0) != EQ:
+			continue
+		var forced := MINUS if plus_needed == 1 else PLUS
+		var af: Array[int] = [idx]
+		return SolverStep.new(
+				"Rank-2 %s %d: EQ(%d,%d) would overflow quota" % [
+					ltype, line, p, p + 1],
+				af, forced, RANK_2)
+	return null
+
+
 # ---------------------------------------------------------------------------
 # Rank 3 techniques
 # ---------------------------------------------------------------------------
@@ -640,9 +705,8 @@ static func _relation_chain_rank3(
 		cells: Array[int],
 		h_relations: Dictionary,
 		v_relations: Dictionary) -> SolverStep:
-	# For each row and column, apply direct EQ-pattern rules (Patterns A, B, C) to
-	# find cells forced by an EQ clue interacting with a filled neighbour or a quota
-	# overflow.  No hypothetical arrays are built or modified.
+	# For each row and column, apply direct EQ no-three patterns to find cells
+	# forced by an EQ clue interacting with a filled neighbour.
 	for r in size:
 		var step := _line_propagate_rank3(size, cells, h_relations, v_relations, r, true)
 		if step:
@@ -657,7 +721,7 @@ static func _relation_chain_rank3(
 ## Rank-3 technique: direct EQ-relation no-three forcing.
 ##
 ## Scans each line for adjacent pairs of empty cells that share an EQ clue and
-## applies three non-speculative patterns derived directly from the current board
+## applies two non-speculative patterns derived directly from the current board
 ## state — no hypothetical arrays, no enumeration of completions:
 ##
 ##   Pattern A — EQ left-neighbour:
@@ -670,12 +734,6 @@ static func _relation_chain_rank3(
 ##     Placing V at cells[p+1] would, via EQ, force cells[p] = V, creating the
 ##     triple (p, p+1, p+2) = V,V,V → no-three violation.  Force cells[p+1] = ¬V.
 ##
-##   Pattern C — EQ quota overflow:
-##     EQ(p, p+1), cells[p] = cells[p+1] = EMPTY.
-##     The EQ pair contributes 0 or 2 of each glyph to the line quota.
-##     If plus_needed == 1: contributing 2 PLUS would overflow quota → both MINUS.
-##     If minus_needed == 1: both must be PLUS.
-##
 ## Does NOT modify cells[].
 static func _line_propagate_rank3(
 		size: int,
@@ -684,20 +742,6 @@ static func _line_propagate_rank3(
 		v_relations: Dictionary,
 		line: int,
 		is_row: bool) -> SolverStep:
-	var plus_count := 0
-	var minus_count := 0
-	for i in size:
-		var idx := line * size + i if is_row else i * size + line
-		match cells[idx]:
-			PLUS:  plus_count += 1
-			MINUS: minus_count += 1
-
-	var half := size / 2
-	var plus_needed  := half - plus_count
-	var minus_needed := half - minus_count
-	if plus_needed < 0 or minus_needed < 0:
-		return null
-
 	var rel_dict := h_relations if is_row else v_relations
 	var ltype := "row" if is_row else "col"
 
@@ -735,20 +779,6 @@ static func _line_propagate_rank3(
 						"+" if cells[idxNext] == PLUS else "-",
 						p + 1, "+" if forced_v == PLUS else "-"],
 					af, forced_v, RANK_3)
-
-		# Pattern C: EQ pair quota overflow.
-		if plus_needed == 1:
-			var af: Array[int] = [idxP]
-			return SolverStep.new(
-				"Rank-3 %s %d: EQ(%d,%d) + plus_needed=1 forces pos %d=MINUS" % [
-					ltype, line, p, p + 1, p],
-				af, MINUS, RANK_3)
-		if minus_needed == 1:
-			var af: Array[int] = [idxP]
-			return SolverStep.new(
-				"Rank-3 %s %d: EQ(%d,%d) + minus_needed=1 forces pos %d=PLUS" % [
-					ltype, line, p, p + 1, p],
-				af, PLUS, RANK_3)
 
 	return null
 
