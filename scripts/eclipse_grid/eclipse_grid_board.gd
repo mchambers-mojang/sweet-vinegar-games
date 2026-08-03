@@ -196,15 +196,25 @@ func _gui_input(event: InputEvent) -> void:
 	if not fired or grid_size <= 0:
 		return
 
-	var cs := _get_cell_size()
-	var origin := _get_grid_origin()
-	var col := int((pos.x - origin.x) / cs)
-	var row := int((pos.y - origin.y) / cs)
-	if col < 0 or col >= grid_size or row < 0 or row >= grid_size:
+	var index := _position_to_index(pos)
+	if index < 0:
 		return
 
-	cell_tapped.emit(row * grid_size + col)
+	cell_tapped.emit(index)
 	accept_event()
+
+
+func _position_to_index(pos: Vector2) -> int:
+	var cs := _get_cell_size()
+	if grid_size <= 0 or cs <= 0.0:
+		return -1
+	var origin := _get_grid_origin()
+	var grid_rect := Rect2(origin, Vector2.ONE * cs * grid_size)
+	if not grid_rect.has_point(pos):
+		return -1
+	var col := int((pos.x - origin.x) / cs)
+	var row := int((pos.y - origin.y) / cs)
+	return row * grid_size + col
 
 
 # ---------------------------------------------------------------------------

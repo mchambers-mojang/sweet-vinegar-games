@@ -243,8 +243,19 @@ func _show_spinner(visible: bool) -> void:
 	if _spinner_tween != null:
 		_spinner_tween.kill()
 		_spinner_tween = null
-	if size_label:
-		size_label.text = "Generating…" if visible else ""
+	if not size_label:
+		return
+	size_label.text = "Generating" if visible else ""
+	if visible:
+		size_label.set_meta("spinner_frame", 0)
+		_spinner_tween = create_tween().set_loops()
+		_spinner_tween.tween_callback(func() -> void:
+			if is_instance_valid(size_label):
+				var frame: int = size_label.get_meta("spinner_frame", 0)
+				frame = (frame + 1) % 4
+				size_label.set_meta("spinner_frame", frame)
+				size_label.text = "Generating" + ".".repeat(frame)
+		).set_delay(0.4)
 
 
 # ---------------------------------------------------------------------------

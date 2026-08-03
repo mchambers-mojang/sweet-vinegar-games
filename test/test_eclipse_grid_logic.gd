@@ -247,12 +247,51 @@ func test_redo_after_undo() -> void:
 	assert_eq(logic.cells[2], PLUS)
 
 
+func test_redo_clears_strict_rejected_cycle_state() -> void:
+	var l2 := EclipseGridLogic.new()
+	var sol: Array[int] = [MINUS, PLUS, MINUS, PLUS,
+						   PLUS, MINUS, PLUS, MINUS,
+						   MINUS, PLUS, MINUS, PLUS,
+						   PLUS, MINUS, PLUS, MINUS]
+	var gv: Array[int] = sol.duplicate()
+	gv[0] = EMPTY
+	gv[1] = EMPTY
+	l2.init_from_save(_make_save_data(4, sol, gv))
+	l2.assistance_mode = EclipseGridLogic.ASSIST_STRICT
+
+	l2.cycle_cell(0)  # Rejected PLUS.
+	l2.cycle_cell(0)  # Accepted MINUS.
+	l2.undo()
+	l2.cycle_cell(0)  # Rejected PLUS while the redo entry remains available.
+	l2.redo()
+
+	var result: EclipseGridLogic.SetGlyphResult = l2.cycle_cell(0)
+	assert_false(result.rejected)
+	assert_eq(result.new_value, EMPTY,
+		"After redo, cycling must continue from the visible MINUS value")
+
+
 func test_can_undo_returns_false_when_stack_empty() -> void:
 	assert_false(logic.can_undo())
 
 
 func test_can_redo_returns_false_when_stack_empty() -> void:
 	assert_false(logic.can_redo())
+
+
+func test_board_rejects_positions_outside_centered_grid() -> void:
+	var board := EclipseGridBoard.new()
+	add_child_autofree(board)
+	board.grid_size = 4
+	board.size = Vector2(200.0, 100.0)
+	var origin := board._get_grid_origin()
+	var cell_size := board._get_cell_size()
+
+	assert_eq(board._position_to_index(origin + Vector2(0.5, 0.5)), 0)
+	assert_eq(board._position_to_index(
+		Vector2(origin.x - 0.5, origin.y + cell_size * 0.5)), -1)
+	assert_eq(board._position_to_index(
+		Vector2(origin.x + cell_size * 0.5, origin.y - 0.5)), -1)
 
 
 # ---------------------------------------------------------------------------

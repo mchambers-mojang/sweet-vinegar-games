@@ -301,6 +301,7 @@ func redo() -> UndoRedoResult:
 	var new_val: int = int(entry.get("new_value", EMPTY))
 	var old_val: int = int(entry.get("old_value", EMPTY))
 	cells[idx] = new_val
+	_rejected_cells.erase(idx)
 	_recompute_completion()
 	result.index = idx
 	result.old_value = old_val
