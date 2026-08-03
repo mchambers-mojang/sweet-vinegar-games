@@ -609,20 +609,19 @@ func test_cell_ownership_resolves_ambiguous_candidates() -> void:
 #   propagation
 # ---------------------------------------------------------------------------
 
-func test_cell_ownership_deduplication_does_not_inflate_owner_count() -> void:
+func test_cell_ownership_deduplication_does_not_false_solve_ambiguity() -> void:
 	# 4×2 grid, A at (0,0) SHAPE_ANY, B at (2,0) SHAPE_ANY.
-	# A has two valid candidates: 1×2@(0,0) and 2×2@(0,0), both covering cell
-	# (0,1).  Before deduplication, the old code added A's index twice to
-	# cell_owners[(0,1)] → size 2 → restriction skipped. The solver still
-	# resolved the puzzle via other cells, but the deduplication ensures the
-	# restriction is correctly recorded and applied.
-	# The unique solution is 2×2@(0,0) + 2×2@(2,0).
+	# A can be 1×2 or 2×2, producing two exact covers:
+	#   A=1×2@(0,0), B=3×2@(1,0)
+	#   A=2×2@(0,0), B=2×2@(2,0)
+	# Repeated candidates from one anchor must not inflate owner counts into a
+	# false deduction that accepts this ambiguous puzzle.
 	var anchors := {
 		Vector2i(0, 0): {"area": 0, "shape": ShikakuLogic.SHAPE_ANY},
 		Vector2i(2, 0): {"area": 0, "shape": ShikakuLogic.SHAPE_ANY},
 	}
-	assert_true(ShikakuSolver.is_human_solvable(4, 2, anchors),
-		"4×2 puzzle with two SHAPE_ANY anchors must be human-solvable")
+	assert_false(ShikakuSolver.is_human_solvable(4, 2, anchors),
+		"Ambiguous ownership must not be treated as a human deduction")
 
 
 func test_restriction_propagation_accumulates_across_iterations() -> void:
@@ -630,7 +629,7 @@ func test_restriction_propagation_accumulates_across_iterations() -> void:
 	# in subsequent Phase 1 and Phase 2 iterations, enabling cumulative
 	# exact-cover deductions that neither phase could make independently.
 	#
-	# 4×2 grid, A at (0,0) SHAPE_ANY, B at (2,0) SHAPE_ANY.
+	# 4×2 grid, A at (0,0) SHAPE_ANY, B at (2,0) SHAPE_SQUARE.
 	# The unique solution is A=2×2@(0,0), B=2×2@(2,0).
 	# Phase 2 correctly deduces A's placement because (1,1) is uniquely owned by A;
 	# additionally, with deduplication, (0,1) is correctly identified as uniquely
@@ -639,10 +638,10 @@ func test_restriction_propagation_accumulates_across_iterations() -> void:
 	# applies narrowed candidates across iterations.
 	var anchors := {
 		Vector2i(0, 0): {"area": 0, "shape": ShikakuLogic.SHAPE_ANY},
-		Vector2i(2, 0): {"area": 0, "shape": ShikakuLogic.SHAPE_ANY},
+		Vector2i(2, 0): {"area": 0, "shape": ShikakuLogic.SHAPE_SQUARE},
 	}
 	assert_true(ShikakuSolver.is_human_solvable(4, 2, anchors),
-		"4×2 puzzle with two SHAPE_ANY anchors must be human-solvable via combined deductions")
+		"Ownership restrictions must resolve the unique ANY/SQUARE exact cover")
 
 
 # ---------------------------------------------------------------------------

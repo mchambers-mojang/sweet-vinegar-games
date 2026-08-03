@@ -225,10 +225,8 @@ static func _is_human_solvable_from_entries(
 			unconstrained_count += 1
 			unconstrained_flags[j] = 1
 
-	# work_cands: Phase 1 result cache, reused in Phase 2 restriction to benefit
-	# from required_cells narrowing applied in Phase 1 (_apply_required_cells).
-	# Phase 2 owner_map building uses base_candidates directly so it reflects
-	# ALL Phase-1 placements, not just those before each anchor was processed.
+	# work_cands: Phase 1 result cache, reused throughout Phase 2 so ownership
+	# honors coverage, anchor conflicts, area limits, and required_cells.
 	var work_cands: Array = []
 	for _i in range(n):
 		work_cands.append([])
@@ -262,7 +260,7 @@ static func _is_human_solvable_from_entries(
 					continue
 				valid_rects.append(rect)
 			valid_rects = _apply_required_cells(valid_rects, work_entries[i])
-			work_cands[i] = valid_rects  # cache for Phase 2 restriction (required_cells narrowing)
+			work_cands[i] = valid_rects
 			if valid_rects.size() == 1:
 				_mark_covered(valid_rects[0], width, covered, 1)
 				placed[i] = 1
@@ -289,11 +287,8 @@ static func _is_human_solvable_from_entries(
 		#   -1 = no unplaced anchor candidate reaches this cell
 		#    k = unique anchor index (0..n-1) can cover this cell
 		#   -2 = multiple anchors can cover this cell
-		# Rebuild from base_candidates with current coverage so the map
-		# reflects ALL Phase-1 placements (not just those before each anchor
-		# was processed).  Accurate ownership leads to more unique-owner
-		# cells detected per pass, fewer required_cells iterations, and
-		# better overall convergence.
+		# Use the fully filtered Phase-1 candidates so ownership deductions
+		# preserve restrictions accumulated during earlier passes.
 		# ------------------------------------------------------------------
 		var owner_map := PackedInt32Array()
 		owner_map.resize(width * height)
@@ -303,14 +298,11 @@ static func _is_human_solvable_from_entries(
 		for i in range(n):
 			if placed[i] != 0:
 				continue
-			var pos_i: Vector2i = work_entries[i]["pos"]
 			var is_unc_i: bool = unconstrained_flags[i] != 0
-			for rect in base_candidates[i]:
+			for rect in work_cands[i]:
 				if is_unc_i and rect.size.x * rect.size.y > al:
-					break  # base_candidates area-sorted ascending for unconstrained
+					break
 				if not _rect_is_clear(rect, width, covered):
-					continue
-				if not _passes_anchor_at(rect, pos_i, anchor_at, width):
 					continue
 				for r in range(rect.position.y, rect.position.y + rect.size.y):
 					for c in range(rect.position.x, rect.position.x + rect.size.x):
