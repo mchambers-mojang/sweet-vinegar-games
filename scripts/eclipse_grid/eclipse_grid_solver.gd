@@ -95,52 +95,194 @@ static func validate(
 
 ## Count solutions up to max_count using backtracking.
 ## Pass cancel_check to abort early.
+## known_forced_steps may contain non-branching steps returned by analyze() for
+## these exact inputs; they reduce the residual exhaustive search without
+## changing its solution set.
 static func count_solutions(
 		size: int,
 		cells: Array[int],
 		h_relations: Dictionary,
 		v_relations: Dictionary,
 		max_count: int = 2,
-		cancel_check: Callable = Callable()) -> int:
+		cancel_check: Callable = Callable(),
+		known_forced_steps: Array = []) -> int:
+	if cells.size() != size * size \
+			or not is_consistent(size, cells, h_relations, v_relations):
+		return 0
+	if cancel_check.is_valid() and cancel_check.call():
+		return 0
 	var working: Array[int] = cells.duplicate()
-	var counter := [0]
-	_backtrack_count(size, working, h_relations, v_relations, 0, max_count, counter, cancel_check)
-	return counter[0]
+	for step in known_forced_steps:
+		if cancel_check.is_valid() and cancel_check.call():
+			return 0
+		var idx: int = step.affected_cells[0]
+		if working[idx] != EMPTY:
+			return 0
+		working[idx] = step.result_value
+		if not is_consistent(size, working, h_relations, v_relations):
+			return 0
+	if not working.has(EMPTY):
+		return 1 if validate(
+				size, working, h_relations, v_relations) else 0
+
+	var valid_masks: Array[int] = _valid_line_masks(size)
+	var row_candidates: Array[Array] = []
+	for row in size:
+		var candidates: Array[int] = []
+		for mask in valid_masks:
+			if _mask_matches_row(
+					size, working, row, mask, h_relations):
+				candidates.append(mask)
+		if candidates.is_empty():
+			return 0
+		row_candidates.append(candidates)
+
+	var vertical_eq: Array[int] = []
+	var vertical_neq: Array[int] = []
+	vertical_eq.resize(size - 1)
+	vertical_eq.fill(0)
+	vertical_neq.resize(size - 1)
+	vertical_neq.fill(0)
+	for pos in v_relations:
+		var cell: Vector2i = pos
+		if v_relations[pos] == EQ:
+			vertical_eq[cell.y] |= 1 << cell.x
+		else:
+			vertical_neq[cell.y] |= 1 << cell.x
+
+	var plus_counts: Array[int] = []
+	plus_counts.resize(size)
+	plus_counts.fill(0)
+	var count_space := 1
+	for _column in size:
+		count_space *= size / 2 + 1
+	var memo: Dictionary = {}
+	var cancelled := [false]
+	return _count_row_masks(
+			size, row_candidates, vertical_eq, vertical_neq, 0, 0, 0,
+			plus_counts, count_space, max_count, memo, cancel_check, cancelled)
 
 
-static func _backtrack_count(
+## Exhaustively count valid row-mask sequences. Memoization collapses prefixes
+## with identical column quotas and trailing rows into the same exact state.
+static func _count_row_masks(
+		size: int,
+		row_candidates: Array[Array],
+		vertical_eq: Array[int],
+		vertical_neq: Array[int],
+		row: int,
+		prev2: int,
+		prev1: int,
+		plus_counts: Array[int],
+		count_space: int,
+		max_count: int,
+		memo: Dictionary,
+		cancel_check: Callable,
+		cancelled: Array) -> int:
+	if cancel_check.is_valid() and cancel_check.call():
+		cancelled[0] = true
+		return 0
+	if row == size:
+		return 1
+
+	var counts_code := 0
+	var count_base := size / 2 + 1
+	for count in plus_counts:
+		counts_code = counts_code * count_base + count
+	var mask_limit := 1 << size
+	var key := (((row * mask_limit + prev2) * mask_limit + prev1) \
+			* count_space + counts_code)
+	if memo.has(key):
+		return memo[key]
+
+	var total := 0
+	var full_mask := mask_limit - 1
+	var remaining := size - row - 1
+	for mask in row_candidates[row]:
+		if cancel_check.is_valid() and cancel_check.call():
+			cancelled[0] = true
+			break
+		if row > 0:
+			var differences: int = prev1 ^ mask
+			if differences & vertical_eq[row - 1]:
+				continue
+			if ((~differences) & full_mask) & vertical_neq[row - 1]:
+				continue
+		if row > 1:
+			if (prev2 & prev1 & mask) != 0 \
+					or ((~(prev2 | prev1 | mask)) & full_mask) != 0:
+				continue
+
+		var feasible := true
+		for col in size:
+			if mask & (1 << col):
+				plus_counts[col] += 1
+			if plus_counts[col] > size / 2 \
+					or plus_counts[col] + remaining < size / 2:
+				feasible = false
+		if feasible:
+			total += _count_row_masks(
+					size, row_candidates, vertical_eq, vertical_neq, row + 1,
+					prev1, mask, plus_counts, count_space,
+					max_count, memo, cancel_check, cancelled)
+		for col in size:
+			if mask & (1 << col):
+				plus_counts[col] -= 1
+		if cancelled[0] or total >= max_count:
+			total = mini(total, max_count)
+			break
+
+	if not cancelled[0]:
+		memo[key] = total
+	return total
+
+
+static func _valid_line_masks(size: int) -> Array[int]:
+	var masks: Array[int] = []
+	for mask in (1 << size):
+		if _mask_plus_count(mask, size) != size / 2:
+			continue
+		var valid := true
+		for col in range(size - 2):
+			var triple := (mask >> col) & 7
+			if triple == 0 or triple == 7:
+				valid = false
+				break
+		if valid:
+			masks.append(mask)
+	return masks
+
+
+static func _mask_matches_row(
 		size: int,
 		cells: Array[int],
-		h_relations: Dictionary,
-		v_relations: Dictionary,
-		start: int,
-		max_count: int,
-		counter: Array,
-		cancel_check: Callable) -> void:
-	if cancel_check.is_valid() and cancel_check.call():
-		return
-	# Find next empty cell
-	var idx := -1
-	for i in range(start, cells.size()):
-		if cells[i] == EMPTY:
-			idx = i
-			break
-	if idx == -1:
-		# All filled — validate
-		if validate(size, cells, h_relations, v_relations):
-			counter[0] += 1
-		return
-	for val in [PLUS, MINUS]:
-		cells[idx] = val
-		if is_consistent(size, cells, h_relations, v_relations):
-			_backtrack_count(size, cells, h_relations, v_relations, idx + 1, max_count, counter, cancel_check)
-			if counter[0] >= max_count:
-				cells[idx] = EMPTY
-				return
-		if cancel_check.is_valid() and cancel_check.call():
-			cells[idx] = EMPTY
-			return
-	cells[idx] = EMPTY
+		row: int,
+		mask: int,
+		h_relations: Dictionary) -> bool:
+	for col in size:
+		var given := cells[row * size + col]
+		var value := PLUS if mask & (1 << col) else MINUS
+		if given != EMPTY and given != value:
+			return false
+	for col in range(size - 1):
+		var pos := Vector2i(col, row)
+		if not h_relations.has(pos):
+			continue
+		var same := bool(mask & (1 << col)) \
+				== bool(mask & (1 << (col + 1)))
+		var relation: int = h_relations[pos]
+		if (relation == EQ and not same) \
+				or (relation == NEQ and same):
+			return false
+	return true
+
+
+static func _mask_plus_count(mask: int, size: int) -> int:
+	var count := 0
+	for col in size:
+		if mask & (1 << col):
+			count += 1
+	return count
 
 
 # ---------------------------------------------------------------------------
@@ -808,7 +950,7 @@ static func _line_propagate_rank3(
 ## If every valid (in-line + cross-line) assignment places the same value at
 ## some position, that cell is forced at RANK_4.
 ##
-## Does NOT modify cells[].  Uses a local duplicate for validation.
+## Restores every temporary assignment before returning.
 static func _global_quota_chain(
 		size: int,
 		cells: Array[int],
@@ -892,12 +1034,16 @@ static func _check_perp_feasibility(
 		forced = PLUS
 	if forced == EMPTY:
 		return true  # No cascade possible at this step.
-	# 4. Apply forced values to a scratch copy and re-validate the line.
-	var scratch: Array[int] = trial.duplicate()
+	# 4. Apply forced values in place, then restore the still-empty positions.
 	for pos in empties:
 		var idx: int = perp * size + pos if is_row else pos * size + perp
-		scratch[idx] = forced
-	return _check_partial_line(scratch, size, perp, is_row, h_relations, v_relations)
+		trial[idx] = forced
+	var feasible := _check_partial_line(
+			trial, size, perp, is_row, h_relations, v_relations)
+	for pos in empties:
+		var idx: int = perp * size + pos if is_row else pos * size + perp
+		trial[idx] = EMPTY
+	return feasible
 
 
 ## Enumerate all valid in-line complete assignments for a line's k empty
@@ -952,8 +1098,9 @@ static func _line_completion_rank4(
 	for _i in k:
 		can_plus.append(false)
 		can_minus.append(false)
-	# Use a local copy so cells[] is never modified.
-	var trial: Array[int] = cells.duplicate()
+	# Candidate values are restored before each iteration completes, so the
+	# caller's working board can safely serve as the trial buffer.
+	var trial: Array[int] = cells
 	var total := 1 << k
 	for combo in total:
 		# Reject assignments whose PLUS count is wrong.
@@ -994,6 +1141,13 @@ static func _line_completion_rank4(
 				can_plus[i] = true
 			else:
 				can_minus[i] = true
+		var all_unforced := true
+		for i in k:
+			if not can_plus[i] or not can_minus[i]:
+				all_unforced = false
+				break
+		if all_unforced:
+			return null
 	# Return the first position forced to a single value.
 	var ltype := "row" if is_row else "col"
 	for i in k:

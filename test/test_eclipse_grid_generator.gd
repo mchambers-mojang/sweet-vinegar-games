@@ -31,6 +31,24 @@ func test_generate_size_10() -> void:
 	_assert_valid_result(result, 10)
 
 
+func test_representative_generation_stays_within_p95_budget() -> void:
+	var base_seeds := {4: 42, 6: 100, 8: 200, 10: 300}
+	for size in base_seeds:
+		var timings: Array[int] = []
+		for offset in 5:
+			var started := Time.get_ticks_msec()
+			var result: Dictionary = EclipseGridGenerator.generate(
+				size, base_seeds[size] + offset)
+			timings.append(Time.get_ticks_msec() - started)
+			assert_false(result.is_empty(),
+				"Representative size %d puzzle must generate successfully" % size)
+		timings.sort()
+		var p95_index := ceili(timings.size() * 0.95) - 1
+		assert_lt(timings[p95_index], 3000,
+			"Size %d generation p95 must stay below 3 seconds; samples=%s" % [
+				size, timings])
+
+
 # ---------------------------------------------------------------------------
 # Determinism
 # ---------------------------------------------------------------------------
@@ -151,6 +169,12 @@ func _assert_valid_result(result: Dictionary, expected_size: int) -> void:
 			"givens must have size×size entries")
 	assert_eq(solution_arr.size(), expected_size * expected_size,
 			"solution must have size×size entries")
+	var analysis: EclipseGridSolver.Analysis = result.get("analysis")
+	assert_not_null(analysis, "generate() must return its solver analysis")
+	if analysis != null:
+		assert_true(analysis.is_unique, "Returned analysis must prove human-solvability")
+		assert_eq(analysis.max_rank, EclipseGridGenerator.required_rank(expected_size),
+			"Returned analysis must match the requested size tier")
 
 	var givens: Array[int] = []
 	givens.assign(givens_arr)

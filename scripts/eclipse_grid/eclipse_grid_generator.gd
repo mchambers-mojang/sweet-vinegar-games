@@ -5,7 +5,7 @@ extends RefCounted
 ##
 ## generate(size, seed, cancel_check) → Dictionary with keys:
 ##   size, seed, givens (Array[int]), h_relations (Dictionary), v_relations (Dictionary),
-##   solution (Array[int]), max_rank (int)
+##   solution (Array[int]), analysis (EclipseGridSolver.Analysis), max_rank (int)
 ## Returns {} on failure or cancellation.
 
 const EMPTY := EclipseGridSolver.EMPTY
@@ -74,15 +74,8 @@ static func generate(size: int, seed: int, cancel_check: Callable = Callable()) 
 		if cancel_check.is_valid() and cancel_check.call():
 			return {}
 
-		# Step 4: Verify unique solution (backtracking, but board is well-constrained).
-		var unique := EclipseGridSolver.count_solutions(
-				size, givens, h_relations, v_relations, 2, cancel_check) == 1
-		if cancel_check.is_valid() and cancel_check.call():
-			return {}
-		if not unique:
-			continue
-
-		# Step 5: Analyse difficulty rank; only accept puzzles at exactly the target rank.
+		# Step 4: Analyse difficulty rank before the more expensive exhaustive
+		# uniqueness proof, so rejected difficulty tiers do not pay for it.
 		var analysis: EclipseGridSolver.Analysis = EclipseGridSolver.analyze(
 				size, givens, h_relations, v_relations, cancel_check)
 		if cancel_check.is_valid() and cancel_check.call():
@@ -94,6 +87,16 @@ static func generate(size: int, seed: int, cancel_check: Callable = Callable()) 
 		if not analysis.is_unique or analysis.max_rank != required_rank(size):
 			continue
 
+		# Step 5: Prove uniqueness exhaustively after applying the already
+		# established non-branching deductions.
+		var unique := EclipseGridSolver.count_solutions(
+				size, givens, h_relations, v_relations, 2, cancel_check,
+				analysis.steps) == 1
+		if cancel_check.is_valid() and cancel_check.call():
+			return {}
+		if not unique:
+			continue
+
 		return {
 			"size": size,
 			"seed": seed,
@@ -101,6 +104,7 @@ static func generate(size: int, seed: int, cancel_check: Callable = Callable()) 
 			"h_relations": h_relations,
 			"v_relations": v_relations,
 			"solution": solution,
+			"analysis": analysis,
 			"max_rank": analysis.max_rank,
 		}
 
@@ -248,9 +252,16 @@ static func _add_relation_clues(
 	_shuffle_array(all_h, rng)
 	_shuffle_array(all_v, rng)
 
-	# Add ~20–40% of available pairs as relation clues
-	var num_h := rng.randi_range(int(all_h.size() * 0.15), int(all_h.size() * 0.35))
-	var num_v := rng.randi_range(int(all_v.size() * 0.15), int(all_v.size() * 0.35))
+	# A sparse relation set gives the minimizers a useful starting point without
+	# making them repeatedly re-analyse dozens of clues that will be discarded.
+	var min_density := 0.12 if size >= 10 else 0.08
+	var max_density := 0.12 if size >= 10 else 0.15
+	var num_h := rng.randi_range(
+			maxi(1, int(all_h.size() * min_density)),
+			maxi(1, int(all_h.size() * max_density)))
+	var num_v := rng.randi_range(
+			maxi(1, int(all_v.size() * min_density)),
+			maxi(1, int(all_v.size() * max_density)))
 	num_h = mini(num_h, all_h.size())
 	num_v = mini(num_v, all_v.size())
 
@@ -289,31 +300,19 @@ static func _minimize_givens(
 		indices.append(i)
 	_shuffle_array(indices, rng)
 
-	var removed_any := true
-	while removed_any:
+	# One greedy pass is sufficient: removing additional clues cannot make a
+	# previously necessary given become human-solvable within the rank ceiling.
+	for idx in indices:
 		if cancel_check.is_valid() and cancel_check.call():
 			return []
-		removed_any = false
-		for idx in indices:
-			if cancel_check.is_valid() and cancel_check.call():
-				return []
-			if givens[idx] == EMPTY:
-				continue
-			# Try removing this cell
-			var saved: int = givens[idx]
-			givens[idx] = EMPTY
-
-			# Use human solver to check if the puzzle is still fully solvable
-			var analysis: EclipseGridSolver.Analysis = EclipseGridSolver.analyze(
-					size, givens, h_relations, v_relations, cancel_check)
-			if cancel_check.is_valid() and cancel_check.call():
-				return []
-
-			# Check if puzzle is fully solved (all cells filled in the analysis)
-			if analysis.is_unique and analysis.max_rank <= max_rank:
-				removed_any = true  # Keep cell removed
-			else:
-				givens[idx] = saved  # Cell is needed; restore it
+		var saved: int = givens[idx]
+		givens[idx] = EMPTY
+		var analysis: EclipseGridSolver.Analysis = EclipseGridSolver.analyze(
+				size, givens, h_relations, v_relations, cancel_check)
+		if cancel_check.is_valid() and cancel_check.call():
+			return []
+		if not analysis.is_unique or analysis.max_rank > max_rank:
+			givens[idx] = saved
 
 	return givens
 
@@ -339,7 +338,7 @@ static func _minimize_relations(
 			if cancel_check.is_valid() and cancel_check.call():
 				return
 			if not analysis.is_unique:
-				dict[key] = saved  # Relation is needed; restore it
+				dict[key] = saved
 
 
 # ---------------------------------------------------------------------------

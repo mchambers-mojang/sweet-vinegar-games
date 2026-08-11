@@ -164,6 +164,28 @@ func test_count_solutions_ambiguous() -> void:
 	assert_eq(count, 2)
 
 
+func test_count_solutions_does_not_mutate_input() -> void:
+	var cells: Array[int] = []
+	cells.resize(16)
+	cells.fill(EMPTY)
+	var snapshot := cells.duplicate()
+	EclipseGridSolver.count_solutions(4, cells, {}, {}, 2)
+	assert_eq(cells, snapshot)
+
+
+func test_count_solutions_respects_cancellation() -> void:
+	var cells: Array[int] = []
+	cells.resize(100)
+	cells.fill(EMPTY)
+	var polls := [0]
+	var count := EclipseGridSolver.count_solutions(
+			10, cells, {}, {}, 2, func() -> bool:
+				polls[0] += 1
+				return true)
+	assert_eq(count, 0)
+	assert_gt(polls[0], 0)
+
+
 # ---------------------------------------------------------------------------
 # Human-logic solver (analyze)
 # ---------------------------------------------------------------------------
@@ -434,8 +456,7 @@ func test_rank4_chain_propagates_before_consistency_check() -> void:
 
 
 func test_rank4_chain_trial_placement_does_not_mutate_input() -> void:
-	## _global_quota_chain tries values in scratch copies; the original cells
-	## array must be unchanged after the call.
+	## _global_quota_chain restores its in-place trials before returning.
 	var cells: Array[int] = [
 		PLUS, MINUS, PLUS, MINUS, PLUS, MINUS,
 		MINUS, PLUS, MINUS, PLUS, MINUS, PLUS,
@@ -678,8 +699,7 @@ func test_rank2_eq_pair_quota_contradiction_returns_no_step() -> void:
 
 
 func test_rank4_non_speculative_read_only() -> void:
-	## _global_quota_chain must not mutate cells[]; it uses a local duplicate
-	## for trial validation only.  Also verify it returns the correct forced step.
+	## _global_quota_chain must restore every in-place trial before returning.
 	## Same board as test_rank4_step_has_rank4_label: row 0 has 3 empties and a
 	## NEQ clue between cols 2 and 3.  All valid in-line completions agree that
 	## col 1 must be MINUS → step at flat index 1, value MINUS, rank RANK_4.
@@ -696,7 +716,7 @@ func test_rank4_non_speculative_read_only() -> void:
 	var step: EclipseGridSolver.SolverStep = \
 		EclipseGridSolver._global_quota_chain(6, cells, h_rels, {})
 	assert_eq(cells, snapshot,
-		"_global_quota_chain must not modify cells[] (uses local trial copy)")
+		"_global_quota_chain must restore cells[] after in-place trials")
 	assert_not_null(step, "Must detect the forced MINUS at col 1 of row 0")
 	if step != null:
 		assert_eq(step.rank, EclipseGridSolver.RANK_4, "Must be RANK_4")

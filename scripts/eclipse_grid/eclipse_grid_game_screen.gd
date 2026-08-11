@@ -245,6 +245,8 @@ func _show_spinner(visible: bool) -> void:
 		_spinner_tween = null
 	if not size_label:
 		return
+	if settings_button:
+		settings_button.disabled = visible
 	size_label.text = "Generating" if visible else ""
 	if visible:
 		size_label.set_meta("spinner_frame", 0)
