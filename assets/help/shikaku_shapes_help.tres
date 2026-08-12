@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="HelpContent" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/help/help_content.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+title = "Shikaku Shapes"
+body = "Divide the grid into rectangles so every rectangle contains exactly one clue and every cell is covered once.\n\n• Number clues require a rectangle with that exact area\n• Square clues require a square rectangle\n• Tall clues require a rectangle taller than it is wide\n• Wide clues require a rectangle wider than it is tall\n• A plain shape clue accepts any rectangle"

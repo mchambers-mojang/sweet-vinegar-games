@@ -1,6 +1,10 @@
 extends Control
 
 const TimeFormat := preload("res://scripts/utils/time_format.gd")
+const SUPPORTED_GAME_MODES := [
+	"blockudoku", "shikaku", "sudoku",
+	"crown_grid", "eclipse_grid", "number_path",
+]
 
 ## Replay collection viewer — browse, bookmark, delete, and (future) play back replays.
 
@@ -123,7 +127,7 @@ func _add_replay_row(replay: Dictionary) -> void:
 	vbox.add_child(btn_row)
 
 	# Play button — all supported games use the generic replay viewer
-	var supports_playback := game_mode in ["blockudoku", "shikaku", "sudoku"]
+	var supports_playback := game_mode in SUPPORTED_GAME_MODES
 	if supports_playback:
 		var play_btn := Button.new()
 		play_btn.text = "▶ Play"
@@ -196,7 +200,7 @@ func _import_from_clipboard() -> void:
 	# Determine game mode and play it
 	var header: Dictionary = replay.get("header", {})
 	var game_mode := str(header.get("game_mode", ""))
-	if game_mode not in ["blockudoku", "shikaku", "sudoku"]:
+	if game_mode not in SUPPORTED_GAME_MODES:
 		_show_toast("Unknown game mode: %s" % game_mode)
 		return
 	ReplaySystem.set_pending_playback(replay)

@@ -9,6 +9,9 @@ static var ENTRIES: Array[GameEntry] = [
 	preload("res://assets/menu/sudoku_entry.tres"),
 	preload("res://assets/menu/shikaku_entry.tres"),
 	preload("res://assets/menu/blockudoku_entry.tres"),
+	preload("res://assets/menu/crown_grid_entry.tres"),
+	preload("res://assets/menu/eclipse_grid_entry.tres"),
+	preload("res://assets/menu/number_path_entry.tres"),
 	preload("res://assets/menu/carom_entry.tres"),
 ]
 

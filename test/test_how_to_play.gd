@@ -7,7 +7,9 @@ const GAMES: Array[String] = [
 	"sudoku_anti_knight",
 	"sudoku_anti_king",
 	"sudoku_killer",
+	"sudoku_mini",
 	"shikaku",
+	"shikaku_shapes",
 	"blockudoku",
 	"carom",
 ]
@@ -43,6 +45,8 @@ func test_sudoku_variant_help_describes_special_rules() -> void:
 	assert_string_contains(_load("sudoku_anti_knight").body, "knight's move")
 	assert_string_contains(_load("sudoku_anti_king").body, "diagonally")
 	assert_string_contains(_load("sudoku_killer").body, "cage")
+	assert_string_contains(_load("sudoku_mini").body, "6×6")
+	assert_string_contains(_load("shikaku_shapes").body, "shape")
 
 
 func test_sudoku_menu_help_topic_tracks_selected_rule_set() -> void:
@@ -53,6 +57,8 @@ func test_sudoku_menu_help_topic_tracks_selected_rule_set() -> void:
 	assert_eq(menu._get_help_topic(), "sudoku_anti_king")
 	menu._rule_set_index = menu.RULE_SET_KILLER
 	assert_eq(menu._get_help_topic(), "sudoku_killer")
+	menu._rule_set_index = menu.RULE_SET_MINI
+	assert_eq(menu._get_help_topic(), "sudoku_mini")
 	menu.free()
 
 
@@ -64,6 +70,22 @@ func test_sudoku_game_help_topic_tracks_active_rule_set() -> void:
 	assert_eq(game._get_help_topic(), "sudoku_anti_king")
 	game.rule_set = game.RULE_SET_KILLER
 	assert_eq(game._get_help_topic(), "sudoku_killer")
+	game.rule_set = game.RULE_SET_MINI
+	assert_eq(game._get_help_topic(), "sudoku_mini")
+	game.free()
+
+
+func test_shikaku_help_topic_tracks_selected_mode() -> void:
+	var menu = load("res://scripts/shikaku/shikaku_menu.gd").new()
+	menu._mode_index = menu.MODE_STANDARD
+	assert_eq(menu._get_help_topic(), "shikaku")
+	menu._mode_index = menu.MODE_SHAPES
+	assert_eq(menu._get_help_topic(), "shikaku_shapes")
+	menu.free()
+
+	var game = load("res://scripts/shikaku/shikaku_game_screen.gd").new()
+	game.mode = ShikakuLogic.RULE_SET_SHAPES
+	assert_eq(game._get_help_topic(), "shikaku_shapes")
 	game.free()
 
 

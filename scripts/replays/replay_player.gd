@@ -188,4 +188,10 @@ func _create_adapter(game_mode: String) -> GameReplayAdapter:
 			return ShikakuReplayAdapter.new()
 		"sudoku":
 			return SudokuReplayAdapter.new()
+		"crown_grid":
+			return CrownGridReplayAdapter.new()
+		"eclipse_grid":
+			return EclipseGridReplayAdapter.new()
+		"number_path":
+			return NumberPathReplayAdapter.new()
 	return null

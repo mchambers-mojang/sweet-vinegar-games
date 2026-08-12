@@ -8,6 +8,7 @@ const TimeFormat := preload("res://scripts/utils/time_format.gd")
 @onready var stats_list: VBoxContainer = %StatsList
 
 const DIFFICULTY_NAMES := ["Easy", "Medium", "Hard", "Expert", "Evil"]
+const RULE_SET_MINI := 4
 
 
 func _ready() -> void:
@@ -64,6 +65,21 @@ func _build_stats_ui() -> void:
 		_add_stat_row("Completion Rate", "%.0f%%" % rate)
 
 		_add_separator()
+
+	_add_header("Mini 6×6")
+	var mini_best_ms: int = GameStatsManager.get_counter("sudoku", "best_mini")
+	var mini_best: float = float(mini_best_ms) / 1000.0 if mini_best_ms > 0 else -1.0
+	_add_stat_row("Best Time",
+		TimeFormat.format_time(mini_best, true) if mini_best >= 0 else "--")
+	var mini_history := _get_time_history_for_rule_set(RULE_SET_MINI)
+	var mini_avg := _compute_average(mini_history)
+	_add_stat_row("Average Time",
+		TimeFormat.format_time(mini_avg, true) if mini_avg >= 0 else "--")
+	if not mini_history.is_empty():
+		_add_time_graph(mini_history)
+	_add_stat_row("Completed",
+		str(GameStatsManager.get_counter("sudoku", "completed_mini")))
+	_add_separator()
 
 	# Reset button at the bottom
 	var reset_btn := Button.new()
@@ -144,6 +160,16 @@ func _get_time_history_for_difficulty(d: int) -> Array:
 	var times: Array = []
 	for entry in all_history:
 		if entry is Dictionary and entry.get("difficulty") == d and entry.has("time"):
+			times.append(entry["time"])
+	return times
+
+
+func _get_time_history_for_rule_set(rule_set: int) -> Array:
+	var all_history: Array = GameStatsManager.get_history("sudoku")
+	var times: Array = []
+	for entry in all_history:
+		if entry is Dictionary and entry.get("rule_set", 0) == rule_set \
+				and entry.has("time"):
 			times.append(entry["time"])
 	return times
 

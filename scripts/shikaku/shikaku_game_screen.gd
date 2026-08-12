@@ -47,6 +47,10 @@ func _get_game_id() -> String:
 	return "shikaku"
 
 
+func _get_help_topic() -> String:
+	return "shikaku_shapes" if mode == ShikakuLogic.RULE_SET_SHAPES else "shikaku"
+
+
 func _get_scene_path() -> String:
 	return Scenes.SHIKAKU_GAME
 
