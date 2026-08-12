@@ -119,8 +119,6 @@ static func count_solutions(
 		if working[idx] != EMPTY:
 			return 0
 		working[idx] = step.result_value
-		if not is_consistent(size, working, h_relations, v_relations):
-			return 0
 	if not working.has(EMPTY):
 		return 1 if validate(
 				size, working, h_relations, v_relations) else 0
@@ -300,11 +298,13 @@ static func analyze(
 		cancel_check: Callable = Callable()) -> Analysis:
 	var result := Analysis.new()
 	var cells: Array[int] = initial_cells.duplicate()
+	var valid_masks := _valid_line_masks(size)
 
 	while true:
 		if cancel_check.is_valid() and cancel_check.call():
 			return result
-		var step: SolverStep = _find_next_step(size, cells, h_relations, v_relations)
+		var step: SolverStep = _find_next_step(
+				size, cells, h_relations, v_relations, valid_masks)
 		if step == null:
 			break
 		cells[step.affected_cells[0]] = step.result_value
@@ -327,12 +327,47 @@ static func analyze(
 	return result
 
 
+## Return whether deterministic human deductions can refill all target cells.
+## Callers may use this when the puzzle before removing one clue is already
+## known to solve within max_rank: once the removed clue's endpoints have been
+## recovered, the known solution path remains available from a stronger state.
+static func can_recover_cells(
+		size: int,
+		initial_cells: Array[int],
+		h_relations: Dictionary,
+		v_relations: Dictionary,
+		targets: Array[int],
+		max_rank: int = RANK_4,
+		cancel_check: Callable = Callable(),
+		valid_masks: Array[int] = []) -> bool:
+	var cells: Array[int] = initial_cells.duplicate()
+	if valid_masks.is_empty():
+		valid_masks = _valid_line_masks(size)
+	while true:
+		var recovered := true
+		for idx in targets:
+			if cells[idx] == EMPTY:
+				recovered = false
+				break
+		if recovered:
+			return true
+		if cancel_check.is_valid() and cancel_check.call():
+			return false
+		var step: SolverStep = _find_next_step(
+				size, cells, h_relations, v_relations, valid_masks)
+		if step == null or step.rank > max_rank:
+			return false
+		cells[step.affected_cells[0]] = step.result_value
+	return false
+
+
 ## Find the next deducible cell using human-logic techniques in rank order.
 static func _find_next_step(
 		size: int,
 		cells: Array[int],
 		h_relations: Dictionary,
-		v_relations: Dictionary) -> SolverStep:
+		v_relations: Dictionary,
+		valid_masks: Array[int] = []) -> SolverStep:
 	# Rank 1 techniques
 	var step: SolverStep
 
@@ -380,7 +415,8 @@ static func _find_next_step(
 		return step
 
 	# Rank 4 techniques
-	step = _global_quota_chain(size, cells, h_relations, v_relations)
+	step = _global_quota_chain(
+			size, cells, h_relations, v_relations, valid_masks)
 	if step:
 		return step
 
@@ -955,8 +991,11 @@ static func _global_quota_chain(
 		size: int,
 		cells: Array[int],
 		h_relations: Dictionary,
-		v_relations: Dictionary) -> SolverStep:
+		v_relations: Dictionary,
+		valid_masks: Array[int] = []) -> SolverStep:
 	var half := size / 2
+	if valid_masks.is_empty():
+		valid_masks = _valid_line_masks(size)
 	# Row analysis: lines with 3 or more empty cells.
 	for r in size:
 		var empties: Array[int] = []
@@ -966,7 +1005,8 @@ static func _global_quota_chain(
 		if empties.size() < 3:
 			continue
 		var step := _line_completion_rank4(
-				size, cells, h_relations, v_relations, r, empties, true, half)
+				size, cells, h_relations, v_relations, r, empties, true,
+				half, valid_masks)
 		if step:
 			return step
 	# Column analysis: lines with 3 or more empty cells.
@@ -978,7 +1018,8 @@ static func _global_quota_chain(
 		if empties.size() < 3:
 			continue
 		var step := _line_completion_rank4(
-				size, cells, h_relations, v_relations, c, empties, false, half)
+				size, cells, h_relations, v_relations, c, empties, false,
+				half, valid_masks)
 		if step:
 			return step
 	return null
@@ -1017,14 +1058,14 @@ static func _check_perp_feasibility(
 	# 2. Count quota and collect remaining empties in the perpendicular line.
 	var plus := 0
 	var minus := 0
-	var empties: Array[int] = []
+	var empty_mask := 0
 	for i in size:
 		var idx: int = perp * size + i if is_row else i * size + perp
 		match trial[idx]:
 			PLUS:  plus += 1
 			MINUS: minus += 1
-			_:     empties.append(i)
-	if empties.is_empty():
+			_:     empty_mask |= 1 << i
+	if empty_mask == 0:
 		return true
 	# 3. Determine if quota exhaustion forces all remaining empties.
 	var forced := EMPTY
@@ -1035,14 +1076,16 @@ static func _check_perp_feasibility(
 	if forced == EMPTY:
 		return true  # No cascade possible at this step.
 	# 4. Apply forced values in place, then restore the still-empty positions.
-	for pos in empties:
-		var idx: int = perp * size + pos if is_row else pos * size + perp
-		trial[idx] = forced
+	for pos in size:
+		if empty_mask & (1 << pos):
+			var idx: int = perp * size + pos if is_row else pos * size + perp
+			trial[idx] = forced
 	var feasible := _check_partial_line(
 			trial, size, perp, is_row, h_relations, v_relations)
-	for pos in empties:
-		var idx: int = perp * size + pos if is_row else pos * size + perp
-		trial[idx] = EMPTY
+	for pos in size:
+		if empty_mask & (1 << pos):
+			var idx: int = perp * size + pos if is_row else pos * size + perp
+			trial[idx] = EMPTY
 	return feasible
 
 
@@ -1075,7 +1118,8 @@ static func _line_completion_rank4(
 		line: int,
 		empties: Array[int],
 		is_row: bool,
-		half: int) -> SolverStep:
+		half: int,
+		valid_masks: Array[int]) -> SolverStep:
 	var k := empties.size()
 	if k > 10:
 		return null
@@ -1101,15 +1145,43 @@ static func _line_completion_rank4(
 	# Candidate values are restored before each iteration completes, so the
 	# caller's working board can safely serve as the trial buffer.
 	var trial: Array[int] = cells
-	var total := 1 << k
-	for combo in total:
-		# Reject assignments whose PLUS count is wrong.
-		var n_plus := 0
-		for i in k:
-			if (combo >> i) & 1:
-				n_plus += 1
-		if n_plus != plus_needed:
-			continue
+	# Each primary-line cell belongs to a distinct perpendicular line, so its
+	# perpendicular feasibility depends only on that cell's value. Compute the
+	# two possibilities once instead of repeating them for every combination.
+	var perp_plus: Array[bool] = []
+	var perp_minus: Array[bool] = []
+	for i in k:
+		var idx: int = line * size + empties[i] if is_row else empties[i] * size + line
+		var perp := empties[i]
+		trial[idx] = PLUS
+		perp_plus.append(_check_perp_feasibility(
+				trial, size, perp, not is_row, h_relations, v_relations))
+		trial[idx] = MINUS
+		perp_minus.append(_check_perp_feasibility(
+				trial, size, perp, not is_row, h_relations, v_relations))
+		trial[idx] = EMPTY
+	var combos: Array[int] = []
+	if k >= 7:
+		for mask in valid_masks:
+			var matches := true
+			var combo := 0
+			for i in size:
+				var idx: int = line * size + i if is_row else i * size + line
+				var value := PLUS if mask & (1 << i) else MINUS
+				if cells[idx] != EMPTY and cells[idx] != value:
+					matches = false
+					break
+			if not matches:
+				continue
+			for i in k:
+				if mask & (1 << empties[i]):
+					combo |= 1 << i
+			combos.append(combo)
+	else:
+		for combo in (1 << k):
+			if _mask_plus_count(combo, k) == plus_needed:
+				combos.append(combo)
+	for combo in combos:
 		# Place this assignment into the trial copy.
 		for i in k:
 			var idx: int = line * size + empties[i] if is_row else empties[i] * size + line
@@ -1125,8 +1197,8 @@ static func _line_completion_rank4(
 		# propagating those forced consequences.
 		if ok:
 			for i in k:
-				var perp := empties[i]
-				if not _check_perp_feasibility(trial, size, perp, not is_row, h_relations, v_relations):
+				var feasible := perp_plus[i] if (combo >> i) & 1 else perp_minus[i]
+				if not feasible:
 					ok = false
 					break
 		# Restore trial before using the result.

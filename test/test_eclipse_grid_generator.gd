@@ -43,7 +43,11 @@ func test_representative_generation_stays_within_p95_budget() -> void:
 			assert_false(result.is_empty(),
 				"Representative size %d puzzle must generate successfully" % size)
 		timings.sort()
+		var median: int = timings[timings.size() / 2]
 		var p95_index := ceili(timings.size() * 0.95) - 1
+		assert_lte(median, 500,
+			"Size %d generation median must stay at or below 500 ms; samples=%s" % [
+				size, timings])
 		assert_lt(timings[p95_index], 3000,
 			"Size %d generation p95 must stay below 3 seconds; samples=%s" % [
 				size, timings])

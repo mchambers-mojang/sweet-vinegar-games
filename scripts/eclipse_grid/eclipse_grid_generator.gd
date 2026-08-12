@@ -41,6 +41,7 @@ static func generate(size: int, seed: int, cancel_check: Callable = Callable()) 
 
 	# Precompute valid rows once for this size.
 	var valid_rows: Array[Array] = _get_valid_rows(size)
+	var valid_masks: Array[int] = EclipseGridSolver._valid_line_masks(size)
 
 	for _attempt in (MAX_ATTEMPTS_EXPERT if size >= 10 else MAX_ATTEMPTS):
 		if cancel_check.is_valid() and cancel_check.call():
@@ -62,7 +63,7 @@ static func generate(size: int, seed: int, cancel_check: Callable = Callable()) 
 		# Step 3: Minimize clues using human-solver as oracle (fast).
 		var givens: Array[int] = _minimize_givens(
 				size, solution, h_relations, v_relations, rng,
-				required_rank(size), cancel_check)
+				required_rank(size), cancel_check, valid_masks)
 		if givens.is_empty():
 			continue
 
@@ -70,7 +71,9 @@ static func generate(size: int, seed: int, cancel_check: Callable = Callable()) 
 			return {}
 
 		# Step 3b: Minimize relation clues with the same oracle.
-		_minimize_relations(size, givens, h_relations, v_relations, cancel_check)
+		_minimize_relations(
+				size, givens, h_relations, v_relations, cancel_check,
+				valid_masks)
 		if cancel_check.is_valid() and cancel_check.call():
 			return {}
 
@@ -254,8 +257,8 @@ static func _add_relation_clues(
 
 	# A sparse relation set gives the minimizers a useful starting point without
 	# making them repeatedly re-analyse dozens of clues that will be discarded.
-	var min_density := 0.12 if size >= 10 else 0.08
-	var max_density := 0.12 if size >= 10 else 0.15
+	var min_density := 0.02 if size >= 10 else 0.08
+	var max_density := 0.02 if size >= 10 else 0.15
 	var num_h := rng.randi_range(
 			maxi(1, int(all_h.size() * min_density)),
 			maxi(1, int(all_h.size() * max_density)))
@@ -292,13 +295,39 @@ static func _minimize_givens(
 		v_relations: Dictionary,
 		rng: RandomNumberGenerator,
 		max_rank: int,
-		cancel_check: Callable) -> Array[int]:
-	var givens: Array[int] = solution.duplicate()
-
+		cancel_check: Callable,
+		valid_masks: Array[int]) -> Array[int]:
 	var indices: Array[int] = []
-	for i in givens.size():
+	for i in solution.size():
 		indices.append(i)
 	_shuffle_array(indices, rng)
+
+	# Start from a deterministic sparse superset instead of proving that every
+	# cell on a fully revealed board is redundant. Grow it only until the human
+	# solver has a valid baseline, then greedily minimize that smaller set.
+	var givens: Array[int] = []
+	givens.resize(solution.size())
+	givens.fill(EMPTY)
+	var initial_given_count := size * 2 if size >= 10 else size * 4
+	var revealed := mini(solution.size(), initial_given_count)
+	for i in revealed:
+		var idx: int = indices[i]
+		givens[idx] = solution[idx]
+	while true:
+		var baseline: EclipseGridSolver.Analysis = EclipseGridSolver.analyze(
+				size, givens, h_relations, v_relations, cancel_check)
+		if cancel_check.is_valid() and cancel_check.call():
+			return []
+		if baseline.is_unique and baseline.max_rank <= max_rank:
+			break
+		if revealed == solution.size():
+			return []
+		var next_revealed := mini(solution.size(), revealed + size)
+		for i in range(revealed, next_revealed):
+			var idx: int = indices[i]
+			givens[idx] = solution[idx]
+		revealed = next_revealed
+	indices = indices.slice(0, revealed)
 
 	# One greedy pass is sufficient: removing additional clues cannot make a
 	# previously necessary given become human-solvable within the rank ceiling.
@@ -307,11 +336,12 @@ static func _minimize_givens(
 			return []
 		var saved: int = givens[idx]
 		givens[idx] = EMPTY
-		var analysis: EclipseGridSolver.Analysis = EclipseGridSolver.analyze(
-				size, givens, h_relations, v_relations, cancel_check)
+		var recoverable := EclipseGridSolver.can_recover_cells(
+				size, givens, h_relations, v_relations, [idx],
+				max_rank, cancel_check, valid_masks)
 		if cancel_check.is_valid() and cancel_check.call():
 			return []
-		if not analysis.is_unique or analysis.max_rank > max_rank:
+		if not recoverable:
 			givens[idx] = saved
 
 	return givens
@@ -325,20 +355,32 @@ static func _minimize_relations(
 		givens: Array[int],
 		h_relations: Dictionary,
 		v_relations: Dictionary,
-		cancel_check: Callable) -> void:
-	for dict in [h_relations, v_relations]:
-		var keys: Array = dict.keys().duplicate()
-		for key in keys:
-			if cancel_check.is_valid() and cancel_check.call():
-				return
-			var saved: int = dict[key]
-			dict.erase(key)
-			var analysis: EclipseGridSolver.Analysis = EclipseGridSolver.analyze(
-					size, givens, h_relations, v_relations, cancel_check)
-			if cancel_check.is_valid() and cancel_check.call():
-				return
-			if not analysis.is_unique:
-				dict[key] = saved
+		cancel_check: Callable,
+		valid_masks: Array[int]) -> void:
+	var clues: Array = []
+	for key in h_relations:
+		var pos: Vector2i = key
+		clues.append([h_relations, key,
+				pos.y * size + pos.x, pos.y * size + pos.x + 1])
+	for key in v_relations:
+		var pos: Vector2i = key
+		clues.append([v_relations, key,
+				pos.y * size + pos.x, (pos.y + 1) * size + pos.x])
+	for clue in clues:
+		if cancel_check.is_valid() and cancel_check.call():
+			return
+		var dict: Dictionary = clue[0]
+		var key: Vector2i = clue[1]
+		var saved: int = dict[key]
+		dict.erase(key)
+		var recoverable := EclipseGridSolver.can_recover_cells(
+				size, givens, h_relations, v_relations,
+				[clue[2], clue[3]], EclipseGridSolver.RANK_4, cancel_check,
+				valid_masks)
+		if cancel_check.is_valid() and cancel_check.call():
+			return
+		if not recoverable:
+			dict[key] = saved
 
 
 # ---------------------------------------------------------------------------
