@@ -122,6 +122,8 @@ func _get_help_topic() -> String:
 			return "sudoku_anti_king"
 		RULE_SET_KILLER:
 			return "sudoku_killer"
+		RULE_SET_MINI:
+			return "sudoku_mini"
 		_:
 			return "sudoku"
 

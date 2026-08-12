@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="GameEntry" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/menu/game_entry.gd" id="1_numberpath"]
+
+[resource]
+script = ExtResource("1_numberpath")
+id = "number_path"
+title = "Number Path"
+menu_scene_path = "res://scenes/number_path_menu.tscn"
+icon = ""
+unlock_rule = ""

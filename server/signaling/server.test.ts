@@ -828,6 +828,119 @@ describe('Leaderboard Endpoint', () => {
   });
 });
 
+import { BOARD_CONFIG } from './db';
+
+describe('Logic Games Integration — leaderboard registry', () => {
+  const NEW_KEYS = [
+    'crown_grid:easy', 'crown_grid:medium', 'crown_grid:hard', 'crown_grid:expert',
+    'eclipse_grid:4', 'eclipse_grid:6', 'eclipse_grid:8', 'eclipse_grid:10',
+    'number_path:easy', 'number_path:medium', 'number_path:hard', 'number_path:expert',
+    'sudoku:mini',
+    'shikaku:shapes_5', 'shikaku:shapes_7', 'shikaku:shapes_8',
+    'shikaku:shapes_10', 'shikaku:shapes_12', 'shikaku:shapes_15',
+  ];
+
+  test('all new game:mode boards are registered', () => {
+    for (const key of NEW_KEYS) {
+      expect(BOARD_CONFIG[key]).toBeDefined();
+    }
+  });
+
+  test('new time-based boards sort ascending with sane bounds', () => {
+    for (const key of NEW_KEYS) {
+      const cfg = BOARD_CONFIG[key];
+      expect(cfg.sort).toBe('asc');
+      expect(cfg.min).toBeGreaterThanOrEqual(0);
+      expect(cfg.max).toBeGreaterThan(cfg.min);
+    }
+  });
+
+  test('BOARD_CONFIG keys are unique', () => {
+    const keys = Object.keys(BOARD_CONFIG);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  test('existing legacy boards remain intact', () => {
+    expect(BOARD_CONFIG['sudoku:easy']).toBeDefined();
+    expect(BOARD_CONFIG['shikaku:5']).toBeDefined();
+    expect(BOARD_CONFIG['blockudoku:standard'].sort).toBe('desc');
+    // Standard Shikaku sizes must stay distinct from Shapes variants.
+    expect(BOARD_CONFIG['shikaku:5']).not.toBe(BOARD_CONFIG['shikaku:shapes_5']);
+  });
+});
+
+describe('Logic Games Integration — score submission', () => {
+  let wss: WebSocketServer;
+  let httpServer: http.Server;
+  let port: number;
+
+  beforeEach(async () => {
+    ({ wss, httpServer, port } = await makeServer());
+    await httpRequest({ method: 'PUT', port, path: '/profile', body: { device_id: TEST_UUID, display_name: 'Alice', visible: true } });
+    await httpRequest({ method: 'PUT', port, path: '/profile', body: { device_id: TEST_UUID2, display_name: 'Bob', visible: true } });
+  });
+
+  afterEach((done) => {
+    wss.close(() => httpServer.close(done));
+  });
+
+  test('accepts valid scores for each new distinct game', async () => {
+    const cases = [
+      { game: 'crown_grid', mode: 'expert', value: 90 },
+      { game: 'eclipse_grid', mode: '4', value: 15 },
+      { game: 'number_path', mode: 'easy', value: 30 },
+    ];
+    for (const c of cases) {
+      const res = await httpRequest({ method: 'POST', port, path: '/scores', body: { device_id: TEST_UUID, ...c } });
+      expect(res.status).toBe(200);
+      expect((res.body as Record<string, unknown>).accepted).toBe(true);
+    }
+  });
+
+  test('accepts Mini Sudoku and Shikaku Shapes mode scores', async () => {
+    const mini = await httpRequest({ method: 'POST', port, path: '/scores', body: { device_id: TEST_UUID, game: 'sudoku', mode: 'mini', value: 60 } });
+    expect(mini.status).toBe(200);
+    const shapes = await httpRequest({ method: 'POST', port, path: '/scores', body: { device_id: TEST_UUID, game: 'shikaku', mode: 'shapes_10', value: 45 } });
+    expect(shapes.status).toBe(200);
+  });
+
+  test('rejects scores below the min bound for a new board', async () => {
+    // crown_grid:expert min is 12
+    const res = await httpRequest({ method: 'POST', port, path: '/scores', body: { device_id: TEST_UUID, game: 'crown_grid', mode: 'expert', value: 1 } });
+    expect(res.status).toBe(400);
+  });
+
+  test('rejects scores above the max bound for a new board', async () => {
+    // number_path:easy max is 3600
+    const res = await httpRequest({ method: 'POST', port, path: '/scores', body: { device_id: TEST_UUID, game: 'number_path', mode: 'easy', value: 3601 } });
+    expect(res.status).toBe(400);
+  });
+
+  test('keeps the better (lower) time for a new time-based board', async () => {
+    await httpRequest({ method: 'POST', port, path: '/scores', body: { device_id: TEST_UUID, game: 'eclipse_grid', mode: '8', value: 100 } });
+    const worse = await httpRequest({ method: 'POST', port, path: '/scores', body: { device_id: TEST_UUID, game: 'eclipse_grid', mode: '8', value: 150 } });
+    expect((worse.body as Record<string, unknown>).accepted).toBe(false);
+    expect((worse.body as Record<string, unknown>).personal_best).toBe(100);
+    const better = await httpRequest({ method: 'POST', port, path: '/scores', body: { device_id: TEST_UUID, game: 'eclipse_grid', mode: '8', value: 80 } });
+    expect((better.body as Record<string, unknown>).accepted).toBe(true);
+    expect((better.body as Record<string, unknown>).personal_best).toBe(80);
+  });
+
+  test('rejects an unknown mode for a new game', async () => {
+    const res = await httpRequest({ method: 'POST', port, path: '/scores', body: { device_id: TEST_UUID, game: 'crown_grid', mode: 'impossible', value: 60 } });
+    expect(res.status).toBe(400);
+  });
+
+  test('ranks new-board times ascending (fastest first)', async () => {
+    await httpRequest({ method: 'POST', port, path: '/scores', body: { device_id: TEST_UUID, game: 'number_path', mode: 'hard', value: 120 } });
+    await httpRequest({ method: 'POST', port, path: '/scores', body: { device_id: TEST_UUID2, game: 'number_path', mode: 'hard', value: 60 } });
+    const res = await httpRequest({ method: 'GET', port, path: `/leaderboard?game=number_path&mode=hard&device_id=${TEST_UUID}` });
+    const top = (res.body as Record<string, unknown>).top as Array<Record<string, unknown>>;
+    expect(top[0].display_name).toBe('Bob');   // 60s beats 120s
+    expect(top[1].display_name).toBe('Alice');
+  });
+});
+
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';

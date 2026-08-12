@@ -49,7 +49,7 @@ func test_snapshot_includes_categories_with_general_first() -> void:
 		var category: String = str(achievement.get("category", ""))
 		if not categories.has(category):
 			categories.append(category)
-	assert_eq(categories, ["General", "Sudoku", "Blockudoku", "Shikaku"])
+	assert_eq(categories, ["General", "Sudoku", "Blockudoku", "Shikaku", "Crown Grid", "Eclipse Grid", "Number Path"])
 
 
 func test_sudoku_win_tracking_unlocks_difficulty_and_time_achievements() -> void:

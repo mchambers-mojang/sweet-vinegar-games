@@ -10,6 +10,14 @@ const TIER_NAMES := {
 	CrownGridGenerator.TIER_EXPERT: "Expert",
 }
 
+## Maps a tier constant to its leaderboard mode key (matches server BOARD_CONFIG).
+const TIER_KEYS := {
+	CrownGridGenerator.TIER_EASY: "easy",
+	CrownGridGenerator.TIER_MEDIUM: "medium",
+	CrownGridGenerator.TIER_HARD: "hard",
+	CrownGridGenerator.TIER_EXPERT: "expert",
+}
+
 const CROWN_GRID_MENU_SCENE := "res://scenes/crown_grid_menu.tscn"
 const CROWN_GRID_GAME_SCENE := "res://scenes/crown_grid_game.tscn"
 
@@ -439,6 +447,7 @@ func _on_back() -> void:
 
 func _handle_win() -> void:
 	GameEvents.game_ended.emit("crown_grid", "win", elapsed_time)
+	GameEvents.leaderboard_score_ready.emit("crown_grid", TIER_KEYS.get(_tier, "easy"), elapsed_time)
 
 	_recorder.record_input(elapsed_time, "game_completed", {"tier": _tier})
 

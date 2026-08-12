@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="HelpContent" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/help/help_content.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+title = "Mini Sudoku"
+body = "Fill the 6×6 grid so every row, column, and 2×3 box contains the digits 1–6 exactly once.\n\n• Mini is a single quick-play mode\n• Tap a cell, then tap a number to place it\n• Use Notes mode to mark possible candidates\n• Each outlined 2×3 region must contain 1–6"

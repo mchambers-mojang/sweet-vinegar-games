@@ -41,6 +41,8 @@ func _get_help_topic() -> String:
 			return "sudoku_anti_king"
 		RULE_SET_KILLER:
 			return "sudoku_killer"
+		RULE_SET_MINI:
+			return "sudoku_mini"
 		_:
 			return "sudoku"
 
@@ -86,14 +88,18 @@ func _inject_rule_set_row() -> void:
 func _start_game() -> void:
 	if not config:
 		return
-	var params := config.build_launch_params(_get_current_option_value())
-	params.rule_set = _rule_set_index
-	# Mini always uses difficulty 0 (quick-play), ignoring the difficulty selector.
-	if _rule_set_index == RULE_SET_MINI:
-		params.option_value = 0
+	var params := _build_launch_params(_get_current_option_value())
 	SceneTransition.navigate(config.game_scene_path, func(game_scene: Node) -> void:
 		game_scene.launch(params)
 	)
+
+
+func _build_launch_params(option_value: int) -> LaunchParams:
+	var params := config.build_launch_params(option_value)
+	params.rule_set = _rule_set_index
+	if _rule_set_index == RULE_SET_MINI:
+		params.option_value = 0
+	return params
 
 
 ## Override _setup_leaderboard_button to add Anti-Knight, Anti-King, Killer, and Mini modes.

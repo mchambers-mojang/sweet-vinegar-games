@@ -29,6 +29,10 @@ func _get_save_adapter() -> GameSaveAdapter:
 	return ShikakuSaveAdapter.new()
 
 
+func _get_help_topic() -> String:
+	return "shikaku_shapes" if _mode_index == MODE_SHAPES else "shikaku"
+
+
 func _on_menu_ready() -> void:
 	super._on_menu_ready()
 	_inject_mode_row()
@@ -67,11 +71,16 @@ func _inject_mode_row() -> void:
 func _start_game() -> void:
 	if not config:
 		return
-	var params := config.build_launch_params(_get_current_option_value())
-	params.rule_set = _mode_index
+	var params := _build_launch_params(_get_current_option_value())
 	SceneTransition.navigate(config.game_scene_path, func(game_scene: Node) -> void:
 		game_scene.launch(params)
 	)
+
+
+func _build_launch_params(option_value: int) -> LaunchParams:
+	var params := config.build_launch_params(option_value)
+	params.rule_set = _mode_index
+	return params
 
 
 ## Override _setup_leaderboard_button to add Shapes-mode leaderboard entries.
