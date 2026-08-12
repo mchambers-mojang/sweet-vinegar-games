@@ -34,6 +34,7 @@ var _pending_gen_data: Dictionary = {}
 # Optional fixed generation seed (>= 0). Used by tests to launch a deterministic,
 # fast-to-generate puzzle; production always uses a random seed (-1).
 var _forced_gen_seed: int = -1
+var _forced_gen_budget_msec: int = -1
 
 # Node refs
 @onready var board: NumberPathBoard = %NumberPathBoard
@@ -112,10 +113,14 @@ func _on_game_screen_ready() -> void:
 
 # --- Launch / Resume ---
 
-func start_new_game(tier: int, forced_seed: int = -1) -> void:
+func start_new_game(
+		tier: int,
+		forced_seed: int = -1,
+		forced_budget_msec: int = -1) -> void:
 	_suppress_auto_resume = true
 	_tier = tier
 	_forced_gen_seed = forced_seed
+	_forced_gen_budget_msec = forced_budget_msec
 	# Generation runs in a background thread.
 	# Show spinner and start thread; begin_session() is called from _on_generation_done().
 	_set_gen_cancelled(false)
@@ -145,11 +150,13 @@ func _run_generation() -> void:
 		var rng := RandomNumberGenerator.new()
 		rng.randomize()
 		seed_val = int(Time.get_ticks_usec()) ^ rng.randi()
-	var result := _generate_with_budget(tier_val, seed_val)
+	var primary_budget := GENERATION_BUDGET_MSEC \
+			if _forced_gen_budget_msec < 0 else _forced_gen_budget_msec
+	var result := _generate_with_budget(tier_val, seed_val, primary_budget)
 	if result.is_empty() and not _get_gen_cancelled() \
 			and seed_val != FALLBACK_GENERATION_SEED:
 		seed_val = FALLBACK_GENERATION_SEED
-		result = _generate_with_budget(tier_val, seed_val)
+		result = _generate_with_budget(tier_val, seed_val, GENERATION_BUDGET_MSEC)
 	if not result.is_empty():
 		result["_used_seed"] = seed_val
 	_pending_gen_data = result
@@ -157,8 +164,11 @@ func _run_generation() -> void:
 		call_deferred("_on_generation_done")
 
 
-func _generate_with_budget(tier_val: int, seed_val: int) -> Dictionary:
-	var deadline := Time.get_ticks_msec() + GENERATION_BUDGET_MSEC
+func _generate_with_budget(
+		tier_val: int,
+		seed_val: int,
+		budget_msec: int) -> Dictionary:
+	var deadline := Time.get_ticks_msec() + budget_msec
 	return NumberPathGenerator.generate(tier_val, seed_val, func() -> bool:
 		return _get_gen_cancelled() or Time.get_ticks_msec() >= deadline
 	)

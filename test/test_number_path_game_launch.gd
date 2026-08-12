@@ -38,7 +38,7 @@ func test_slow_expert_seed_falls_back_to_playable_board() -> void:
 	add_child(screen)
 	await wait_process_frames(2)
 
-	screen.start_new_game(NumberPathLogic.TIER_EXPERT, 42)
+	screen.start_new_game(NumberPathLogic.TIER_EXPERT, 42, 1)
 	var deadline := Time.get_ticks_msec() + 12_000
 	while screen._gen_thread != null and Time.get_ticks_msec() < deadline:
 		await wait_process_frames(1)
