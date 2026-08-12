@@ -18,6 +18,8 @@ const TIER_KEYS := {
 
 const _SCENE_MENU := "res://scenes/number_path_menu.tscn"
 const _SCENE_GAME := "res://scenes/number_path_game.tscn"
+const GENERATION_BUDGET_MSEC := 5000
+const FALLBACK_GENERATION_SEED := 100
 
 # Game state
 var _tier: int = NumberPathLogic.TIER_EASY
@@ -29,6 +31,10 @@ var _gen_thread: Thread = null
 var _gen_mutex: Mutex = Mutex.new()
 var _gen_cancelled: bool = false
 var _pending_gen_data: Dictionary = {}
+# Optional fixed generation seed (>= 0). Used by tests to launch a deterministic,
+# fast-to-generate puzzle; production always uses a random seed (-1).
+var _forced_gen_seed: int = -1
+var _forced_gen_budget_msec: int = -1
 
 # Node refs
 @onready var board: NumberPathBoard = %NumberPathBoard
@@ -107,8 +113,14 @@ func _on_game_screen_ready() -> void:
 
 # --- Launch / Resume ---
 
-func start_new_game(tier: int) -> void:
+func start_new_game(
+		tier: int,
+		forced_seed: int = -1,
+		forced_budget_msec: int = -1) -> void:
+	_suppress_auto_resume = true
 	_tier = tier
+	_forced_gen_seed = forced_seed
+	_forced_gen_budget_msec = forced_budget_msec
 	# Generation runs in a background thread.
 	# Show spinner and start thread; begin_session() is called from _on_generation_done().
 	_set_gen_cancelled(false)
@@ -131,16 +143,35 @@ func resume_game(data: Dictionary) -> void:
 
 func _run_generation() -> void:
 	var tier_val := _tier
-	var rng := RandomNumberGenerator.new()
-	rng.randomize()
-	var seed_val := int(Time.get_ticks_usec()) ^ rng.randi()
-	var result := NumberPathGenerator.generate(tier_val, seed_val,
-			func() -> bool: return _get_gen_cancelled())
+	var seed_val: int
+	if _forced_gen_seed >= 0:
+		seed_val = _forced_gen_seed
+	else:
+		var rng := RandomNumberGenerator.new()
+		rng.randomize()
+		seed_val = int(Time.get_ticks_usec()) ^ rng.randi()
+	var primary_budget := GENERATION_BUDGET_MSEC \
+			if _forced_gen_budget_msec < 0 else _forced_gen_budget_msec
+	var result := _generate_with_budget(tier_val, seed_val, primary_budget)
+	if result.is_empty() and not _get_gen_cancelled() \
+			and seed_val != FALLBACK_GENERATION_SEED:
+		seed_val = FALLBACK_GENERATION_SEED
+		result = _generate_with_budget(tier_val, seed_val, GENERATION_BUDGET_MSEC)
 	if not result.is_empty():
 		result["_used_seed"] = seed_val
 	_pending_gen_data = result
 	if not _get_gen_cancelled():
 		call_deferred("_on_generation_done")
+
+
+func _generate_with_budget(
+		tier_val: int,
+		seed_val: int,
+		budget_msec: int) -> Dictionary:
+	var deadline := Time.get_ticks_msec() + budget_msec
+	return NumberPathGenerator.generate(tier_val, seed_val, func() -> bool:
+		return _get_gen_cancelled() or Time.get_ticks_msec() >= deadline
+	)
 
 
 func _on_generation_done() -> void:
@@ -154,8 +185,28 @@ func _on_generation_done() -> void:
 		push_error("NumberPathGameScreen: generation failed")
 		_suppress_auto_resume = true
 		_pending_gen_data = {}
+		_show_generation_failed_dialog()
 		return
 	begin_session()
+
+
+func _show_generation_failed_dialog() -> void:
+	var dialog := AcceptDialog.new()
+	dialog.title = "Generation Failed"
+	dialog.dialog_text = "Number Path could not build this puzzle. Please try again."
+	dialog.ok_button_text = "Retry"
+	dialog.add_button("Menu", true, "menu")
+	add_child(dialog)
+	dialog.popup_centered()
+	dialog.confirmed.connect(func() -> void:
+		dialog.queue_free()
+		start_new_game(_tier)
+	)
+	dialog.custom_action.connect(func(action: StringName) -> void:
+		if action == "menu":
+			dialog.queue_free()
+			SceneTransition.navigate(_SCENE_MENU)
+	)
 
 
 # --- Session ceremony hooks ---
