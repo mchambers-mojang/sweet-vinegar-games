@@ -11,9 +11,22 @@ const RANK_LOCAL := 2     # two local constraints or simple bottleneck
 const RANK_REGION := 3    # remaining-region connectivity or cut analysis
 const RANK_GLOBAL := 4    # non-branching chain: checkpoint order + barriers + connectivity
 
+# Resolution-depth boundary between Rank 3 and Rank 4. A branch resolved by an
+# immediate sound cut is Rank 2 (depth 0); resolved after one forced move is
+# Rank 3 (depth 1); anything needing a longer forced chain is Rank 4 (depth >= 2).
+const _RANK3_DEPTH := 1
+
 # --- Public API ---
 
 ## Solve a puzzle using human-style deductions.
+## max_rank_allowed caps the deduction difficulty the solver may use; if a step
+## requires a harder rank than allowed, the solver stops (solved=false). This lets
+## the generator probe a puzzle's exact difficulty cheaply (see the depth ladder
+## in _deduce_by_depth). rollout_budget bounds the forced-only look-ahead used to
+## refute candidates; -1 means width*height (effectively unbounded). Bounding the
+## look-ahead keeps every solve cheap and matches how a human resolves a branch
+## (a short non-branching chain), and it only ever causes a false negative (never
+## certifies a non-unique puzzle), so it is safe for the generator to rely on.
 ## Returns {"solved": bool, "path": Array[Vector2i], "steps": Array[Dictionary],
 ##          "max_rank": int}
 ## Steps: [{"rank": int, "reason": str, "affected": Array[Vector2i], "result": Vector2i}]
@@ -21,13 +34,16 @@ static func solve(
 		width: int,
 		height: int,
 		checkpoints: Array[Dictionary],
-		barriers: Array[Dictionary]) -> Dictionary:
+		barriers: Array[Dictionary],
+		max_rank_allowed: int = RANK_GLOBAL,
+		rollout_budget: int = -1) -> Dictionary:
 	var state := _SolverState.new(width, height, checkpoints, barriers)
 	var steps: Array[Dictionary] = []
 	var max_rank := 0
+	var budget := rollout_budget if rollout_budget >= 0 else width * height
 
 	while not state.is_complete():
-		var step := _try_deduce(state)
+		var step := _try_deduce(state, max_rank_allowed, budget)
 		if step.is_empty():
 			break
 		steps.append(step)
@@ -94,39 +110,35 @@ static func count_solutions(
 
 # --- Private: deduction engine ---
 
-static func _try_deduce(state: _SolverState) -> Dictionary:
-	# Rank 1: forced moves
+static func _try_deduce(
+		state: _SolverState,
+		max_rank_allowed: int,
+		rollout_budget: int) -> Dictionary:
+	# Rank 1: forced moves (single legal neighbor, checkpoint approach, dead-end).
 	var step := _rank1_forced(state)
 	if not step.is_empty():
 		return step
-
-	# Rank 2: local constraints / bottleneck
-	step = _rank2_local(state)
-	if not step.is_empty():
-		return step
-
-	# Rank 3: region connectivity
-	step = _rank3_region(state)
-	if not step.is_empty():
-		return step
-
-	# Rank 4: global chain
-	step = _rank4_global(state)
-	return step
+	if max_rank_allowed < RANK_LOCAL:
+		return {}
+	# Rank 2/3/4: resolve a branch by the shallowest sound refutation depth.
+	return _deduce_by_depth(state, max_rank_allowed, rollout_budget)
 
 
 static func _rank1_forced(state: _SolverState) -> Dictionary:
 	var head := state.get_head()
 	var candidates := state.free_neighbors(head)
 
-	# Exactly one free neighbor → forced
-	if candidates.size() == 1:
-		var cell: Vector2i = candidates[0]
-		if not state.is_checkpoint_valid_next(cell):
-			return {}
+	# Out-of-order checkpoints are not legal candidates. If only one neighbor
+	# remains after applying checkpoint order, the next move is forced.
+	var legal_candidates: Array[Vector2i] = []
+	for candidate in candidates:
+		if state.is_checkpoint_valid_next(candidate):
+			legal_candidates.append(candidate)
+	if legal_candidates.size() == 1:
+		var cell: Vector2i = legal_candidates[0]
 		return {
 			"rank": RANK_FORCED,
-			"reason": "single free neighbor",
+			"reason": "single legal neighbor",
 			"affected": [head],
 			"result": cell,
 		}
@@ -179,92 +191,153 @@ static func _rank1_forced(state: _SolverState) -> Dictionary:
 	return {}
 
 
-
-
-static func _rank2_local(state: _SolverState) -> Dictionary:
+# Rank 2/3/4 depth ladder.
+#
+# At a branch (>1 legal candidate) a move is only forced when every alternative
+# can be *disproved* by a sound necessary condition — never by guessing which
+# branch "looks" better. _refute_depth tentatively takes a candidate, follows
+# only forced (Rank-1) moves, and reports the first depth at which the position
+# becomes provably impossible. The rank is the shallowest look-ahead needed to
+# leave exactly one surviving candidate:
+#   depth 0  -> Rank 2 (immediate local/bottleneck contradiction)
+#   depth 1  -> Rank 3 (one forced move exposes a region/cut contradiction)
+#   depth >=2 -> Rank 4 (a longer non-branching chain of forced moves)
+# Because every elimination is a necessary condition, completing a solve with
+# these deductions proves the solution is unique.
+static func _deduce_by_depth(
+		state: _SolverState,
+		max_rank_allowed: int,
+		rollout_budget: int) -> Dictionary:
 	var head := state.get_head()
 	var candidates := state.free_neighbors(head)
-	if candidates.size() < 2:
-		return {}
-
-	# Bottleneck: one candidate is the only cell connecting two free regions
-	for nb in candidates:
-		if not state.is_checkpoint_valid_next(nb):
-			continue
-		if state.is_bottleneck(nb):
-			return {
-				"rank": RANK_LOCAL,
-				"reason": "bottleneck cell",
-				"affected": [nb],
-				"result": nb,
-			}
-
-	# Two-constraint intersection: only one candidate satisfies both local degree and checkpoint constraints
-	var valid: Array[Vector2i] = []
+	var legal: Array[Vector2i] = []
 	for nb in candidates:
 		if state.is_checkpoint_valid_next(nb):
-			if state.free_neighbor_count_after_extend(nb) > 0 or state.remaining_unvisited() == 1:
-				valid.append(nb)
-	if valid.size() == 1:
+			legal.append(nb)
+	# 0 or 1 legal candidate is already handled as a Rank-1 forced move.
+	if legal.size() <= 1:
+		return {}
+
+	# Only roll out as deep as the allowed rank could possibly need.
+	var budget := 0
+	if max_rank_allowed >= RANK_GLOBAL:
+		budget = rollout_budget
+	elif max_rank_allowed == RANK_REGION:
+		budget = _RANK3_DEPTH
+
+	var depths: Array[int] = []
+	for nb in legal:
+		depths.append(_refute_depth(state, nb, budget))
+
+	# Rank 2: exactly one candidate survives immediate (depth-0) refutation.
+	var forced := _single_survivor(legal, depths, 0)
+	if forced != Vector2i(-1, -1):
 		return {
 			"rank": RANK_LOCAL,
-			"reason": "two-constraint intersection",
-			"affected": candidates,
-			"result": valid[0],
+			"reason": "local constraint",
+			"affected": legal,
+			"result": forced,
 		}
-
-	return {}
-
-
-static func _rank3_region(state: _SolverState) -> Dictionary:
-	var head := state.get_head()
-	var candidates := state.free_neighbors(head)
-	if candidates.is_empty():
+	if _survivor_count(depths, 0) == 0:
 		return {}
 
-	# Prune candidates that would disconnect the remaining free region
-	var valid: Array[Vector2i] = []
-	for nb in candidates:
-		if not state.is_checkpoint_valid_next(nb):
-			continue
-		if state.remaining_stays_connected_after(nb):
-			valid.append(nb)
+	# Rank 3: exactly one candidate survives a one-move-deep refutation.
+	if max_rank_allowed >= RANK_REGION:
+		forced = _single_survivor(legal, depths, _RANK3_DEPTH)
+		if forced != Vector2i(-1, -1):
+			return {
+				"rank": RANK_REGION,
+				"reason": "region connectivity",
+				"affected": legal,
+				"result": forced,
+			}
+		if _survivor_count(depths, _RANK3_DEPTH) == 0:
+			return {}
 
-	if valid.size() == 1:
-		return {
-			"rank": RANK_REGION,
-			"reason": "region connectivity",
-			"affected": candidates,
-			"result": valid[0],
-		}
-
-	return {}
-
-
-static func _rank4_global(state: _SolverState) -> Dictionary:
-	var head := state.get_head()
-	var candidates := state.free_neighbors(head)
-	if candidates.is_empty():
-		return {}
-
-	# Try each candidate: discard any that cannot lead to a complete Hamiltonian path
-	# visiting checkpoints in order without guessing.
-	var valid: Array[Vector2i] = []
-	for nb in candidates:
-		if not state.is_checkpoint_valid_next(nb):
-			continue
-		if state.can_complete_from(nb):
-			valid.append(nb)
-
-	if valid.size() == 1:
-		return {
-			"rank": RANK_GLOBAL,
-			"reason": "global path constraint",
-			"affected": candidates,
-			"result": valid[0],
-		}
+	# Rank 4: exactly one candidate survives the full forced-chain refutation.
+	if max_rank_allowed >= RANK_GLOBAL:
+		forced = _single_survivor(legal, depths, budget)
+		if forced != Vector2i(-1, -1):
+			return {
+				"rank": RANK_GLOBAL,
+				"reason": "global chain",
+				"affected": legal,
+				"result": forced,
+			}
 
 	return {}
+
+
+## Tentatively move to `candidate`, then follow only forced (Rank-1) moves.
+## Returns the depth at which the position first becomes provably impossible
+## (0 = impossible immediately after the tentative move), or -1 if no
+## contradiction is found within `max_budget` forced moves (the candidate
+## survives). State is always restored before returning.
+static func _refute_depth(state: _SolverState, candidate: Vector2i, max_budget: int) -> int:
+	var saved_size := state.path.size()
+	state.extend(candidate)
+	var depth := 0
+	var result := -1
+	while true:
+		if state.is_complete():
+			result = -1
+			break
+		if _state_invalid(state):
+			result = depth
+			break
+		if depth >= max_budget:
+			result = -1
+			break
+		var mv := _forced_move(state)
+		if mv == Vector2i(-1, -1):
+			result = -1
+			break
+		state.extend(mv)
+		depth += 1
+	state.rollback_to(saved_size)
+	return result
+
+
+## The single Rank-1 forced move from the current head, or (-1,-1) if none.
+static func _forced_move(state: _SolverState) -> Vector2i:
+	var step := _rank1_forced(state)
+	if step.is_empty():
+		return Vector2i(-1, -1)
+	return step.get("result", Vector2i(-1, -1))
+
+
+static func _survivor_count(depths: Array[int], budget: int) -> int:
+	var count := 0
+	for d in depths:
+		if d == -1 or d > budget:
+			count += 1
+	return count
+
+
+## If exactly one candidate survives refutation at `budget`, return it; else (-1,-1).
+static func _single_survivor(
+		legal: Array[Vector2i],
+		depths: Array[int],
+		budget: int) -> Vector2i:
+	var found := Vector2i(-1, -1)
+	var count := 0
+	for i in range(legal.size()):
+		if depths[i] == -1 or depths[i] > budget:
+			found = legal[i]
+			count += 1
+			if count > 1:
+				return Vector2i(-1, -1)
+	return found if count == 1 else Vector2i(-1, -1)
+
+
+## Bundled sound necessary conditions for completing a Hamiltonian path from the
+## current head to the final checkpoint. Any single failure proves the branch is
+## dead; none of these ever rejects a genuinely completable position.
+static func _state_invalid(state: _SolverState) -> bool:
+	return state.head_is_premature_endpoint() \
+			or not state.head_reaches_all_free() \
+			or not state.degree_condition_ok() \
+			or not state.parity_ok()
 
 
 # --- Private: solution counting DFS ---
@@ -555,110 +628,137 @@ class _SolverState:
 			return false
 		return true
 
-	func is_bottleneck(cell: Vector2i) -> bool:
-		# Check if cell is the only connection between two components of free cells
-		# (excluding head's current position which is about to be extended)
-		if visited[cell.y * width + cell.x] != 0:
-			return false
-		# Temporarily mark cell as visited and check if free region splits
-		visited[cell.y * width + cell.x] = 1
-		var split := _free_region_splits()
-		visited[cell.y * width + cell.x] = 0
-		return split
-
-	func _free_region_splits() -> bool:
-		# Find all free cells (unvisited)
-		var free_cells: Array[Vector2i] = []
-		for y in range(height):
-			for x in range(width):
-				if visited[y * width + x] == 0:
-					free_cells.append(Vector2i(x, y))
-		if free_cells.is_empty():
-			return false
-		# BFS from first free cell
-		var start: Vector2i = free_cells[0]
-		var seen := PackedByteArray()
-		seen.resize(width * height)
-		seen.fill(0)
-		var queue: Array[Vector2i] = [start]
-		seen[start.y * width + start.x] = 1
-		while not queue.is_empty():
-			var cur: Vector2i = queue.pop_front()
-			var dirs: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
-			for d in dirs:
-				var nb := cur + d
-				if nb.x < 0 or nb.y < 0 or nb.x >= width or nb.y >= height:
-					continue
-				if visited[nb.y * width + nb.x] != 0:
-					continue
-				if seen[nb.y * width + nb.x] != 0:
-					continue
-				if NumberPathSolver._has_barrier(barriers, cur, nb):
-					continue
-				seen[nb.y * width + nb.x] = 1
-				queue.append(nb)
-		# If any free cell was not reached, region split
-		for cell in free_cells:
-			if seen[cell.y * width + cell.x] == 0:
-				return true
-		return false
-
 	func would_isolate_cell_if_not_extended_to(other: Vector2i) -> bool:
 		# Check if 'other' has only one free neighbor (degree 1) in current state
 		# (not counting the head which will be extended elsewhere)
 		var other_neighbors := free_neighbors(other)
 		return other_neighbors.size() == 1 and other_neighbors[0] == get_head()
 
-	func remaining_stays_connected_after(cell: Vector2i) -> bool:
-		# Extend to cell and check remaining free cells + head are all connected
-		visited[cell.y * width + cell.x] = 1
-		var result := not _free_region_splits()
-		# Also check head can still reach all free cells
-		visited[cell.y * width + cell.x] = 0
-		return result
+	## Undo path extensions back to `size` cells, clearing their visited marks.
+	## Used to restore state after a speculative refutation rollout.
+	func rollback_to(size: int) -> void:
+		while path.size() > size:
+			var cell: Vector2i = path.pop_back()
+			visited[cell.y * width + cell.x] = 0
 
-	func can_complete_from(cell: Vector2i) -> bool:
-		# Quick connectivity heuristic: after extending to cell,
-		# can we reach all remaining cells and checkpoints?
-		# _count_reachable_from counts 'cell' itself, so compare against
-		# (total - already-visited), which also includes 'cell'.
-		visited[cell.y * width + cell.x] = 1
-		var reachable := _count_reachable_from(cell)
-		var remaining := width * height - path.size()
-		visited[cell.y * width + cell.x] = 0
-		if reachable != remaining:
+	func _last_checkpoint() -> Vector2i:
+		if checkpoints.is_empty():
+			return Vector2i(-1, -1)
+		var lc: Dictionary = checkpoints[checkpoints.size() - 1]
+		return Vector2i(int(lc.get("x", -1)), int(lc.get("y", -1)))
+
+	## The path must terminate on the final checkpoint. Arriving there while any
+	## cell is still unvisited is unrecoverable (we cannot leave and return).
+	func head_is_premature_endpoint() -> bool:
+		var last_cp := _last_checkpoint()
+		if last_cp == Vector2i(-1, -1):
 			return false
-		# The last checkpoint must be the terminal cell of the completed path.
-		# Visiting it while unvisited cells still remain is never valid, since
-		# we would have to leave and return — impossible without revisiting.
-		if not checkpoints.is_empty():
-			var lc: Dictionary = checkpoints[checkpoints.size() - 1]
-			var lc_cell := Vector2i(int(lc.get("x", -1)), int(lc.get("y", -1)))
-			if cell == lc_cell and remaining > 1:
-				return false
-		return true
+		return get_head() == last_cp and remaining_unvisited() > 0
 
-	func _count_reachable_from(start: Vector2i) -> int:
-		var count := 0
+	## Every unvisited cell must remain reachable from the head through free cells.
+	func head_reaches_all_free() -> bool:
+		var remaining := remaining_unvisited()
+		if remaining == 0:
+			return true
+		var head := get_head()
+		if head == Vector2i(-1, -1):
+			return false
 		var seen := PackedByteArray()
 		seen.resize(width * height)
 		seen.fill(0)
-		var queue: Array[Vector2i] = [start]
-		seen[start.y * width + start.x] = 1
+		seen[head.y * width + head.x] = 1
+		var queue: Array[Vector2i] = [head]
+		var reached := 0
+		var dirs: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 		while not queue.is_empty():
 			var cur: Vector2i = queue.pop_front()
-			count += 1
-			var dirs: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 			for d in dirs:
 				var nb := cur + d
 				if nb.x < 0 or nb.y < 0 or nb.x >= width or nb.y >= height:
 					continue
-				if visited[nb.y * width + nb.x] != 0:
-					continue
-				if seen[nb.y * width + nb.x] != 0:
+				var idx: int = nb.y * width + nb.x
+				if visited[idx] != 0 or seen[idx] != 0:
 					continue
 				if NumberPathSolver._has_barrier(barriers, cur, nb):
 					continue
-				seen[nb.y * width + nb.x] = 1
+				seen[idx] = 1
+				reached += 1
 				queue.append(nb)
-		return count
+		return reached == remaining
+
+	## Degree of `cell` within the remaining graph (unvisited cells + the head,
+	## which is the sole visited cell a future path segment can still connect to).
+	func _remaining_degree(cell: Vector2i) -> int:
+		var head := get_head()
+		var deg := 0
+		var dirs: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+		for d in dirs:
+			var nb := cell + d
+			if nb.x < 0 or nb.y < 0 or nb.x >= width or nb.y >= height:
+				continue
+			if NumberPathSolver._has_barrier(barriers, cell, nb):
+				continue
+			var idx: int = nb.y * width + nb.x
+			if visited[idx] == 0 or nb == head:
+				deg += 1
+		return deg
+
+	## In a Hamiltonian path from head to the final checkpoint, the two endpoints
+	## (head and final checkpoint) need degree >= 1 and every other unvisited cell
+	## needs degree >= 2 in the remaining graph. A violation proves impossibility.
+	func degree_condition_ok() -> bool:
+		var remaining := remaining_unvisited()
+		if remaining == 0:
+			return true
+		var head := get_head()
+		if _remaining_degree(head) < 1:
+			return false
+		var last_cp := _last_checkpoint()
+		for y in range(height):
+			for x in range(width):
+				if visited[y * width + x] != 0:
+					continue
+				var cell := Vector2i(x, y)
+				var deg := _remaining_degree(cell)
+				if cell == last_cp:
+					if deg < 1:
+						return false
+				elif deg < 2:
+					return false
+		return true
+
+	## Bipartite (checkerboard) parity: a path of T nodes from the head alternates
+	## colors, so the remaining cells' color counts and the final checkpoint's
+	## color are fully determined. A mismatch proves impossibility.
+	func parity_ok() -> bool:
+		var remaining := remaining_unvisited()
+		if remaining == 0:
+			return true
+		var last_cp := _last_checkpoint()
+		if last_cp == Vector2i(-1, -1):
+			return true
+		# If the terminal checkpoint has already been consumed, this cut cannot
+		# reason about the endpoint colour; defer to the other conditions.
+		if visited[last_cp.y * width + last_cp.x] != 0:
+			return true
+		var head := get_head()
+		var head_color: int = (head.x + head.y) & 1
+		# Nodes remaining to place: the head plus every unvisited cell.
+		var total := remaining + 1
+		var color_count := [0, 0]
+		color_count[head_color] += 1
+		for y in range(height):
+			for x in range(width):
+				if visited[y * width + x] != 0:
+					continue
+				color_count[(x + y) & 1] += 1
+		var expected_head := (total + 1) / 2
+		var expected_other := total / 2
+		if color_count[head_color] != expected_head:
+			return false
+		if color_count[1 - head_color] != expected_other:
+			return false
+		# The final checkpoint sits at position total-1 of the alternating path.
+		var last_pos := total - 1
+		var expected_last := head_color if (last_pos & 1) == 0 else 1 - head_color
+		return ((last_cp.x + last_cp.y) & 1) == expected_last

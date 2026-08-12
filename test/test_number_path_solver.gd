@@ -111,22 +111,21 @@ func test_count_solutions_immediate_cancel_small_grid() -> void:
 
 # --- Regression: rank-4 can_complete_from off-by-one (fix 1) ---
 
-func test_rank4_global_deduction_succeeds_on_3x3() -> void:
+func test_premature_endpoint_rejection_solves_3x3() -> void:
 	# 3×3 with checkpoints at (0,0) start and (1,1) last, and a DIR_DOWN
 	# barrier at {r:0,c:0} that blocks (0,0)↔(0,1).
-	# Rank-1 forces the first step to (1,0); then rank-4 fires three times
-	# by rejecting (1,1) as a too-early last-checkpoint visit:
-	#   • from (1,0): deduces (2,0)
-	#   • from (2,1): deduces (2,2)
-	#   • from (1,2): deduces (0,2)
+	# Rank-1 forces the first step to (1,0); then at each branch the too-early
+	# last-checkpoint candidate (1,1) is rejected by the premature-endpoint
+	# necessary condition. Under the depth ladder that contradiction is immediate
+	# (depth 0), so it grades as Rank 2 (RANK_LOCAL) rather than a deep chain.
 	# The unique complete solution is:
 	#   (0,0)→(1,0)→(2,0)→(2,1)→(2,2)→(1,2)→(0,2)→(0,1)→(1,1)
 	var cps := _make_checkpoints([[0, 0], [1, 1]])
 	var barriers: Array[Dictionary] = [{"r": 0, "c": 0, "dir": NumberPathLogic.DIR_DOWN}]
 	var result := NumberPathSolver.solve(3, 3, cps, barriers)
 	assert_true(result.get("solved", false), "Solver must complete the 3×3 puzzle")
-	assert_true(result.get("max_rank", 0) >= NumberPathSolver.RANK_GLOBAL,
-		"Rank-4 must fire to reject the too-early last-checkpoint candidate")
+	assert_eq(int(result.get("max_rank", 0)), NumberPathSolver.RANK_LOCAL,
+		"Premature-endpoint rejection is an immediate (depth-0) cut → Rank 2")
 	var path: Array = result.get("path", [])
 	var expected: Array[Vector2i] = [
 		Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(2, 1),
@@ -176,3 +175,11 @@ func test_rank1_checkpoint_approach_fires() -> void:
 					"CP-approach deduction must force move to next checkpoint (1,0)")
 			break
 	assert_true(found, "Rank-1 'next checkpoint only approach' deduction must fire")
+
+
+func test_out_of_order_checkpoint_neighbors_are_not_valid_candidates() -> void:
+	var cps := _make_checkpoints([[0, 0], [1, 0], [1, 1], [0, 1]])
+	var result := NumberPathSolver.solve(2, 2, cps, [])
+	assert_true(result.get("solved", false))
+	assert_eq(result.get("max_rank", 0), NumberPathSolver.RANK_FORCED,
+		"When only the next checkpoint is legal, every move is Rank 1")

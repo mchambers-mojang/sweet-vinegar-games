@@ -12,7 +12,9 @@ func before_each() -> void:
 	board.set_script(BoardScript)
 	board.size = Vector2(300, 300)
 	add_child_autofree(board)
-	board.setup(5, 5, [], [])
+	var checkpoints: Array[Dictionary] = []
+	var barriers: Array[Dictionary] = []
+	board.setup(5, 5, checkpoints, barriers)
 
 
 # --- _interpolate_cells ---
