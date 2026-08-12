@@ -829,3 +829,96 @@ func test_killer_generation_complete_is_noop_when_cancelled() -> void:
 	assert_false(s.abort_called,
 			"_abort_generation_failure must not run when generation is cancelled")
 	s.free()
+
+
+# ---------------------------------------------------------------------------
+# Eclipse Grid: launch() suppresses deferred auto-resume
+# ---------------------------------------------------------------------------
+
+## EclipseGridGameScreen subclass that overrides _run_generation to a noop,
+## preventing actual puzzle generation and allowing synchronous test teardown.
+class TestEclipseGridScreen extends "res://scripts/eclipse_grid/eclipse_grid_game_screen.gd":
+	var gen_started := false
+
+	func _run_generation() -> void:
+		# Noop: prevents real EclipseGridGenerator from running in tests.
+		# _suppress_auto_resume is verified before the thread finishes.
+		gen_started = true
+
+
+func test_eclipse_grid_launch_suppresses_auto_resume() -> void:
+	## Regression: EclipseGridGameScreen.launch() must set _suppress_auto_resume = true
+	## before starting the background generation thread.
+	##
+	## Without this guard, GameScreen._try_auto_resume() (scheduled as a deferred
+	## call after _ready()) can fire while generation runs in the background: it finds
+	## the planted save, resumes it, and _on_generation_complete() later overwrites it
+	## by calling begin_session() with fresh generation data.
+	##
+	## The fix mirrors Crown Grid: _suppress_auto_resume = true is the first line
+	## executed in launch() after parameter validation.
+	var mock_saves := MockSaves.new()
+	# Plant a resumable save to prove _try_auto_resume cannot pick it up.
+	mock_saves.data["eclipse_grid"] = {
+		"schema_version": 1, "size": 4, "seed": 99,
+		"givens": [], "cells": [], "solution": [],
+		"h_relations": {}, "v_relations": {},
+		"is_completed": false, "hints_used": 0,
+		"assistance_mode": 0, "undo_stack": [], "redo_stack": [],
+		"pre_rejection": {},
+	}
+
+	var s := TestEclipseGridScreen.new(
+		MockRecorder.new(), MockStorage.new(), MockCrash.new(), MockAnalytics.new(),
+		MockAchievements.new(), mock_saves, MockStats.new(), MockSound.new(), MockHaptic.new()
+	)
+	var params := LaunchParams.new()
+	params.option_value = 6
+	s.launch(params)
+
+	# _suppress_auto_resume must be set before the thread is started.
+	assert_true(s._suppress_auto_resume,
+			"launch() must set _suppress_auto_resume = true before starting generation")
+
+	# _try_auto_resume must not resume the planted save while generation is in progress.
+	s._try_auto_resume()
+	assert_false(s._is_initialized(),
+			"_try_auto_resume must not resume saved game when _suppress_auto_resume is true")
+
+	# Clean up: cancel and join the generation thread.
+	s._set_gen_cancelled()
+	if s._gen_thread != null:
+		s._gen_thread.wait_to_finish()
+	s.free()
+
+
+func test_eclipse_grid_back_during_generation_does_not_save_invalid_state() -> void:
+	## Regression: pressing Back while background generation is in progress must
+	## cancel the thread and must NOT write a save entry with size=0.
+	##
+	## Without the _is_initialized() guard in _on_back(), _save_current_state() is
+	## called before the game is set up (logic.size == 0), which writes an invalid
+	## save.  The menu then reads the zero-size entry and shows a spurious
+	## "Abandon Game" prompt for a session that was never started.
+	var mock_saves := MockSaves.new()
+	var s := TestEclipseGridScreen.new(
+		MockRecorder.new(), MockStorage.new(), MockCrash.new(), MockAnalytics.new(),
+		MockAchievements.new(), mock_saves, MockStats.new(), MockSound.new(), MockHaptic.new()
+	)
+	var params := LaunchParams.new()
+	params.option_value = 4
+	s.launch(params)
+
+	assert_false(s._is_initialized(),
+		"Game must not be initialized while generation is in progress")
+
+	# Simulate pressing Back before generation completes.
+	s._on_back()
+
+	# No save must be written while logic is uninitialized.
+	assert_false(mock_saves.has_saved_game("eclipse_grid"),
+		"_on_back() during generation must not persist an invalid size=0 save")
+
+	# Clean up the SceneTransition fade started by navigate().
+	SceneTransition.cancel_transition()
+	s.free()

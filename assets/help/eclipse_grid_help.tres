@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="HelpContent" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/help/help_content.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+title = "Eclipse Grid"
+body = "Fill every cell with a + or − so the board obeys three rules:\n\n• Balance: each row and column has exactly half + and half −\n• No three in a row: three identical glyphs cannot appear consecutively in any row or column\n• Clue relations: = means the two neighboring cells are the same; ≠ means they differ\n\nTap a cell to cycle through +, −, and empty. Use Hint if you get stuck."
