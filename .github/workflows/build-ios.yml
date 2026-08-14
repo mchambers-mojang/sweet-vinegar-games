@@ -2,6 +2,11 @@ name: Build iOS
 
 on:
   workflow_call:
+    inputs:
+      release_version:
+        description: App Store marketing version (for example, 1.0.57)
+        required: true
+        type: string
     secrets:
       APPLE_TEAM_ID:
         required: true
@@ -166,6 +171,8 @@ jobs:
           API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
           API_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          BUILD_NUMBER: ${{ github.run_number }}
         run: |
           # Find the generated xcodeproj
           PROJ_DIR=$(find build/ios -name "*.xcodeproj" -print -quit | xargs dirname)
@@ -192,7 +199,18 @@ jobs:
             PROVISIONING_PROFILE_SPECIFIER="" \
             PROVISIONING_PROFILE="${PROVISIONING_PROFILE_UUID}" \
             IPHONEOS_DEPLOYMENT_TARGET=16.0 \
+            MARKETING_VERSION="${RELEASE_VERSION}" \
+            CURRENT_PROJECT_VERSION="${BUILD_NUMBER}" \
             archive
+
+          ARCHIVED_PLIST="$RUNNER_TEMP/${EXPORT_NAME}.xcarchive/Products/Applications/${EXPORT_NAME}.app/Info.plist"
+          ARCHIVED_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$ARCHIVED_PLIST")
+          ARCHIVED_BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$ARCHIVED_PLIST")
+          echo "Archived version: ${ARCHIVED_VERSION} (${ARCHIVED_BUILD})"
+          if [ "$ARCHIVED_VERSION" != "$RELEASE_VERSION" ] || [ "$ARCHIVED_BUILD" != "$BUILD_NUMBER" ]; then
+            echo "ERROR: Archive version ${ARCHIVED_VERSION} (${ARCHIVED_BUILD}) does not match expected ${RELEASE_VERSION} (${BUILD_NUMBER})"
+            exit 1
+          fi
 
       - name: Export IPA
         env:

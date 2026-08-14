@@ -248,6 +248,8 @@ jobs:
     needs: tag
     if: needs.tag.outputs.tagged == 'true'
     uses: ./.github/workflows/build-ios.yml
+    with:
+      release_version: ${{ needs.tag.outputs.version }}
     secrets:
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       IOS_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}
